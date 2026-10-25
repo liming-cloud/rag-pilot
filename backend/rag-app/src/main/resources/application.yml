@@ -1,0 +1,47 @@
+spring:
+  application:
+    name: rag-pilot
+  threads:
+    virtual:
+      enabled: true
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/rag}
+    username: ${DB_USERNAME:rag}
+    password: ${DB_PASSWORD:}
+  flyway:
+    # 每个模块一个迁移目录；版本号统一用时间戳，避免目录之间版本冲突。
+    locations:
+      - classpath:db/migration/common
+      - classpath:db/migration/identity
+      - classpath:db/migration/knowledge
+      - classpath:db/migration/answering
+      - classpath:db/migration/evaluation
+
+mybatis-plus:
+  global-config:
+    banner: false
+
+# 试点为单实例部署，会话存在内存里，应用重启后需要重新登录；多实例时改用 Redis 存储。
+sa-token:
+  token-name: Authorization
+  token-prefix: Bearer
+  timeout: 28800
+  active-timeout: 1800
+  is-read-cookie: false
+  is-read-header: true
+  is-print: false
+
+server:
+  port: 8080
+  shutdown: graceful
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: never
