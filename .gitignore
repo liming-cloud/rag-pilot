@@ -22,3 +22,23 @@
 # virtual machine crash logs, see http://www.java.com/en/download/help/error_hotspot.xml
 hs_err_pid*
 replay_pid*
+
+# Maven
+target/
+!.mvn/wrapper/maven-wrapper.properties
+
+# 前端
+node_modules/
+dist/
+
+# IDE 与系统文件
+.idea/
+*.iml
+.vscode/
+.DS_Store
+
+# 本地配置与密钥，不提交
+.env
+.env.*
+!.env.example
+deploy/.env
