@@ -17,7 +17,7 @@
 
 ## 技术栈
 
-JDK 25、Spring Boot 4.1、Spring AI 2.0、Spring Modulith 2.1、MyBatis-Plus、Sa-Token、Flyway、PostgreSQL（pgvector）。前端为 React 19 + Vite + Tailwind CSS v4 + shadcn/ui（下一个 PR 加入）。选型理由见 [DECISIONS.md](DECISIONS.md)。
+JDK 25、Spring Boot 4.1、Spring AI 2.0、Spring Modulith 2.1、MyBatis-Plus、Sa-Token、Flyway、PostgreSQL 18（ParadeDB：pgvector 向量检索 + BM25 中文分词）。前端为 React 19 + Vite + Tailwind CSS v4 + shadcn/ui（下一个 PR 加入）。选型理由见 [DECISIONS.md](DECISIONS.md)。
 
 ## 模块
 

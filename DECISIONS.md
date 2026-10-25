@@ -26,9 +26,9 @@ JDK 25 LTS、Spring Boot 4.1.0、Spring AI 2.0.0、Spring Modulith 2.1.0、MyBat
 
 每个模块一个迁移目录，版本号统一 `yyyyMMddNNNN`，避免多个目录之间版本冲突。
 
-## D-007 数据库镜像暂用 pgvector（2026-10-25）
+## D-007 数据库用 ParadeDB（2026-10-26 更新）
 
-暂用旧项目已验证的 `pgvector/pgvector:0.8.5-pg18-trixie`。计划改用 ParadeDB（BM25 + jieba 中文分词），在第 1 周的独立 PR 中验证镜像与中文检索后再切换；不通过则退回应用内分词加 Postgres 全文索引。
+改用 ParadeDB 镜像（PostgreSQL 18，按摘要 `sha256:9b15fc38…` 锁定），同时提供 pgvector 向量检索和 pg_search BM25。PR #7 的集成测试验证了 jieba 中文分词、中文关键词 BM25 命中和向量距离排序。升级镜像时更新 `TestDatabase` 和 `deploy/compose.yml` 两处摘要。
 
 ## D-008 前端：原型即代码（2026-10-25）
 

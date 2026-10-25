@@ -9,7 +9,7 @@ import org.testcontainers.utility.DockerImageName;
 final class TestDatabase {
 
     static final DockerImageName IMAGE =
-            DockerImageName.parse("paradedb/paradedb:latest").asCompatibleSubstituteFor("postgres");
+            DockerImageName.parse("paradedb/paradedb@sha256:9b15fc383bcd771f1e32e222bd1603c4c29856c481f6bd06f1960e89608c02f0").asCompatibleSubstituteFor("postgres");
 
     private TestDatabase() {
     }
