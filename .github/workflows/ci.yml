@@ -23,6 +23,22 @@ jobs:
       # 运行全部单元测试、Modulith 边界测试和 Testcontainers 集成测试（运行器自带 Docker）。
       - name: 构建并测试
         run: ./mvnw -B -ntp verify
+      # 把测试数量写成检查注释，PR 页面直接可见；测试数为 0 时判为失败，防止测试被静默跳过。
+      - name: 汇总测试结果
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import glob, sys, xml.etree.ElementTree as ET
+          total = failed = skipped = 0
+          for path in glob.glob("**/target/surefire-reports/TEST-*.xml", recursive=True):
+              root = ET.parse(path).getroot()
+              total += int(root.get("tests", 0))
+              failed += int(root.get("failures", 0)) + int(root.get("errors", 0))
+              skipped += int(root.get("skipped", 0))
+              print(f"{root.get('name')}: {root.get('tests')} 个")
+          print(f"::notice title=测试结果::共 {total} 个测试，失败 {failed}，跳过 {skipped}")
+          sys.exit(1 if total == 0 else 0)
+          PY
 
   image:
     name: image
