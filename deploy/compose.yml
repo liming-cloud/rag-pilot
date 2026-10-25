@@ -5,8 +5,8 @@ name: rag-pilot
 
 services:
   db:
-    # 旧项目已验证的 pgvector 镜像，按摘要锁定；ParadeDB 中文 BM25 验证通过后再切换（见 DECISIONS.md D-007）。
-    image: pgvector/pgvector:0.8.5-pg18-trixie@sha256:9d2e61c7352b9e9f4798df5fd9a498f043f4cda1cdacc707de3d198650f4321e
+    # ParadeDB：同时提供 pgvector 向量检索与 pg_search BM25（jieba 中文分词），见 DECISIONS.md D-007。
+    image: paradedb/paradedb:latest
     environment:
       POSTGRES_DB: rag
       POSTGRES_USER: rag

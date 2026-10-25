@@ -39,6 +39,13 @@ jobs:
           print(f"::notice title=测试结果::共 {total} 个测试，失败 {failed}，跳过 {skipped}")
           sys.exit(1 if total == 0 else 0)
           PY
+      # 临时步骤（Issue #3）：记录 ParadeDB latest 的摘要和 Postgres 主版本，用于按摘要锁定镜像。
+      - name: 记录数据库镜像摘要
+        if: always()
+        run: |
+          digest=$(docker image inspect paradedb/paradedb:latest --format '{{index .RepoDigests 0}}' 2>/dev/null || echo 未拉取)
+          major=$(docker image inspect paradedb/paradedb:latest --format '{{range .Config.Env}}{{println .}}{{end}}' 2>/dev/null | grep '^PG_MAJOR=' || true)
+          echo "::notice title=数据库镜像::$digest $major"
 
   image:
     name: image
