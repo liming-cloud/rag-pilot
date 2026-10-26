@@ -1,0 +1,61 @@
+/*
+ * 设计令牌：沿用已验收旧原型（WP-0016）的颜色、圆角与间距；Anthropic 品牌字体换成开源的思源字体。
+ * 变量名采用 shadcn/ui 约定，组件直接使用；画布原型使用同一组值。
+ * 小号文字只用 --muted-foreground 及更深的颜色，保证对比度不低于 4.5:1。
+ */
+:root {
+  --background: #f5f4ed;
+  --foreground: #141413;
+  --card: #faf9f5;
+  --card-foreground: #141413;
+  --popover: #faf9f5;
+  --popover-foreground: #141413;
+  /* 按钮底色用加深的陶土色，浅色文字在上面对比度达标；原型的 #c96442 只作装饰。 */
+  --primary: #a4502f;
+  --primary-foreground: #faf9f5;
+  --secondary: #e8e6dc;
+  --secondary-foreground: #141413;
+  --muted: #e8e6dc;
+  --muted-foreground: #5e5d59;
+  --accent: #f1e2d9;
+  --accent-foreground: #6e3119;
+  --brand: #c96442;
+  --destructive: #b53333;
+  --destructive-foreground: #faf9f5;
+  --success: #1d6b3a;
+  --border: #e8e6dc;
+  --input: #d9d6ca;
+  --ring: #3898ec;
+  --radius: 12px;
+  --font-sans: "Noto Sans SC", system-ui, sans-serif;
+  --font-serif: "Noto Serif SC", Georgia, serif;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-brand: var(--brand);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --radius-sm: 8px;
+  --radius-md: var(--radius);
+  --radius-lg: 16px;
+  --font-sans: var(--font-sans);
+  --font-serif: var(--font-serif);
+}
