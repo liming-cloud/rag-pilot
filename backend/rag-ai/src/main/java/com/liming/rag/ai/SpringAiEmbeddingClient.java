@@ -17,12 +17,9 @@ final class SpringAiEmbeddingClient implements EmbeddingClient {
     private final int batchSize;
 
     SpringAiEmbeddingClient(AiProperties properties) {
-        if (properties.apiKey() == null || properties.apiKey().isBlank()) {
-            throw new IllegalStateException("未配置模型密钥：请设置环境变量 MODEL_API_KEY");
-        }
         var options = OpenAiEmbeddingOptions.builder()
                 .baseUrl(properties.baseUrl())
-                .apiKey(properties.apiKey())
+                .apiKey(properties.requireApiKey())
                 .model(properties.embedding().model())
                 .timeout(properties.timeout())
                 .maxRetries(0)
