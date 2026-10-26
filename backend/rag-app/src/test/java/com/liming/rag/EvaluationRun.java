@@ -167,11 +167,14 @@ class EvaluationRun {
                 report.falseRefusalRate() * 100, report.leaks(), report.searchP95Millis(), report.askP95Millis());
         // 失败题和分数逐条写成注释，不下载报告也能在 PR 检查页看到。
         report.failures().forEach(failure -> System.out.println("::warning title=评测未通过::" + failure));
+        // GitHub 每步每类注释最多显示 10 条，逐题分数合成一条；%0A 是注释里的换行。
+        var detail = new StringBuilder();
         for (var outcome : report.outcomes()) {
-            System.out.printf(Locale.ROOT, "::notice title=评测明细 %s::%s，最高分 %s，%s%n", outcome.evalCase().id(),
+            detail.append(String.format(Locale.ROOT, "%s（%s）最高分 %s，%s%%0A", outcome.evalCase().id(),
                     outcome.evalCase().kind() == EvalCase.Kind.ANSWERABLE ? "可回答" : "应拒答",
                     outcome.topRelevance() == null ? "-" : String.format(Locale.ROOT, "%.3f", outcome.topRelevance()),
-                    outcome.refused() ? "拒答（" + outcome.refusalReason() + "）" : "已回答");
+                    outcome.refused() ? "拒答 " + outcome.refusalReason() : "已回答"));
         }
+        System.out.println("::notice title=评测逐题分数::" + detail);
     }
 }
