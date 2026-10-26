@@ -53,3 +53,7 @@ React 19.2、Vite 8.1、TypeScript 6.0、Vitest 4.1 沿用旧项目验证过的�
 ## D-013 嵌入模型与混合检索（2026-10-26）
 
 嵌入用硅基流动 `BAAI/bge-m3`（1024 维），经 Spring AI 的 OpenAI 兼容客户端调用；嵌入、重排、对话共用一个 `MODEL_API_KEY`。检索为向量 top50 + BM25（jieba）top50，用 RRF（k=60）融合，权限过滤只在 `ChunkSearchMapper` 的 SQL 里。测试和无密钥的离线开发用本地哈希向量（`RAG_EMBEDDING_PROVIDER=hashing`），它不具备语义能力，不能用于评测。
+
+## D-014 重排、生成与拒答（2026-10-26）
+
+重排用硅基流动 `BAAI/bge-reranker-v2-m3`，Spring AI 没有重排抽象，用 JDK HttpClient 调 `/rerank`；对话默认 `deepseek-ai/DeepSeek-V3`（`CHAT_MODEL` 可换）。候选 30 → 重排 → 门槛过滤 → 最多 8 条证据。拒答四道关口：无结果、低于门槛、模型回答 NO_ANSWER、没有有效 [n] 引用。门槛 0.2 是占位值，用评测集校准。先做非流式 `/api/ask`，流式输出随第 3 周问答页一起做。

@@ -57,11 +57,25 @@ rag:
     base-url: ${MODEL_BASE_URL:https://api.siliconflow.cn/v1}
     api-key: ${MODEL_API_KEY:}
     timeout: 30s
+    # provider 为 openai 时调用真实模型；hashing / lexical / extractive 是本地确定性实现，
+    # 只用于测试和没有密钥时的离线开发，不能用于评测。
     embedding:
-      # openai：调用真实模型；hashing：本地确定性向量，只用于测试和没有密钥时的离线开发。
       provider: ${RAG_EMBEDDING_PROVIDER:openai}
       model: ${EMBEDDING_MODEL:BAAI/bge-m3}
       batch-size: 16
+    rerank:
+      provider: ${RAG_RERANK_PROVIDER:openai}
+      model: ${RERANK_MODEL:BAAI/bge-reranker-v2-m3}
+    chat:
+      provider: ${RAG_CHAT_PROVIDER:openai}
+      model: ${CHAT_MODEL:deepseek-ai/DeepSeek-V3}
+      temperature: 0.1
+      max-tokens: 1024
+  answering:
+    # 检索候选数、送进提示词的证据数、重排相关度门槛（占位值，用评测集校准）。
+    candidates: 30
+    evidence-limit: 8
+    min-relevance: 0.2
   pilot:
     # 试点单租户；第 4 周接入登录后改为从会话取租户。
     tenant-id: 1

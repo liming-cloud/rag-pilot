@@ -4,21 +4,35 @@ import java.time.Duration;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
- * 模型配置。三种能力默认共用同一个 OpenAI 兼容地址和密钥（MODEL_API_KEY），各自可以单独覆盖。
+ * 模型配置。嵌入、重排、对话共用同一个 OpenAI 兼容地址和密钥（MODEL_API_KEY）。
+ *
+ * <p>每种能力都有 provider：openai 调用真实模型；其余取值是本地确定性实现，只用于测试和没有密钥时的离线开发，
+ * 不具备真实模型的能力，不能用于评测。
  *
  * @param baseUrl OpenAI 兼容接口地址，含 /v1
  * @param apiKey 密钥，只从环境变量注入，不写进配置文件和日志
- * @param embedding 嵌入模型配置
  * @param timeout 单次调用超时
  */
 @ConfigurationProperties("rag.ai")
-public record AiProperties(String baseUrl, String apiKey, Embedding embedding, Duration timeout) {
+public record AiProperties(String baseUrl, String apiKey, Duration timeout, Embedding embedding, Rerank rerank,
+        Chat chat) {
 
-    /**
-     * @param provider openai：调用真实模型；hashing：本地确定性向量，只用于测试和离线开发
-     * @param model 模型名
-     * @param batchSize 每次请求的文本条数
-     */
+    /** @param provider openai 或 hashing */
     public record Embedding(String provider, String model, int batchSize) {
+    }
+
+    /** @param provider openai 或 lexical */
+    public record Rerank(String provider, String model) {
+    }
+
+    /** @param provider openai 或 extractive */
+    public record Chat(String provider, String model, double temperature, int maxTokens) {
+    }
+
+    String requireApiKey() {
+        if (apiKey == null || apiKey.isBlank()) {
+            throw new IllegalStateException("未配置模型密钥：请设置环境变量 MODEL_API_KEY");
+        }
+        return apiKey;
     }
 }
