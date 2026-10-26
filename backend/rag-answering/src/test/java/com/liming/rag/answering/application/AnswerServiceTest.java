@@ -32,6 +32,7 @@ class AnswerServiceTest {
         var answer = service(List.of(CASH, SHELF), List.of(0.1, 0.9), "在 03 号货架[1]。").ask(TENANT, List.of(1L), "青柚在哪");
 
         assertThat(answer.refused()).isFalse();
+        assertThat(answer.topRelevance()).isEqualTo(0.9);
         assertThat(answer.text()).isEqualTo("在 03 号货架[1]。");
         assertThat(answer.citations()).singleElement()
                 .satisfies(citation -> assertThat(citation.documentName()).isEqualTo("商品陈列.txt"));

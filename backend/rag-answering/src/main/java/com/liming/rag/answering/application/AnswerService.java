@@ -56,19 +56,25 @@ public class AnswerService {
         }
         var hits = search.search(new SearchQuery(tenantId, knowledgeBaseIds, text, candidates));
         if (hits.isEmpty()) {
-            return Answer.refused(RefusalReason.NO_EVIDENCE);
+            return Answer.refused(RefusalReason.NO_EVIDENCE, null);
         }
-        var evidence = rerankAndFilter(text, hits);
+        var ranked = rerank(text, hits);
+        double topRelevance = ranked.getFirst().score();
+        var evidence = ranked.stream()
+                .filter(scored -> scored.score() >= minRelevance)
+                .limit(evidenceLimit)
+                .map(Scored::hit)
+                .toList();
         if (evidence.isEmpty()) {
-            return Answer.refused(RefusalReason.LOW_RELEVANCE);
+            return Answer.refused(RefusalReason.LOW_RELEVANCE, topRelevance);
         }
         var reply = chat.complete(AnswerPrompt.SYSTEM, AnswerPrompt.user(text, evidence)).strip();
         if (reply.isEmpty() || reply.startsWith(AnswerPrompt.NO_ANSWER)) {
-            return Answer.refused(RefusalReason.MODEL_DECLINED);
+            return Answer.refused(RefusalReason.MODEL_DECLINED, topRelevance);
         }
         var parsed = CitationParser.parse(reply, evidence.size());
         if (parsed.cited().isEmpty()) {
-            return Answer.refused(RefusalReason.UNCITED);
+            return Answer.refused(RefusalReason.UNCITED, topRelevance);
         }
         var citations = parsed.cited().stream()
                 .map(index -> {
@@ -77,19 +83,20 @@ public class AnswerService {
                             hit.headingPath(), hit.content());
                 })
                 .toList();
-        return Answer.answered(parsed.text(), citations);
+        return Answer.answered(parsed.text(), citations, topRelevance);
     }
 
-    private List<SearchHit> rerankAndFilter(String question, List<SearchHit> hits) {
+    private record Scored(SearchHit hit, double score) {
+    }
+
+    /** 按重排分数从高到低排列全部候选。 */
+    private List<Scored> rerank(String question, List<SearchHit> hits) {
         var scores = rerank.score(question, hits.stream()
                 .map(hit -> hit.headingPath() + "\n" + hit.content())
                 .toList());
         return IntStream.range(0, hits.size())
-                .filter(i -> scores.get(i) >= minRelevance)
-                .boxed()
-                .sorted(Comparator.comparingDouble((Integer i) -> scores.get(i)).reversed())
-                .limit(evidenceLimit)
-                .map(hits::get)
+                .mapToObj(i -> new Scored(hits.get(i), scores.get(i)))
+                .sorted(Comparator.comparingDouble(Scored::score).reversed())
                 .toList();
     }
 }
