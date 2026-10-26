@@ -39,7 +39,11 @@ jobs:
               # 失败用例写成错误注释（含异常摘要），不用翻日志就能定位。
               for case in root.iter("testcase"):
                   for problem in list(case.findall("failure")) + list(case.findall("error")):
-                      detail = (problem.get("message") or problem.text or "").strip().replace("\n", " ")[:600]
+                      text = problem.text or ""
+                      causes = [line.strip() for line in text.splitlines() if line.strip().startswith("Caused by:")]
+                      head = (problem.get("message") or "").strip().replace("\n", " ")[:300]
+                      root_cause = causes[-1][:500] if causes else ""
+                      detail = f"{head} ｜ 根因：{root_cause}" if root_cause else head
                       print(f"::error title={case.get('classname')}.{case.get('name')}::{detail}")
           print(f"::notice title=测试结果::共 {total} 个测试，失败 {failed}，跳过 {skipped}")
           sys.exit(1 if total == 0 else 0)
