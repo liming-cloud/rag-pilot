@@ -6,6 +6,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -41,6 +42,11 @@ class KnowledgeIngestionTests {
 
     @Autowired
     private TestRestTemplate http;
+
+    @BeforeEach
+    void signIn() {
+        TestLogin.asAdmin(http);
+    }
 
     @Autowired
     private JdbcTemplate jdbc;

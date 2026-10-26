@@ -1,6 +1,9 @@
 package com.liming.rag.knowledge.web;
 
-import com.liming.rag.common.TenantId;
+import cn.dev33.satoken.annotation.SaCheckLogin;
+import cn.dev33.satoken.annotation.SaCheckRole;
+import com.liming.rag.identity.api.CurrentUser;
+import com.liming.rag.identity.api.Roles;
 import com.liming.rag.knowledge.api.KnowledgeSearch;
 import com.liming.rag.knowledge.api.SearchHit;
 import com.liming.rag.knowledge.api.SearchQuery;
@@ -11,7 +14,6 @@ import com.liming.rag.knowledge.domain.KnowledgeBase;
 import java.io.IOException;
 import java.time.OffsetDateTime;
 import java.util.List;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -27,10 +29,11 @@ import org.springframework.web.multipart.MultipartFile;
 /**
  * 知识库与文档接口。
  *
- * <p>租户暂时取配置里的试点租户；第 4 周接入登录后改为从 Sa-Token 会话取，并按知识库授权过滤。
+ * <p>都要登录，租户从登录会话取；建库、上传、检索调试只有管理员能用。按知识库成员授权过滤在下一步加入。
  */
 @RestController
 @RequestMapping("/api/knowledge-bases")
+@SaCheckLogin
 class KnowledgeBaseController {
 
     record CreateKnowledgeBaseRequest(String name) {
@@ -53,45 +56,48 @@ class KnowledgeBaseController {
     private final KnowledgeBaseService knowledgeBases;
     private final DocumentIngestionService ingestion;
     private final KnowledgeSearch search;
-    private final TenantId pilotTenant;
+    private final CurrentUser currentUser;
 
     KnowledgeBaseController(KnowledgeBaseService knowledgeBases, DocumentIngestionService ingestion,
-            KnowledgeSearch search, @Value("${rag.pilot.tenant-id:1}") long pilotTenantId) {
+            KnowledgeSearch search, CurrentUser currentUser) {
         this.knowledgeBases = knowledgeBases;
         this.ingestion = ingestion;
         this.search = search;
-        this.pilotTenant = new TenantId(pilotTenantId);
+        this.currentUser = currentUser;
     }
 
+    @SaCheckRole(Roles.ADMIN)
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     KnowledgeBaseView create(@RequestBody CreateKnowledgeBaseRequest request) {
-        return KnowledgeBaseView.of(knowledgeBases.create(pilotTenant, request.name()));
+        return KnowledgeBaseView.of(knowledgeBases.create(currentUser.tenantId(), request.name()));
     }
 
     @GetMapping
     List<KnowledgeBaseView> list() {
-        return knowledgeBases.list(pilotTenant).stream().map(KnowledgeBaseView::of).toList();
+        return knowledgeBases.list(currentUser.tenantId()).stream().map(KnowledgeBaseView::of).toList();
     }
 
+    @SaCheckRole(Roles.ADMIN)
     @PostMapping(path = "/{knowledgeBaseId}/documents", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @ResponseStatus(HttpStatus.CREATED)
     DocumentView upload(@PathVariable long knowledgeBaseId, @RequestParam("file") MultipartFile file)
             throws IOException {
-        return DocumentView.of(ingestion.ingest(pilotTenant, knowledgeBaseId, file.getOriginalFilename(),
+        return DocumentView.of(ingestion.ingest(currentUser.tenantId(), knowledgeBaseId, file.getOriginalFilename(),
                 file.getBytes()));
     }
 
     @GetMapping("/{knowledgeBaseId}/documents")
     List<DocumentView> documents(@PathVariable long knowledgeBaseId) {
-        return ingestion.list(pilotTenant, knowledgeBaseId).stream().map(DocumentView::of).toList();
+        return ingestion.list(currentUser.tenantId(), knowledgeBaseId).stream().map(DocumentView::of).toList();
     }
 
     /** 检索调试与评测用：直接看某个知识库对一个问题召回了哪些分块。 */
+    @SaCheckRole(Roles.ADMIN)
     @GetMapping("/{knowledgeBaseId}/search")
     List<SearchHit> search(@PathVariable long knowledgeBaseId, @RequestParam("q") String question,
             @RequestParam(name = "limit", defaultValue = "10") int limit) {
-        knowledgeBases.get(pilotTenant, knowledgeBaseId);
-        return search.search(new SearchQuery(pilotTenant, List.of(knowledgeBaseId), question, limit));
+        knowledgeBases.get(currentUser.tenantId(), knowledgeBaseId);
+        return search.search(new SearchQuery(currentUser.tenantId(), List.of(knowledgeBaseId), question, limit));
     }
 }

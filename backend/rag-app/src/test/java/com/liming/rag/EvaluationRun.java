@@ -15,6 +15,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -68,6 +69,11 @@ class EvaluationRun {
 
     @Autowired
     private TestRestTemplate http;
+
+    @BeforeEach
+    void signIn() {
+        TestLogin.asAdmin(http);
+    }
 
     @Test
     @DisplayName("评测集：召回、引用、拒答、越权、延迟")

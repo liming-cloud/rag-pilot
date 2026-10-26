@@ -9,3 +9,8 @@ rag:
       provider: extractive
   answering:
     min-relevance: 0.3
+  # 测试专用的初始管理员，与 TestLogin 一致；真实部署从环境变量读取。
+  identity:
+    admin:
+      username: admin
+      password: admin-test-password
