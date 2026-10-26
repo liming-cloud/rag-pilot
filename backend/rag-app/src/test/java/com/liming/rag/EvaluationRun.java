@@ -165,5 +165,13 @@ class EvaluationRun {
                 "::notice title=评测结果::召回 %.1f%%，引用正确 %.1f%%，拒答正确 %.1f%%，误拒 %.1f%%，越权 %d，检索 p95 %d ms，问答 p95 %d ms%n",
                 report.recallAt10() * 100, report.citationAccuracy() * 100, report.refusalAccuracy() * 100,
                 report.falseRefusalRate() * 100, report.leaks(), report.searchP95Millis(), report.askP95Millis());
+        // 失败题和分数逐条写成注释，不下载报告也能在 PR 检查页看到。
+        report.failures().forEach(failure -> System.out.println("::warning title=评测未通过::" + failure));
+        for (var outcome : report.outcomes()) {
+            System.out.printf(Locale.ROOT, "::notice title=评测明细 %s::%s，最高分 %s，%s%n", outcome.evalCase().id(),
+                    outcome.evalCase().kind() == EvalCase.Kind.ANSWERABLE ? "可回答" : "应拒答",
+                    outcome.topRelevance() == null ? "-" : String.format(Locale.ROOT, "%.3f", outcome.topRelevance()),
+                    outcome.refused() ? "拒答（" + outcome.refusalReason() + "）" : "已回答");
+        }
     }
 }
