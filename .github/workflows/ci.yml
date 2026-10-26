@@ -36,6 +36,11 @@ jobs:
               failed += int(root.get("failures", 0)) + int(root.get("errors", 0))
               skipped += int(root.get("skipped", 0))
               print(f"{root.get('name')}: {root.get('tests')} 个")
+              # 失败用例写成错误注释（含异常摘要），不用翻日志就能定位。
+              for case in root.iter("testcase"):
+                  for problem in list(case.findall("failure")) + list(case.findall("error")):
+                      detail = (problem.get("message") or problem.text or "").strip().replace("\n", " ")[:600]
+                      print(f"::error title={case.get('classname')}.{case.get('name')}::{detail}")
           print(f"::notice title=测试结果::共 {total} 个测试，失败 {failed}，跳过 {skipped}")
           sys.exit(1 if total == 0 else 0)
           PY
