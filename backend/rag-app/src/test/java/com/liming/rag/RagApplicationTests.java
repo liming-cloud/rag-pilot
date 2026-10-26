@@ -13,7 +13,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
 /**
- * 用真实 PostgreSQL 启动整个应用：验证各模块能装配、Flyway 迁移能执行、向量扩展可用。
+ * 用真实 PostgreSQL 启动整个应用：验证各模块能装配、Flyway 迁移能执行、向量与 BM25 扩展可用。
  */
 @SpringBootTest
 @Testcontainers
@@ -21,16 +21,16 @@ class RagApplicationTests {
 
     @Container
     @ServiceConnection
-    static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("pgvector/pgvector:0.8.5-pg18-trixie");
+    static final PostgreSQLContainer POSTGRES = TestDatabase.container();
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
 
     @Test
-    @DisplayName("应用启动后完成迁移，向量扩展已启用")
+    @DisplayName("应用启动后完成迁移，向量与 BM25 扩展已启用")
     void startsAndMigrates() {
         Integer extensions = jdbcTemplate.queryForObject(
-                "select count(*) from pg_extension where extname = 'vector'", Integer.class);
-        assertThat(extensions).isEqualTo(1);
+                "select count(*) from pg_extension where extname in ('vector', 'pg_search')", Integer.class);
+        assertThat(extensions).isEqualTo(2);
     }
 }
