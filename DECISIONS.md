@@ -37,3 +37,16 @@ React 19 + Vite + TypeScript + Tailwind CSS v4 + shadcn/ui。页面先用 MSW �
 ## D-009 Maven Wrapper（2026-10-25）
 
 Maven Wrapper 3.3.4（only-script）从旧项目复制，固定 Maven 3.9.16。
+
+## D-010 原型方案选定（2026-10-26）
+
+问答页用画布方案 A（对话式，含“查看引用原文”“找不到答案”两个状态），知识库管理页用方案 B（上传优先，显示处理进度和失败提醒）。第 2 周按此做可点击原型。
+
+## D-011 字体先用 Google Fonts（2026-10-26）
+
+思源黑体 / 思源宋体（Noto Sans SC / Noto Serif SC）先从 Google Fonts 加载。客户内网可能访问不了外网，部署到客户环境前改为自托管字体文件。
+
+## D-012 前端依赖版本与 Node 24（2026-10-26）
+
+React 19.2、Vite 8.1、TypeScript 6.0、Vitest 4.1 沿用旧项目验证过的版本；Tailwind CSS 4.3、MSW 2、React Router 7、TanStack Query 5。前端用 Node 24（自带 npm 11），因为 npm 10 安装 Vite 8 依赖时会崩溃。
+

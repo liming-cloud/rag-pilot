@@ -9,6 +9,7 @@
 ## 本地验证
 
 - 后端：`./mvnw verify`（含 Testcontainers 和 Spring Modulith 边界测试，需要 Docker）。
+- 前端：在 `frontend/` 下运行 `npm run typecheck && npm test && npm run build`。
 - 改了检索或生成：加跑评测（评测命令随评测模块加入后补充）。
 
 ## 约束

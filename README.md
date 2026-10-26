@@ -17,7 +17,7 @@
 
 ## 技术栈
 
-JDK 25、Spring Boot 4.1、Spring AI 2.0、Spring Modulith 2.1、MyBatis-Plus、Sa-Token、Flyway、PostgreSQL 18（ParadeDB：pgvector 向量检索 + BM25 中文分词）。前端为 React 19 + Vite + Tailwind CSS v4 + shadcn/ui（下一个 PR 加入）。选型理由见 [DECISIONS.md](DECISIONS.md)。
+JDK 25、Spring Boot 4.1、Spring AI 2.0、Spring Modulith 2.1、MyBatis-Plus、Sa-Token、Flyway、PostgreSQL 18（ParadeDB：pgvector 向量检索 + BM25 中文分词）。前端为 React 19 + Vite + Tailwind CSS v4 + shadcn/ui。选型理由见 [DECISIONS.md](DECISIONS.md)。
 
 ## 模块
 
@@ -47,6 +47,16 @@ curl http://localhost:8080/actuator/health
 
 ```sh
 ./mvnw verify
+```
+
+前端需要 Node 24：
+
+```sh
+cd frontend
+npm ci
+npm run dev:mock   # 用 MSW 假接口启动，不需要后端，做可点击原型时用
+npm run dev        # 接口转发到本机 8080 端口的后端
+npm test && npm run build
 ```
 
 协作流程见 [AGENTS.md](AGENTS.md)：每项工作先开 Issue，再建分支、开 PR，CI 通过后 squash 合并，不直接推送 main。
