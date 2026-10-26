@@ -1,0 +1,64 @@
+name: eval
+
+# 用真实模型跑评测集，结果写在运行摘要里。会产生少量模型调用费用（每次约 32 题），
+# 所以只在改动检索、问答、模型适配或评测集时运行，也可以在 Actions 页面手动运行。
+on:
+  workflow_dispatch:
+    inputs:
+      min_relevance:
+        description: 拒答门槛（重排相关度）
+        default: "0.2"
+  pull_request:
+    paths:
+      - backend/rag-ai/**
+      - backend/rag-knowledge/**
+      - backend/rag-answering/**
+      - backend/rag-evaluation/**
+      - backend/rag-app/src/test/resources/eval/**
+      - backend/rag-app/src/main/resources/application.yml
+      - .github/workflows/eval.yml
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: eval-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  eval:
+    name: eval
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "25"
+          cache: maven
+      - name: 检查密钥
+        env:
+          MODEL_API_KEY: ${{ secrets.MODEL_API_KEY }}
+        run: |
+          if [ -z "$MODEL_API_KEY" ]; then
+            echo "::error title=缺少密钥::请在仓库 Settings → Secrets and variables → Actions 添加 MODEL_API_KEY"
+            exit 1
+          fi
+      - name: 运行评测
+        env:
+          MODEL_API_KEY: ${{ secrets.MODEL_API_KEY }}
+          EVAL_MIN_RELEVANCE: ${{ inputs.min_relevance || '0.2' }}
+        run: >
+          ./mvnw -B -ntp verify -pl backend/rag-app -am
+          -Dtest.groups=eval -Dtest.excludedGroups=none
+          -Dtest=EvaluationRun -Dsurefire.failIfNoSpecifiedTests=false
+      - name: 保存报告
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-report
+          path: backend/rag-app/target/eval-report.md
+          if-no-files-found: ignore

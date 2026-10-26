@@ -10,7 +10,9 @@
 
 - 后端：`./mvnw verify`（含 Testcontainers 和 Spring Modulith 边界测试，需要 Docker）。
 - 前端：在 `frontend/` 下运行 `npm run typecheck && npm test && npm run build`。
-- 改了检索或生成：加跑评测（评测命令随评测模块加入后补充）。
+- 改了检索或生成：加跑评测。PR 改到检索、问答、模型或评测集时 CI 的 `eval` 任务会自动用真实模型跑；本地运行：
+  `MODEL_API_KEY=… ./mvnw verify -pl backend/rag-app -am -Dtest.groups=eval -Dtest.excludedGroups=none -Dtest=EvaluationRun -Dsurefire.failIfNoSpecifiedTests=false`，报告在 `backend/rag-app/target/eval-report.md`。
+- 评测集是合成数据（`backend/rag-app/src/test/resources/eval/`）；客户真实评测集只放在客户环境。
 
 ## 约束
 

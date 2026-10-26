@@ -1,0 +1,296 @@
+[
+  {
+    "id": "冷柜温度",
+    "question": "饮料冷柜温度要保持在多少度？",
+    "kind": "answerable",
+    "expectedDocument": "商品陈列与补货规范.md",
+    "keywords": [
+      "6℃",
+      "6°C",
+      "6度",
+      "6 ℃"
+    ]
+  },
+  {
+    "id": "补货阈值",
+    "question": "货架缺货到什么程度需要补货？",
+    "kind": "answerable",
+    "expectedDocument": "商品陈列与补货规范.md",
+    "keywords": [
+      "三分之一",
+      "1/3"
+    ]
+  },
+  {
+    "id": "纸箱通道",
+    "question": "补货时纸箱最多能在通道上放多久？",
+    "kind": "answerable",
+    "expectedDocument": "商品陈列与补货规范.md",
+    "keywords": [
+      "30 分钟",
+      "30分钟",
+      "半小时"
+    ]
+  },
+  {
+    "id": "堆头高度",
+    "question": "堆头最高可以堆多高？",
+    "kind": "answerable",
+    "expectedDocument": "商品陈列与补货规范.md",
+    "keywords": [
+      "1.5"
+    ]
+  },
+  {
+    "id": "端架更换",
+    "question": "端架商品多久换一次？",
+    "kind": "answerable",
+    "expectedDocument": "商品陈列与补货规范.md",
+    "keywords": [
+      "两周",
+      "2 周",
+      "2周"
+    ]
+  },
+  {
+    "id": "长保质期临期",
+    "question": "保质期 90 天以上的商品，还剩多少天算临期？",
+    "kind": "answerable",
+    "expectedDocument": "临期与报损管理.md",
+    "keywords": [
+      "30"
+    ]
+  },
+  {
+    "id": "鲜奶临期",
+    "question": "鲜奶和面包还剩几天算临期？",
+    "kind": "answerable",
+    "expectedDocument": "临期与报损管理.md",
+    "keywords": [
+      "2天",
+      "2 天",
+      "两天"
+    ]
+  },
+  {
+    "id": "临期折扣",
+    "question": "临期商品按几折卖？",
+    "kind": "answerable",
+    "expectedDocument": "临期与报损管理.md",
+    "keywords": [
+      "七折",
+      "7折",
+      "7 折"
+    ]
+  },
+  {
+    "id": "报损签字",
+    "question": "报损金额达到多少需要店长签字？",
+    "kind": "answerable",
+    "expectedDocument": "临期与报损管理.md",
+    "keywords": [
+      "500"
+    ]
+  },
+  {
+    "id": "鲜食下架",
+    "question": "鲜食什么时候下架？",
+    "kind": "answerable",
+    "expectedDocument": "临期与报损管理.md",
+    "keywords": [
+      "20:00",
+      "20点",
+      "晚上8点",
+      "晚上 8 点"
+    ]
+  },
+  {
+    "id": "备用金",
+    "question": "开班备用金是多少钱？",
+    "kind": "answerable",
+    "expectedDocument": "收银与交接班.md",
+    "keywords": [
+      "800"
+    ]
+  },
+  {
+    "id": "差异说明",
+    "question": "交班差额超过多少要写差异说明单？",
+    "kind": "answerable",
+    "expectedDocument": "收银与交接班.md",
+    "keywords": [
+      "20"
+    ]
+  },
+  {
+    "id": "假币",
+    "question": "收到疑似假币应该怎么处理？",
+    "kind": "answerable",
+    "expectedDocument": "收银与交接班.md",
+    "keywords": [
+      "更换",
+      "店长"
+    ]
+  },
+  {
+    "id": "保险柜",
+    "question": "钱箱里现金超过多少要放进保险柜？",
+    "kind": "answerable",
+    "expectedDocument": "收银与交接班.md",
+    "keywords": [
+      "3000"
+    ]
+  },
+  {
+    "id": "退换期限",
+    "question": "顾客买的东西几天内可以退换？",
+    "kind": "answerable",
+    "expectedDocument": "退换货政策.md",
+    "keywords": [
+      "7"
+    ]
+  },
+  {
+    "id": "拆封零食",
+    "question": "已经拆封的零食能退吗？",
+    "kind": "answerable",
+    "expectedDocument": "退换货政策.md",
+    "keywords": [
+      "不退",
+      "不能",
+      "不可以",
+      "质量问题"
+    ]
+  },
+  {
+    "id": "退款授权",
+    "question": "退款超过多少钱需要店长授权？",
+    "kind": "answerable",
+    "expectedDocument": "退换货政策.md",
+    "keywords": [
+      "200"
+    ]
+  },
+  {
+    "id": "充值卡",
+    "question": "充值卡卖出去还能退吗？",
+    "kind": "answerable",
+    "expectedDocument": "退换货政策.md",
+    "keywords": [
+      "不退",
+      "不能",
+      "不可以",
+      "不予"
+    ]
+  },
+  {
+    "id": "积分抵扣",
+    "question": "会员积分多少分能抵一块钱？",
+    "kind": "answerable",
+    "expectedDocument": "会员与促销.md",
+    "keywords": [
+      "100"
+    ]
+  },
+  {
+    "id": "会员日",
+    "question": "会员日是星期几？",
+    "kind": "answerable",
+    "expectedDocument": "会员与促销.md",
+    "keywords": [
+      "周三",
+      "星期三"
+    ]
+  },
+  {
+    "id": "折扣叠加",
+    "question": "会员日折扣能和临期七折一起用吗？",
+    "kind": "answerable",
+    "expectedDocument": "会员与促销.md",
+    "keywords": [
+      "不能",
+      "不与",
+      "不可",
+      "不叠加"
+    ]
+  },
+  {
+    "id": "灭火器",
+    "question": "灭火器多久检查一次？",
+    "kind": "answerable",
+    "expectedDocument": "门店安全与应急.md",
+    "keywords": [
+      "每月",
+      "每个月",
+      "一个月"
+    ]
+  },
+  {
+    "id": "停电冷链",
+    "question": "停电多久没恢复要转移冷链商品？",
+    "kind": "answerable",
+    "expectedDocument": "门店安全与应急.md",
+    "keywords": [
+      "2 小时",
+      "2小时",
+      "两小时"
+    ]
+  },
+  {
+    "id": "监控保留",
+    "question": "顾客受伤的监控录像要保留多久？",
+    "kind": "answerable",
+    "expectedDocument": "门店安全与应急.md",
+    "keywords": [
+      "30"
+    ]
+  },
+  {
+    "id": "年假",
+    "question": "员工年假怎么申请？",
+    "kind": "unanswerable",
+    "restricted": false
+  },
+  {
+    "id": "WiFi",
+    "question": "门店 WiFi 密码是多少？",
+    "kind": "unanswerable",
+    "restricted": false
+  },
+  {
+    "id": "外卖上架",
+    "question": "外卖平台怎么上架新品？",
+    "kind": "unanswerable",
+    "restricted": false
+  },
+  {
+    "id": "夜班补贴",
+    "question": "夜班补贴是多少钱？",
+    "kind": "unanswerable",
+    "restricted": false
+  },
+  {
+    "id": "试用期",
+    "question": "新员工试用期多久？",
+    "kind": "unanswerable",
+    "restricted": false
+  },
+  {
+    "id": "总部地址",
+    "question": "总部地址在哪里？",
+    "kind": "unanswerable",
+    "restricted": false
+  },
+  {
+    "id": "店长奖金",
+    "question": "店长的月度奖金怎么计算？",
+    "kind": "unanswerable",
+    "restricted": true
+  },
+  {
+    "id": "排名复训",
+    "question": "区域排名靠后的店长会怎么样？",
+    "kind": "unanswerable",
+    "restricted": true
+  }
+]
