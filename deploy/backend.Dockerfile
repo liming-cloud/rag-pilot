@@ -9,6 +9,8 @@ RUN ./mvnw -B -ntp -pl backend/rag-app -am package -DskipTests
 # 运行阶段：只保留 JRE 和一个 jar，以非 root 用户运行。
 FROM eclipse-temurin:25-jre
 WORKDIR /opt/rag
+# 上传文件目录预先归属运行用户，命名卷首次挂载时会继承这个属主。
+RUN mkdir -p /data/files && chown 10001:10001 /data/files
 COPY --from=builder --chown=10001:10001 /workspace/backend/rag-app/target/rag-app.jar app.jar
 USER 10001:10001
 ENV JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=75.0 -Dfile.encoding=UTF-8"

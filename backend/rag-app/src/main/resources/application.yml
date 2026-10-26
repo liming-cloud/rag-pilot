@@ -4,6 +4,11 @@ spring:
   threads:
     virtual:
       enabled: true
+  servlet:
+    multipart:
+      # 与 DocumentIngestionService.MAX_SIZE_BYTES 一致。
+      max-file-size: 50MB
+      max-request-size: 55MB
   datasource:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/rag}
     username: ${DB_USERNAME:rag}
@@ -45,3 +50,11 @@ management:
       probes:
         enabled: true
       show-details: never
+
+rag:
+  pilot:
+    # 试点单租户；第 4 周接入登录后改为从会话取租户。
+    tenant-id: 1
+  storage:
+    # 原始文件存放目录；Compose 中挂载为数据卷。
+    root: ${RAG_STORAGE_ROOT:./data/files}

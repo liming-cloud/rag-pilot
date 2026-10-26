@@ -27,6 +27,9 @@ services:
       DB_URL: jdbc:postgresql://db:5432/rag
       DB_USERNAME: rag
       DB_PASSWORD: ${DB_PASSWORD}
+      RAG_STORAGE_ROOT: /data/files
+    volumes:
+      - app-files:/data/files
     depends_on:
       db:
         condition: service_healthy
@@ -35,3 +38,4 @@ services:
 
 volumes:
   db-data:
+  app-files:
