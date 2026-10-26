@@ -1,0 +1,5 @@
+# 测试专用覆盖：用本地确定性向量，测试不访问外部模型服务。
+rag:
+  ai:
+    embedding:
+      provider: hashing

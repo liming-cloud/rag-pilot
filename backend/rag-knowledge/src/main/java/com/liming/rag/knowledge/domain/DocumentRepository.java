@@ -9,7 +9,8 @@ public interface DocumentRepository {
     /** 新文档插入并回填标识，已有文档更新状态。 */
     void save(Document document);
 
-    void saveChunks(Document document, List<Chunk> chunks);
+    /** 分块与向量一一对应，按顺序写入。 */
+    void saveChunks(Document document, List<Chunk> chunks, List<float[]> embeddings);
 
     boolean existsInKnowledgeBase(long knowledgeBaseId, String sha256);
 

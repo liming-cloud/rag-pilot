@@ -28,6 +28,7 @@ services:
       DB_USERNAME: rag
       DB_PASSWORD: ${DB_PASSWORD}
       RAG_STORAGE_ROOT: /data/files
+      MODEL_API_KEY: ${MODEL_API_KEY:?请在 deploy/.env 中设置 MODEL_API_KEY}
     volumes:
       - app-files:/data/files
     depends_on:

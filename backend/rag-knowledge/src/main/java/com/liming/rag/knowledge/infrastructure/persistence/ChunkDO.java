@@ -1,10 +1,11 @@
 package com.liming.rag.knowledge.infrastructure.persistence;
 
 import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 
-/** chunk 表的持久化对象。向量列在接入嵌入模型时加入。 */
+/** chunk 表的持久化对象。 */
 @TableName("chunk")
 public class ChunkDO {
 
@@ -17,6 +18,8 @@ public class ChunkDO {
     private String headingPath;
     private String content;
     private Integer tokenCount;
+    @TableField(typeHandler = VectorTypeHandler.class)
+    private float[] embedding;
 
     public Long getId() {
         return id;
@@ -80,5 +83,13 @@ public class ChunkDO {
 
     public void setTokenCount(Integer tokenCount) {
         this.tokenCount = tokenCount;
+    }
+
+    public float[] getEmbedding() {
+        return embedding;
+    }
+
+    public void setEmbedding(float[] embedding) {
+        this.embedding = embedding;
     }
 }
