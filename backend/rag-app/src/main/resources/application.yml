@@ -52,6 +52,16 @@ management:
       show-details: never
 
 rag:
+  ai:
+    # 嵌入、重排、对话默认共用一个 OpenAI 兼容地址和密钥（硅基流动），见 DECISIONS.md。
+    base-url: ${MODEL_BASE_URL:https://api.siliconflow.cn/v1}
+    api-key: ${MODEL_API_KEY:}
+    timeout: 30s
+    embedding:
+      # openai：调用真实模型；hashing：本地确定性向量，只用于测试和没有密钥时的离线开发。
+      provider: ${RAG_EMBEDDING_PROVIDER:openai}
+      model: ${EMBEDDING_MODEL:BAAI/bge-m3}
+      batch-size: 16
   pilot:
     # 试点单租户；第 4 周接入登录后改为从会话取租户。
     tenant-id: 1

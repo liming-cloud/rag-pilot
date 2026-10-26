@@ -42,8 +42,12 @@ class MybatisDocumentRepository implements DocumentRepository {
     }
 
     @Override
-    public void saveChunks(Document document, List<Chunk> values) {
-        for (var chunk : values) {
+    public void saveChunks(Document document, List<Chunk> values, List<float[]> embeddings) {
+        if (values.size() != embeddings.size()) {
+            throw new IllegalArgumentException("分块数和向量数不一致");
+        }
+        for (int i = 0; i < values.size(); i++) {
+            var chunk = values.get(i);
             var row = new ChunkDO();
             row.setTenantId(document.tenantId().value());
             row.setKnowledgeBaseId(document.knowledgeBaseId());
@@ -52,6 +56,7 @@ class MybatisDocumentRepository implements DocumentRepository {
             row.setHeadingPath(chunk.headingPath());
             row.setContent(chunk.content());
             row.setTokenCount(chunk.tokenCount());
+            row.setEmbedding(embeddings.get(i));
             chunks.insert(row);
         }
     }

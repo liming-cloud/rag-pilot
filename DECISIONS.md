@@ -50,3 +50,6 @@ Maven Wrapper 3.3.4（only-script）从旧项目复制，固定 Maven 3.9.16。
 
 React 19.2、Vite 8.1、TypeScript 6.0、Vitest 4.1 沿用旧项目验证过的版本；Tailwind CSS 4.3、MSW 2、React Router 7、TanStack Query 5。前端用 Node 24（自带 npm 11），因为 npm 10 安装 Vite 8 依赖时会崩溃。
 
+## D-013 嵌入模型与混合检索（2026-10-26）
+
+嵌入用硅基流动 `BAAI/bge-m3`（1024 维），经 Spring AI 的 OpenAI 兼容客户端调用；嵌入、重排、对话共用一个 `MODEL_API_KEY`。检索为向量 top50 + BM25（jieba）top50，用 RRF（k=60）融合，权限过滤只在 `ChunkSearchMapper` 的 SQL 里。测试和无密钥的离线开发用本地哈希向量（`RAG_EMBEDDING_PROVIDER=hashing`），它不具备语义能力，不能用于评测。

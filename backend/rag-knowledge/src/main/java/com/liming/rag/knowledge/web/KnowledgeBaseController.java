@@ -1,6 +1,9 @@
 package com.liming.rag.knowledge.web;
 
 import com.liming.rag.common.TenantId;
+import com.liming.rag.knowledge.api.KnowledgeSearch;
+import com.liming.rag.knowledge.api.SearchHit;
+import com.liming.rag.knowledge.api.SearchQuery;
 import com.liming.rag.knowledge.application.DocumentIngestionService;
 import com.liming.rag.knowledge.application.KnowledgeBaseService;
 import com.liming.rag.knowledge.domain.Document;
@@ -49,12 +52,14 @@ class KnowledgeBaseController {
 
     private final KnowledgeBaseService knowledgeBases;
     private final DocumentIngestionService ingestion;
+    private final KnowledgeSearch search;
     private final TenantId pilotTenant;
 
     KnowledgeBaseController(KnowledgeBaseService knowledgeBases, DocumentIngestionService ingestion,
-            @Value("${rag.pilot.tenant-id:1}") long pilotTenantId) {
+            KnowledgeSearch search, @Value("${rag.pilot.tenant-id:1}") long pilotTenantId) {
         this.knowledgeBases = knowledgeBases;
         this.ingestion = ingestion;
+        this.search = search;
         this.pilotTenant = new TenantId(pilotTenantId);
     }
 
@@ -80,5 +85,13 @@ class KnowledgeBaseController {
     @GetMapping("/{knowledgeBaseId}/documents")
     List<DocumentView> documents(@PathVariable long knowledgeBaseId) {
         return ingestion.list(pilotTenant, knowledgeBaseId).stream().map(DocumentView::of).toList();
+    }
+
+    /** 检索调试与评测用：直接看某个知识库对一个问题召回了哪些分块。 */
+    @GetMapping("/{knowledgeBaseId}/search")
+    List<SearchHit> search(@PathVariable long knowledgeBaseId, @RequestParam("q") String question,
+            @RequestParam(name = "limit", defaultValue = "10") int limit) {
+        knowledgeBases.get(pilotTenant, knowledgeBaseId);
+        return search.search(new SearchQuery(pilotTenant, List.of(knowledgeBaseId), question, limit));
     }
 }

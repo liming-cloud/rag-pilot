@@ -1,5 +1,7 @@
 package com.liming.rag.knowledge.application;
 
+import com.liming.rag.ai.EmbeddingClient;
+import com.liming.rag.ai.ModelCallException;
 import com.liming.rag.common.TenantId;
 import com.liming.rag.knowledge.domain.Document;
 import com.liming.rag.knowledge.domain.DocumentRepository;
@@ -20,8 +22,8 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * 文档入库：校验、存原文件、解析、分块、写入分块。
  *
- * <p>目前只支持 UTF-8 的 TXT 和 Markdown，在上传请求内同步完成。PDF、Office 等格式接入
- * docling-serve 后改为任务表异步处理，这里的校验和失败语义保持不变。
+ * <p>目前只支持 UTF-8 的 TXT 和 Markdown，在上传请求内同步完成（含调用嵌入模型）。PDF、Office
+ * 等格式接入 docling-serve 后改为任务表异步处理，模型调用也随之移出数据库事务；校验和失败语义保持不变。
  */
 @Service
 public class DocumentIngestionService {
@@ -37,13 +39,15 @@ public class DocumentIngestionService {
     private final KnowledgeBaseService knowledgeBases;
     private final DocumentRepository documents;
     private final FileStorage storage;
+    private final EmbeddingClient embeddings;
     private final TextChunker chunker = new TextChunker();
 
     public DocumentIngestionService(KnowledgeBaseService knowledgeBases, DocumentRepository documents,
-            FileStorage storage) {
+            FileStorage storage, EmbeddingClient embeddings) {
         this.knowledgeBases = knowledgeBases;
         this.documents = documents;
         this.storage = storage;
+        this.embeddings = embeddings;
     }
 
     /**
@@ -81,8 +85,16 @@ public class DocumentIngestionService {
         if (chunks.isEmpty()) {
             document.markFailed("文件里没有可检索的文字");
         } else {
-            documents.saveChunks(document, chunks);
-            document.markReady(chunks.size());
+            try {
+                // 向量化时带上章节位置，短分块也能借标题获得上下文。
+                var vectors = embeddings.embed(chunks.stream()
+                        .map(chunk -> chunk.headingPath() + "\n" + chunk.content())
+                        .toList());
+                documents.saveChunks(document, chunks, vectors);
+                document.markReady(chunks.size());
+            } catch (ModelCallException e) {
+                document.markFailed(e.getMessage());
+            }
         }
         documents.save(document);
         return document;

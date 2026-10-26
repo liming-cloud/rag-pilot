@@ -58,7 +58,7 @@ jobs:
       - name: 构建后端镜像
         run: docker build -f deploy/backend.Dockerfile -t rag-app:ci .
       - name: 校验 Compose 配置
-        run: DB_PASSWORD=ci docker compose -f deploy/compose.yml config --quiet
+        run: DB_PASSWORD=ci MODEL_API_KEY=ci docker compose -f deploy/compose.yml config --quiet
 
   frontend:
     name: frontend
