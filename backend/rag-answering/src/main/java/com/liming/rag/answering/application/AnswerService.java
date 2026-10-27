@@ -4,22 +4,23 @@ import com.liming.rag.ai.ChatGateway;
 import com.liming.rag.ai.RerankClient;
 import com.liming.rag.answering.api.Answer;
 import com.liming.rag.answering.api.Answer.RefusalReason;
-import com.liming.rag.answering.api.Citation;
 import com.liming.rag.answering.domain.CitationParser;
 import com.liming.rag.common.TenantId;
 import com.liming.rag.common.UserId;
 import com.liming.rag.knowledge.api.KnowledgeSearch;
-import com.liming.rag.knowledge.api.SearchHit;
-import com.liming.rag.knowledge.api.SearchQuery;
-import java.util.Comparator;
 import java.util.List;
 import java.util.function.Consumer;
-import java.util.stream.IntStream;
+import org.springframework.ai.rag.generation.augmentation.QueryAugmenter;
+import org.springframework.ai.rag.postretrieval.document.DocumentPostProcessor;
+import org.springframework.ai.rag.retrieval.search.DocumentRetriever;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 /**
  * 带引用的问答：混合检索 → 重排 → 相关度门槛 → 生成 → 引用校验。
+ *
+ * <p>检索、重排、拼证据用 Spring AI 模块化 RAG 的接口（{@link DocumentRetriever}、{@link DocumentPostProcessor}、
+ * {@link QueryAugmenter}），编排和拒答规则在这里，见 D-020。
  *
  * <p>三道拒答关口：没有检索结果、重排后都低于门槛、模型回答 NO_ANSWER 或没有有效引用。
  * 门槛 {@code rag.answering.min-relevance} 是占位值，要用评测集校准。
@@ -32,10 +33,10 @@ public class AnswerService {
 
     static final int MAX_QUESTION_LENGTH = 500;
 
-    private final KnowledgeSearch search;
-    private final RerankClient rerank;
+    private final DocumentRetriever retriever;
+    private final DocumentPostProcessor reranker;
+    private final QueryAugmenter augmenter = new NumberedEvidenceAugmenter();
     private final ChatGateway chat;
-    private final int candidates;
     private final int evidenceLimit;
     private final double minRelevance;
 
@@ -43,10 +44,9 @@ public class AnswerService {
             @Value("${rag.answering.candidates:30}") int candidates,
             @Value("${rag.answering.evidence-limit:8}") int evidenceLimit,
             @Value("${rag.answering.min-relevance:0.2}") double minRelevance) {
-        this.search = search;
-        this.rerank = rerank;
+        this.retriever = new KnowledgeDocumentRetriever(search, candidates);
+        this.reranker = new RerankPostProcessor(rerank);
         this.chat = chat;
-        this.candidates = candidates;
         this.evidenceLimit = evidenceLimit;
         this.minRelevance = minRelevance;
     }
@@ -68,22 +68,22 @@ public class AnswerService {
         if (text.isEmpty() || text.length() > MAX_QUESTION_LENGTH) {
             throw new IllegalArgumentException("问题不能为空，且不超过 " + MAX_QUESTION_LENGTH + " 个字");
         }
-        var hits = search.search(new SearchQuery(tenantId, userId, knowledgeBaseIds, text, candidates));
-        if (hits.isEmpty()) {
+        var query = AnswerContext.query(text, tenantId, userId, knowledgeBaseIds);
+        var candidates = retriever.retrieve(query);
+        if (candidates.isEmpty()) {
             return Answer.refused(RefusalReason.NO_EVIDENCE, null);
         }
-        var ranked = rerank(text, hits);
-        double topRelevance = ranked.getFirst().score();
+        var ranked = reranker.process(query, candidates);
+        double topRelevance = ranked.getFirst().getScore();
         var evidence = ranked.stream()
-                .filter(scored -> scored.score() >= minRelevance)
+                .filter(document -> document.getScore() >= minRelevance)
                 .limit(evidenceLimit)
-                .map(Scored::hit)
                 .toList();
         if (evidence.isEmpty()) {
             return Answer.refused(RefusalReason.LOW_RELEVANCE, topRelevance);
         }
-        var reply = chat.stream(AnswerPrompt.SYSTEM, AnswerPrompt.user(text, evidence), new NoAnswerGate(onDelta))
-                .strip();
+        var prompt = augmenter.augment(query, evidence).text();
+        var reply = chat.stream(AnswerPrompt.SYSTEM, prompt, new NoAnswerGate(onDelta)).strip();
         if (reply.isEmpty() || reply.startsWith(AnswerPrompt.NO_ANSWER)) {
             return Answer.refused(RefusalReason.MODEL_DECLINED, topRelevance);
         }
@@ -92,16 +92,9 @@ public class AnswerService {
             return Answer.refused(RefusalReason.UNCITED, topRelevance);
         }
         var citations = parsed.cited().stream()
-                .map(index -> {
-                    var hit = evidence.get(index - 1);
-                    return new Citation(index, hit.chunkId(), hit.documentId(), hit.documentName(),
-                            hit.headingPath(), hit.content());
-                })
+                .map(index -> Evidence.citation(index, evidence.get(index - 1)))
                 .toList();
         return Answer.answered(parsed.text(), citations, topRelevance);
-    }
-
-    private record Scored(SearchHit hit, double score) {
     }
 
     /** 先攒住开头的文字，确认不是 NO_ANSWER 之后再放行，之后的片段直接转发。 */
@@ -136,14 +129,4 @@ public class AnswerService {
         }
     }
 
-    /** 按重排分数从高到低排列全部候选。 */
-    private List<Scored> rerank(String question, List<SearchHit> hits) {
-        var scores = rerank.score(question, hits.stream()
-                .map(hit -> hit.headingPath() + "\n" + hit.content())
-                .toList());
-        return IntStream.range(0, hits.size())
-                .mapToObj(i -> new Scored(hits.get(i), scores.get(i)))
-                .sorted(Comparator.comparingDouble(Scored::score).reversed())
-                .toList();
-    }
 }
