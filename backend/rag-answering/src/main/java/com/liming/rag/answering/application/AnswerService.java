@@ -10,8 +10,10 @@ import com.liming.rag.common.UserId;
 import com.liming.rag.knowledge.api.KnowledgeSearch;
 import java.util.List;
 import java.util.function.Consumer;
+import org.springframework.ai.document.Document;
 import org.springframework.ai.rag.generation.augmentation.QueryAugmenter;
 import org.springframework.ai.rag.postretrieval.document.DocumentPostProcessor;
+import org.springframework.ai.rag.preretrieval.query.transformation.QueryTransformer;
 import org.springframework.ai.rag.retrieval.search.DocumentRetriever;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -23,6 +25,7 @@ import org.springframework.stereotype.Service;
  * {@link QueryAugmenter}），编排和拒答规则在这里，见 D-020。
  *
  * <p>三道拒答关口：没有检索结果、重排后都低于门槛、模型回答 NO_ANSWER 或没有有效引用。
+ * 重排后都低于门槛时，先把问题改写一次再检索（{@link LowRelevanceRewriter}，可用 {@code rag.answering.rewrite-on-low-relevance} 关闭）。
  * 门槛 {@code rag.answering.min-relevance} 是占位值，要用评测集校准。
  *
  * <p>流式问答时，生成中的文字先流给用户，最终以返回的 {@link Answer} 为准：引用校验不通过时它是拒答，
@@ -36,19 +39,24 @@ public class AnswerService {
     private final DocumentRetriever retriever;
     private final DocumentPostProcessor reranker;
     private final QueryAugmenter augmenter = new NumberedEvidenceAugmenter();
+    private final QueryTransformer rewriter;
     private final ChatGateway chat;
     private final int evidenceLimit;
     private final double minRelevance;
+    private final boolean rewriteOnLowRelevance;
 
     AnswerService(KnowledgeSearch search, RerankClient rerank, ChatGateway chat,
             @Value("${rag.answering.candidates:30}") int candidates,
             @Value("${rag.answering.evidence-limit:8}") int evidenceLimit,
-            @Value("${rag.answering.min-relevance:0.2}") double minRelevance) {
+            @Value("${rag.answering.min-relevance:0.2}") double minRelevance,
+            @Value("${rag.answering.rewrite-on-low-relevance:true}") boolean rewriteOnLowRelevance) {
         this.retriever = new KnowledgeDocumentRetriever(search, candidates);
         this.reranker = new RerankPostProcessor(rerank);
+        this.rewriter = new LowRelevanceRewriter(chat);
         this.chat = chat;
         this.evidenceLimit = evidenceLimit;
         this.minRelevance = minRelevance;
+        this.rewriteOnLowRelevance = rewriteOnLowRelevance;
     }
 
     /**
@@ -73,32 +81,59 @@ public class AnswerService {
         var candidates = retriever.retrieve(query);
         clock.retrieved();
         if (candidates.isEmpty()) {
-            return Answer.refused(RefusalReason.NO_EVIDENCE, null).withTimings(clock.timings());
+            return finish(Answer.refused(RefusalReason.NO_EVIDENCE, null), clock, null);
         }
         var ranked = reranker.process(query, candidates);
         clock.reranked();
-        double topRelevance = ranked.getFirst().getScore();
-        var evidence = ranked.stream()
-                .filter(document -> document.getScore() >= minRelevance)
-                .limit(evidenceLimit)
-                .toList();
-        if (evidence.isEmpty()) {
-            return Answer.refused(RefusalReason.LOW_RELEVANCE, topRelevance).withTimings(clock.timings());
+        var evidence = evidence(ranked);
+        String rewritten = null;
+        if (evidence.isEmpty() && rewriteOnLowRelevance) {
+            // 低分时改写一次问题再检索：口语、错别字、叫法不同常让重排打低分。正常问题不走这里，延迟不变。
+            clock.rewriteStarted();
+            var transformed = rewriter.transform(query);
+            if (!transformed.text().equals(query.text())) {
+                rewritten = transformed.text();
+                var retried = retriever.retrieve(transformed);
+                var reranked = retried.isEmpty() ? List.<Document>of() : reranker.process(transformed, retried);
+                if (!reranked.isEmpty() && reranked.getFirst().getScore() > ranked.getFirst().getScore()) {
+                    ranked = reranked;
+                    evidence = evidence(ranked);
+                }
+            }
+            clock.rewriteFinished();
         }
+        double topRelevance = ranked.getFirst().getScore();
+        if (evidence.isEmpty()) {
+            return finish(Answer.refused(RefusalReason.LOW_RELEVANCE, topRelevance), clock, rewritten);
+        }
+        // 证据可能来自改写后的检索，但回答针对员工原来的问题。
         var prompt = augmenter.augment(query, evidence).text();
         var reply = chat.stream(AnswerPrompt.SYSTEM, prompt, new NoAnswerGate(onDelta, clock::firstToken)).strip();
         clock.generated();
         if (reply.isEmpty() || reply.startsWith(AnswerPrompt.NO_ANSWER)) {
-            return Answer.refused(RefusalReason.MODEL_DECLINED, topRelevance).withTimings(clock.timings());
+            return finish(Answer.refused(RefusalReason.MODEL_DECLINED, topRelevance), clock, rewritten);
         }
         var parsed = CitationParser.parse(reply, evidence.size());
         if (parsed.cited().isEmpty()) {
-            return Answer.refused(RefusalReason.UNCITED, topRelevance).withTimings(clock.timings());
+            return finish(Answer.refused(RefusalReason.UNCITED, topRelevance), clock, rewritten);
         }
+        var finalEvidence = evidence;
         var citations = parsed.cited().stream()
-                .map(index -> Evidence.citation(index, evidence.get(index - 1)))
+                .map(index -> Evidence.citation(index, finalEvidence.get(index - 1)))
                 .toList();
-        return Answer.answered(parsed.text(), citations, topRelevance).withTimings(clock.timings());
+        return finish(Answer.answered(parsed.text(), citations, topRelevance), clock, rewritten);
+    }
+
+    /** 重排后达到门槛的前几条。 */
+    private List<Document> evidence(List<Document> ranked) {
+        return ranked.stream()
+                .filter(document -> document.getScore() >= minRelevance)
+                .limit(evidenceLimit)
+                .toList();
+    }
+
+    private static Answer finish(Answer answer, StageClock clock, String rewritten) {
+        return answer.withRewrittenQuestion(rewritten).withTimings(clock.timings());
     }
 
     /** 记下各阶段结束的时刻；首字只记第一次。 */
@@ -109,6 +144,8 @@ public class AnswerService {
         private long reranked;
         private long firstToken;
         private long generated;
+        private long rewriteStarted;
+        private long rewriteFinished;
 
         void retrieved() {
             retrieved = System.nanoTime();
@@ -116,6 +153,14 @@ public class AnswerService {
 
         void reranked() {
             reranked = System.nanoTime();
+        }
+
+        void rewriteStarted() {
+            rewriteStarted = System.nanoTime();
+        }
+
+        void rewriteFinished() {
+            rewriteFinished = System.nanoTime();
         }
 
         void firstToken() {
@@ -130,9 +175,12 @@ public class AnswerService {
         }
 
         Answer.Timings timings() {
+            // 生成从重排结束（有改写时从改写结束）开始算。
+            long generationStart = rewriteFinished == 0 ? reranked : rewriteFinished;
             return new Answer.Timings(millis(start, retrieved), reranked == 0 ? null : millis(retrieved, reranked),
-                    firstToken == 0 ? null : millis(reranked, firstToken),
-                    generated == 0 ? null : millis(reranked, generated));
+                    firstToken == 0 ? null : millis(generationStart, firstToken),
+                    generated == 0 ? null : millis(generationStart, generated),
+                    rewriteFinished == 0 ? null : millis(rewriteStarted, rewriteFinished));
         }
 
         private static long millis(long from, long to) {

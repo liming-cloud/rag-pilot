@@ -435,11 +435,17 @@
     "style": "近似"
   },
   {
-    "id": "积分过期",
+    "id": "积分有效期",
     "question": "会员积分会过期吗？",
-    "kind": "unanswerable",
-    "restricted": false,
-    "style": "近似"
+    "kind": "answerable",
+    "expectedDocument": "会员与促销.md",
+    "keywords": [
+      "次年 12 月 31 日",
+      "次年12月31日",
+      "12月31日",
+      "12 月 31 日"
+    ],
+    "style": "改写"
   },
   {
     "id": "外卖打包",

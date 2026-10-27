@@ -64,6 +64,26 @@ class EvalReportTest {
     }
 
     @Test
+    @DisplayName("统计低分改写：触发次数、救回的可回答题、被改写后答了的应拒答题、改写耗时")
+    void reportsRewrites() {
+        var rescued = new EvalOutcome(SHELF, List.of(new Retrieved("陈列.md", "放在 03 号货架")), false, null,
+                "在 03 号货架[1]", List.of("陈列.md"), 0.9, 100, 400, 1000,
+                new EvalOutcome.Stages(120L, 300L, 900L, 1500L), "青柚气泡水在哪个货架？");
+        var stillRefused = new EvalOutcome(LEAVE, List.of(), true, "LOW_RELEVANCE", "", List.of(), 0.01, 100, 300,
+                300, new EvalOutcome.Stages(80L, 250L, null, 1100L), "员工年假如何申请？");
+        var risky = new EvalOutcome(BONUS, List.of(), false, null, "基数 3000 元[1]", List.of("奖金.md"), 0.5, 100,
+                300, 300, new EvalOutcome.Stages(80L, 250L, 700L, 1200L), "店长奖金怎么算？");
+
+        var markdown = EvalReport.of(List.of(rescued, stillRefused, risky), Set.of()).toMarkdown();
+
+        assertThat(markdown).contains("触发 3 题")
+                .contains("可回答题救回 1 题")
+                .contains("应拒答题被改写后回答了 1 题")
+                .contains("| 低分改写（改写 + 重新检索、重排） | 1500 ms |")
+                .contains("员工年假如何申请？");
+    }
+
+    @Test
     @DisplayName("p95 用最近秩法")
     void p95() {
         assertThat(EvalReport.p95(List.of(5L, 1L, 3L))).isEqualTo(5);

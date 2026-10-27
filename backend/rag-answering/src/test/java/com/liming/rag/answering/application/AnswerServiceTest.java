@@ -27,7 +27,7 @@ class AnswerServiceTest {
         return new AnswerService(query -> hits, (query, documents) -> scores, (system, user) -> {
             prompts.add(user);
             return reply;
-        }, 30, 8, 0.3);
+        }, 30, 8, 0.3, false);
     }
 
     @Test
@@ -121,6 +121,63 @@ class AnswerServiceTest {
                 return String.join("", pieces);
             }
         };
-        return new AnswerService(query -> List.of(SHELF), (query, documents) -> List.of(score), chat, 30, 8, 0.3);
+        return new AnswerService(query -> List.of(SHELF), (query, documents) -> List.of(score), chat, 30, 8, 0.3,
+                false);
+    }
+
+    /**
+     * 改写场景：只有问题里出现“货架”时重排才给高分；改写器把口语问题改成规范说法。
+     * 回答时用员工原来的问题，证据来自改写后的检索。
+     */
+    private AnswerService rewriting(String rewritten, boolean enabled) {
+        ChatGateway chat = new ChatGateway() {
+            @Override
+            public String complete(String systemPrompt, String userMessage) {
+                prompts.add(userMessage);
+                return rewritten;
+            }
+
+            @Override
+            public String stream(String systemPrompt, String userMessage, Consumer<String> onDelta) {
+                prompts.add(userMessage);
+                onDelta.accept("在 03 号货架[1]。");
+                return "在 03 号货架[1]。";
+            }
+        };
+        return new AnswerService(query -> List.of(SHELF),
+                (query, documents) -> List.of(query.contains("货架") ? 0.9 : 0.05), chat, 30, 8, 0.3, enabled);
+    }
+
+    @Test
+    @DisplayName("低分时改写问题再检索一次：救回来就用员工原来的问题回答，并记下改写结果和耗时")
+    void rewritesOnLowRelevance() {
+        var answer = rewriting("青柚气泡水放在哪个货架？", true).ask(TENANT, USER, List.of(), "青柚放哪了");
+
+        assertThat(answer.refused()).isFalse();
+        assertThat(answer.rewrittenQuestion()).isEqualTo("青柚气泡水放在哪个货架？");
+        assertThat(answer.topRelevance()).isEqualTo(0.9);
+        assertThat(answer.timings().rewriteMillis()).isNotNull();
+        assertThat(prompts.getFirst()).contains("青柚放哪了");
+        assertThat(prompts.getLast()).endsWith("问题：青柚放哪了");
+    }
+
+    @Test
+    @DisplayName("改写后仍然低分照常拒答；改写器没给出有效改写、或开关关闭时不重试")
+    void keepsRefusingWhenRewriteDoesNotHelp() {
+        var stillLow = rewriting("青柚在哪里？", true).ask(TENANT, USER, List.of(), "青柚放哪了");
+        assertThat(stillLow.refusalReason()).isEqualTo(RefusalReason.LOW_RELEVANCE);
+        assertThat(stillLow.rewrittenQuestion()).isEqualTo("青柚在哪里？");
+
+        for (var invalid : List.of("NO_ANSWER", "青柚放哪了", "  ")) {
+            prompts.clear();
+            var answer = rewriting(invalid, true).ask(TENANT, USER, List.of(), "青柚放哪了");
+            assertThat(answer.refusalReason()).isEqualTo(RefusalReason.LOW_RELEVANCE);
+            assertThat(answer.rewrittenQuestion()).isNull();
+        }
+
+        prompts.clear();
+        var disabled = rewriting("青柚气泡水放在哪个货架？", false).ask(TENANT, USER, List.of(), "青柚放哪了");
+        assertThat(disabled.refusalReason()).isEqualTo(RefusalReason.LOW_RELEVANCE);
+        assertThat(prompts).isEmpty();
     }
 }

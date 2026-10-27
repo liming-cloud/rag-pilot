@@ -76,6 +76,8 @@ rag:
     candidates: 30
     evidence-limit: 8
     min-relevance: 0.2
+    # 重排最高分低于门槛时，先把问题改写成规范说法再检索一次，减少口语、错别字导致的误拒；只影响本来要拒答的问题。
+    rewrite-on-low-relevance: ${RAG_REWRITE_ON_LOW_RELEVANCE:true}
   pilot:
     # 试点单租户：初始管理员建在这个租户下，之后的账号跟随创建它的管理员；请求的租户从登录会话取。
     tenant-id: 1

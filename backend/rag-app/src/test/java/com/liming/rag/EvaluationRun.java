@@ -53,7 +53,8 @@ import tools.jackson.databind.json.JsonMapper;
         "rag.ai.embedding.provider=${EVAL_EMBEDDING_PROVIDER:openai}",
         "rag.ai.rerank.provider=${EVAL_RERANK_PROVIDER:openai}",
         "rag.ai.chat.provider=${EVAL_CHAT_PROVIDER:openai}",
-        "rag.answering.min-relevance=${EVAL_MIN_RELEVANCE:0.2}"})
+        "rag.answering.min-relevance=${EVAL_MIN_RELEVANCE:0.2}",
+        "rag.answering.rewrite-on-low-relevance=${EVAL_REWRITE:true}"})
 @AutoConfigureTestRestTemplate
 @Testcontainers
 class EvaluationRun {
@@ -121,7 +122,8 @@ class EvaluationRun {
                 (String) answer.get("text"),
                 citations.stream().map(citation -> (String) citation.get("documentName")).toList(),
                 answer.get("topRelevance") == null ? null : ((Number) answer.get("topRelevance")).doubleValue(),
-                searchMillis, events.getFirst().atMillis(), done.atMillis(), stages(answer));
+                searchMillis, events.getFirst().atMillis(), done.atMillis(), stages(answer),
+                (String) answer.get("rewrittenQuestion"));
     }
 
     /**
@@ -208,7 +210,7 @@ class EvaluationRun {
         }
         var values = (Map<String, Object>) timings;
         return new EvalOutcome.Stages(millis(values.get("retrievalMillis")), millis(values.get("rerankMillis")),
-                millis(values.get("firstTokenMillis")));
+                millis(values.get("firstTokenMillis")), millis(values.get("rewriteMillis")));
     }
 
     /** 没有对应题目时比例是 NaN，显示成“-”。 */

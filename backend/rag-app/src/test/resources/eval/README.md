@@ -17,7 +17,7 @@ MODEL_API_KEY=... EVAL_DATA_DIR=/path/to/private-eval ./mvnw verify -pl backend/
   -Dtest.groups=eval -Dtest.excludedGroups=none -Dtest=EvaluationRun -Dsurefire.failIfNoSpecifiedTests=false
 ```
 
-报告写到 `backend/rag-app/target/eval-report.md`。先离线检查格式和流程（不调真实模型、分数没有意义）时，再加上 `EVAL_EMBEDDING_PROVIDER=hashing EVAL_RERANK_PROVIDER=lexical EVAL_CHAT_PROVIDER=extractive`，`MODEL_API_KEY` 随便填一个值即可。
+报告写到 `backend/rag-app/target/eval-report.md`。设置 `EVAL_REWRITE=false` 可以关闭“低分时改写问题再检索”，用来对比改写前后的误拒和延迟。先离线检查格式和流程（不调真实模型、分数没有意义）时，再加上 `EVAL_EMBEDDING_PROVIDER=hashing EVAL_RERANK_PROVIDER=lexical EVAL_CHAT_PROVIDER=extractive`，`MODEL_API_KEY` 随便填一个值即可。
 
 ## 真实问题 → 评测题
 
