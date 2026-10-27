@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, within } from "@testing-library/react";
-import { http } from "msw";
+import { http, HttpResponse } from "msw";
 import { server } from "@/mocks/server";
 import { sseResponse } from "@/mocks/sse";
 import { sampleAnswer } from "@/mocks/handlers";
@@ -104,15 +104,77 @@ describe("问答页", () => {
     expect(await screen.findByText("暂时无法回答，请稍后重试。")).toBeInTheDocument();
   });
 
-  it("可以点赞或点踩", async () => {
+  it("点赞提交给后端，再点一次撤销", async () => {
+    const requests = recordFeedback();
     renderPage();
     ask("临期商品怎么处理？");
 
     const helpful = await screen.findByRole("button", { name: "有帮助" });
     fireEvent.click(helpful);
     expect(helpful).toHaveAttribute("aria-pressed", "true");
-    fireEvent.click(screen.getByRole("button", { name: "没帮助" }));
+    await vi.waitFor(() => expect(requests).toEqual([{ method: "PUT", id: "501", body: { rating: "UP" } }]));
+
+    fireEvent.click(helpful);
     expect(helpful).toHaveAttribute("aria-pressed", "false");
-    expect(screen.getByRole("button", { name: "没帮助" })).toHaveAttribute("aria-pressed", "true");
+    await vi.waitFor(() => expect(requests.at(-1)).toEqual({ method: "DELETE", id: "501", body: null }));
+  });
+
+  it("点踩后可以补一句哪里不对", async () => {
+    const requests = recordFeedback();
+    renderPage();
+    ask("临期商品怎么处理？");
+
+    fireEvent.click(await screen.findByRole("button", { name: "没帮助" }));
+    fireEvent.change(await screen.findByLabelText("哪里不对？（选填）"), { target: { value: "门店规定是五折" } });
+    fireEvent.click(screen.getByRole("button", { name: "提交" }));
+
+    expect(await screen.findByText("已收到，谢谢反馈")).toBeInTheDocument();
+    expect(requests.at(-1)).toEqual({ method: "PUT", id: "501", body: { rating: "DOWN", comment: "门店规定是五折" } });
+  });
+
+  it("反馈提交失败时恢复原状并提示", async () => {
+    server.use(http.put("/api/answers/:id/feedback", () => new HttpResponse(null, { status: 500 })));
+    renderPage();
+    ask("临期商品怎么处理？");
+
+    const helpful = await screen.findByRole("button", { name: "有帮助" });
+    fireEvent.click(helpful);
+
+    expect(await screen.findByText("反馈没有提交成功，请稍后重试。")).toBeInTheDocument();
+    expect(helpful).toHaveAttribute("aria-pressed", "false");
+  });
+
+  it("拒答也能反馈没帮助", async () => {
+    server.use(http.post("/api/ask/stream", () => sseResponse([["done", { ...refusal, id: 502 }]])));
+    const requests = recordFeedback();
+    renderPage();
+    ask("明天会下雨吗？");
+
+    fireEvent.click(await screen.findByRole("button", { name: "没帮助" }));
+    await vi.waitFor(() => expect(requests[0]).toMatchObject({ method: "PUT", id: "502", body: { rating: "DOWN" } }));
   });
 });
+
+const refusal = {
+  text: "知识库里没有找到能回答这个问题的可靠依据，建议换个问法，或联系店长确认。",
+  refused: true,
+  refusalReason: "LOW_RELEVANCE",
+  citations: [],
+  topRelevance: 0.01,
+};
+
+/** 记下发给反馈接口的请求。 */
+function recordFeedback() {
+  const requests: { method: string; id: string; body: unknown }[] = [];
+  const record = async ({ request, params }: { request: Request; params: Record<string, unknown> }) => {
+    requests.push({
+      method: request.method,
+      id: String(params.id),
+      body: request.method === "DELETE" ? null : await request.json(),
+    });
+    return new HttpResponse(null, { status: 204 });
+  };
+  server.use(http.put("/api/answers/:id/feedback", record), http.delete("/api/answers/:id/feedback", record));
+  return requests;
+}
+

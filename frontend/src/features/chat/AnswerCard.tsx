@@ -1,22 +1,24 @@
-import { SearchX, ThumbsDown, ThumbsUp, X } from "lucide-react";
+import { SearchX, X } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import type { Answer, Citation } from "./api";
+import { FeedbackBar } from "./FeedbackBar";
 
-/** 一条回答：正文里的 [n] 可点开原文，下方列出来源和点赞点踩。拒答时显示“没有找到答案”。 */
+/** 一条回答：正文里的 [n] 可点开原文，下方列出来源和点赞点踩。拒答时显示“没有找到答案”，也可以反馈没帮助。 */
 export function AnswerCard({ answer }: { answer: Answer }) {
   const [opened, setOpened] = useState<Citation | null>(null);
-  // 原型阶段反馈只记在页面上，反馈接口随会话一起做。
-  const [feedback, setFeedback] = useState<"up" | "down" | null>(null);
 
   if (answer.refused) {
     return (
-      <article aria-label="回答" className="flex gap-3 rounded-lg border bg-card p-4">
-        <SearchX aria-hidden="true" className="size-5 shrink-0 text-muted-foreground" />
-        <div className="flex flex-col gap-1">
-          <h2 className="font-medium">没有找到答案</h2>
-          <p className="text-sm text-muted-foreground">{answer.text}</p>
+      <article aria-label="回答" className="flex flex-col gap-2 rounded-lg border bg-card p-4">
+        <div className="flex gap-3">
+          <SearchX aria-hidden="true" className="size-5 shrink-0 text-muted-foreground" />
+          <div className="flex flex-col gap-1">
+            <h2 className="font-medium">没有找到答案</h2>
+            <p className="text-sm text-muted-foreground">{answer.text}</p>
+          </div>
         </div>
+        <FeedbackBar answerId={answer.id} allowUp={false} />
       </article>
     );
   }
@@ -75,26 +77,7 @@ export function AnswerCard({ answer }: { answer: Answer }) {
           </li>
         ))}
       </ol>
-      <div className="flex justify-end gap-1">
-        <Button
-          variant="ghost"
-          size="icon"
-          aria-label="有帮助"
-          aria-pressed={feedback === "up"}
-          onClick={() => setFeedback(feedback === "up" ? null : "up")}
-        >
-          <ThumbsUp aria-hidden="true" className="size-4" />
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon"
-          aria-label="没帮助"
-          aria-pressed={feedback === "down"}
-          onClick={() => setFeedback(feedback === "down" ? null : "down")}
-        >
-          <ThumbsDown aria-hidden="true" className="size-4" />
-        </Button>
-      </div>
+      <FeedbackBar answerId={answer.id} />
     </article>
   );
 }

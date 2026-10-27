@@ -10,14 +10,27 @@ export type Citation = {
   excerpt: string;
 };
 
-/** 与后端 answering 模块的 Answer 一致；拒答时 text 是给用户看的说明，citations 为空。 */
+/** 与后端 answering 模块的 Answer 一致；拒答时 text 是给用户看的说明，citations 为空。id 用于点赞点踩。 */
 export type Answer = {
+  id: number | null;
   text: string;
   refused: boolean;
   refusalReason: "NO_EVIDENCE" | "LOW_RELEVANCE" | "MODEL_DECLINED" | "UNCITED" | null;
   citations: Citation[];
   topRelevance: number | null;
 };
+
+/** 点赞、点踩（可附留言）或撤销（rating 为 null）。只有提问人本人能评价自己的回答。 */
+export async function rateAnswer(id: number, rating: "UP" | "DOWN" | null, comment?: string): Promise<void> {
+  const response = await authFetch(`/api/answers/${id}/feedback`, {
+    method: rating ? "PUT" : "DELETE",
+    headers: rating ? { "Content-Type": "application/json" } : undefined,
+    body: rating ? JSON.stringify(comment ? { rating, comment } : { rating }) : undefined,
+  });
+  if (!response.ok) {
+    throw new Error(`反馈失败（${response.status}）`);
+  }
+}
 
 /**
  * 流式问答：读后端 SSE，每段文字交给 onDelta，返回 done 事件里的最终结果。
