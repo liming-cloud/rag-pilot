@@ -34,6 +34,7 @@ class MybatisDocumentRepository implements DocumentRepository {
         row.setStatus(document.status().name());
         row.setError(document.error());
         row.setChunkCount(document.chunkCount());
+        row.setReplacesDocumentId(document.replacesDocumentId());
         if (row.getId() == null) {
             documents.insert(row);
             document.assignId(row.getId());
@@ -87,6 +88,20 @@ class MybatisDocumentRepository implements DocumentRepository {
     }
 
     @Override
+    public boolean delete(TenantId tenantId, long id) {
+        return documents.delete(new LambdaQueryWrapper<DocumentDO>()
+                .eq(DocumentDO::getTenantId, tenantId.value())
+                .eq(DocumentDO::getId, id)) > 0;
+    }
+
+    @Override
+    public boolean existsBySha256(TenantId tenantId, String sha256) {
+        return documents.exists(new LambdaQueryWrapper<DocumentDO>()
+                .eq(DocumentDO::getTenantId, tenantId.value())
+                .eq(DocumentDO::getSha256, sha256));
+    }
+
+    @Override
     public List<Document> listParsing() {
         return documents.selectList(new LambdaQueryWrapper<DocumentDO>()
                         .eq(DocumentDO::getStatus, DocumentStatus.PARSING.name())
@@ -97,6 +112,7 @@ class MybatisDocumentRepository implements DocumentRepository {
     private static Document toDomain(DocumentDO row) {
         return Document.restore(row.getId(), new TenantId(row.getTenantId()), row.getKnowledgeBaseId(),
                 row.getFilename(), row.getMediaType(), row.getSha256(), row.getSizeBytes(),
-                DocumentStatus.valueOf(row.getStatus()), row.getError(), row.getChunkCount(), row.getCreatedAt());
+                DocumentStatus.valueOf(row.getStatus()), row.getError(), row.getChunkCount(), row.getCreatedAt(),
+                row.getReplacesDocumentId());
     }
 }

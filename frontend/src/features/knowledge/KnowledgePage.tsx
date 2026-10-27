@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import {
   createKnowledgeBase,
+  deleteDocument,
   fetchDocuments,
   fetchKnowledgeBases,
   type KnowledgeBase,
@@ -99,14 +100,14 @@ function KnowledgeBaseDetail({ knowledgeBase }: { knowledgeBase: KnowledgeBase }
   const [uploads, setUploads] = useState<Upload[]>([]);
   const [dragging, setDragging] = useState(false);
 
-  async function uploadAll(files: File[]) {
+  async function uploadAll(files: File[], replacesDocumentId?: number) {
     const batch = files.map((file) => ({ key: `${Date.now()}-${file.name}`, filename: file.name, message: null }));
     setUploads((current) => [...current, ...batch]);
     // 后端同步解析入库，逐个上传，避免同时占满模型调用。
     for (const [index, file] of files.entries()) {
       const key = batch[index]!.key;
       try {
-        await uploadDocument(knowledgeBase.id, file);
+        await uploadDocument(knowledgeBase.id, file, replacesDocumentId);
         setUploads((current) => current.filter((upload) => upload.key !== key));
         await queryClient.invalidateQueries({ queryKey: documentsKey });
       } catch (e) {
@@ -178,7 +179,16 @@ function KnowledgeBaseDetail({ knowledgeBase }: { knowledgeBase: KnowledgeBase }
       {documents.data && documents.data.length > 0 && (
         <ul aria-label="文档" className="flex flex-col divide-y rounded-lg border bg-card">
           {documents.data.map((document) => (
-            <DocumentRow key={document.id} document={document} />
+            <DocumentRow
+              key={document.id}
+              document={document}
+              replacedName={documents.data.find((other) => other.id === document.replacesDocumentId)?.filename}
+              onReplace={(file) => void uploadAll([file], document.id)}
+              onDelete={async () => {
+                await deleteDocument(knowledgeBase.id, document.id);
+                await queryClient.invalidateQueries({ queryKey: documentsKey });
+              }}
+            />
           ))}
         </ul>
       )}
@@ -193,20 +203,88 @@ const STATUS: Record<KnowledgeDocument["status"], { label: string; className: st
   PARSING: { label: "解析中", className: "text-muted-foreground" },
 };
 
-function DocumentRow({ document }: { document: KnowledgeDocument }) {
+type DocumentRowProps = {
+  document: KnowledgeDocument;
+  /** 这份文档要替换的旧版本的文件名；不是新版本时为 undefined。 */
+  replacedName: string | undefined;
+  onReplace: (file: File) => void;
+  onDelete: () => Promise<void>;
+};
+
+/** 一份文档：状态、分块数、失败原因，以及“上传新版本”和“删除”（行内二次确认）。 */
+function DocumentRow({ document, replacedName, onReplace, onDelete }: DocumentRowProps) {
   const status = STATUS[document.status];
+  const [confirming, setConfirming] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  async function confirmDelete() {
+    try {
+      await onDelete();
+    } catch (e) {
+      setDeleteError(e instanceof Error ? e.message : "删除失败");
+      setConfirming(false);
+    }
+  }
+
   return (
     <li className="flex items-start gap-3 p-3">
       <FileText aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
         <span className="truncate font-medium">{document.filename}</span>
+        {replacedName && <span className="text-sm text-muted-foreground">替换《{replacedName}》</span>}
         <span className="text-sm text-muted-foreground">
           {document.status === "READY" && `${document.chunkCount} 个分块 · `}
           {formatSize(document.sizeBytes)}
         </span>
         {document.error && <span className="text-sm text-destructive">{document.error}</span>}
+        {document.status === "FAILED" && replacedName && (
+          <span className="text-sm text-muted-foreground">新版本解析失败，旧版本《{replacedName}》已保留。</span>
+        )}
+        {deleteError && <span className="text-sm text-destructive">{deleteError}</span>}
       </div>
-      <span className={cn("shrink-0 text-sm font-medium", status.className)}>{status.label}</span>
+      <div className="flex shrink-0 flex-col items-end gap-1">
+        <span className={cn("text-sm font-medium", status.className)}>{status.label}</span>
+        {confirming ? (
+          <div className="flex items-center gap-1">
+            <span className="text-sm">确定删除？</span>
+            <Button size="sm" variant="destructive" onClick={() => void confirmDelete()}>
+              确认删除
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => setConfirming(false)}>
+              取消
+            </Button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-1">
+            <Button asChild size="sm" variant="ghost">
+              <label>
+                上传新版本
+                <input
+                  type="file"
+                  accept=".pdf,.docx,.xlsx,.xls,.txt,.md,.markdown"
+                  aria-label={`上传新版本 ${document.filename}`}
+                  className="sr-only"
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    if (file) {
+                      onReplace(file);
+                    }
+                    event.target.value = "";
+                  }}
+                />
+              </label>
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              aria-label={`删除 ${document.filename}`}
+              onClick={() => setConfirming(true)}
+            >
+              删除
+            </Button>
+          </div>
+        )}
+      </div>
     </li>
   );
 }
