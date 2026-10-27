@@ -1,28 +1,29 @@
 package com.liming.rag.answering.web;
 
+import cn.dev33.satoken.annotation.SaCheckLogin;
 import com.liming.rag.answering.api.Answer;
 import com.liming.rag.answering.application.AnswerService;
-import com.liming.rag.common.TenantId;
+import com.liming.rag.identity.api.CurrentUser;
 import java.util.List;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 问答接口。试点阶段租户固定为配置值；接入 Sa-Token 后改为从登录会话取租户，并只允许问有权限的知识库。
+ * 问答接口。要登录，租户从登录会话取；只允许问有权限的知识库在下一步加入。
  */
 @RestController
 @RequestMapping("/api/ask")
+@SaCheckLogin
 class AskController {
 
     private final AnswerService answers;
-    private final TenantId pilotTenant;
+    private final CurrentUser currentUser;
 
-    AskController(AnswerService answers, @Value("${rag.pilot.tenant-id:1}") long pilotTenantId) {
+    AskController(AnswerService answers, CurrentUser currentUser) {
         this.answers = answers;
-        this.pilotTenant = new TenantId(pilotTenantId);
+        this.currentUser = currentUser;
     }
 
     record AskRequest(String question, List<Long> knowledgeBaseIds) {
@@ -30,6 +31,6 @@ class AskController {
 
     @PostMapping
     Answer ask(@RequestBody AskRequest request) {
-        return answers.ask(pilotTenant, request.knowledgeBaseIds(), request.question());
+        return answers.ask(currentUser.tenantId(), request.knowledgeBaseIds(), request.question());
     }
 }
