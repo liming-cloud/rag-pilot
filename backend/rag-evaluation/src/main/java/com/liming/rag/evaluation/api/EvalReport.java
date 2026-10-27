@@ -121,6 +121,15 @@ public record EvalReport(int cases, double recallAt10, double citationAccuracy, 
         row(text, "检索（问题向量化 + 混合检索）", stageP95(EvalOutcome.Stages::retrievalMillis));
         row(text, "重排", stageP95(EvalOutcome.Stages::rerankMillis));
         row(text, "模型首字（从开始生成算起）", stageP95(EvalOutcome.Stages::modelFirstTokenMillis));
+        row(text, "低分改写（改写 + 重新检索、重排）", stageP95(EvalOutcome.Stages::rewriteMillis));
+        var rewritten = outcomes.stream().filter(o -> o.rewrittenQuestion() != null).toList();
+        text.append("\n### 低分改写\n\n");
+        text.append("重排最高分低于门槛时改写问题再检索一次：触发 ").append(rewritten.size()).append(" 题，")
+                .append("可回答题救回 ").append(rewritten.stream()
+                        .filter(o -> o.evalCase().kind() == Kind.ANSWERABLE && citedCorrectly(o)).count()).append(" 题，")
+                .append("应拒答题被改写后回答了 ").append(rewritten.stream()
+                        .filter(o -> o.evalCase().kind() == Kind.UNANSWERABLE && !o.refused()).count())
+                .append(" 题。改写只在本来要拒答时触发，“救回”指改写后给出了正确回答。\n");
         text.append("\n### 按问法统计（可回答题）\n\n| 问法 | 题数 | 召回 | 引用正确 | 误拒 |\n| --- | --- | --- | --- | --- |\n");
         var byStyle = outcomes.stream()
                 .filter(o -> o.evalCase().kind() == Kind.ANSWERABLE)
@@ -148,10 +157,12 @@ public record EvalReport(int cases, double recallAt10, double citationAccuracy, 
             text.append("无。\n");
         }
         failures.forEach(failure -> text.append("- ").append(failure).append('\n'));
-        text.append("\n<details><summary>逐题明细</summary>\n\n| 题 | 拒答 | 最高分 | 引用 | 回答 |\n| --- | --- | --- | --- | --- |\n");
+        text.append("\n<details><summary>逐题明细</summary>\n\n| 题 | 拒答 | 最高分 | 改写为 | 引用 | 回答 |\n| --- | --- | --- | --- | --- | --- |\n");
         for (var o : outcomes) {
             row(text, o.evalCase().id(), o.refused() ? "是（" + o.refusalReason() + "）" : "否",
-                    o.topRelevance() == null ? "-" : fmt(o.topRelevance()), String.join("、", o.citedDocuments()),
+                    o.topRelevance() == null ? "-" : fmt(o.topRelevance()),
+                    o.rewrittenQuestion() == null ? "" : o.rewrittenQuestion().replace("|", "／"),
+                    String.join("、", o.citedDocuments()),
                     o.answer() == null ? "" : o.answer().replace("\n", " ").replace("|", "／"));
         }
         return text.append("\n</details>\n").toString();
