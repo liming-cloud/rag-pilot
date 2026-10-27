@@ -52,6 +52,17 @@ export function resetMockData() {
 }
 resetMockData();
 
+/**
+ * 从 multipart 请求体里读出文件名和大小。不用 request.formData()：Node 24 在 jsdom 测试环境里解析时，
+ * 会用 jsdom 的 File 构造对象而触发 undici 的断言。
+ */
+async function uploadedFile(request: Request) {
+  const body = await request.text();
+  const name = /filename="([^"]*)"/.exec(body)?.[1] ?? "";
+  const content = body.split("\r\n\r\n").slice(1).join("\r\n\r\n").replace(/\r\n--[^\r\n]*--\r\n$/, "");
+  return { name, size: new TextEncoder().encode(content).length };
+}
+
 const problem = (status: number, detail: string) => HttpResponse.json({ status, detail }, { status });
 
 export const sampleAnswer: Answer = {
@@ -118,7 +129,7 @@ export const handlers = [
   http.get("/api/knowledge-bases/:id/documents", ({ params }) => HttpResponse.json(documents[Number(params.id)] ?? [])),
   // 与后端一致：只收 TXT / Markdown，同名文件视为重复。
   http.post("/api/knowledge-bases/:id/documents", async ({ params, request }) => {
-    const file = (await request.formData()).get("file") as File;
+    const file = await uploadedFile(request);
     if (!/\.(txt|md|markdown)$/i.test(file.name)) {
       return problem(415, "目前只支持 TXT 和 Markdown；PDF、Word、PPT、Excel 将在接入文档解析服务后支持");
     }
