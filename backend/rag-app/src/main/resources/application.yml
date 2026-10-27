@@ -84,6 +84,9 @@ rag:
     admin:
       username: ${RAG_ADMIN_USERNAME:}
       password: ${RAG_ADMIN_PASSWORD:}
+  ingestion:
+    # 后台同时处理的文档数，限制对嵌入模型的并发调用。
+    concurrency: ${RAG_INGESTION_CONCURRENCY:2}
   storage:
     # 原始文件存放目录；Compose 中挂载为数据卷。
     root: ${RAG_STORAGE_ROOT:./data/files}

@@ -38,6 +38,17 @@ describe("知识库页", () => {
     expect(await within(documents).findByText("收银规范.md")).toBeInTheDocument();
   });
 
+  it("上传后先显示解析中，后台处理完自动变成可用", async () => {
+    renderPage();
+    await screen.findByRole("list", { name: "文档" });
+
+    choose(new File(["# 陈列\n\n新品放在视线高度。"], "陈列规范.md", { type: "text/markdown" }));
+
+    const row = (await screen.findByText("陈列规范.md")).closest("li")!;
+    expect(within(row).getByText("解析中")).toBeInTheDocument();
+    expect(await within(row).findByText("可用", {}, { timeout: 3000 })).toBeInTheDocument();
+  });
+
   it("后端拒收时显示原因，其余文件照常上传", async () => {
     renderPage();
     await screen.findByRole("list", { name: "文档" });

@@ -27,10 +27,7 @@ class LocalFileStorage implements FileStorage {
 
     @Override
     public void store(TenantId tenantId, String sha256, byte[] content) {
-        if (!sha256.matches("[0-9a-f]{64}")) {
-            throw new IllegalArgumentException("文件摘要格式不正确");
-        }
-        var target = root.resolve(Long.toString(tenantId.value())).resolve(sha256.substring(0, 2)).resolve(sha256);
+        var target = pathOf(tenantId, sha256);
         if (Files.exists(target)) {
             return;
         }
@@ -42,5 +39,21 @@ class LocalFileStorage implements FileStorage {
         } catch (IOException e) {
             throw new UncheckedIOException("保存上传文件失败", e);
         }
+    }
+
+    @Override
+    public byte[] read(TenantId tenantId, String sha256) {
+        try {
+            return Files.readAllBytes(pathOf(tenantId, sha256));
+        } catch (IOException e) {
+            throw new UncheckedIOException("读取上传文件失败", e);
+        }
+    }
+
+    private Path pathOf(TenantId tenantId, String sha256) {
+        if (!sha256.matches("[0-9a-f]{64}")) {
+            throw new IllegalArgumentException("文件摘要格式不正确");
+        }
+        return root.resolve(Long.toString(tenantId.value())).resolve(sha256.substring(0, 2)).resolve(sha256);
     }
 }
