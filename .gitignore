@@ -42,3 +42,6 @@ dist/
 .env.*
 !.env.example
 deploy/.env
+
+# 本机的 Claude 预览配置，含本地路径
+.claude/launch.json
