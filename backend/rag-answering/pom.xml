@@ -27,6 +27,11 @@
             <groupId>${project.groupId}</groupId>
             <artifactId>rag-ai</artifactId>
         </dependency>
+        <!-- 模块化 RAG 的阶段接口（DocumentRetriever、DocumentPostProcessor、QueryAugmenter），见 DECISIONS.md D-020。 -->
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-rag</artifactId>
+        </dependency>
         <dependency>
             <groupId>${project.groupId}</groupId>
             <artifactId>rag-knowledge</artifactId>

@@ -1,9 +1,6 @@
 package com.liming.rag.answering.application;
 
-import com.liming.rag.knowledge.api.SearchHit;
-import java.util.List;
-
-/** 回答提示词。资料格式（“[n] 来源：…”后接正文）与 rag-ai 的本地对话实现约定一致，改动时一起改。 */
+/** 回答的系统提示词。资料部分由 {@link NumberedEvidenceAugmenter} 拼接。 */
 final class AnswerPrompt {
 
     static final String NO_ANSWER = "NO_ANSWER";
@@ -21,16 +18,4 @@ final class AnswerPrompt {
     private AnswerPrompt() {
     }
 
-    static String user(String question, List<SearchHit> evidence) {
-        var text = new StringBuilder("资料：\n");
-        for (int i = 0; i < evidence.size(); i++) {
-            var hit = evidence.get(i);
-            text.append('[').append(i + 1).append("] 来源：").append(hit.documentName());
-            if (hit.headingPath() != null && !hit.headingPath().isBlank()) {
-                text.append(" / ").append(hit.headingPath());
-            }
-            text.append('\n').append(hit.content().strip()).append("\n\n");
-        }
-        return text.append("问题：").append(question).toString();
-    }
 }
