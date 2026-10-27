@@ -6,6 +6,7 @@ import java.nio.ByteBuffer;
 import java.nio.charset.CharacterCodingException;
 import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -16,6 +17,9 @@ import java.util.stream.IntStream;
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.encryption.InvalidPasswordException;
 import org.apache.pdfbox.text.PDFTextStripper;
+import org.apache.poi.EncryptedDocumentException;
+import org.apache.poi.ss.usermodel.DataFormatter;
+import org.apache.poi.ss.usermodel.WorkbookFactory;
 import org.apache.poi.xwpf.usermodel.XWPFDocument;
 import org.apache.poi.xwpf.usermodel.XWPFParagraph;
 import org.apache.poi.xwpf.usermodel.XWPFTable;
@@ -24,10 +28,11 @@ import org.springframework.ai.document.Document;
 import org.springframework.ai.document.DocumentReader;
 
 /**
- * 本地读取 TXT / Markdown（UTF-8）、PDF（PDFBox）和 Word .docx（POI），不调用外部服务。
+ * 本地读取 TXT / Markdown（UTF-8）、PDF（PDFBox）、Word .docx 和 Excel .xlsx / .xls（POI），不调用外部服务。
  *
  * <p>Word 的标题样式转成 Markdown 标题；表格第一行当表头，其余每行转成“表头：值；表头：值”，
- * 一行一条，检索时每条都带着列名。PDF 没有可靠的标题信息，只按阅读顺序提取文字。
+ * 一行一条，检索时每条都带着列名。Excel 每个可见工作表一节，规则同 Word 表格，单元格按 Excel 里显示的样子输出。
+ * PDF 没有可靠的标题信息，只按阅读顺序提取文字。
  */
 final class LocalDocumentReaders implements DocumentReaders {
 
@@ -36,7 +41,7 @@ final class LocalDocumentReaders implements DocumentReaders {
     /** 少于这么多可见字符，基本可以判断是扫描件或图片。 */
     private static final int MIN_PDF_CHARS = 20;
 
-    private static final Set<String> EXTENSIONS = Set.of("txt", "md", "markdown", "pdf", "docx");
+    private static final Set<String> EXTENSIONS = Set.of("txt", "md", "markdown", "pdf", "docx", "xlsx", "xls");
 
     @Override
     public boolean supports(String extension) {
@@ -54,6 +59,7 @@ final class LocalDocumentReaders implements DocumentReaders {
             var text = switch (extension) {
                 case "pdf" -> pdf(content);
                 case "docx" -> word(content);
+                case "xlsx", "xls" -> excel(content);
                 default -> utf8(content);
             };
             if (text.isBlank()) {
@@ -108,6 +114,41 @@ final class LocalDocumentReaders implements DocumentReaders {
         }
     }
 
+    private static String excel(byte[] content) {
+        try (var workbook = WorkbookFactory.create(new ByteArrayInputStream(content))) {
+            var formatter = new DataFormatter(Locale.SIMPLIFIED_CHINESE);
+            var evaluator = workbook.getCreationHelper().createFormulaEvaluator();
+            var text = new StringBuilder();
+            for (int i = 0; i < workbook.getNumberOfSheets(); i++) {
+                if (workbook.isSheetHidden(i) || workbook.isSheetVeryHidden(i)) {
+                    continue;
+                }
+                var sheet = workbook.getSheetAt(i);
+                var rows = new ArrayList<List<String>>();
+                for (var row : sheet) {
+                    var cells = IntStream.range(0, Math.max(row.getLastCellNum(), 0))
+                            .mapToObj(c -> {
+                                var cell = row.getCell(c);
+                                return cell == null ? "" : formatter.formatCellValue(cell, evaluator).replaceAll("\\s+", " ").strip();
+                            })
+                            .toList();
+                    if (cells.stream().anyMatch(cell -> !cell.isEmpty())) {
+                        rows.add(cells);
+                    }
+                }
+                if (rows.size() > 1) {
+                    text.append("\n## ").append(sheet.getSheetName()).append('\n');
+                    rows(rows, text);
+                }
+            }
+            return text.toString();
+        } catch (EncryptedDocumentException e) {
+            throw new DocumentParseException("Excel 有密码保护，请去掉密码后重新上传", e);
+        } catch (IOException | RuntimeException e) {
+            throw new DocumentParseException("文件已损坏或不是有效的 Excel 文件（.xlsx / .xls）", e);
+        }
+    }
+
     private static void paragraph(XWPFDocument document, XWPFParagraph paragraph, StringBuilder text) {
         var line = paragraph.getText().strip();
         if (line.isEmpty()) {
@@ -137,13 +178,18 @@ final class LocalDocumentReaders implements DocumentReaders {
     }
 
     private static void table(XWPFTable table, StringBuilder text) {
-        var rows = table.getRows();
+        rows(table.getRows().stream()
+                .map(row -> row.getTableCells().stream().map(LocalDocumentReaders::cell).toList())
+                .toList(), text);
+    }
+
+    /** 第一行当表头，其余每行转成“表头：值；表头：值”，空单元格跳过。 */
+    private static void rows(List<List<String>> rows, StringBuilder text) {
         if (rows.isEmpty()) {
             return;
         }
-        var header = rows.getFirst().getTableCells().stream().map(LocalDocumentReaders::cell).toList();
-        for (var row : rows.subList(1, rows.size())) {
-            var cells = row.getTableCells().stream().map(LocalDocumentReaders::cell).toList();
+        var header = rows.getFirst();
+        for (var cells : rows.subList(1, rows.size())) {
             var line = IntStream.range(0, cells.size())
                     .filter(i -> !cells.get(i).isEmpty())
                     .mapToObj(i -> (i < header.size() && !header.get(i).isEmpty() ? header.get(i) + "：" : "")

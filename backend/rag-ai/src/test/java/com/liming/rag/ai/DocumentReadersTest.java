@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDate;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
 import org.apache.pdfbox.pdmodel.PDPageContentStream;
@@ -13,6 +14,9 @@ import org.apache.pdfbox.pdmodel.encryption.AccessPermission;
 import org.apache.pdfbox.pdmodel.encryption.StandardProtectionPolicy;
 import org.apache.pdfbox.pdmodel.font.PDType1Font;
 import org.apache.pdfbox.pdmodel.font.Standard14Fonts;
+import org.apache.poi.hssf.usermodel.HSSFWorkbook;
+import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.apache.poi.xwpf.usermodel.XWPFDocument;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -63,6 +67,55 @@ class DocumentReadersTest {
                 .isInstanceOf(DocumentParseException.class).hasMessageContaining("UTF-8");
         assertThatThrownBy(() -> text("空白.txt", " \n ".getBytes(StandardCharsets.UTF_8)))
                 .isInstanceOf(DocumentParseException.class).hasMessageContaining("没有可检索的文字");
+    }
+
+    @Test
+    @DisplayName("Excel：每个工作表一节，每行转成“表头：值”，按显示格式输出数字、日期和公式；隐藏表和空行跳过")
+    void readsExcel() throws IOException {
+        var text = text("价目表.xlsx", excel(new XSSFWorkbook()));
+
+        assertThat(text).contains("## 价目表\n")
+                .contains("商品：青柚气泡水；价格：5.50；上架日期：2026/10/27；两份价格：11.00")
+                .contains("商品：海盐苏打；价格：4.00")
+                .doesNotContain("草稿").doesNotContain("；；");
+        assertThat(text("价目表.xls", excel(new HSSFWorkbook()))).contains("商品：青柚气泡水；价格：5.50");
+        assertThatThrownBy(() -> text("损坏.xlsx", "not a xlsx".getBytes(StandardCharsets.UTF_8)))
+                .isInstanceOf(DocumentParseException.class).hasMessageContaining("损坏");
+    }
+
+    /** 价目表：表头、两行数据、中间一个空行；另有一个隐藏的草稿表。 */
+    static byte[] excel(Workbook workbook) throws IOException {
+        try (workbook; var out = new ByteArrayOutputStream()) {
+            var helper = workbook.getCreationHelper();
+            var money = workbook.createCellStyle();
+            money.setDataFormat(helper.createDataFormat().getFormat("0.00"));
+            var date = workbook.createCellStyle();
+            date.setDataFormat(helper.createDataFormat().getFormat("yyyy/m/d"));
+
+            var sheet = workbook.createSheet("价目表");
+            var header = sheet.createRow(0);
+            String[] titles = {"商品", "价格", "上架日期", "两份价格"};
+            for (int i = 0; i < titles.length; i++) {
+                header.createCell(i).setCellValue(titles[i]);
+            }
+            var first = sheet.createRow(1);
+            first.createCell(0).setCellValue("青柚气泡水");
+            first.createCell(1).setCellValue(5.5);
+            first.getCell(1).setCellStyle(money);
+            first.createCell(2).setCellValue(LocalDate.of(2026, 10, 27));
+            first.getCell(2).setCellStyle(date);
+            first.createCell(3).setCellFormula("B2*2");
+            first.getCell(3).setCellStyle(money);
+            var second = sheet.createRow(3);
+            second.createCell(0).setCellValue("海盐苏打");
+            second.createCell(1).setCellValue(4);
+            second.getCell(1).setCellStyle(money);
+
+            workbook.createSheet("草稿").createRow(0).createCell(0).setCellValue("草稿");
+            workbook.setSheetHidden(1, true);
+            workbook.write(out);
+            return out.toByteArray();
+        }
     }
 
     private String text(String filename, byte[] content) {

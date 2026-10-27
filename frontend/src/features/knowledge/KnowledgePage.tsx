@@ -140,7 +140,7 @@ function KnowledgeBaseDetail({ knowledgeBase }: { knowledgeBase: KnowledgeBase }
             <input
               type="file"
               multiple
-              accept=".pdf,.docx,.txt,.md,.markdown"
+              accept=".pdf,.docx,.xlsx,.xls,.txt,.md,.markdown"
               className="sr-only"
               onChange={(event) => {
                 void uploadAll([...(event.target.files ?? [])]);
@@ -150,7 +150,7 @@ function KnowledgeBaseDetail({ knowledgeBase }: { knowledgeBase: KnowledgeBase }
           </label>
         </Button>
         <p className="text-sm text-muted-foreground">
-          支持 PDF、Word（.docx）、TXT 和 Markdown，单个文件不超过 50 MB；扫描件 PDF 暂不支持。
+          支持 PDF、Word（.docx）、Excel、TXT 和 Markdown，单个文件不超过 50 MB；扫描件 PDF 暂不支持。
         </p>
       </div>
       {uploads.length > 0 && (
