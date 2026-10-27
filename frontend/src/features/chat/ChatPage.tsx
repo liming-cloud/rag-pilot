@@ -1,25 +1,23 @@
-import { useQueryClient } from "@tanstack/react-query";
 import { ArrowUp } from "lucide-react";
 import { type FormEvent, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { fetchKnowledgeBases } from "@/features/knowledge/api";
-import { type Answer, askQuestion } from "./api";
+import { type Answer, askStream } from "./api";
 import { AnswerCard } from "./AnswerCard";
 
 type Turn = { id: number; question: string } & (
   | { status: "pending" }
+  | { status: "streaming"; text: string }
   | { status: "done"; answer: Answer }
   | { status: "failed" }
 );
 
 /**
- * 问答页，按画布方案 A（对话式、手机优先）。当前是非流式整段回答；流式输出随第 3 周后端流式接口一起做。
+ * 问答页，按画布方案 A（对话式、手机优先）。回答边生成边显示，结束后换成带引用的最终结果。
  */
 export function ChatPage() {
-  const queryClient = useQueryClient();
   const [turns, setTurns] = useState<Turn[]>([]);
   const [draft, setDraft] = useState("");
-  const asking = turns.some((turn) => turn.status === "pending");
+  const asking = turns.some((turn) => turn.status === "pending" || turn.status === "streaming");
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -31,16 +29,12 @@ export function ChatPage() {
     setDraft("");
     setTurns((current) => [...current, { id, question, status: "pending" }]);
     const settle = (next: Turn) => setTurns((current) => current.map((turn) => (turn.id === id ? next : turn)));
+    let text = "";
     try {
-      // 试点阶段问全部知识库；接入登录后由后端按授权过滤，前端不再传库列表。
-      const knowledgeBases = await queryClient.ensureQueryData({
-        queryKey: ["knowledge-bases"],
-        queryFn: fetchKnowledgeBases,
+      const answer = await askStream(question, (delta) => {
+        text += delta;
+        settle({ id, question, status: "streaming", text });
       });
-      const answer = await askQuestion(
-        question,
-        knowledgeBases.map((knowledgeBase) => knowledgeBase.id),
-      );
       settle({ id, question, status: "done", answer });
     } catch {
       settle({ id, question, status: "failed" });
@@ -64,6 +58,11 @@ export function ChatPage() {
             {turn.status === "pending" && (
               <p role="status" className="text-sm text-muted-foreground">
                 正在查找资料…
+              </p>
+            )}
+            {turn.status === "streaming" && (
+              <p aria-live="polite" className="rounded-lg border bg-card p-4 leading-relaxed">
+                {turn.text}
               </p>
             )}
             {turn.status === "failed" && (
