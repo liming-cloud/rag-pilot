@@ -11,6 +11,7 @@ import {
   type KnowledgeDocument,
   uploadDocument,
 } from "./api";
+import { MembersPanel } from "./MembersPanel";
 
 /**
  * 知识库管理页，按画布方案 B（上传优先）：左边选库，右边先是上传区，再是文档列表和处理结果。
@@ -174,6 +175,7 @@ function KnowledgeBaseDetail({ knowledgeBase }: { knowledgeBase: KnowledgeBase }
           ))}
         </ul>
       )}
+      <MembersPanel knowledgeBaseId={knowledgeBase.id} />
     </section>
   );
 }

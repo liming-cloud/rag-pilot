@@ -1,4 +1,5 @@
 import { http, HttpResponse } from "msw";
+import type { User } from "@/features/auth/api";
 import type { Answer } from "@/features/chat/api";
 import type { KnowledgeBase, KnowledgeDocument } from "@/features/knowledge/api";
 import { sseResponse } from "./sse";
@@ -32,14 +33,22 @@ const sampleDocuments: Record<number, KnowledgeDocument[]> = {
   ],
 };
 
+const sampleUsers: User[] = [
+  { id: 1, username: "admin", displayName: "管理员", role: "ADMIN" },
+  { id: 2, username: "staff01", displayName: "店员小王", role: "STAFF" },
+  { id: 3, username: "staff02", displayName: "店员小李", role: "STAFF" },
+];
+
 /** 假接口的可变数据；测试之间用 resetMockData 还原。 */
 let knowledgeBases: KnowledgeBase[] = [];
 let documents: Record<number, KnowledgeDocument[]> = {};
+let members: Record<number, number[]> = {};
 let nextId = 100;
 
 export function resetMockData() {
   knowledgeBases = sampleKnowledgeBases.map((knowledgeBase) => ({ ...knowledgeBase }));
   documents = Object.fromEntries(Object.entries(sampleDocuments).map(([id, list]) => [id, [...list]]));
+  members = { 1: [1, 2], 2: [1] };
 }
 resetMockData();
 
@@ -70,7 +79,7 @@ export const sampleAnswer: Answer = {
   topRelevance: 0.97,
 };
 
-const sampleUser = { id: 2, username: "staff01", displayName: "店员小王", role: "STAFF" };
+const sampleUser = sampleUsers[1];
 
 export const handlers = [
   // 密码填 wrong-password 时模拟登录失败，其他任意账号密码都能登录。
@@ -90,6 +99,21 @@ export const handlers = [
     const created = { id: nextId++, name };
     knowledgeBases.push(created);
     return HttpResponse.json(created, { status: 201 });
+  }),
+  http.get("/api/users", () => HttpResponse.json(sampleUsers)),
+  http.get("/api/knowledge-bases/:id/members", ({ params }) =>
+    HttpResponse.json((members[Number(params.id)] ?? []).map((userId) => ({ userId }))),
+  ),
+  http.put("/api/knowledge-bases/:id/members/:userId", ({ params }) => {
+    const list = (members[Number(params.id)] ??= []);
+    if (!list.includes(Number(params.userId))) {
+      list.push(Number(params.userId));
+    }
+    return new HttpResponse(null, { status: 204 });
+  }),
+  http.delete("/api/knowledge-bases/:id/members/:userId", ({ params }) => {
+    members[Number(params.id)] = (members[Number(params.id)] ?? []).filter((id) => id !== Number(params.userId));
+    return new HttpResponse(null, { status: 204 });
   }),
   http.get("/api/knowledge-bases/:id/documents", ({ params }) => HttpResponse.json(documents[Number(params.id)] ?? [])),
   // 与后端一致：只收 TXT / Markdown，同名文件视为重复。

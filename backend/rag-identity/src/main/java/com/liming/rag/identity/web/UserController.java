@@ -4,7 +4,9 @@ import cn.dev33.satoken.annotation.SaCheckRole;
 import com.liming.rag.identity.api.CurrentUser;
 import com.liming.rag.identity.api.Roles;
 import com.liming.rag.identity.application.AccountService;
+import java.util.List;
 import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -26,6 +28,11 @@ class UserController {
     UserController(AccountService accounts, CurrentUser currentUser) {
         this.accounts = accounts;
         this.currentUser = currentUser;
+    }
+
+    @GetMapping
+    List<UserView> list() {
+        return accounts.list(currentUser.tenantId()).stream().map(UserView::of).toList();
     }
 
     @PostMapping

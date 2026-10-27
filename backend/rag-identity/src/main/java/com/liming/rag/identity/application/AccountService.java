@@ -73,6 +73,10 @@ public class AccountService implements CurrentUser, UserDirectory, StpInterface 
                 role, true));
     }
 
+    public List<Account> list(TenantId tenantId) {
+        return accounts.list(tenantId);
+    }
+
     public Account me() {
         return accounts.find(StpUtil.getLoginIdAsLong())
                 .orElseThrow(() -> new IdentityException(IdentityException.Reason.BAD_CREDENTIALS, "账号不存在"));

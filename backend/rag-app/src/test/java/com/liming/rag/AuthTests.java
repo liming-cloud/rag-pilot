@@ -83,6 +83,22 @@ class AuthTests {
                 .isEqualTo(HttpStatus.UNAUTHORIZED);
     }
 
+    @Test
+    @DisplayName("管理员能列出本租户账号，不含密码；店员不能")
+    void listsUsersForAdminOnly() {
+        String admin = TestLogin.token(http, TestLogin.ADMIN_USERNAME, TestLogin.ADMIN_PASSWORD);
+        call(HttpMethod.POST, "/api/users", admin,
+                Map.of("username", "lister01", "displayName", "店员小李", "password", "staff-password", "role", "STAFF"));
+
+        var users = http.exchange("/api/users", HttpMethod.GET, new HttpEntity<>(headers(admin)), String.class);
+        assertThat(users.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(users.getBody()).contains("\"username\":\"admin\"").contains("\"displayName\":\"店员小李\"")
+                .doesNotContain("password");
+
+        String staff = TestLogin.token(http, "lister01", "staff-password");
+        assertThat(status(HttpMethod.GET, "/api/users", staff, null)).isEqualTo(HttpStatus.FORBIDDEN);
+    }
+
     private ResponseEntity<Map<String, Object>> login(String username, String password) {
         return call(HttpMethod.POST, "/api/auth/login", null, Map.of("username", username, "password", password));
     }

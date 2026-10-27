@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.liming.rag.common.TenantId;
 import com.liming.rag.identity.application.Account;
 import com.liming.rag.identity.application.Accounts;
+import java.util.List;
 import java.util.Optional;
 import org.springframework.stereotype.Repository;
 
@@ -29,6 +30,14 @@ class MybatisAccounts implements Accounts {
     @Override
     public boolean existsByUsername(String username) {
         return mapper.exists(byUsername(username));
+    }
+
+    @Override
+    public List<Account> list(TenantId tenantId) {
+        return mapper.selectList(new LambdaQueryWrapper<AppUserDO>()
+                        .eq(AppUserDO::getTenantId, tenantId.value())
+                        .orderByAsc(AppUserDO::getId))
+                .stream().map(MybatisAccounts::toAccount).toList();
     }
 
     @Override

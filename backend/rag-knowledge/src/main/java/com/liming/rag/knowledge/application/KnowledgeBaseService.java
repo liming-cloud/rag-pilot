@@ -69,9 +69,13 @@ public class KnowledgeBaseService {
         knowledgeBases.addMember(tenantId, knowledgeBaseId, userId);
     }
 
+    /** 不能撤销自己：列表只显示自己是成员的库，撤销后这个库会从自己的界面上消失，也无法再授权回来。 */
     @Transactional
-    public void revoke(TenantId tenantId, long knowledgeBaseId, UserId userId) {
+    public void revoke(TenantId tenantId, long knowledgeBaseId, UserId userId, UserId actor) {
         get(tenantId, knowledgeBaseId);
+        if (userId.equals(actor)) {
+            throw new KnowledgeException(KnowledgeException.Reason.INVALID, "不能撤销自己的权限");
+        }
         knowledgeBases.removeMember(tenantId, knowledgeBaseId, userId);
     }
 
