@@ -91,6 +91,35 @@ class AnswerFeedbackTests {
         assertThat(events.getLast().data()).containsPattern("\"id\":\\d+");
     }
 
+    @Test
+    @DisplayName("管理员按差评、答不上来、全部查看回答记录；店员不能看")
+    void adminReviewsAnswers() {
+        long knowledgeBaseId = createKnowledgeBase();
+        upload(knowledgeBaseId, "收银规范.txt", "收银员交班时要清点备用金，在交班表上签字后再离开收银台。");
+        var disliked = http.postForEntity("/api/ask", Map.of("question", "交班时要做什么"), Map.class).getBody();
+        feedback(HttpMethod.PUT, ((Number) disliked.get("id")).longValue(),
+                Map.of("rating", "DOWN", "comment", "还要锁好钱箱"), null);
+        http.postForEntity("/api/ask", Map.of("question", "门店几点打烊"), Map.class);
+
+        var dislikedList = review("disliked", null);
+        assertThat(dislikedList.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(dislikedList.getBody()).contains("交班时要做什么").contains("还要锁好钱箱").contains("收银规范.txt")
+                .doesNotContain("门店几点打烊");
+        assertThat(review("refused", null).getBody()).contains("门店几点打烊").doesNotContain("交班时要做什么");
+        assertThat(review("all", null).getBody()).contains("门店几点打烊").contains("交班时要做什么");
+        assertThat(review("whatever", null).getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(review("all", otherUserToken()).getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+    }
+
+    private org.springframework.http.ResponseEntity<String> review(String filter, String token) {
+        var headers = new HttpHeaders();
+        if (token != null) {
+            headers.setBearerAuth(token);
+        }
+        return http.exchange("/api/answers?filter={filter}", HttpMethod.GET, new HttpEntity<>(headers), String.class,
+                filter);
+    }
+
     private HttpStatusCode feedback(HttpMethod method, long id, Map<String, Object> body, String token) {
         var headers = new HttpHeaders();
         if (token != null) {
@@ -101,10 +130,11 @@ class AnswerFeedbackTests {
     }
 
     private String otherUserToken() {
-        var user = new HashMap<String, Object>(Map.of("username", "feedback-other", "displayName", "另一位店员",
+        var username = "other-" + System.nanoTime() % 1_000_000;
+        var user = new HashMap<String, Object>(Map.of("username", username, "displayName", "另一位店员",
                 "password", "staff-password", "role", "STAFF"));
         http.postForEntity("/api/users", user, Map.class);
-        return TestLogin.token(http, "feedback-other", "staff-password");
+        return TestLogin.token(http, username, "staff-password");
     }
 
     private long createKnowledgeBase() {

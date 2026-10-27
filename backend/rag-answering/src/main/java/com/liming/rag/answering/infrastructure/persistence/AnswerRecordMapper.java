@@ -1,5 +1,6 @@
 package com.liming.rag.answering.infrastructure.persistence;
 
+import java.util.List;
 import java.util.Map;
 import org.apache.ibatis.annotations.Insert;
 import org.apache.ibatis.annotations.Mapper;
@@ -33,6 +34,24 @@ interface AnswerRecordMapper {
             WHERE tenant_id = #{tenantId} AND id = #{id}
             """)
     Map<String, Object> find(@Param("tenantId") long tenantId, @Param("id") long id);
+
+    /** filter 为 DISLIKED、REFUSED 或 ALL；引用的文档名用 \u001F 连接，由调用方拆开。 */
+    @Select("""
+            <script>
+            SELECT r.id, r.user_id, r.question, r.answer_text, r.refused, r.refusal_reason, r.top_relevance,
+                   r.rating, r.feedback_comment, r.created_at,
+                   (SELECT string_agg(DISTINCT c.document_name, chr(31)) FROM answer_citation c
+                     WHERE c.answer_id = r.id) AS cited_documents
+            FROM answer_record r
+            WHERE r.tenant_id = #{tenantId}
+            <if test="filter == 'DISLIKED'">AND r.rating = 'DOWN'</if>
+            <if test="filter == 'REFUSED'">AND r.refused</if>
+            ORDER BY r.created_at DESC, r.id DESC
+            LIMIT #{limit}
+            </script>
+            """)
+    List<Map<String, Object>> list(@Param("tenantId") long tenantId, @Param("filter") String filter,
+            @Param("limit") int limit);
 
     @Update("""
             UPDATE answer_record

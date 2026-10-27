@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { createBrowserRouter, Navigate } from "react-router";
+import { AnswersPage } from "@/features/answers/AnswersPage";
 import { LoginPage } from "@/features/auth/LoginPage";
 import { ChatPage } from "@/features/chat/ChatPage";
 import { KnowledgePage } from "@/features/knowledge/KnowledgePage";
@@ -35,6 +36,14 @@ export const router = createBrowserRouter([
     element: (
       <RequireAuth>
         <UsersPage />
+      </RequireAuth>
+    ),
+  },
+  {
+    path: "/admin/answers",
+    element: (
+      <RequireAuth>
+        <AnswersPage />
       </RequireAuth>
     ),
   },

@@ -5,6 +5,8 @@ import com.liming.rag.answering.domain.AnswerRecord;
 import com.liming.rag.answering.domain.AnswerRecordRepository;
 import com.liming.rag.common.TenantId;
 import com.liming.rag.common.UserId;
+import java.util.List;
+import java.util.Locale;
 import java.util.NoSuchElementException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -15,10 +17,32 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class AnswerLogService {
 
-    private final AnswerRecordRepository records;
+    /** 一次最多查看的条数。 */
+    static final int MAX_REVIEW_LIMIT = 200;
 
-    AnswerLogService(AnswerRecordRepository records) {
+    private final AnswerRecordRepository records;
+    private final AnswerReviews reviews;
+
+    AnswerLogService(AnswerRecordRepository records, AnswerReviews reviews) {
         this.records = records;
+        this.reviews = reviews;
+    }
+
+    /**
+     * 管理员查看回答记录，按时间从新到旧。
+     *
+     * @param filter disliked（被点踩）、refused（答不上来）或 all，不区分大小写
+     * @throws IllegalArgumentException 范围不认识
+     */
+    @Transactional(readOnly = true)
+    public List<AnswerReview> review(TenantId tenantId, String filter, int limit) {
+        AnswerReview.Filter parsed;
+        try {
+            parsed = AnswerReview.Filter.valueOf(filter == null ? "" : filter.toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("查看范围只能是 disliked、refused 或 all");
+        }
+        return reviews.list(tenantId, parsed, Math.clamp(limit, 1, MAX_REVIEW_LIMIT));
     }
 
     /** 记下一次问答，返回带 id 的回答。 */
