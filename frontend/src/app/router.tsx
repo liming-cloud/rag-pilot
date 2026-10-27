@@ -1,9 +1,32 @@
+import type { ReactNode } from "react";
 import { createBrowserRouter, Navigate } from "react-router";
+import { LoginPage } from "@/features/auth/LoginPage";
 import { ChatPage } from "@/features/chat/ChatPage";
 import { KnowledgePage } from "@/features/knowledge/KnowledgePage";
+import { getToken } from "@/lib/auth";
+
+/** 没有令牌时先去登录；令牌过期由 authFetch 收到 401 时处理。 */
+function RequireAuth({ children }: { children: ReactNode }) {
+  return getToken() ? children : <Navigate to="/login" replace />;
+}
 
 export const router = createBrowserRouter([
   { path: "/", element: <Navigate to="/chat" replace /> },
-  { path: "/chat", element: <ChatPage /> },
-  { path: "/admin/knowledge", element: <KnowledgePage /> },
+  { path: "/login", element: <LoginPage /> },
+  {
+    path: "/chat",
+    element: (
+      <RequireAuth>
+        <ChatPage />
+      </RequireAuth>
+    ),
+  },
+  {
+    path: "/admin/knowledge",
+    element: (
+      <RequireAuth>
+        <KnowledgePage />
+      </RequireAuth>
+    ),
+  },
 ]);
