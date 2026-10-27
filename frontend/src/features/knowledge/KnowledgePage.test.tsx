@@ -1,11 +1,11 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { http, HttpResponse } from "msw";
 import { server } from "@/mocks/server";
 import { KnowledgePage } from "./KnowledgePage";
 
 function renderPage() {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
   render(
     <QueryClientProvider client={client}>
       <KnowledgePage />
@@ -13,11 +13,53 @@ function renderPage() {
   );
 }
 
+function choose(...files: File[]) {
+  fireEvent.change(screen.getByLabelText("选择文件"), { target: { files } });
+}
+
 describe("知识库页", () => {
-  it("列出接口返回的知识库", async () => {
+  it("列出知识库，默认显示第一个库的文档和失败原因", async () => {
     renderPage();
-    expect(await screen.findByText("门店运营知识库")).toBeInTheDocument();
-    expect(screen.getByText("商品知识库")).toBeInTheDocument();
+
+    expect(await screen.findByRole("button", { name: "门店运营知识库" })).toHaveAttribute("aria-current", "true");
+    const documents = await screen.findByRole("list", { name: "文档" });
+    expect(within(documents).getByText("临期与报损管理.md")).toBeInTheDocument();
+    expect(within(documents).getByText("可用")).toBeInTheDocument();
+    expect(within(documents).getByText(/不是 UTF-8 编码/)).toBeInTheDocument();
+  });
+
+  it("上传后文档出现在列表里", async () => {
+    renderPage();
+    await screen.findByRole("list", { name: "文档" });
+
+    choose(new File(["# 收银\n\n交班清点备用金。"], "收银规范.md", { type: "text/markdown" }));
+
+    const documents = screen.getByRole("list", { name: "文档" });
+    expect(await within(documents).findByText("收银规范.md")).toBeInTheDocument();
+  });
+
+  it("后端拒收时显示原因，其余文件照常上传", async () => {
+    renderPage();
+    await screen.findByRole("list", { name: "文档" });
+
+    choose(
+      new File(["%PDF"], "员工手册.pdf", { type: "application/pdf" }),
+      new File(["退货凭小票办理。"], "退换货.txt", { type: "text/plain" }),
+    );
+
+    expect(await screen.findByText(/员工手册\.pdf：目前只支持 TXT 和 Markdown/)).toBeInTheDocument();
+    expect(await within(screen.getByRole("list", { name: "文档" })).findByText("退换货.txt")).toBeInTheDocument();
+  });
+
+  it("新建知识库后选中它", async () => {
+    renderPage();
+    await screen.findByRole("button", { name: "门店运营知识库" });
+
+    fireEvent.change(screen.getByLabelText("新知识库名称"), { target: { value: "促销活动" } });
+    fireEvent.click(screen.getByRole("button", { name: "新建" }));
+
+    expect(await screen.findByRole("button", { name: "促销活动" })).toHaveAttribute("aria-current", "true");
+    expect(await screen.findByText("还没有文档，先上传一份吧。")).toBeInTheDocument();
   });
 
   it("接口失败时给出中文提示", async () => {
