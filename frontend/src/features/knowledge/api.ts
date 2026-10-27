@@ -1,3 +1,4 @@
+import type { User } from "@/features/auth/api";
 import { authFetch } from "@/lib/auth";
 
 /** 与后端 KnowledgeBaseController 的响应一致。 */
@@ -47,6 +48,25 @@ export async function createKnowledgeBase(name: string): Promise<KnowledgeBase> 
 
 export async function fetchDocuments(knowledgeBaseId: number): Promise<KnowledgeDocument[]> {
   return json(await authFetch(`/api/knowledge-bases/${knowledgeBaseId}/documents`), "读取文档失败");
+}
+
+/** 本租户全部账号，只有管理员能调用。 */
+export async function fetchUsers(): Promise<User[]> {
+  return json(await authFetch("/api/users"), "读取账号失败");
+}
+
+export async function fetchMembers(knowledgeBaseId: number): Promise<{ userId: number }[]> {
+  return json(await authFetch(`/api/knowledge-bases/${knowledgeBaseId}/members`), "读取成员失败");
+}
+
+/** 授予或撤销成员；成功时后端返回 204，没有响应体。 */
+export async function setMember(knowledgeBaseId: number, userId: number, granted: boolean): Promise<void> {
+  const response = await authFetch(`/api/knowledge-bases/${knowledgeBaseId}/members/${userId}`, {
+    method: granted ? "PUT" : "DELETE",
+  });
+  if (!response.ok) {
+    await json(response, granted ? "授权失败" : "撤销失败");
+  }
 }
 
 /** 后端同步完成解析和入库，返回的文档状态是 READY 或 FAILED（附原因）。 */

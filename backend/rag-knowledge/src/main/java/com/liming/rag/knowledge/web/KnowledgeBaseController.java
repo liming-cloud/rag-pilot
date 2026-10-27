@@ -127,6 +127,6 @@ class KnowledgeBaseController {
     @DeleteMapping("/{knowledgeBaseId}/members/{userId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     void revoke(@PathVariable long knowledgeBaseId, @PathVariable long userId) {
-        knowledgeBases.revoke(currentUser.tenantId(), knowledgeBaseId, new UserId(userId));
+        knowledgeBases.revoke(currentUser.tenantId(), knowledgeBaseId, new UserId(userId), currentUser.userId());
     }
 }
