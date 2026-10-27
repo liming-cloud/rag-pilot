@@ -152,7 +152,8 @@ class EvaluationRun {
             headers.setContentType(MediaType.MULTIPART_FORM_DATA);
             var uploaded = http.postForEntity("/api/knowledge-bases/{id}/documents", new HttpEntity<>(body, headers),
                     Map.class, knowledgeBaseId);
-            assertThat(uploaded.getBody()).as(filename + " 入库").containsEntry("status", "READY");
+            assertThat(TestDocuments.awaitProcessed(http, knowledgeBaseId, uploaded.getBody(), null)).as(filename + " 入库")
+                    .containsEntry("status", "READY");
             names.add(filename);
         }
         assertThat(names).as(folder + " 语料").isNotEmpty();

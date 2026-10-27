@@ -7,6 +7,7 @@ import com.liming.rag.knowledge.domain.Document;
 import com.liming.rag.knowledge.domain.DocumentRepository;
 import com.liming.rag.knowledge.domain.DocumentStatus;
 import java.util.List;
+import java.util.Optional;
 import org.springframework.stereotype.Repository;
 
 @Repository
@@ -74,6 +75,22 @@ class MybatisDocumentRepository implements DocumentRepository {
                         .eq(DocumentDO::getTenantId, tenantId.value())
                         .eq(DocumentDO::getKnowledgeBaseId, knowledgeBaseId)
                         .orderByDesc(DocumentDO::getId))
+                .stream().map(MybatisDocumentRepository::toDomain).toList();
+    }
+
+    @Override
+    public Optional<Document> find(TenantId tenantId, long id) {
+        return Optional.ofNullable(documents.selectOne(new LambdaQueryWrapper<DocumentDO>()
+                        .eq(DocumentDO::getTenantId, tenantId.value())
+                        .eq(DocumentDO::getId, id)))
+                .map(MybatisDocumentRepository::toDomain);
+    }
+
+    @Override
+    public List<Document> listParsing() {
+        return documents.selectList(new LambdaQueryWrapper<DocumentDO>()
+                        .eq(DocumentDO::getStatus, DocumentStatus.PARSING.name())
+                        .orderByAsc(DocumentDO::getId))
                 .stream().map(MybatisDocumentRepository::toDomain).toList();
     }
 
