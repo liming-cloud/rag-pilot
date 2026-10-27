@@ -135,6 +135,7 @@ export const handlers = [
       : HttpResponse.json({ token: "mock-token", user: sampleUser });
   }),
   http.get("/api/auth/me", () => HttpResponse.json(sampleUser)),
+  http.post("/api/auth/logout", () => new HttpResponse(null, { status: 204 })),
   http.get("/api/answers", ({ request }) => {
     const filter = new URL(request.url).searchParams.get("filter");
     return HttpResponse.json(
