@@ -13,6 +13,7 @@ import com.liming.rag.knowledge.api.SearchHit;
 import com.liming.rag.knowledge.api.SearchQuery;
 import java.util.Comparator;
 import java.util.List;
+import java.util.function.Consumer;
 import java.util.stream.IntStream;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -22,6 +23,9 @@ import org.springframework.stereotype.Service;
  *
  * <p>三道拒答关口：没有检索结果、重排后都低于门槛、模型回答 NO_ANSWER 或没有有效引用。
  * 门槛 {@code rag.answering.min-relevance} 是占位值，要用评测集校准。
+ *
+ * <p>流式问答时，生成中的文字先流给用户，最终以返回的 {@link Answer} 为准：引用校验不通过时它是拒答，
+ * 调用方要用它替换已流出的文字。模型回复 NO_ANSWER 时一个字也不流出。
  */
 @Service
 public class AnswerService {
@@ -51,6 +55,15 @@ public class AnswerService {
      * @param knowledgeBaseIds 想缩小到的知识库，可以为空；只会在提问人是成员的知识库里检索
      */
     public Answer ask(TenantId tenantId, UserId userId, List<Long> knowledgeBaseIds, String question) {
+        return ask(tenantId, userId, knowledgeBaseIds, question, delta -> {
+        });
+    }
+
+    /**
+     * 流式问答：生成中的文字交给 {@code onDelta}，返回值是最终结果。检索阶段就拒答时不会调用 {@code onDelta}。
+     */
+    public Answer ask(TenantId tenantId, UserId userId, List<Long> knowledgeBaseIds, String question,
+            Consumer<String> onDelta) {
         var text = question == null ? "" : question.strip();
         if (text.isEmpty() || text.length() > MAX_QUESTION_LENGTH) {
             throw new IllegalArgumentException("问题不能为空，且不超过 " + MAX_QUESTION_LENGTH + " 个字");
@@ -69,7 +82,8 @@ public class AnswerService {
         if (evidence.isEmpty()) {
             return Answer.refused(RefusalReason.LOW_RELEVANCE, topRelevance);
         }
-        var reply = chat.complete(AnswerPrompt.SYSTEM, AnswerPrompt.user(text, evidence)).strip();
+        var reply = chat.stream(AnswerPrompt.SYSTEM, AnswerPrompt.user(text, evidence), new NoAnswerGate(onDelta))
+                .strip();
         if (reply.isEmpty() || reply.startsWith(AnswerPrompt.NO_ANSWER)) {
             return Answer.refused(RefusalReason.MODEL_DECLINED, topRelevance);
         }
@@ -88,6 +102,38 @@ public class AnswerService {
     }
 
     private record Scored(SearchHit hit, double score) {
+    }
+
+    /** 先攒住开头的文字，确认不是 NO_ANSWER 之后再放行，之后的片段直接转发。 */
+    private static final class NoAnswerGate implements Consumer<String> {
+
+        private final Consumer<String> downstream;
+        private final StringBuilder head = new StringBuilder();
+        private boolean open;
+        private boolean declined;
+
+        NoAnswerGate(Consumer<String> downstream) {
+            this.downstream = downstream;
+        }
+
+        @Override
+        public void accept(String delta) {
+            if (open) {
+                downstream.accept(delta);
+                return;
+            }
+            if (declined) {
+                return;
+            }
+            head.append(delta);
+            var start = head.toString().stripLeading();
+            if (start.startsWith(AnswerPrompt.NO_ANSWER)) {
+                declined = true;
+            } else if (!AnswerPrompt.NO_ANSWER.startsWith(start)) {
+                open = true;
+                downstream.accept(head.toString());
+            }
+        }
     }
 
     /** 按重排分数从高到低排列全部候选。 */

@@ -69,3 +69,7 @@ React 19.2、Vite 8.1、TypeScript 6.0、Vitest 4.1 沿用旧项目验证过的�
 ## D-017 知识库按成员授权（2026-10-27）
 
 成员表 `knowledge_base_member` 在 knowledge 模块；建库的人自动成为成员，管理员没有绕过成员的特权，因此检索只有一条规则。过滤仍只写在 `ChunkSearchMapper` 的两条召回 SQL 里，请求里点名无权限的库会被忽略。无权限的知识库与不存在的一样返回 404。评测以只被授权门店库的店员身份提问，并在请求里带上店长专用库。
+
+## D-018 流式问答（2026-10-27）
+
+`POST /api/ask/stream` 用 Spring MVC 的 `SseEmitter`，每次问答一个虚拟线程，阻塞读取 Spring AI 的流式输出，不新增依赖，answering 模块也不引入 Reactor 类型。事件为 `delta`、`done`、`error`；`done` 是最终结果，引用校验不通过时客户端要用拒答替换已显示的文字，NO_ANSWER 在服务端拦住、不流出。Sa-Token 拦截器对 ASYNC 再分派放行（登录已在原始请求里校验）。评测走流式接口，首字延迟按第一个事件计。

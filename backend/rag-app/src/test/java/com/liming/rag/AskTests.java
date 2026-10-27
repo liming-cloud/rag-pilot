@@ -69,6 +69,23 @@ class AskTests {
         assertThat(ask(store, "  ").getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
     }
 
+    @Test
+    @DisplayName("流式接口先发 delta 再发 done；拒答只发 done")
+    void streamsAnswer() {
+        long store = createKnowledgeBase("流式知识库");
+        upload(store, "商品陈列.txt", "青柚气泡水陈列在一层 A 区 03 号货架第二层。补货时先移出临期批次。");
+
+        var answered = SseEvents.post(http, "/api/ask/stream", Map.of("question", "青柚气泡水在哪个货架"), null);
+        assertThat(answered).extracting(SseEvents.Event::name).startsWith("delta").endsWith("done");
+        assertThat(answered.getLast().data()).contains("\"refused\":false").contains("商品陈列.txt");
+
+        var refused = SseEvents.post(http, "/api/ask/stream", Map.of("question", "员工年假怎么申请"), null);
+        assertThat(refused).singleElement().satisfies(event -> {
+            assertThat(event.name()).isEqualTo("done");
+            assertThat(event.data()).contains("\"refused\":true");
+        });
+    }
+
     @SuppressWarnings({"rawtypes", "unchecked"})
     private org.springframework.http.ResponseEntity<Map<String, Object>> ask(long knowledgeBaseId, String question) {
         org.springframework.http.ResponseEntity response = http.postForEntity("/api/ask",

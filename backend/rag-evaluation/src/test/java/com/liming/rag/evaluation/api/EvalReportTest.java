@@ -21,12 +21,12 @@ class EvalReportTest {
     void computesMetrics() {
         var outcomes = List.of(
                 new EvalOutcome(SHELF, List.of(new Retrieved("陈列.md", "放在 03 号货架")), false, null,
-                        "在 03 号货架[1]", List.of("陈列.md"), 0.9, 100, 1000),
+                        "在 03 号货架[1]", List.of("陈列.md"), 0.9, 100, 400, 1000),
                 new EvalOutcome(CASH, List.of(new Retrieved("收银.md", "交班签字")), false, null,
-                        "800 元[1]", List.of("陈列.md"), 0.5, 300, 2000),
-                new EvalOutcome(LEAVE, List.of(), true, "NO_EVIDENCE", "", List.of(), null, 200, 50),
+                        "800 元[1]", List.of("陈列.md"), 0.5, 300, 900, 2000),
+                new EvalOutcome(LEAVE, List.of(), true, "NO_EVIDENCE", "", List.of(), null, 200, 50, 50),
                 new EvalOutcome(BONUS, List.of(new Retrieved("奖金.md", "基数 3000 元")), false, null,
-                        "3000 元[1]", List.of("奖金.md"), 0.8, 400, 1500));
+                        "3000 元[1]", List.of("奖金.md"), 0.8, 400, 600, 1500));
 
         var report = EvalReport.of(outcomes, Set.of("奖金.md"));
 
@@ -36,8 +36,11 @@ class EvalReportTest {
         assertThat(report.falseRefusalRate()).isZero();
         assertThat(report.leaks()).isEqualTo(1);
         assertThat(report.searchP95Millis()).isEqualTo(400);
+        assertThat(report.firstTokenP95Millis()).isEqualTo(900);
+        assertThat(report.askP95Millis()).isEqualTo(2000);
         assertThat(report.failures()).contains("备用金：前 10 条没有召回预期分块", "奖金：越权泄漏", "奖金：应拒答却回答了");
-        assertThat(report.toMarkdown()).contains("| 越权泄漏 | 1 | 0 |", "| 检索召回 Recall@10 | 50.0% | ≥ 85% |");
+        assertThat(report.toMarkdown()).contains("| 越权泄漏 | 1 | 0 |", "| 检索召回 Recall@10 | 50.0% | ≥ 85% |",
+                "| 首字延迟 p95（流式） | 900 ms | < 3 s |");
     }
 
     @Test

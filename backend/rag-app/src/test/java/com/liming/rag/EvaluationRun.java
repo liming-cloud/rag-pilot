@@ -102,14 +102,13 @@ class EvaluationRun {
                 knowledgeBaseId, evalCase.question()).getBody();
         long searchMillis = (System.nanoTime() - start) / 1_000_000;
 
-        start = System.nanoTime();
-        var headers = new HttpHeaders();
-        headers.setBearerAuth(staff);
-        var response = http.exchange("/api/ask", HttpMethod.POST, new HttpEntity<>(Map.of("question",
-                evalCase.question(), "knowledgeBaseIds", List.of(knowledgeBaseId, restricted)), headers), Map.class);
-        long askMillis = (System.nanoTime() - start) / 1_000_000;
-        assertThat(response.getStatusCode()).as(evalCase.id() + " 问答接口").isEqualTo(HttpStatus.OK);
-        var answer = response.getBody();
+        var events = SseEvents.post(http, "/api/ask/stream",
+                Map.of("question", evalCase.question(), "knowledgeBaseIds", List.of(knowledgeBaseId, restricted)), staff);
+        assertThat(events).as(evalCase.id() + " 流式问答").isNotEmpty();
+        var done = events.getLast();
+        assertThat(done.name()).as(evalCase.id() + " 流式问答结果：" + done.data()).isEqualTo("done");
+        Map<String, Object> answer = JsonMapper.builder().build().readValue(done.data(), new TypeReference<>() {
+        });
         @SuppressWarnings("unchecked")
         var citations = (List<Map<String, Object>>) answer.get("citations");
 
@@ -121,7 +120,7 @@ class EvaluationRun {
                 (String) answer.get("text"),
                 citations.stream().map(citation -> (String) citation.get("documentName")).toList(),
                 answer.get("topRelevance") == null ? null : ((Number) answer.get("topRelevance")).doubleValue(),
-                searchMillis, askMillis);
+                searchMillis, events.getFirst().atMillis(), done.atMillis());
     }
 
     private static List<EvalCase> loadCases() throws IOException {
@@ -182,9 +181,10 @@ class EvaluationRun {
             Files.writeString(Path.of(summary), markdown, StandardOpenOption.CREATE, StandardOpenOption.APPEND);
         }
         System.out.printf(Locale.ROOT,
-                "::notice title=评测结果::召回 %.1f%%，引用正确 %.1f%%，拒答正确 %.1f%%，误拒 %.1f%%，越权 %d，检索 p95 %d ms，问答 p95 %d ms%n",
+                "::notice title=评测结果::召回 %.1f%%，引用正确 %.1f%%，拒答正确 %.1f%%，误拒 %.1f%%，越权 %d，检索 p95 %d ms，首字 p95 %d ms，整段 p95 %d ms%n",
                 report.recallAt10() * 100, report.citationAccuracy() * 100, report.refusalAccuracy() * 100,
-                report.falseRefusalRate() * 100, report.leaks(), report.searchP95Millis(), report.askP95Millis());
+                report.falseRefusalRate() * 100, report.leaks(), report.searchP95Millis(), report.firstTokenP95Millis(),
+                report.askP95Millis());
         // 失败题和分数逐条写成注释，不下载报告也能在 PR 检查页看到。
         report.failures().forEach(failure -> System.out.println("::warning title=评测未通过::" + failure));
         // GitHub 每步每类注释最多显示 10 条，逐题分数合成一条；%0A 是注释里的换行。

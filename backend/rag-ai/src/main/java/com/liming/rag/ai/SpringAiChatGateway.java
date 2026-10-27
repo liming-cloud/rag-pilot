@@ -1,6 +1,7 @@
 package com.liming.rag.ai;
 
 import java.util.List;
+import java.util.function.Consumer;
 import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatModel;
@@ -29,11 +30,38 @@ final class SpringAiChatGateway implements ChatGateway {
     @Override
     public String complete(String systemPrompt, String userMessage) {
         try {
-            var response = model.call(new Prompt(List.of(new SystemMessage(systemPrompt), new UserMessage(userMessage))));
+            var response = model.call(prompt(systemPrompt, userMessage));
             var text = response.getResult().getOutput().getText();
             return text == null ? "" : text;
         } catch (RuntimeException e) {
-            throw new ModelCallException("生成回答失败：对话模型服务暂时不可用，请稍后重试", e);
+            throw unavailable(e);
         }
+    }
+
+    /** 在调用线程上阻塞到生成结束；调用方在虚拟线程里运行，不占用平台线程。 */
+    @Override
+    public String stream(String systemPrompt, String userMessage, Consumer<String> onDelta) {
+        var text = new StringBuilder();
+        try {
+            model.stream(prompt(systemPrompt, userMessage))
+                    .mapNotNull(response -> response.getResult() == null ? null : response.getResult().getOutput().getText())
+                    .filter(delta -> !delta.isEmpty())
+                    .doOnNext(delta -> {
+                        text.append(delta);
+                        onDelta.accept(delta);
+                    })
+                    .blockLast();
+        } catch (RuntimeException e) {
+            throw unavailable(e);
+        }
+        return text.toString();
+    }
+
+    private static Prompt prompt(String systemPrompt, String userMessage) {
+        return new Prompt(List.of(new SystemMessage(systemPrompt), new UserMessage(userMessage)));
+    }
+
+    private static ModelCallException unavailable(RuntimeException e) {
+        return new ModelCallException("生成回答失败：对话模型服务暂时不可用，请稍后重试", e);
     }
 }
