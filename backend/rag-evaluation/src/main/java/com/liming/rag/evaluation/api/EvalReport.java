@@ -17,10 +17,11 @@ import java.util.function.Predicate;
  *   <li>引用正确率：可回答且未拒答的题中，第一条引用来自预期文档、且回答含答案关键词的比例。</li>
  *   <li>拒答正确率：应拒答题中实际拒答的比例；误拒率：可回答题中被拒答的比例。</li>
  *   <li>越权泄漏：检索结果或引用里出现无权访问文档的题数，必须为 0。</li>
+ *   <li>首字延迟：流式问答从发出请求到收到第一个事件（第一段文字，或拒答结果）的时间。</li>
  * </ul>
  */
 public record EvalReport(int cases, double recallAt10, double citationAccuracy, double refusalAccuracy,
-        double falseRefusalRate, int leaks, long searchP95Millis, long askP95Millis, List<String> failures,
+        double falseRefusalRate, int leaks, long searchP95Millis, long firstTokenP95Millis, long askP95Millis, List<String> failures,
         List<EvalOutcome> outcomes) {
 
     public static EvalReport of(List<EvalOutcome> outcomes, Set<String> restrictedDocuments) {
@@ -66,6 +67,7 @@ public record EvalReport(int cases, double recallAt10, double citationAccuracy, 
                 ratio(answerable, EvalOutcome::refused),
                 leaks,
                 p95(outcomes.stream().map(EvalOutcome::searchMillis).toList()),
+                p95(outcomes.stream().map(EvalOutcome::firstEventMillis).toList()),
                 p95(outcomes.stream().map(EvalOutcome::askMillis).toList()),
                 List.copyOf(failures),
                 List.copyOf(outcomes));
@@ -99,7 +101,8 @@ public record EvalReport(int cases, double recallAt10, double citationAccuracy, 
         row(text, "误拒率", percent(falseRefusalRate), "越低越好");
         row(text, "越权泄漏", String.valueOf(leaks), "0");
         row(text, "检索延迟 p95", searchP95Millis + " ms", "< 800 ms");
-        row(text, "问答延迟 p95（非流式，整段）", askP95Millis + " ms", "首字 < 3 s");
+        row(text, "首字延迟 p95（流式）", firstTokenP95Millis + " ms", "< 3 s");
+        row(text, "整段回答 p95（流式）", askP95Millis + " ms", "—");
         text.append("\n### 重排最高分分布（用于校准拒答门槛）\n\n");
         text.append("| 题型 | 最低 | 中位 | 最高 |\n| --- | --- | --- | --- |\n");
         for (var kind : Kind.values()) {

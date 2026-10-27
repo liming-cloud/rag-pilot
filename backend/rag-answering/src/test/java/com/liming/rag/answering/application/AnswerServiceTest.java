@@ -3,12 +3,14 @@ package com.liming.rag.answering.application;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.liming.rag.ai.ChatGateway;
 import com.liming.rag.answering.api.Answer.RefusalReason;
 import com.liming.rag.common.TenantId;
 import com.liming.rag.common.UserId;
 import com.liming.rag.knowledge.api.SearchHit;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Consumer;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -61,5 +63,44 @@ class AnswerServiceTest {
     void validatesInput() {
         var service = service(List.of(), List.of(), "x");
         assertThatThrownBy(() -> service.ask(TENANT, USER, List.of(1L), " ")).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    @DisplayName("流式：文字按片段流出，最终结果带引用")
+    void streamsDeltas() {
+        var deltas = new ArrayList<String>();
+        var answer = streaming(List.of("在 03 ", "号货架[1]。"), 0.9).ask(TENANT, USER, List.of(), "青柚在哪", deltas::add);
+
+        assertThat(deltas).containsExactly("在 03 ", "号货架[1]。");
+        assertThat(answer.refused()).isFalse();
+        assertThat(answer.citations()).singleElement().satisfies(c -> assertThat(c.documentName()).isEqualTo("商品陈列.txt"));
+    }
+
+    @Test
+    @DisplayName("流式：模型回复 NO_ANSWER 时一个字也不流出；相关度低时不调用模型")
+    void streamsNothingWhenRefusing() {
+        var deltas = new ArrayList<String>();
+        var declined = streaming(List.of("NO_", "ANSWER"), 0.9).ask(TENANT, USER, List.of(), "问", deltas::add);
+        var low = streaming(List.of("不该出现"), 0.1).ask(TENANT, USER, List.of(), "问", deltas::add);
+
+        assertThat(declined.refusalReason()).isEqualTo(RefusalReason.MODEL_DECLINED);
+        assertThat(low.refusalReason()).isEqualTo(RefusalReason.LOW_RELEVANCE);
+        assertThat(deltas).isEmpty();
+    }
+
+    private AnswerService streaming(List<String> pieces, double score) {
+        ChatGateway chat = new ChatGateway() {
+            @Override
+            public String complete(String systemPrompt, String userMessage) {
+                return String.join("", pieces);
+            }
+
+            @Override
+            public String stream(String systemPrompt, String userMessage, Consumer<String> onDelta) {
+                pieces.forEach(onDelta);
+                return String.join("", pieces);
+            }
+        };
+        return new AnswerService(query -> List.of(SHELF), (query, documents) -> List.of(score), chat, 30, 8, 0.3);
     }
 }
