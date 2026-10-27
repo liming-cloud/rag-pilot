@@ -3,6 +3,7 @@ package com.liming.rag.answering.web;
 import cn.dev33.satoken.annotation.SaCheckLogin;
 import com.liming.rag.ai.ModelCallException;
 import com.liming.rag.answering.api.Answer;
+import com.liming.rag.answering.application.AnswerLogService;
 import com.liming.rag.answering.application.AnswerService;
 import com.liming.rag.identity.api.CurrentUser;
 import java.io.IOException;
@@ -32,10 +33,12 @@ class AskController {
     private static final ExecutorService STREAMS = Executors.newVirtualThreadPerTaskExecutor();
 
     private final AnswerService answers;
+    private final AnswerLogService log;
     private final CurrentUser currentUser;
 
-    AskController(AnswerService answers, CurrentUser currentUser) {
+    AskController(AnswerService answers, AnswerLogService log, CurrentUser currentUser) {
         this.answers = answers;
+        this.log = log;
         this.currentUser = currentUser;
     }
 
@@ -44,7 +47,10 @@ class AskController {
 
     @PostMapping
     Answer ask(@RequestBody AskRequest request) {
-        return answers.ask(currentUser.tenantId(), currentUser.userId(), request.knowledgeBaseIds(), request.question());
+        var tenantId = currentUser.tenantId();
+        var userId = currentUser.userId();
+        var answer = answers.ask(tenantId, userId, request.knowledgeBaseIds(), request.question());
+        return log.record(tenantId, userId, request.question(), answer);
     }
 
     /**
@@ -61,7 +67,7 @@ class AskController {
             try {
                 var answer = answers.ask(tenantId, userId, request.knowledgeBaseIds(), request.question(),
                         delta -> send(emitter, "delta", Map.of("text", delta)));
-                send(emitter, "done", answer);
+                send(emitter, "done", log.record(tenantId, userId, request.question(), answer));
                 emitter.complete();
             } catch (IllegalArgumentException e) {
                 finishWithError(emitter, 400, e.getMessage());
