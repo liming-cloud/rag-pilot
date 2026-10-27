@@ -151,11 +151,11 @@ export const handlers = [
     return new HttpResponse(null, { status: 204 });
   }),
   http.get("/api/knowledge-bases/:id/documents", ({ params }) => HttpResponse.json(documents[Number(params.id)] ?? [])),
-  // 与后端一致：只收 TXT / Markdown，同名文件视为重复。
+  // 与后端一致：只收 PDF、Word、TXT、Markdown，同名文件视为重复。
   http.post("/api/knowledge-bases/:id/documents", async ({ params, request }) => {
     const file = await uploadedFile(request);
-    if (!/\.(txt|md|markdown)$/i.test(file.name)) {
-      return problem(415, "目前只支持 TXT 和 Markdown；PDF、Word、PPT、Excel 将在接入文档解析服务后支持");
+    if (!/\.(txt|md|markdown|pdf|docx)$/i.test(file.name)) {
+      return problem(415, "目前支持 PDF、Word（.docx）、TXT 和 Markdown；Excel 即将支持，旧版 .doc 请先另存为 .docx");
     }
     const list = (documents[Number(params.id)] ??= []);
     if (list.some((document) => document.filename === file.name)) {

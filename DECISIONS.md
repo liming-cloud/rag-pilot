@@ -73,3 +73,7 @@ React 19.2、Vite 8.1、TypeScript 6.0、Vitest 4.1 沿用旧项目验证过的�
 ## D-018 流式问答（2026-10-27）
 
 `POST /api/ask/stream` 用 Spring MVC 的 `SseEmitter`，每次问答一个虚拟线程，阻塞读取 Spring AI 的流式输出，不新增依赖，answering 模块也不引入 Reactor 类型。事件为 `delta`、`done`、`error`；`done` 是最终结果，引用校验不通过时客户端要用拒答替换已显示的文字，NO_ANSWER 在服务端拦住、不流出。Sa-Token 拦截器对 ASYNC 再分派放行（登录已在原始请求里校验）。评测走流式接口，首字延迟按第一个事件计。
+
+## D-019 文档解析：本地 PDFBox 与 POI（2026-10-27）
+
+客户资料主要是 PDF、Word、Excel。新增 Apache PDFBox 3.0.7（PDF）和 Apache POI 5.5.1（`poi-ooxml`，Word / Excel），在 rag-ai 里本地解析，不接 docling 等外部服务：不多一个要部署的服务，客户内网也能用，结果确定可测。不用 Tika：依赖太多，而且输出是平铺文字，会丢掉 Word 标题层级和表格表头。Word 的标题样式转成 Markdown 标题，表格每行转成“表头：值”；PDF 只按阅读顺序提取文字。已知限制：扫描件（需要 OCR）、旧版 .doc、只靠加粗放大而没用标题样式的“标题”都不识别，等拿到脱敏的真实样例再定是否加规则或换解析服务。

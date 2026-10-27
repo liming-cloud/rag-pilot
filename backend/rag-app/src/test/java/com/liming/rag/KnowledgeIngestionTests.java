@@ -2,10 +2,12 @@ package com.liming.rag;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
+import org.apache.poi.xwpf.usermodel.XWPFDocument;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -76,17 +78,47 @@ class KnowledgeIngestionTests {
     }
 
     @Test
-    @DisplayName("不支持的格式拒绝；非 UTF-8 文本保存为失败文档并给出原因")
+    @DisplayName("不支持的格式拒绝；非 UTF-8 文本、损坏的 PDF 保存为失败文档并给出原因")
     void rejectsUnsupportedAndRecordsEncodingFailure() {
         long knowledgeBaseId = createKnowledgeBase("失败场景知识库");
 
-        var pdf = upload(knowledgeBaseId, "收银规范.pdf", "%PDF-1.7".getBytes(StandardCharsets.US_ASCII));
-        assertThat(pdf.getStatusCode()).isEqualTo(HttpStatus.UNSUPPORTED_MEDIA_TYPE);
+        var pptx = upload(knowledgeBaseId, "门店培训.pptx", "PK".getBytes(StandardCharsets.US_ASCII));
+        assertThat(pptx.getStatusCode()).isEqualTo(HttpStatus.UNSUPPORTED_MEDIA_TYPE);
+
+        var brokenPdf = upload(knowledgeBaseId, "收银规范.pdf", "%PDF-1.7".getBytes(StandardCharsets.US_ASCII));
+        assertThat(brokenPdf.getBody()).containsEntry("status", "FAILED");
+        assertThat((String) brokenPdf.getBody().get("error")).contains("损坏");
 
         var gbk = upload(knowledgeBaseId, "旧编码.txt", new byte[] {(byte) 0xC1, (byte) 0xD9, (byte) 0xC6});
         assertThat(gbk.getStatusCode()).isEqualTo(HttpStatus.CREATED);
         assertThat(gbk.getBody()).containsEntry("status", "FAILED");
         assertThat((String) gbk.getBody().get("error")).contains("UTF-8");
+    }
+
+    @Test
+    @DisplayName("上传 Word 文档：按标题样式分章节入库，表格行带着表头")
+    void uploadsWord() throws IOException {
+        long knowledgeBaseId = createKnowledgeBase("Word 知识库");
+        byte[] docx;
+        try (var document = new XWPFDocument(); var out = new ByteArrayOutputStream()) {
+            var heading = document.createParagraph();
+            heading.setStyle("Heading1");
+            heading.createRun().setText("商品陈列");
+            document.createParagraph().createRun().setText("饮料按品牌集中陈列，新品放在视线高度。");
+            var table = document.createTable(2, 2);
+            table.getRow(0).getCell(0).setText("商品");
+            table.getRow(0).getCell(1).setText("货架");
+            table.getRow(1).getCell(0).setText("青柚气泡水");
+            table.getRow(1).getCell(1).setText("A-03");
+            document.write(out);
+            docx = out.toByteArray();
+        }
+
+        var uploaded = upload(knowledgeBaseId, "陈列规范.docx", docx);
+        assertThat(uploaded.getBody()).containsEntry("status", "READY");
+        assertThat(jdbc.queryForList("select heading_path || ' | ' || content from chunk where knowledge_base_id = ?",
+                String.class, knowledgeBaseId))
+                .anySatisfy(chunk -> assertThat(chunk).contains("商品陈列").contains("商品：青柚气泡水；货架：A-03"));
     }
 
     private long createKnowledgeBase(String name) {

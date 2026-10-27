@@ -1,5 +1,7 @@
 package com.liming.rag.knowledge.application;
 
+import com.liming.rag.ai.DocumentParseException;
+import com.liming.rag.ai.DocumentParser;
 import com.liming.rag.ai.EmbeddingClient;
 import com.liming.rag.ai.ModelCallException;
 import com.liming.rag.common.TenantId;
@@ -22,8 +24,8 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * 文档入库：校验、存原文件、解析、分块、写入分块。
  *
- * <p>目前只支持 UTF-8 的 TXT 和 Markdown，在上传请求内同步完成（含调用嵌入模型）。PDF、Office
- * 等格式接入 docling-serve 后改为任务表异步处理，模型调用也随之移出数据库事务；校验和失败语义保持不变。
+ * <p>支持 UTF-8 的 TXT、Markdown，以及 PDF、Word（.docx，经 rag-ai 的 {@link DocumentParser} 本地解析，见 D-019）。
+ * 在上传请求内同步完成（含调用嵌入模型）；大文件变多后再改为任务表异步处理，模型调用也随之移出数据库事务。
  */
 @Service
 public class DocumentIngestionService {
@@ -34,20 +36,24 @@ public class DocumentIngestionService {
     private static final Map<String, String> SUPPORTED_TYPES = Map.of(
             "txt", "text/plain",
             "md", "text/markdown",
-            "markdown", "text/markdown");
+            "markdown", "text/markdown",
+            "pdf", "application/pdf",
+            "docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
 
     private final KnowledgeBaseService knowledgeBases;
     private final DocumentRepository documents;
     private final FileStorage storage;
     private final EmbeddingClient embeddings;
+    private final DocumentParser parser;
     private final TextChunker chunker = new TextChunker();
 
     public DocumentIngestionService(KnowledgeBaseService knowledgeBases, DocumentRepository documents,
-            FileStorage storage, EmbeddingClient embeddings) {
+            FileStorage storage, EmbeddingClient embeddings, DocumentParser parser) {
         this.knowledgeBases = knowledgeBases;
         this.documents = documents;
         this.storage = storage;
         this.embeddings = embeddings;
+        this.parser = parser;
     }
 
     /**
@@ -75,9 +81,13 @@ public class DocumentIngestionService {
 
         String text;
         try {
-            text = decodeUtf8(content);
+            text = mediaType.startsWith("text/") ? decodeUtf8(content) : parser.toText(filename, content);
         } catch (CharacterCodingException e) {
             document.markFailed("文件不是 UTF-8 编码，请用“另存为 UTF-8”后重新上传");
+            documents.save(document);
+            return document;
+        } catch (DocumentParseException e) {
+            document.markFailed(e.getMessage());
             documents.save(document);
             return document;
         }
@@ -115,7 +125,7 @@ public class DocumentIngestionService {
         var mediaType = SUPPORTED_TYPES.get(extension);
         if (mediaType == null) {
             throw new KnowledgeException(KnowledgeException.Reason.UNSUPPORTED_TYPE,
-                    "目前只支持 TXT 和 Markdown；PDF、Word、PPT、Excel 将在接入文档解析服务后支持");
+                    "目前支持 PDF、Word（.docx）、TXT 和 Markdown；Excel 即将支持，旧版 .doc 请先另存为 .docx");
         }
         return mediaType;
     }
