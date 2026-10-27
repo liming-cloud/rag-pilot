@@ -73,6 +73,25 @@ public class AccountService implements CurrentUser, UserDirectory, StpInterface 
                 role, true));
     }
 
+    /**
+     * 启用或停用账号。停用时踢掉它所有已登录的会话，令牌立即失效。不能停用自己，避免把唯一的管理员锁在外面。
+     */
+    @Transactional
+    public Account setEnabled(TenantId tenantId, UserId target, UserId actor, boolean enabled) {
+        var account = accounts.find(target.value())
+                .filter(found -> found.tenantId().equals(tenantId))
+                .orElseThrow(() -> new IdentityException(IdentityException.Reason.NOT_FOUND, "账号不存在"));
+        if (!enabled && target.equals(actor)) {
+            throw invalid("不能停用自己的账号");
+        }
+        accounts.setEnabled(target.value(), enabled);
+        if (!enabled) {
+            StpUtil.logout(target.value());
+        }
+        return new Account(account.id(), account.tenantId(), account.username(), account.displayName(),
+                account.passwordHash(), account.role(), enabled);
+    }
+
     public List<Account> list(TenantId tenantId) {
         return accounts.list(tenantId);
     }

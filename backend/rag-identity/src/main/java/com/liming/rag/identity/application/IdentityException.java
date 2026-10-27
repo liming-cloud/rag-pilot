@@ -7,6 +7,7 @@ public class IdentityException extends RuntimeException {
 
     public enum Reason {
         BAD_CREDENTIALS,
+        NOT_FOUND,
         CONFLICT,
         INVALID
     }

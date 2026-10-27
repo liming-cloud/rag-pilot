@@ -18,6 +18,8 @@ public interface Accounts {
 
     long count();
 
+    void setEnabled(long id, boolean enabled);
+
     /** 插入新账号，返回带主键的账号。 */
     Account insert(Account account);
 }

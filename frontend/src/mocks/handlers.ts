@@ -34,21 +34,23 @@ const sampleDocuments: Record<number, KnowledgeDocument[]> = {
 };
 
 const sampleUsers: User[] = [
-  { id: 1, username: "admin", displayName: "管理员", role: "ADMIN" },
-  { id: 2, username: "staff01", displayName: "店员小王", role: "STAFF" },
-  { id: 3, username: "staff02", displayName: "店员小李", role: "STAFF" },
+  { id: 1, username: "admin", displayName: "管理员", role: "ADMIN", enabled: true },
+  { id: 2, username: "staff01", displayName: "店员小王", role: "STAFF", enabled: true },
+  { id: 3, username: "staff02", displayName: "店员小李", role: "STAFF", enabled: true },
 ];
 
 /** 假接口的可变数据；测试之间用 resetMockData 还原。 */
 let knowledgeBases: KnowledgeBase[] = [];
 let documents: Record<number, KnowledgeDocument[]> = {};
 let members: Record<number, number[]> = {};
+let users: User[] = [];
 let nextId = 100;
 
 export function resetMockData() {
   knowledgeBases = sampleKnowledgeBases.map((knowledgeBase) => ({ ...knowledgeBase }));
   documents = Object.fromEntries(Object.entries(sampleDocuments).map(([id, list]) => [id, [...list]]));
   members = { 1: [1, 2], 2: [1] };
+  users = sampleUsers.map((user) => ({ ...user }));
 }
 resetMockData();
 
@@ -111,7 +113,29 @@ export const handlers = [
     knowledgeBases.push(created);
     return HttpResponse.json(created, { status: 201 });
   }),
-  http.get("/api/users", () => HttpResponse.json(sampleUsers)),
+  http.get("/api/users", () => HttpResponse.json(users)),
+  http.post("/api/users", async ({ request }) => {
+    const input = (await request.json()) as Omit<User, "id" | "enabled">;
+    if (users.some((user) => user.username === input.username)) {
+      return problem(409, `用户名已被使用：${input.username}`);
+    }
+    const created: User = { id: nextId++, username: input.username, displayName: input.displayName, role: input.role, enabled: true };
+    users.push(created);
+    return HttpResponse.json(created, { status: 201 });
+  }),
+  // 假定当前登录的是 1 号管理员，与后端一样不能停用自己。
+  http.patch("/api/users/:id", async ({ params, request }) => {
+    const { enabled } = (await request.json()) as { enabled: boolean };
+    const user = users.find((candidate) => candidate.id === Number(params.id));
+    if (!user) {
+      return problem(404, "账号不存在");
+    }
+    if (!enabled && user.id === 1) {
+      return problem(400, "不能停用自己的账号");
+    }
+    user.enabled = enabled;
+    return HttpResponse.json(user);
+  }),
   http.get("/api/knowledge-bases/:id/members", ({ params }) =>
     HttpResponse.json((members[Number(params.id)] ?? []).map((userId) => ({ userId }))),
   ),

@@ -46,6 +46,14 @@ class MybatisAccounts implements Accounts {
     }
 
     @Override
+    public void setEnabled(long id, boolean enabled) {
+        var row = new AppUserDO();
+        row.setId(id);
+        row.setEnabled(enabled);
+        mapper.updateById(row);
+    }
+
+    @Override
     public Account insert(Account account) {
         var row = new AppUserDO();
         row.setTenantId(account.tenantId().value());
