@@ -7,7 +7,7 @@ import org.springframework.http.ProblemDetail;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
-@RestControllerAdvice(assignableTypes = {AskController.class, FeedbackController.class})
+@RestControllerAdvice(assignableTypes = {AskController.class, FeedbackController.class, AnswerReviewController.class})
 class AskExceptionHandler {
 
     @ExceptionHandler(IllegalArgumentException.class)

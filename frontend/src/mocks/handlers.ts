@@ -1,4 +1,5 @@
 import { http, HttpResponse } from "msw";
+import type { AnswerReview } from "@/features/answers/api";
 import type { User } from "@/features/auth/api";
 import type { Answer } from "@/features/chat/api";
 import type { KnowledgeBase, KnowledgeDocument } from "@/features/knowledge/api";
@@ -66,6 +67,35 @@ async function uploadedFile(request: Request) {
   return { name, size: new TextEncoder().encode(content).length };
 }
 
+const sampleReviews: AnswerReview[] = [
+  {
+    id: 601,
+    userId: 2,
+    question: "临期商品打几折？",
+    answerText: "保质期剩余不足三分之一的商品按原价七折销售 [1]。",
+    refused: false,
+    refusalReason: null,
+    topRelevance: 0.93,
+    rating: "DOWN",
+    comment: "门店规定是五折",
+    createdAt: "2026-10-27T10:20:00+08:00",
+    citedDocuments: ["临期与报损管理.md"],
+  },
+  {
+    id: 602,
+    userId: 3,
+    question: "门店几点打烊？",
+    answerText: "知识库里没有找到能回答这个问题的可靠依据，建议换个问法，或联系店长确认。",
+    refused: true,
+    refusalReason: "LOW_RELEVANCE",
+    topRelevance: 0.02,
+    rating: null,
+    comment: null,
+    createdAt: "2026-10-27T09:05:00+08:00",
+    citedDocuments: [],
+  },
+];
+
 const problem = (status: number, detail: string) => HttpResponse.json({ status, detail }, { status });
 
 export const sampleAnswer: Answer = {
@@ -105,6 +135,14 @@ export const handlers = [
       : HttpResponse.json({ token: "mock-token", user: sampleUser });
   }),
   http.get("/api/auth/me", () => HttpResponse.json(sampleUser)),
+  http.get("/api/answers", ({ request }) => {
+    const filter = new URL(request.url).searchParams.get("filter");
+    return HttpResponse.json(
+      sampleReviews.filter((review) =>
+        filter === "refused" ? review.refused : filter === "all" ? true : review.rating === "DOWN",
+      ),
+    );
+  }),
   http.put("/api/answers/:id/feedback", () => new HttpResponse(null, { status: 204 })),
   http.delete("/api/answers/:id/feedback", () => new HttpResponse(null, { status: 204 })),
   http.get("/api/knowledge-bases", () => HttpResponse.json(knowledgeBases)),
