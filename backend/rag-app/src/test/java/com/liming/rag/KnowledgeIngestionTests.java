@@ -8,6 +8,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.apache.poi.xwpf.usermodel.XWPFDocument;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -128,6 +129,32 @@ class KnowledgeIngestionTests {
         assertThat(jdbc.queryForList("select heading_path || ' | ' || content from chunk where knowledge_base_id = ?",
                 String.class, knowledgeBaseId))
                 .anySatisfy(chunk -> assertThat(chunk).contains("商品陈列").contains("商品：青柚气泡水；货架：A-03"));
+    }
+
+    @Test
+    @DisplayName("上传 Excel：每行带着表头入库，数字按显示格式")
+    void uploadsExcel() throws IOException {
+        long knowledgeBaseId = createKnowledgeBase("Excel 知识库");
+        byte[] xlsx;
+        try (var workbook = new XSSFWorkbook(); var out = new ByteArrayOutputStream()) {
+            var money = workbook.createCellStyle();
+            money.setDataFormat(workbook.createDataFormat().getFormat("0.00"));
+            var sheet = workbook.createSheet("价目表");
+            sheet.createRow(0).createCell(0).setCellValue("商品");
+            sheet.getRow(0).createCell(1).setCellValue("价格");
+            sheet.createRow(1).createCell(0).setCellValue("青柚气泡水");
+            sheet.getRow(1).createCell(1).setCellValue(5.5);
+            sheet.getRow(1).getCell(1).setCellStyle(money);
+            workbook.write(out);
+            xlsx = out.toByteArray();
+        }
+
+        var uploaded = upload(knowledgeBaseId, "价目表.xlsx", xlsx);
+        assertThat(TestDocuments.awaitProcessed(http, knowledgeBaseId, uploaded.getBody(), null))
+                .containsEntry("status", "READY");
+        assertThat(jdbc.queryForList("select heading_path || ' | ' || content from chunk where knowledge_base_id = ?",
+                String.class, knowledgeBaseId))
+                .anySatisfy(chunk -> assertThat(chunk).contains("价目表").contains("商品：青柚气泡水；价格：5.50"));
     }
 
     @Test

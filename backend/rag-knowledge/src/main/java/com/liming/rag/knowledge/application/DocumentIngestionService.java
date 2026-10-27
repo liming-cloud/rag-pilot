@@ -16,7 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * 文档入库：校验、存原文件、解析、分块、写入分块。
  *
- * <p>支持 UTF-8 的 TXT、Markdown，以及 PDF、Word（.docx）。上传只做校验、存文件、记录文档，
+ * <p>支持 UTF-8 的 TXT、Markdown，以及 PDF、Word（.docx）、Excel（.xlsx / .xls）。上传只做校验、存文件、记录文档，
  * 读取、分块、向量化由 {@link IngestionWorker} 在后台按 {@link IngestionPipeline} 完成。
  */
 @Service
@@ -30,7 +30,9 @@ public class DocumentIngestionService {
             "md", "text/markdown",
             "markdown", "text/markdown",
             "pdf", "application/pdf",
-            "docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+            "docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "xls", "application/vnd.ms-excel");
 
     private final KnowledgeBaseService knowledgeBases;
     private final DocumentRepository documents;
@@ -88,7 +90,7 @@ public class DocumentIngestionService {
         var mediaType = SUPPORTED_TYPES.get(extension);
         if (mediaType == null) {
             throw new KnowledgeException(KnowledgeException.Reason.UNSUPPORTED_TYPE,
-                    "目前支持 PDF、Word（.docx）、TXT 和 Markdown；Excel 即将支持，旧版 .doc 请先另存为 .docx");
+                    "目前支持 PDF、Word（.docx）、Excel（.xlsx / .xls）、TXT 和 Markdown；旧版 .doc 请先另存为 .docx");
         }
         return mediaType;
     }
