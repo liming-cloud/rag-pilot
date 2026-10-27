@@ -81,3 +81,7 @@ React 19.2、Vite 8.1、TypeScript 6.0、Vitest 4.1 沿用旧项目验证过的�
 ## D-020 入库与问答流程按 Spring AI 接口组织（2026-10-27）
 
 流程骨架用 Spring AI 的阶段接口，实现自己写：入库为 `DocumentReader`（rag-ai 的 `DocumentReaders`）→ `DocumentTransformer`（标题感知分块）→ `DocumentWriter`（向量化并写入 chunk）；问答侧之后按 `DocumentRetriever` / `DocumentPostProcessor` / `QueryAugmenter` 改。框架自带的组件（问题改写、Tika 读取器等）可以直接插进来做评测。边界：Spring AI 的 `Document` 只在流程内部使用，不进模块 `api`、不当领域模型，元数据键集中定义；流程编排仍在 `AnswerService`，不用 `RetrievalAugmentationAdvisor`，因为它覆盖不了“相关度低时不调模型直接拒答”和生成后的引用校验。问答侧为此引入 `spring-ai-rag`（版本由 Spring AI BOM 管理），只用它的阶段接口；检索器从 `Query.context` 取提问人身份，缺少时直接拒绝。
+
+## D-021 评测闭环：分段计时与私有评测集（2026-10-27）
+
+回答里带上各阶段耗时（检索、重排、模型首字、生成），评测报告给出各段 p95，用数据定位首字延迟的瓶颈，而不是凭猜测换模型。客户真实资料和问题不进公开仓库：评测运行支持 `EVAL_DATA_DIR` 指向仓库外的私有评测集，目录结构与合成集相同；员工的差评和答不上来的问题可以从“回答记录”页导出成评测题草稿，人工标注后放进去。合成集补了改写、口语、错字和近似拒答题，报告按问法分别统计。
