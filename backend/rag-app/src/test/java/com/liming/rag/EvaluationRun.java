@@ -27,7 +27,6 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.core.io.ByteArrayResource;
-import org.springframework.core.io.ClassPathResource;
 import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -51,13 +50,15 @@ import tools.jackson.databind.json.JsonMapper;
 @EnabledIfEnvironmentVariable(named = "MODEL_API_KEY", matches = ".+")
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {
         "rag.storage.root=${java.io.tmpdir}/rag-eval-files",
-        "rag.ai.embedding.provider=openai",
-        "rag.ai.rerank.provider=openai",
-        "rag.ai.chat.provider=openai",
+        "rag.ai.embedding.provider=${EVAL_EMBEDDING_PROVIDER:openai}",
+        "rag.ai.rerank.provider=${EVAL_RERANK_PROVIDER:openai}",
+        "rag.ai.chat.provider=${EVAL_CHAT_PROVIDER:openai}",
         "rag.answering.min-relevance=${EVAL_MIN_RELEVANCE:0.2}"})
 @AutoConfigureTestRestTemplate
 @Testcontainers
 class EvaluationRun {
+
+    private static final PathMatchingResourcePatternResolver RESOURCES = new PathMatchingResourcePatternResolver();
 
     private static final ParameterizedTypeReference<List<Map<String, Object>>> HITS =
             new ParameterizedTypeReference<>() {
@@ -120,26 +121,49 @@ class EvaluationRun {
                 (String) answer.get("text"),
                 citations.stream().map(citation -> (String) citation.get("documentName")).toList(),
                 answer.get("topRelevance") == null ? null : ((Number) answer.get("topRelevance")).doubleValue(),
-                searchMillis, events.getFirst().atMillis(), done.atMillis());
+                searchMillis, events.getFirst().atMillis(), done.atMillis(), stages(answer));
+    }
+
+    /**
+     * 评测数据的位置：设置了 {@code EVAL_DATA_DIR} 时用仓库外的私有评测集（客户真实资料和问题），
+     * 否则用仓库里的合成集。目录结构相同：{@code corpus/store/}、{@code corpus/restricted/}（可选）、{@code cases.json}。
+     */
+    private static String dataLocation() {
+        var dir = System.getenv("EVAL_DATA_DIR");
+        if (dir == null || dir.isBlank()) {
+            return "classpath:eval/";
+        }
+        var uri = Path.of(dir).toAbsolutePath().toUri().toString();
+        return uri.endsWith("/") ? uri : uri + "/";
     }
 
     private static List<EvalCase> loadCases() throws IOException {
-        var json = new ClassPathResource("eval/cases.json").getContentAsString(StandardCharsets.UTF_8);
+        var json = RESOURCES.getResource(dataLocation() + "cases.json").getContentAsString(StandardCharsets.UTF_8);
         List<Map<String, Object>> raw = JsonMapper.builder().build().readValue(json, new TypeReference<>() {
         });
         return raw.stream().map(item -> {
             @SuppressWarnings("unchecked")
             var keywords = (List<String>) item.get("keywords");
-            return new EvalCase((String) item.get("id"), (String) item.get("question"),
+            var evalCase = new EvalCase((String) item.get("id"), (String) item.get("question"),
                     EvalCase.Kind.valueOf(((String) item.get("kind")).toUpperCase(Locale.ROOT)),
-                    (String) item.get("expectedDocument"), keywords, Boolean.TRUE.equals(item.get("restricted")));
+                    (String) item.get("expectedDocument"), keywords, Boolean.TRUE.equals(item.get("restricted")),
+                    (String) item.get("style"));
+            // 从回答记录导出的草稿题要先人工标注，没标完就跑会让指标失真。
+            if (evalCase.kind() == EvalCase.Kind.ANSWERABLE
+                    && (evalCase.expectedDocument() == null || evalCase.keywords().isEmpty())) {
+                throw new IllegalStateException("评测题“" + evalCase.id() + "”还没标注预期文档和答案关键词");
+            }
+            return evalCase;
         }).toList();
     }
 
     private Set<String> uploadCorpus(long knowledgeBaseId, String folder) throws IOException {
         var names = new java.util.HashSet<String>();
-        for (var resource : new PathMatchingResourcePatternResolver().getResources("classpath:eval/corpus/" + folder + "/*.md")) {
+        for (var resource : RESOURCES.getResources(dataLocation() + "corpus/" + folder + "/*")) {
             var filename = resource.getFilename();
+            if (filename == null || filename.startsWith(".") || !resource.isReadable()) {
+                continue;
+            }
             var file = new ByteArrayResource(resource.getContentAsByteArray()) {
                 @Override
                 public String getFilename() {
@@ -156,7 +180,10 @@ class EvaluationRun {
                     .containsEntry("status", "READY");
             names.add(filename);
         }
-        assertThat(names).as(folder + " 语料").isNotEmpty();
+        // 私有评测集可以没有店长专用库；合成集两个库都有。
+        if (folder.equals("store")) {
+            assertThat(names).as(folder + " 语料").isNotEmpty();
+        }
         return names;
     }
 
@@ -174,6 +201,25 @@ class EvaluationRun {
         return ((Number) created.getBody().get("id")).longValue();
     }
 
+    @SuppressWarnings("unchecked")
+    private static EvalOutcome.Stages stages(Map<String, Object> answer) {
+        if (!(answer.get("timings") instanceof Map<?, ?> timings)) {
+            return null;
+        }
+        var values = (Map<String, Object>) timings;
+        return new EvalOutcome.Stages(millis(values.get("retrievalMillis")), millis(values.get("rerankMillis")),
+                millis(values.get("firstTokenMillis")));
+    }
+
+    /** 没有对应题目时比例是 NaN，显示成“-”。 */
+    private static String percent(double value) {
+        return Double.isNaN(value) ? "-" : String.format(Locale.ROOT, "%.1f%%", value * 100);
+    }
+
+    private static Long millis(Object value) {
+        return value == null ? null : ((Number) value).longValue();
+    }
+
     private static void publish(EvalReport report) throws IOException {
         var markdown = report.toMarkdown();
         Files.writeString(Path.of("target", "eval-report.md"), markdown);
@@ -182,9 +228,9 @@ class EvaluationRun {
             Files.writeString(Path.of(summary), markdown, StandardOpenOption.CREATE, StandardOpenOption.APPEND);
         }
         System.out.printf(Locale.ROOT,
-                "::notice title=评测结果::召回 %.1f%%，引用正确 %.1f%%，拒答正确 %.1f%%，误拒 %.1f%%，越权 %d，检索 p95 %d ms，首字 p95 %d ms，整段 p95 %d ms%n",
-                report.recallAt10() * 100, report.citationAccuracy() * 100, report.refusalAccuracy() * 100,
-                report.falseRefusalRate() * 100, report.leaks(), report.searchP95Millis(), report.firstTokenP95Millis(),
+                "::notice title=评测结果::召回 %s，引用正确 %s，拒答正确 %s，误拒 %s，越权 %d，检索 p95 %d ms，首字 p95 %d ms，整段 p95 %d ms%n",
+                percent(report.recallAt10()), percent(report.citationAccuracy()), percent(report.refusalAccuracy()),
+                percent(report.falseRefusalRate()), report.leaks(), report.searchP95Millis(), report.firstTokenP95Millis(),
                 report.askP95Millis());
         // 失败题和分数逐条写成注释，不下载报告也能在 PR 检查页看到。
         report.failures().forEach(failure -> System.out.println("::warning title=评测未通过::" + failure));

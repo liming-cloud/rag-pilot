@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { fetchUsers } from "@/features/users/api";
-import { type AnswerReview, fetchAnswerReviews, type ReviewFilter } from "./api";
+import { type AnswerReview, fetchAnswerReviews, type ReviewFilter, toEvalDrafts } from "./api";
 
 const FILTERS: { value: ReviewFilter; label: string }[] = [
   { value: "disliked", label: "差评" },
@@ -22,7 +22,7 @@ export function AnswersPage() {
   return (
     <main className="mx-auto flex max-w-3xl flex-col gap-4 p-6 md:p-8">
       <h1 className="font-serif text-2xl font-semibold">回答记录</h1>
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         {FILTERS.map((option) => (
           <Button
             key={option.value}
@@ -34,7 +34,19 @@ export function AnswersPage() {
             {option.label}
           </Button>
         ))}
+        <Button
+          size="sm"
+          variant="ghost"
+          className="ml-auto"
+          disabled={!reviews.data?.length}
+          onClick={() => download(`eval-drafts-${filter}.json`, toEvalDrafts(reviews.data ?? []))}
+        >
+          导出为评测题草稿
+        </Button>
       </div>
+      <p className="text-sm text-muted-foreground">
+        导出的题要人工标注预期文档和答案关键词，放进仓库外的私有评测集（EVAL_DATA_DIR），不要提交到代码仓库。
+      </p>
       {reviews.isError && <p className="text-destructive">{reviews.error.message}</p>}
       {reviews.data?.length === 0 && <p className="text-muted-foreground">暂时没有记录。</p>}
       <ul aria-label="回答记录" className="flex flex-col gap-3">
@@ -44,6 +56,15 @@ export function AnswersPage() {
       </ul>
     </main>
   );
+}
+
+function download(filename: string, data: unknown) {
+  const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }));
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
 }
 
 function ReviewItem({ review, asker }: { review: AnswerReview; asker: string }) {

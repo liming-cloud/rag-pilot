@@ -3,11 +3,14 @@ package com.liming.rag.evaluation.api;
 import com.liming.rag.evaluation.api.EvalCase.Kind;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.function.Predicate;
+import java.util.stream.Collectors;
 
 /**
  * 评测指标，口径与 README 的验收指标一致：
@@ -30,11 +33,8 @@ public record EvalReport(int cases, double recallAt10, double citationAccuracy, 
         var answered = answerable.stream().filter(o -> !o.refused()).toList();
         var failures = new ArrayList<String>();
 
-        Predicate<EvalOutcome> recalled = o -> o.retrieved().stream().limit(10).anyMatch(r ->
-                r.document().equals(o.evalCase().expectedDocument()) && o.evalCase().matches(r.content()));
-        Predicate<EvalOutcome> citedCorrectly = o -> !o.citedDocuments().isEmpty()
-                && o.citedDocuments().getFirst().equals(o.evalCase().expectedDocument())
-                && o.evalCase().matches(o.answer());
+        Predicate<EvalOutcome> recalled = EvalReport::recalled;
+        Predicate<EvalOutcome> citedCorrectly = EvalReport::citedCorrectly;
         Predicate<EvalOutcome> leaked = o -> o.retrieved().stream().anyMatch(r -> restrictedDocuments.contains(r.document()))
                 || o.citedDocuments().stream().anyMatch(restrictedDocuments::contains);
 
@@ -73,6 +73,19 @@ public record EvalReport(int cases, double recallAt10, double citationAccuracy, 
                 List.copyOf(outcomes));
     }
 
+    /** 前 10 条检索结果里有来自预期文档、且含答案关键词的分块。 */
+    static boolean recalled(EvalOutcome o) {
+        return o.retrieved().stream().limit(10).anyMatch(r ->
+                r.document().equals(o.evalCase().expectedDocument()) && o.evalCase().matches(r.content()));
+    }
+
+    /** 第一条引用来自预期文档，且回答含答案关键词。 */
+    static boolean citedCorrectly(EvalOutcome o) {
+        return !o.citedDocuments().isEmpty()
+                && o.citedDocuments().getFirst().equals(o.evalCase().expectedDocument())
+                && o.evalCase().matches(o.answer());
+    }
+
     private static double ratio(List<EvalOutcome> outcomes, Predicate<EvalOutcome> predicate) {
         if (outcomes.isEmpty()) {
             return Double.NaN;
@@ -103,6 +116,19 @@ public record EvalReport(int cases, double recallAt10, double citationAccuracy, 
         row(text, "检索延迟 p95", searchP95Millis + " ms", "< 800 ms");
         row(text, "首字延迟 p95（流式）", firstTokenP95Millis + " ms", "< 3 s");
         row(text, "整段回答 p95（流式）", askP95Millis + " ms", "—");
+        text.append("\n### 首字延迟拆分（服务端各阶段 p95）\n\n");
+        text.append("首字延迟 ≈ 检索 + 重排 + 模型首字 + 网络。\n\n| 阶段 | p95 |\n| --- | --- |\n");
+        row(text, "检索（问题向量化 + 混合检索）", stageP95(EvalOutcome.Stages::retrievalMillis));
+        row(text, "重排", stageP95(EvalOutcome.Stages::rerankMillis));
+        row(text, "模型首字（从开始生成算起）", stageP95(EvalOutcome.Stages::modelFirstTokenMillis));
+        text.append("\n### 按问法统计（可回答题）\n\n| 问法 | 题数 | 召回 | 引用正确 | 误拒 |\n| --- | --- | --- | --- | --- |\n");
+        var byStyle = outcomes.stream()
+                .filter(o -> o.evalCase().kind() == Kind.ANSWERABLE)
+                .collect(Collectors.groupingBy(o -> o.evalCase().style(), LinkedHashMap::new, Collectors.toList()));
+        byStyle.forEach((style, group) -> row(text, style, String.valueOf(group.size()),
+                percent(ratio(group, EvalReport::recalled)),
+                percent(ratio(group.stream().filter(o -> !o.refused()).toList(), EvalReport::citedCorrectly)),
+                percent(ratio(group, EvalOutcome::refused))));
         text.append("\n### 重排最高分分布（用于校准拒答门槛）\n\n");
         text.append("| 题型 | 最低 | 中位 | 最高 |\n| --- | --- | --- | --- |\n");
         for (var kind : Kind.values()) {
@@ -129,6 +155,16 @@ public record EvalReport(int cases, double recallAt10, double citationAccuracy, 
                     o.answer() == null ? "" : o.answer().replace("\n", " ").replace("|", "／"));
         }
         return text.append("\n</details>\n").toString();
+    }
+
+    private String stageP95(Function<EvalOutcome.Stages, Long> stage) {
+        var values = outcomes.stream()
+                .map(EvalOutcome::stages)
+                .filter(Objects::nonNull)
+                .map(stage)
+                .filter(Objects::nonNull)
+                .toList();
+        return values.isEmpty() ? "-" : p95(values) + " ms";
     }
 
     private static void row(StringBuilder text, String... cells) {

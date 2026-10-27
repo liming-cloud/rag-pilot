@@ -292,5 +292,160 @@
     "question": "区域排名靠后的店长会怎么样？",
     "kind": "unanswerable",
     "restricted": true
+  },
+  {
+    "id": "冷柜温度-改写",
+    "question": "冷藏柜里的饮料应该设成几度？",
+    "kind": "answerable",
+    "expectedDocument": "商品陈列与补货规范.md",
+    "keywords": [
+      "6℃",
+      "6°C",
+      "6度",
+      "6 ℃"
+    ],
+    "style": "改写"
+  },
+  {
+    "id": "补货阈值-改写",
+    "question": "架子上的商品卖到剩多少就得上货？",
+    "kind": "answerable",
+    "expectedDocument": "商品陈列与补货规范.md",
+    "keywords": [
+      "三分之一",
+      "1/3"
+    ],
+    "style": "改写"
+  },
+  {
+    "id": "报损签字-改写",
+    "question": "损耗金额多大的时候必须让店长签字确认？",
+    "kind": "answerable",
+    "expectedDocument": "临期与报损管理.md",
+    "keywords": [
+      "500"
+    ],
+    "style": "改写"
+  },
+  {
+    "id": "退款授权-改写",
+    "question": "给顾客退多少钱以上要店长同意？",
+    "kind": "answerable",
+    "expectedDocument": "退换货政策.md",
+    "keywords": [
+      "200"
+    ],
+    "style": "改写"
+  },
+  {
+    "id": "鲜食下架-口语",
+    "question": "便当饭团晚上几点得撤下来啊",
+    "kind": "answerable",
+    "expectedDocument": "临期与报损管理.md",
+    "keywords": [
+      "20:00",
+      "20点",
+      "晚上8点",
+      "晚上 8 点"
+    ],
+    "style": "口语"
+  },
+  {
+    "id": "会员日-口语",
+    "question": "会员日是哪天来着",
+    "kind": "answerable",
+    "expectedDocument": "会员与促销.md",
+    "keywords": [
+      "周三",
+      "星期三"
+    ],
+    "style": "口语"
+  },
+  {
+    "id": "保险柜-口语",
+    "question": "钱箱里钱太多了要咋办，多少算多",
+    "kind": "answerable",
+    "expectedDocument": "收银与交接班.md",
+    "keywords": [
+      "3000"
+    ],
+    "style": "口语"
+  },
+  {
+    "id": "停电冷链-口语",
+    "question": "要是停电了冷柜里的东西咋处理",
+    "kind": "answerable",
+    "expectedDocument": "门店安全与应急.md",
+    "keywords": [
+      "2 小时",
+      "2小时",
+      "两小时"
+    ],
+    "style": "口语"
+  },
+  {
+    "id": "临期折扣-错字",
+    "question": "临其商品打几着？",
+    "kind": "answerable",
+    "expectedDocument": "临期与报损管理.md",
+    "keywords": [
+      "七折",
+      "7折",
+      "7 折"
+    ],
+    "style": "错字"
+  },
+  {
+    "id": "备用金-错字",
+    "question": "开班被用金是多少钱",
+    "kind": "answerable",
+    "expectedDocument": "收银与交接班.md",
+    "keywords": [
+      "800"
+    ],
+    "style": "错字"
+  },
+  {
+    "id": "灭火器-错字",
+    "question": "灭火期多久检察一次",
+    "kind": "answerable",
+    "expectedDocument": "门店安全与应急.md",
+    "keywords": [
+      "每月",
+      "每个月",
+      "一个月"
+    ],
+    "style": "错字"
+  },
+  {
+    "id": "退换期限-错字",
+    "question": "顾客买的东西几填内可以腿换",
+    "kind": "answerable",
+    "expectedDocument": "退换货政策.md",
+    "keywords": [
+      "7"
+    ],
+    "style": "错字"
+  },
+  {
+    "id": "员工内购",
+    "question": "临期商品员工可以内部购买吗？",
+    "kind": "unanswerable",
+    "restricted": false,
+    "style": "近似"
+  },
+  {
+    "id": "积分过期",
+    "question": "会员积分会过期吗？",
+    "kind": "unanswerable",
+    "restricted": false,
+    "style": "近似"
+  },
+  {
+    "id": "外卖打包",
+    "question": "外卖订单怎么打包？",
+    "kind": "unanswerable",
+    "restricted": false,
+    "style": "近似"
   }
 ]

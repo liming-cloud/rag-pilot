@@ -66,6 +66,26 @@ class AnswerServiceTest {
     }
 
     @Test
+    @DisplayName("回答带各阶段耗时；没走到的阶段为空")
+    void recordsStageTimings() {
+        var answered = streaming(List.of("在 03 ", "号货架[1]。"), 0.9).ask(TENANT, USER, List.of(), "青柚在哪", delta -> {
+        });
+        assertThat(answered.timings().retrievalMillis()).isNotNegative();
+        assertThat(answered.timings().rerankMillis()).isNotNull();
+        assertThat(answered.timings().firstTokenMillis()).isNotNull();
+        assertThat(answered.timings().generationMillis()).isNotNull();
+
+        var low = streaming(List.of("不该出现"), 0.1).ask(TENANT, USER, List.of(), "问", delta -> {
+        });
+        assertThat(low.timings().rerankMillis()).isNotNull();
+        assertThat(low.timings().firstTokenMillis()).isNull();
+        assertThat(low.timings().generationMillis()).isNull();
+
+        var none = service(List.of(), List.of(), "x").ask(TENANT, USER, List.of(1L), "问");
+        assertThat(none.timings().rerankMillis()).isNull();
+    }
+
+    @Test
     @DisplayName("流式：文字按片段流出，最终结果带引用")
     void streamsDeltas() {
         var deltas = new ArrayList<String>();
