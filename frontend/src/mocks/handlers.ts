@@ -69,6 +69,7 @@ async function uploadedFile(request: Request) {
 const problem = (status: number, detail: string) => HttpResponse.json({ status, detail }, { status });
 
 export const sampleAnswer: Answer = {
+  id: 501,
   text: "保质期剩余三分之一时贴黄色临期标签并移到临期专区 [1]；剩余 1 天的商品当天闭店前下架，登记报损后由店长确认 [2]。",
   refused: false,
   refusalReason: null,
@@ -104,6 +105,8 @@ export const handlers = [
       : HttpResponse.json({ token: "mock-token", user: sampleUser });
   }),
   http.get("/api/auth/me", () => HttpResponse.json(sampleUser)),
+  http.put("/api/answers/:id/feedback", () => new HttpResponse(null, { status: 204 })),
+  http.delete("/api/answers/:id/feedback", () => new HttpResponse(null, { status: 204 })),
   http.get("/api/knowledge-bases", () => HttpResponse.json(knowledgeBases)),
   http.post("/api/knowledge-bases", async ({ request }) => {
     const { name } = (await request.json()) as { name: string };
