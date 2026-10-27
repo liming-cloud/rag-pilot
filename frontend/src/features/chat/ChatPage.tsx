@@ -42,10 +42,7 @@ export function ChatPage() {
   }
 
   return (
-    <div className="mx-auto flex h-dvh max-w-md flex-col">
-      <header className="flex h-14 shrink-0 items-center justify-center border-b bg-card">
-        <span className="font-medium">门店运营知识库</span>
-      </header>
+    <div className="mx-auto flex h-full max-w-md flex-col">
       <main className="flex flex-1 flex-col gap-4 overflow-y-auto p-4">
         {turns.length === 0 && (
           <p className="m-auto text-center text-muted-foreground">问问门店规范、商品、促销，回答会标出原文出处。</p>
