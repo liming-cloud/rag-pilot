@@ -35,6 +35,11 @@ class AiConfiguration {
         };
     }
 
+    @Bean
+    DocumentParser documentParser() {
+        return new OfficeDocumentParser();
+    }
+
     private static IllegalStateException unknown(String capability, String value, String allowed) {
         return new IllegalStateException("rag.ai." + capability + ".provider 只能是 " + allowed + "，当前为：" + value);
     }

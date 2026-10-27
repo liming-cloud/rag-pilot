@@ -43,11 +43,11 @@ describe("知识库页", () => {
     await screen.findByRole("list", { name: "文档" });
 
     choose(
-      new File(["%PDF"], "员工手册.pdf", { type: "application/pdf" }),
+      new File(["PK"], "门店培训.pptx", { type: "application/vnd.ms-powerpoint" }),
       new File(["退货凭小票办理。"], "退换货.txt", { type: "text/plain" }),
     );
 
-    expect(await screen.findByText(/员工手册\.pdf：目前只支持 TXT 和 Markdown/)).toBeInTheDocument();
+    expect(await screen.findByText(/门店培训\.pptx：目前支持 PDF、Word/)).toBeInTheDocument();
     expect(await within(screen.getByRole("list", { name: "文档" })).findByText("退换货.txt")).toBeInTheDocument();
   });
 

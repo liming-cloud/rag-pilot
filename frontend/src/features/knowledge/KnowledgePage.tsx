@@ -140,7 +140,7 @@ function KnowledgeBaseDetail({ knowledgeBase }: { knowledgeBase: KnowledgeBase }
             <input
               type="file"
               multiple
-              accept=".txt,.md,.markdown"
+              accept=".pdf,.docx,.txt,.md,.markdown"
               className="sr-only"
               onChange={(event) => {
                 void uploadAll([...(event.target.files ?? [])]);
@@ -149,7 +149,9 @@ function KnowledgeBaseDetail({ knowledgeBase }: { knowledgeBase: KnowledgeBase }
             />
           </label>
         </Button>
-        <p className="text-sm text-muted-foreground">目前支持 TXT 和 Markdown，单个文件不超过 50 MB。</p>
+        <p className="text-sm text-muted-foreground">
+          支持 PDF、Word（.docx）、TXT 和 Markdown，单个文件不超过 50 MB；扫描件 PDF 暂不支持。
+        </p>
       </div>
       {uploads.length > 0 && (
         <ul aria-label="上传中" className="flex flex-col gap-1 text-sm">
