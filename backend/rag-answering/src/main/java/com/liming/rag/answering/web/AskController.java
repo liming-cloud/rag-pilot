@@ -11,7 +11,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 问答接口。要登录，租户从登录会话取；只允许问有权限的知识库在下一步加入。
+ * 问答接口。要登录，租户和提问人从登录会话取；{@code knowledgeBaseIds} 可不传，只会在提问人是成员的知识库里检索。
  */
 @RestController
 @RequestMapping("/api/ask")
@@ -31,6 +31,6 @@ class AskController {
 
     @PostMapping
     Answer ask(@RequestBody AskRequest request) {
-        return answers.ask(currentUser.tenantId(), request.knowledgeBaseIds(), request.question());
+        return answers.ask(currentUser.tenantId(), currentUser.userId(), request.knowledgeBaseIds(), request.question());
     }
 }

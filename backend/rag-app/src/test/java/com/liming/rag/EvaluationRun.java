@@ -83,9 +83,12 @@ class EvaluationRun {
         uploadCorpus(store, "store");
         var restrictedDocuments = uploadCorpus(restricted, "restricted");
 
+        // 以只被授权门店库的店员身份提问，并在请求里主动带上店长专用库，检验越权是否真的被挡住。
+        String staff = createStaffWithAccessTo(store);
+
         var outcomes = new ArrayList<EvalOutcome>();
         for (var evalCase : loadCases()) {
-            outcomes.add(run(store, evalCase));
+            outcomes.add(run(store, restricted, staff, evalCase));
         }
         var report = EvalReport.of(outcomes, restrictedDocuments);
         publish(report);
@@ -93,15 +96,17 @@ class EvaluationRun {
         assertThat(report.leaks()).as("越权泄漏必须为 0").isZero();
     }
 
-    private EvalOutcome run(long knowledgeBaseId, EvalCase evalCase) {
+    private EvalOutcome run(long knowledgeBaseId, long restricted, String staff, EvalCase evalCase) {
         long start = System.nanoTime();
         var hits = http.exchange("/api/knowledge-bases/{id}/search?q={q}&limit=10", HttpMethod.GET, null, HITS,
                 knowledgeBaseId, evalCase.question()).getBody();
         long searchMillis = (System.nanoTime() - start) / 1_000_000;
 
         start = System.nanoTime();
-        var response = http.postForEntity("/api/ask",
-                Map.of("question", evalCase.question(), "knowledgeBaseIds", List.of(knowledgeBaseId)), Map.class);
+        var headers = new HttpHeaders();
+        headers.setBearerAuth(staff);
+        var response = http.exchange("/api/ask", HttpMethod.POST, new HttpEntity<>(Map.of("question",
+                evalCase.question(), "knowledgeBaseIds", List.of(knowledgeBaseId, restricted)), headers), Map.class);
         long askMillis = (System.nanoTime() - start) / 1_000_000;
         assertThat(response.getStatusCode()).as(evalCase.id() + " 问答接口").isEqualTo(HttpStatus.OK);
         var answer = response.getBody();
@@ -153,6 +158,15 @@ class EvaluationRun {
         }
         assertThat(names).as(folder + " 语料").isNotEmpty();
         return names;
+    }
+
+    private String createStaffWithAccessTo(long knowledgeBaseId) {
+        var created = http.postForEntity("/api/users", Map.of("username", "eval-staff", "displayName", "评测店员",
+                "password", "eval-staff-password", "role", "STAFF"), Map.class);
+        assertThat(created.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        long userId = ((Number) created.getBody().get("id")).longValue();
+        http.put("/api/knowledge-bases/{id}/members/{userId}", null, knowledgeBaseId, userId);
+        return TestLogin.token(http, "eval-staff", "eval-staff-password");
     }
 
     private long createKnowledgeBase(String name) {

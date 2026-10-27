@@ -1,6 +1,7 @@
 package com.liming.rag.knowledge.infrastructure.persistence;
 
 import com.liming.rag.common.TenantId;
+import com.liming.rag.common.UserId;
 import com.liming.rag.knowledge.api.SearchHit;
 import com.liming.rag.knowledge.application.ChunkIndex;
 import java.util.List;
@@ -16,13 +17,15 @@ class MybatisChunkIndex implements ChunkIndex {
     }
 
     @Override
-    public List<Long> nearest(TenantId tenantId, List<Long> knowledgeBaseIds, float[] vector, int limit) {
-        return mapper.nearest(tenantId.value(), knowledgeBaseIds, VectorTypeHandler.format(vector), limit);
+    public List<Long> nearest(TenantId tenantId, UserId userId, List<Long> knowledgeBaseIds, float[] vector,
+            int limit) {
+        return mapper.nearest(tenantId.value(), userId.value(), knowledgeBaseIds, VectorTypeHandler.format(vector), limit);
     }
 
     @Override
-    public List<Long> keyword(TenantId tenantId, List<Long> knowledgeBaseIds, String text, int limit) {
-        return mapper.keyword(tenantId.value(), knowledgeBaseIds, text, limit);
+    public List<Long> keyword(TenantId tenantId, UserId userId, List<Long> knowledgeBaseIds, String text,
+            int limit) {
+        return mapper.keyword(tenantId.value(), userId.value(), knowledgeBaseIds, text, limit);
     }
 
     @Override

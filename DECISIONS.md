@@ -65,3 +65,7 @@ React 19.2、Vite 8.1、TypeScript 6.0、Vitest 4.1 沿用旧项目验证过的�
 ## D-016 账号与登录（2026-10-27）
 
 登录用 Sa-Token，令牌放请求头 `Authorization: Bearer`；密码用 Sa-Token 自带的 BCrypt，不新增依赖。角色先只有 ADMIN（管理知识库和账号）与 STAFF（问答），每次校验都读账号表，停用立即生效。账号表为空时用 `RAG_ADMIN_USERNAME` / `RAG_ADMIN_PASSWORD` 建第一个管理员。用户名全局唯一，租户在登录时写进会话。原定第 4 周，提前做是为了让越权指标测到真实的权限边界。
+
+## D-017 知识库按成员授权（2026-10-27）
+
+成员表 `knowledge_base_member` 在 knowledge 模块；建库的人自动成为成员，管理员没有绕过成员的特权，因此检索只有一条规则。过滤仍只写在 `ChunkSearchMapper` 的两条召回 SQL 里，请求里点名无权限的库会被忽略。无权限的知识库与不存在的一样返回 404。评测以只被授权门店库的店员身份提问，并在请求里带上店长专用库。

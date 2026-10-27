@@ -7,6 +7,7 @@ import com.liming.rag.common.TenantId;
 import com.liming.rag.common.UserId;
 import com.liming.rag.identity.api.CurrentUser;
 import com.liming.rag.identity.api.Roles;
+import com.liming.rag.identity.api.UserDirectory;
 import java.util.List;
 import java.util.Set;
 import java.util.regex.Pattern;
@@ -18,7 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
  * 同时实现 Sa-Token 的角色查询：每次校验都读账号表，停用或改角色立即生效。
  */
 @Service
-public class AccountService implements CurrentUser, StpInterface {
+public class AccountService implements CurrentUser, UserDirectory, StpInterface {
 
     private static final String TENANT_KEY = "tenantId";
     private static final Pattern USERNAME = Pattern.compile("[A-Za-z0-9_.-]{3,50}");
@@ -85,6 +86,13 @@ public class AccountService implements CurrentUser, StpInterface {
     @Override
     public TenantId tenantId() {
         return new TenantId(StpUtil.getSession().getLong(TENANT_KEY));
+    }
+
+    @Override
+    public boolean exists(TenantId tenantId, UserId userId) {
+        return accounts.find(userId.value())
+                .filter(account -> account.enabled() && account.tenantId().equals(tenantId))
+                .isPresent();
     }
 
     @Override
