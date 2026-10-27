@@ -99,6 +99,29 @@ class AuthTests {
         assertThat(status(HttpMethod.GET, "/api/users", staff, null)).isEqualTo(HttpStatus.FORBIDDEN);
     }
 
+    @Test
+    @DisplayName("停用账号后已登录的会话立即失效、不能再登录；不能停用自己；启用后恢复")
+    void disablesAndEnablesUsers() {
+        String admin = TestLogin.token(http, TestLogin.ADMIN_USERNAME, TestLogin.ADMIN_PASSWORD);
+        var created = call(HttpMethod.POST, "/api/users", admin,
+                Map.of("username", "leaver01", "displayName", "离职店员", "password", "staff-password", "role", "STAFF"));
+        long staffId = ((Number) created.getBody().get("id")).longValue();
+        assertThat(created.getBody()).containsEntry("enabled", true);
+        String staff = TestLogin.token(http, "leaver01", "staff-password");
+
+        var disabled = call(HttpMethod.PATCH, "/api/users/" + staffId, admin, Map.of("enabled", false));
+        assertThat(disabled.getBody()).containsEntry("enabled", false);
+        assertThat(status(HttpMethod.GET, "/api/auth/me", staff, null)).isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(login("leaver01", "staff-password").getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+
+        long adminId = ((Number) call(HttpMethod.GET, "/api/auth/me", admin, null).getBody().get("id")).longValue();
+        assertThat(status(HttpMethod.PATCH, "/api/users/" + adminId, admin, Map.of("enabled", false)))
+                .isEqualTo(HttpStatus.BAD_REQUEST);
+
+        call(HttpMethod.PATCH, "/api/users/" + staffId, admin, Map.of("enabled", true));
+        assertThat(login("leaver01", "staff-password").getStatusCode()).isEqualTo(HttpStatus.OK);
+    }
+
     private ResponseEntity<Map<String, Object>> login(String username, String password) {
         return call(HttpMethod.POST, "/api/auth/login", null, Map.of("username", username, "password", password));
     }

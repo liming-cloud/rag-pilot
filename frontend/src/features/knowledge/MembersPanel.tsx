@@ -1,7 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { type FormEvent, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { fetchMembers, fetchUsers, setMember } from "./api";
+import { fetchUsers } from "@/features/users/api";
+import { fetchMembers, setMember } from "./api";
 
 const ROLE_LABEL = { ADMIN: "管理员账号", STAFF: "店员账号" } as const;
 

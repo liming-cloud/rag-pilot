@@ -1,12 +1,15 @@
 package com.liming.rag.identity.web;
 
 import cn.dev33.satoken.annotation.SaCheckRole;
+import com.liming.rag.common.UserId;
 import com.liming.rag.identity.api.CurrentUser;
 import com.liming.rag.identity.api.Roles;
 import com.liming.rag.identity.application.AccountService;
 import java.util.List;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -22,6 +25,9 @@ class UserController {
     record CreateUserRequest(String username, String displayName, String password, String role) {
     }
 
+    record UpdateUserRequest(boolean enabled) {
+    }
+
     private final AccountService accounts;
     private final CurrentUser currentUser;
 
@@ -33,6 +39,12 @@ class UserController {
     @GetMapping
     List<UserView> list() {
         return accounts.list(currentUser.tenantId()).stream().map(UserView::of).toList();
+    }
+
+    @PatchMapping("/{id}")
+    UserView update(@PathVariable long id, @RequestBody UpdateUserRequest request) {
+        return UserView.of(accounts.setEnabled(currentUser.tenantId(), new UserId(id), currentUser.userId(),
+                request.enabled()));
     }
 
     @PostMapping

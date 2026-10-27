@@ -3,6 +3,7 @@ import { createBrowserRouter, Navigate } from "react-router";
 import { LoginPage } from "@/features/auth/LoginPage";
 import { ChatPage } from "@/features/chat/ChatPage";
 import { KnowledgePage } from "@/features/knowledge/KnowledgePage";
+import { UsersPage } from "@/features/users/UsersPage";
 import { getToken } from "@/lib/auth";
 
 /** 没有令牌时先去登录；令牌过期由 authFetch 收到 401 时处理。 */
@@ -26,6 +27,14 @@ export const router = createBrowserRouter([
     element: (
       <RequireAuth>
         <KnowledgePage />
+      </RequireAuth>
+    ),
+  },
+  {
+    path: "/admin/users",
+    element: (
+      <RequireAuth>
+        <UsersPage />
       </RequireAuth>
     ),
   },

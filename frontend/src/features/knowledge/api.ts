@@ -1,4 +1,4 @@
-import type { User } from "@/features/auth/api";
+import { json } from "@/lib/api";
 import { authFetch } from "@/lib/auth";
 
 /** 与后端 KnowledgeBaseController 的响应一致。 */
@@ -13,25 +13,6 @@ export type KnowledgeDocument = {
   sizeBytes: number;
   createdAt: string | null;
 };
-
-/** 后端用 RFC 9457 问题详情返回失败原因，detail 是给用户看的中文说明。 */
-export class ApiError extends Error {
-  constructor(
-    readonly status: number,
-    message: string,
-  ) {
-    super(message);
-  }
-}
-
-async function json<T>(response: Response, fallback: string): Promise<T> {
-  if (!response.ok) {
-    const problem = (await response.json().catch(() => null)) as { detail?: string } | null;
-    const detail = response.status === 403 ? "没有权限执行此操作，请联系管理员" : (problem?.detail ?? fallback);
-    throw new ApiError(response.status, detail);
-  }
-  return (await response.json()) as T;
-}
 
 export async function fetchKnowledgeBases(): Promise<KnowledgeBase[]> {
   return json(await authFetch("/api/knowledge-bases"), "读取知识库失败");
@@ -48,11 +29,6 @@ export async function createKnowledgeBase(name: string): Promise<KnowledgeBase> 
 
 export async function fetchDocuments(knowledgeBaseId: number): Promise<KnowledgeDocument[]> {
   return json(await authFetch(`/api/knowledge-bases/${knowledgeBaseId}/documents`), "读取文档失败");
-}
-
-/** 本租户全部账号，只有管理员能调用。 */
-export async function fetchUsers(): Promise<User[]> {
-  return json(await authFetch("/api/users"), "读取账号失败");
 }
 
 export async function fetchMembers(knowledgeBaseId: number): Promise<{ userId: number }[]> {

@@ -1,7 +1,13 @@
 import { saveToken } from "@/lib/auth";
 
 /** 与后端 identity 模块的 UserView 一致。 */
-export type User = { id: number; username: string; displayName: string; role: "ADMIN" | "STAFF" };
+export type User = {
+  id: number;
+  username: string;
+  displayName: string;
+  role: "ADMIN" | "STAFF";
+  enabled: boolean;
+};
 
 export class BadCredentialsError extends Error {}
 
