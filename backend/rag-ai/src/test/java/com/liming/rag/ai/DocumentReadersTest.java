@@ -17,14 +17,14 @@ import org.apache.poi.xwpf.usermodel.XWPFDocument;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-class DocumentParserTest {
+class DocumentReadersTest {
 
-    private final DocumentParser parser = new OfficeDocumentParser();
+    private final DocumentReaders readers = new LocalDocumentReaders();
 
     @Test
     @DisplayName("Word：标题样式转成章节，表格按行转成“表头：值”")
     void parsesWord() throws IOException {
-        var text = parser.toText("收银规范.docx", word());
+        var text = text("收银规范.docx", word());
 
         assertThat(text).contains("# 门店收银\n").contains("## 交班\n").contains("交班时清点备用金。")
                 .contains("商品：青柚气泡水；货架：A-03");
@@ -34,21 +34,39 @@ class DocumentParserTest {
     @Test
     @DisplayName("PDF：按阅读顺序提取文字")
     void parsesPdf() throws IOException {
-        assertThat(parser.toText("handover.pdf", pdf("Count the cash float before handover.", false)))
+        assertThat(text("handover.pdf", pdf("Count the cash float before handover.", false)))
                 .contains("Count the cash float before handover.");
     }
 
     @Test
     @DisplayName("提取不到文字的 PDF、加密 PDF、损坏文件都给出中文原因")
     void explainsUnreadableFiles() throws IOException {
-        assertThatThrownBy(() -> parser.toText("扫描件.pdf", pdf(null, false)))
+        assertThatThrownBy(() -> text("扫描件.pdf", pdf(null, false)))
                 .isInstanceOf(DocumentParseException.class).hasMessageContaining("扫描件");
-        assertThatThrownBy(() -> parser.toText("加密.pdf", pdf("secret", true)))
+        assertThatThrownBy(() -> text("加密.pdf", pdf("secret", true)))
                 .isInstanceOf(DocumentParseException.class).hasMessageContaining("密码");
-        assertThatThrownBy(() -> parser.toText("损坏.docx", "not a docx".getBytes(StandardCharsets.UTF_8)))
+        assertThatThrownBy(() -> text("损坏.docx", "not a docx".getBytes(StandardCharsets.UTF_8)))
                 .isInstanceOf(DocumentParseException.class).hasMessageContaining("损坏");
-        assertThatThrownBy(() -> parser.toText("损坏.pdf", "not a pdf".getBytes(StandardCharsets.UTF_8)))
+        assertThatThrownBy(() -> text("损坏.pdf", "not a pdf".getBytes(StandardCharsets.UTF_8)))
                 .isInstanceOf(DocumentParseException.class).hasMessageContaining("损坏");
+    }
+
+    @Test
+    @DisplayName("文本：按 UTF-8 读取；不是 UTF-8 或没有文字时给出原因；元数据带文件名")
+    void readsPlainText() {
+        var document = readers.forFile("收银.md", "# 收银\n\n交班清点备用金。".getBytes(StandardCharsets.UTF_8)).get()
+                .getFirst();
+        assertThat(document.getText()).contains("# 收银");
+        assertThat(document.getMetadata()).containsEntry(DocumentReaders.FILENAME, "收银.md");
+
+        assertThatThrownBy(() -> text("旧编码.txt", new byte[] {(byte) 0xC1, (byte) 0xD9, (byte) 0xC6}))
+                .isInstanceOf(DocumentParseException.class).hasMessageContaining("UTF-8");
+        assertThatThrownBy(() -> text("空白.txt", " \n ".getBytes(StandardCharsets.UTF_8)))
+                .isInstanceOf(DocumentParseException.class).hasMessageContaining("没有可检索的文字");
+    }
+
+    private String text(String filename, byte[] content) {
+        return readers.forFile(filename, content).get().getFirst().getText();
     }
 
     static byte[] word() throws IOException {

@@ -77,3 +77,7 @@ React 19.2、Vite 8.1、TypeScript 6.0、Vitest 4.1 沿用旧项目验证过的�
 ## D-019 文档解析：本地 PDFBox 与 POI（2026-10-27）
 
 客户资料主要是 PDF、Word、Excel。新增 Apache PDFBox 3.0.7（PDF）和 Apache POI 5.5.1（`poi-ooxml`，Word / Excel），在 rag-ai 里本地解析，不接 docling 等外部服务：不多一个要部署的服务，客户内网也能用，结果确定可测。不用 Tika：依赖太多，而且输出是平铺文字，会丢掉 Word 标题层级和表格表头。Word 的标题样式转成 Markdown 标题，表格每行转成“表头：值”；PDF 只按阅读顺序提取文字。已知限制：扫描件（需要 OCR）、旧版 .doc、只靠加粗放大而没用标题样式的“标题”都不识别，等拿到脱敏的真实样例再定是否加规则或换解析服务。
+
+## D-020 入库与问答流程按 Spring AI 接口组织（2026-10-27）
+
+流程骨架用 Spring AI 的阶段接口，实现自己写：入库为 `DocumentReader`（rag-ai 的 `DocumentReaders`）→ `DocumentTransformer`（标题感知分块）→ `DocumentWriter`（向量化并写入 chunk）；问答侧之后按 `DocumentRetriever` / `DocumentPostProcessor` / `QueryAugmenter` 改。框架自带的组件（问题改写、Tika 读取器等）可以直接插进来做评测。边界：Spring AI 的 `Document` 只在流程内部使用，不进模块 `api`、不当领域模型，元数据键集中定义；流程编排仍在 `AnswerService`，不用 `RetrievalAugmentationAdvisor`，因为它覆盖不了“相关度低时不调模型直接拒答”和生成后的引用校验。

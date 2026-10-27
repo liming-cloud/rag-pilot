@@ -36,8 +36,8 @@ class AiConfiguration {
     }
 
     @Bean
-    DocumentParser documentParser() {
-        return new OfficeDocumentParser();
+    DocumentReaders documentReaders() {
+        return new LocalDocumentReaders();
     }
 
     private static IllegalStateException unknown(String capability, String value, String allowed) {

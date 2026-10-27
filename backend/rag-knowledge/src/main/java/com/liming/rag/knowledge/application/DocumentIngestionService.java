@@ -1,17 +1,8 @@
 package com.liming.rag.knowledge.application;
 
-import com.liming.rag.ai.DocumentParseException;
-import com.liming.rag.ai.DocumentParser;
-import com.liming.rag.ai.EmbeddingClient;
-import com.liming.rag.ai.ModelCallException;
 import com.liming.rag.common.TenantId;
 import com.liming.rag.knowledge.domain.Document;
 import com.liming.rag.knowledge.domain.DocumentRepository;
-import com.liming.rag.knowledge.domain.TextChunker;
-import java.nio.ByteBuffer;
-import java.nio.charset.CharacterCodingException;
-import java.nio.charset.CodingErrorAction;
-import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
@@ -24,7 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * 文档入库：校验、存原文件、解析、分块、写入分块。
  *
- * <p>支持 UTF-8 的 TXT、Markdown，以及 PDF、Word（.docx，经 rag-ai 的 {@link DocumentParser} 本地解析，见 D-019）。
+ * <p>支持 UTF-8 的 TXT、Markdown，以及 PDF、Word（.docx），读取、分块、写入见 {@link IngestionPipeline}。
  * 在上传请求内同步完成（含调用嵌入模型）；大文件变多后再改为任务表异步处理，模型调用也随之移出数据库事务。
  */
 @Service
@@ -43,17 +34,14 @@ public class DocumentIngestionService {
     private final KnowledgeBaseService knowledgeBases;
     private final DocumentRepository documents;
     private final FileStorage storage;
-    private final EmbeddingClient embeddings;
-    private final DocumentParser parser;
-    private final TextChunker chunker = new TextChunker();
+    private final IngestionPipeline pipeline;
 
-    public DocumentIngestionService(KnowledgeBaseService knowledgeBases, DocumentRepository documents,
-            FileStorage storage, EmbeddingClient embeddings, DocumentParser parser) {
+    DocumentIngestionService(KnowledgeBaseService knowledgeBases, DocumentRepository documents,
+            FileStorage storage, IngestionPipeline pipeline) {
         this.knowledgeBases = knowledgeBases;
         this.documents = documents;
         this.storage = storage;
-        this.embeddings = embeddings;
-        this.parser = parser;
+        this.pipeline = pipeline;
     }
 
     /**
@@ -79,34 +67,7 @@ public class DocumentIngestionService {
         var document = Document.received(tenantId, knowledgeBase.id(), filename, mediaType, sha256, content.length);
         documents.save(document);
 
-        String text;
-        try {
-            text = mediaType.startsWith("text/") ? decodeUtf8(content) : parser.toText(filename, content);
-        } catch (CharacterCodingException e) {
-            document.markFailed("文件不是 UTF-8 编码，请用“另存为 UTF-8”后重新上传");
-            documents.save(document);
-            return document;
-        } catch (DocumentParseException e) {
-            document.markFailed(e.getMessage());
-            documents.save(document);
-            return document;
-        }
-        var chunks = chunker.chunk(titleOf(filename), text);
-        if (chunks.isEmpty()) {
-            document.markFailed("文件里没有可检索的文字");
-        } else {
-            try {
-                // 向量化时带上章节位置，短分块也能借标题获得上下文。
-                var vectors = embeddings.embed(chunks.stream()
-                        .map(chunk -> chunk.headingPath() + "\n" + chunk.content())
-                        .toList());
-                documents.saveChunks(document, chunks, vectors);
-                document.markReady(chunks.size());
-            } catch (ModelCallException e) {
-                document.markFailed(e.getMessage());
-            }
-        }
-        documents.save(document);
+        pipeline.run(document, content);
         return document;
     }
 
@@ -130,18 +91,7 @@ public class DocumentIngestionService {
         return mediaType;
     }
 
-    private static String titleOf(String filename) {
-        var dot = filename.lastIndexOf('.');
-        return dot > 0 ? filename.substring(0, dot) : filename;
-    }
 
-    private static String decodeUtf8(byte[] content) throws CharacterCodingException {
-        return StandardCharsets.UTF_8.newDecoder()
-                .onMalformedInput(CodingErrorAction.REPORT)
-                .onUnmappableCharacter(CodingErrorAction.REPORT)
-                .decode(ByteBuffer.wrap(content))
-                .toString();
-    }
 
     private static String sha256(byte[] content) {
         try {

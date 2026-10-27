@@ -2,8 +2,14 @@ package com.liming.rag.ai;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.charset.CharacterCodingException;
+import java.nio.charset.CodingErrorAction;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -14,35 +20,59 @@ import org.apache.poi.xwpf.usermodel.XWPFDocument;
 import org.apache.poi.xwpf.usermodel.XWPFParagraph;
 import org.apache.poi.xwpf.usermodel.XWPFTable;
 import org.apache.poi.xwpf.usermodel.XWPFTableCell;
+import org.springframework.ai.document.Document;
+import org.springframework.ai.document.DocumentReader;
 
 /**
- * 本地解析 PDF（PDFBox）和 Word .docx（POI），不调用外部服务。
+ * 本地读取 TXT / Markdown（UTF-8）、PDF（PDFBox）和 Word .docx（POI），不调用外部服务。
  *
  * <p>Word 的标题样式转成 Markdown 标题；表格第一行当表头，其余每行转成“表头：值；表头：值”，
  * 一行一条，检索时每条都带着列名。PDF 没有可靠的标题信息，只按阅读顺序提取文字。
  */
-final class OfficeDocumentParser implements DocumentParser {
+final class LocalDocumentReaders implements DocumentReaders {
 
     /** 中文 Word 的内置标题样式名是“heading 1”，样式 ID 可能是“Heading1”或“1”；自定义样式常叫“标题 1”。 */
     private static final Pattern HEADING_STYLE = Pattern.compile("(?i)^(?:heading|标题)\\s*([1-6])$");
     /** 少于这么多可见字符，基本可以判断是扫描件或图片。 */
     private static final int MIN_PDF_CHARS = 20;
 
+    private static final Set<String> EXTENSIONS = Set.of("txt", "md", "markdown", "pdf", "docx");
+
     @Override
     public boolean supports(String extension) {
-        return extension.equals("pdf") || extension.equals("docx");
+        return EXTENSIONS.contains(extension);
     }
 
     @Override
-    public String toText(String filename, byte[] content) {
-        var lower = filename.toLowerCase(Locale.ROOT);
-        if (lower.endsWith(".pdf")) {
-            return pdf(content);
+    public DocumentReader forFile(String filename, byte[] content) {
+        var dot = filename.lastIndexOf('.');
+        var extension = dot < 0 ? "" : filename.substring(dot + 1).toLowerCase(Locale.ROOT);
+        if (!supports(extension)) {
+            throw new IllegalArgumentException("不支持的文件类型：" + filename);
         }
-        if (lower.endsWith(".docx")) {
-            return word(content);
+        return () -> {
+            var text = switch (extension) {
+                case "pdf" -> pdf(content);
+                case "docx" -> word(content);
+                default -> utf8(content);
+            };
+            if (text.isBlank()) {
+                throw new DocumentParseException("文件里没有可检索的文字", null);
+            }
+            return List.of(new Document(text, Map.of(FILENAME, filename)));
+        };
+    }
+
+    private static String utf8(byte[] content) {
+        try {
+            return StandardCharsets.UTF_8.newDecoder()
+                    .onMalformedInput(CodingErrorAction.REPORT)
+                    .onUnmappableCharacter(CodingErrorAction.REPORT)
+                    .decode(ByteBuffer.wrap(content))
+                    .toString();
+        } catch (CharacterCodingException e) {
+            throw new DocumentParseException("文件不是 UTF-8 编码，请用“另存为 UTF-8”后重新上传", e);
         }
-        throw new IllegalArgumentException("不支持的文件类型：" + filename);
     }
 
     private static String pdf(byte[] content) {
@@ -111,9 +141,9 @@ final class OfficeDocumentParser implements DocumentParser {
         if (rows.isEmpty()) {
             return;
         }
-        var header = rows.getFirst().getTableCells().stream().map(OfficeDocumentParser::cell).toList();
+        var header = rows.getFirst().getTableCells().stream().map(LocalDocumentReaders::cell).toList();
         for (var row : rows.subList(1, rows.size())) {
-            var cells = row.getTableCells().stream().map(OfficeDocumentParser::cell).toList();
+            var cells = row.getTableCells().stream().map(LocalDocumentReaders::cell).toList();
             var line = IntStream.range(0, cells.size())
                     .filter(i -> !cells.get(i).isEmpty())
                     .mapToObj(i -> (i < header.size() && !header.get(i).isEmpty() ? header.get(i) + "：" : "")
