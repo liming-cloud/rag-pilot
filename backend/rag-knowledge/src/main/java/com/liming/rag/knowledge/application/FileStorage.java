@@ -6,4 +6,6 @@ import com.liming.rag.common.TenantId;
 public interface FileStorage {
 
     void store(TenantId tenantId, String sha256, byte[] content);
+
+    byte[] read(TenantId tenantId, String sha256);
 }

@@ -9,14 +9,15 @@ import java.util.HexFormat;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
  * 文档入库：校验、存原文件、解析、分块、写入分块。
  *
- * <p>支持 UTF-8 的 TXT、Markdown，以及 PDF、Word（.docx）、Excel（.xlsx / .xls），读取、分块、写入见 {@link IngestionPipeline}。
- * 在上传请求内同步完成（含调用嵌入模型）；大文件变多后再改为任务表异步处理，模型调用也随之移出数据库事务。
+ * <p>支持 UTF-8 的 TXT、Markdown，以及 PDF、Word（.docx）、Excel（.xlsx / .xls）。上传只做校验、存文件、记录文档，
+ * 读取、分块、向量化由 {@link IngestionWorker} 在后台按 {@link IngestionPipeline} 完成。
  */
 @Service
 public class DocumentIngestionService {
@@ -36,19 +37,19 @@ public class DocumentIngestionService {
     private final KnowledgeBaseService knowledgeBases;
     private final DocumentRepository documents;
     private final FileStorage storage;
-    private final IngestionPipeline pipeline;
+    private final ApplicationEventPublisher events;
 
     DocumentIngestionService(KnowledgeBaseService knowledgeBases, DocumentRepository documents,
-            FileStorage storage, IngestionPipeline pipeline) {
+            FileStorage storage, ApplicationEventPublisher events) {
         this.knowledgeBases = knowledgeBases;
         this.documents = documents;
         this.storage = storage;
-        this.pipeline = pipeline;
+        this.events = events;
     }
 
     /**
-     * 上传一份文档。格式不支持、重复上传会直接拒绝；内容问题（编码不对、没有文字）会保存为失败文档，
-     * 让管理员在列表里看到原因。
+     * 上传一份文档。格式不支持、重复上传会直接拒绝；返回的文档状态是“解析中”。内容问题（编码不对、没有文字、
+     * 文件损坏）在后台处理时发现，保存为失败文档，让管理员在列表里看到原因。
      */
     @Transactional
     public Document ingest(TenantId tenantId, long knowledgeBaseId, String filename, byte[] content) {
@@ -69,7 +70,8 @@ public class DocumentIngestionService {
         var document = Document.received(tenantId, knowledgeBase.id(), filename, mediaType, sha256, content.length);
         documents.save(document);
 
-        pipeline.run(document, content);
+        // 解析、分块、向量化在事务提交后由后台完成，上传请求只返回“解析中”的文档。
+        events.publishEvent(new DocumentReceived(tenantId, document.id()));
         return document;
     }
 

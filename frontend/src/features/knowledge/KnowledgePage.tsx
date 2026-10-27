@@ -89,7 +89,12 @@ type Upload = { key: string; filename: string; message: string | null };
 function KnowledgeBaseDetail({ knowledgeBase }: { knowledgeBase: KnowledgeBase }) {
   const queryClient = useQueryClient();
   const documentsKey = ["knowledge-bases", knowledgeBase.id, "documents"];
-  const documents = useQuery({ queryKey: documentsKey, queryFn: () => fetchDocuments(knowledgeBase.id) });
+  const documents = useQuery({
+    queryKey: documentsKey,
+    queryFn: () => fetchDocuments(knowledgeBase.id),
+    // 入库在后台进行：有解析中的文档时每秒刷新一次，全部处理完就停。
+    refetchInterval: (query) => (query.state.data?.some((document) => document.status === "PARSING") ? 1000 : false),
+  });
   // 正在上传和被拒收的文件；上传成功的从这里移走，出现在文档列表里。
   const [uploads, setUploads] = useState<Upload[]>([]);
   const [dragging, setDragging] = useState(false);
@@ -162,7 +167,7 @@ function KnowledgeBaseDetail({ knowledgeBase }: { knowledgeBase: KnowledgeBase }
               </li>
             ) : (
               <li key={upload.key} className="text-muted-foreground">
-                {upload.filename}：上传并解析中…
+                {upload.filename}：上传中…
               </li>
             ),
           )}

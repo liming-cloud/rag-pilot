@@ -112,7 +112,8 @@ class KnowledgeAccessTests {
         headers.setContentType(MediaType.MULTIPART_FORM_DATA);
         var response = http.exchange("/api/knowledge-bases/{id}/documents", HttpMethod.POST,
                 new HttpEntity<>(body, headers), Map.class, knowledgeBaseId);
-        assertThat(response.getBody()).containsEntry("status", "READY");
+        assertThat(TestDocuments.awaitProcessed(http, knowledgeBaseId, response.getBody(), token))
+                .containsEntry("status", "READY");
     }
 
     @SuppressWarnings("unchecked")

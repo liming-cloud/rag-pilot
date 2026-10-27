@@ -112,6 +112,7 @@ class AskTests {
         headers.setContentType(MediaType.MULTIPART_FORM_DATA);
         var response = http.postForEntity("/api/knowledge-bases/{id}/documents", new HttpEntity<>(body, headers),
                 Map.class, knowledgeBaseId);
-        assertThat(response.getBody()).containsEntry("status", "READY");
+        assertThat(TestDocuments.awaitProcessed(http, knowledgeBaseId, response.getBody(), null))
+                .containsEntry("status", "READY");
     }
 }

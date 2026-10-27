@@ -44,6 +44,7 @@ let knowledgeBases: KnowledgeBase[] = [];
 let documents: Record<number, KnowledgeDocument[]> = {};
 let members: Record<number, number[]> = {};
 let users: User[] = [];
+const pendingChunks = new Map<number, number>();
 let nextId = 100;
 
 export function resetMockData() {
@@ -150,7 +151,15 @@ export const handlers = [
     members[Number(params.id)] = (members[Number(params.id)] ?? []).filter((id) => id !== Number(params.userId));
     return new HttpResponse(null, { status: 204 });
   }),
-  http.get("/api/knowledge-bases/:id/documents", ({ params }) => HttpResponse.json(documents[Number(params.id)] ?? [])),
+  // 模拟后台入库：解析中的文档被查询一次之后变成可用。
+  http.get("/api/knowledge-bases/:id/documents", ({ params }) => {
+    const list = documents[Number(params.id)] ?? [];
+    const snapshot = list.map((document) => ({ ...document }));
+    for (const document of list.filter((candidate) => candidate.status === "PARSING")) {
+      Object.assign(document, { status: "READY", chunkCount: pendingChunks.get(document.id) ?? 1 });
+    }
+    return HttpResponse.json(snapshot);
+  }),
   // 与后端一致：只收 PDF、Word、Excel、TXT、Markdown，同名文件视为重复。
   http.post("/api/knowledge-bases/:id/documents", async ({ params, request }) => {
     const file = await uploadedFile(request);
@@ -164,13 +173,14 @@ export const handlers = [
     const created: KnowledgeDocument = {
       id: nextId++,
       filename: file.name,
-      status: "READY",
+      status: "PARSING",
       error: null,
-      chunkCount: Math.max(1, Math.ceil(file.size / 1_500)),
+      chunkCount: 0,
       sizeBytes: file.size,
       createdAt: new Date().toISOString(),
     };
     list.unshift(created);
+    pendingChunks.set(created.id, Math.max(1, Math.ceil(file.size / 1_500)));
     return HttpResponse.json(created, { status: 201 });
   }),
   http.post("/api/ask/stream", () =>

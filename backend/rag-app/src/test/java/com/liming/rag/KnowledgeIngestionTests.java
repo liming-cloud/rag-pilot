@@ -2,11 +2,13 @@ package com.liming.rag;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.liming.rag.knowledge.application.IngestionWorker;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.apache.poi.xwpf.usermodel.XWPFDocument;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -53,6 +55,9 @@ class KnowledgeIngestionTests {
     @Autowired
     private JdbcTemplate jdbc;
 
+    @Autowired
+    private IngestionWorker ingestionWorker;
+
     @Test
     @DisplayName("上传门店样例文本后分块入库，可在文档列表看到")
     void uploadsAndChunksText() throws IOException {
@@ -62,8 +67,10 @@ class KnowledgeIngestionTests {
         var uploaded = upload(knowledgeBaseId, "门店商品知识.txt", sample);
 
         assertThat(uploaded.getStatusCode()).isEqualTo(HttpStatus.CREATED);
-        assertThat(uploaded.getBody()).containsEntry("status", "READY");
-        int chunkCount = ((Number) uploaded.getBody().get("chunkCount")).intValue();
+        assertThat(uploaded.getBody()).as("上传先返回，后台再解析").containsEntry("status", "PARSING");
+        var processed = TestDocuments.awaitProcessed(http, knowledgeBaseId, uploaded.getBody(), null);
+        assertThat(processed).containsEntry("status", "READY");
+        int chunkCount = ((Number) processed.get("chunkCount")).intValue();
         assertThat(chunkCount).isPositive();
         assertThat(jdbc.queryForObject("select count(*) from chunk where knowledge_base_id = ? and tenant_id = 1",
                 Integer.class, knowledgeBaseId)).isEqualTo(chunkCount);
@@ -86,13 +93,15 @@ class KnowledgeIngestionTests {
         assertThat(pptx.getStatusCode()).isEqualTo(HttpStatus.UNSUPPORTED_MEDIA_TYPE);
 
         var brokenPdf = upload(knowledgeBaseId, "收银规范.pdf", "%PDF-1.7".getBytes(StandardCharsets.US_ASCII));
-        assertThat(brokenPdf.getBody()).containsEntry("status", "FAILED");
-        assertThat((String) brokenPdf.getBody().get("error")).contains("损坏");
+        var brokenPdfResult = TestDocuments.awaitProcessed(http, knowledgeBaseId, brokenPdf.getBody(), null);
+        assertThat(brokenPdfResult).containsEntry("status", "FAILED");
+        assertThat((String) brokenPdfResult.get("error")).contains("损坏");
 
         var gbk = upload(knowledgeBaseId, "旧编码.txt", new byte[] {(byte) 0xC1, (byte) 0xD9, (byte) 0xC6});
         assertThat(gbk.getStatusCode()).isEqualTo(HttpStatus.CREATED);
-        assertThat(gbk.getBody()).containsEntry("status", "FAILED");
-        assertThat((String) gbk.getBody().get("error")).contains("UTF-8");
+        var gbkResult = TestDocuments.awaitProcessed(http, knowledgeBaseId, gbk.getBody(), null);
+        assertThat(gbkResult).containsEntry("status", "FAILED");
+        assertThat((String) gbkResult.get("error")).contains("UTF-8");
     }
 
     @Test
@@ -115,10 +124,54 @@ class KnowledgeIngestionTests {
         }
 
         var uploaded = upload(knowledgeBaseId, "陈列规范.docx", docx);
-        assertThat(uploaded.getBody()).containsEntry("status", "READY");
+        assertThat(TestDocuments.awaitProcessed(http, knowledgeBaseId, uploaded.getBody(), null))
+                .containsEntry("status", "READY");
         assertThat(jdbc.queryForList("select heading_path || ' | ' || content from chunk where knowledge_base_id = ?",
                 String.class, knowledgeBaseId))
                 .anySatisfy(chunk -> assertThat(chunk).contains("商品陈列").contains("商品：青柚气泡水；货架：A-03"));
+    }
+
+    @Test
+    @DisplayName("上传 Excel：每行带着表头入库，数字按显示格式")
+    void uploadsExcel() throws IOException {
+        long knowledgeBaseId = createKnowledgeBase("Excel 知识库");
+        byte[] xlsx;
+        try (var workbook = new XSSFWorkbook(); var out = new ByteArrayOutputStream()) {
+            var money = workbook.createCellStyle();
+            money.setDataFormat(workbook.createDataFormat().getFormat("0.00"));
+            var sheet = workbook.createSheet("价目表");
+            sheet.createRow(0).createCell(0).setCellValue("商品");
+            sheet.getRow(0).createCell(1).setCellValue("价格");
+            sheet.createRow(1).createCell(0).setCellValue("青柚气泡水");
+            sheet.getRow(1).createCell(1).setCellValue(5.5);
+            sheet.getRow(1).getCell(1).setCellStyle(money);
+            workbook.write(out);
+            xlsx = out.toByteArray();
+        }
+
+        var uploaded = upload(knowledgeBaseId, "价目表.xlsx", xlsx);
+        assertThat(TestDocuments.awaitProcessed(http, knowledgeBaseId, uploaded.getBody(), null))
+                .containsEntry("status", "READY");
+        assertThat(jdbc.queryForList("select heading_path || ' | ' || content from chunk where knowledge_base_id = ?",
+                String.class, knowledgeBaseId))
+                .anySatisfy(chunk -> assertThat(chunk).contains("价目表").contains("商品：青柚气泡水；价格：5.50"));
+    }
+
+    @Test
+    @DisplayName("重启后，卡在“解析中”的文档会被重新处理")
+    void resumesPendingDocumentsAfterRestart() {
+        long knowledgeBaseId = createKnowledgeBase("恢复知识库");
+        var uploaded = upload(knowledgeBaseId, "交班.txt", "交班时清点备用金，在交班表上签字。".getBytes(StandardCharsets.UTF_8));
+        long id = ((Number) TestDocuments.awaitProcessed(http, knowledgeBaseId, uploaded.getBody(), null).get("id"))
+                .longValue();
+        // 模拟处理到一半时应用重启：分块没写入，状态停在解析中。
+        jdbc.update("delete from chunk where document_id = ?", id);
+        jdbc.update("update document set status = 'PARSING', chunk_count = 0 where id = ?", id);
+
+        ingestionWorker.resumePending();
+
+        assertThat(TestDocuments.awaitProcessed(http, knowledgeBaseId, Map.of("id", id), null))
+                .containsEntry("status", "READY").containsEntry("chunkCount", 1);
     }
 
     private long createKnowledgeBase(String name) {
