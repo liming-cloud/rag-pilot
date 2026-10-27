@@ -1,6 +1,7 @@
 package com.liming.rag.knowledge.domain;
 
 import com.liming.rag.common.TenantId;
+import com.liming.rag.common.UserId;
 import java.util.List;
 import java.util.Optional;
 
@@ -11,7 +12,14 @@ public interface KnowledgeBaseRepository {
 
     Optional<KnowledgeBase> find(TenantId tenantId, long id);
 
-    List<KnowledgeBase> list(TenantId tenantId);
+    /** 用户是成员的知识库，按创建顺序。 */
+    List<KnowledgeBase> listAccessible(TenantId tenantId, UserId userId);
+
+    void addMember(TenantId tenantId, long knowledgeBaseId, UserId userId);
+
+    void removeMember(TenantId tenantId, long knowledgeBaseId, UserId userId);
+
+    List<UserId> members(TenantId tenantId, long knowledgeBaseId);
 
     boolean existsByName(TenantId tenantId, String name);
 }

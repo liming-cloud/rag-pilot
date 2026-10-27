@@ -7,6 +7,7 @@ import com.liming.rag.answering.api.Answer.RefusalReason;
 import com.liming.rag.answering.api.Citation;
 import com.liming.rag.answering.domain.CitationParser;
 import com.liming.rag.common.TenantId;
+import com.liming.rag.common.UserId;
 import com.liming.rag.knowledge.api.KnowledgeSearch;
 import com.liming.rag.knowledge.api.SearchHit;
 import com.liming.rag.knowledge.api.SearchQuery;
@@ -46,15 +47,15 @@ public class AnswerService {
         this.minRelevance = minRelevance;
     }
 
-    public Answer ask(TenantId tenantId, List<Long> knowledgeBaseIds, String question) {
+    /**
+     * @param knowledgeBaseIds 想缩小到的知识库，可以为空；只会在提问人是成员的知识库里检索
+     */
+    public Answer ask(TenantId tenantId, UserId userId, List<Long> knowledgeBaseIds, String question) {
         var text = question == null ? "" : question.strip();
         if (text.isEmpty() || text.length() > MAX_QUESTION_LENGTH) {
             throw new IllegalArgumentException("问题不能为空，且不超过 " + MAX_QUESTION_LENGTH + " 个字");
         }
-        if (knowledgeBaseIds == null || knowledgeBaseIds.isEmpty()) {
-            throw new IllegalArgumentException("请至少选择一个知识库");
-        }
-        var hits = search.search(new SearchQuery(tenantId, knowledgeBaseIds, text, candidates));
+        var hits = search.search(new SearchQuery(tenantId, userId, knowledgeBaseIds, text, candidates));
         if (hits.isEmpty()) {
             return Answer.refused(RefusalReason.NO_EVIDENCE, null);
         }

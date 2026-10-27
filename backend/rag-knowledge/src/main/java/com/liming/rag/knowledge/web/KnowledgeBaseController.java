@@ -2,6 +2,7 @@ package com.liming.rag.knowledge.web;
 
 import cn.dev33.satoken.annotation.SaCheckLogin;
 import cn.dev33.satoken.annotation.SaCheckRole;
+import com.liming.rag.common.UserId;
 import com.liming.rag.identity.api.CurrentUser;
 import com.liming.rag.identity.api.Roles;
 import com.liming.rag.knowledge.api.KnowledgeSearch;
@@ -16,9 +17,11 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -29,7 +32,7 @@ import org.springframework.web.multipart.MultipartFile;
 /**
  * 知识库与文档接口。
  *
- * <p>都要登录，租户从登录会话取；建库、上传、检索调试只有管理员能用。按知识库成员授权过滤在下一步加入。
+ * <p>都要登录，租户从登录会话取；建库、上传、检索调试、管理成员只有管理员能用。列表和文档只对知识库成员可见。
  */
 @RestController
 @RequestMapping("/api/knowledge-bases")
@@ -37,6 +40,9 @@ import org.springframework.web.multipart.MultipartFile;
 class KnowledgeBaseController {
 
     record CreateKnowledgeBaseRequest(String name) {
+    }
+
+    record MemberView(long userId) {
     }
 
     record KnowledgeBaseView(long id, String name) {
@@ -70,12 +76,12 @@ class KnowledgeBaseController {
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     KnowledgeBaseView create(@RequestBody CreateKnowledgeBaseRequest request) {
-        return KnowledgeBaseView.of(knowledgeBases.create(currentUser.tenantId(), request.name()));
+        return KnowledgeBaseView.of(knowledgeBases.create(currentUser.tenantId(), currentUser.userId(), request.name()));
     }
 
     @GetMapping
     List<KnowledgeBaseView> list() {
-        return knowledgeBases.list(currentUser.tenantId()).stream().map(KnowledgeBaseView::of).toList();
+        return knowledgeBases.listAccessible(currentUser.tenantId(), currentUser.userId()).stream().map(KnowledgeBaseView::of).toList();
     }
 
     @SaCheckRole(Roles.ADMIN)
@@ -89,6 +95,7 @@ class KnowledgeBaseController {
 
     @GetMapping("/{knowledgeBaseId}/documents")
     List<DocumentView> documents(@PathVariable long knowledgeBaseId) {
+        knowledgeBases.getAccessible(currentUser.tenantId(), currentUser.userId(), knowledgeBaseId);
         return ingestion.list(currentUser.tenantId(), knowledgeBaseId).stream().map(DocumentView::of).toList();
     }
 
@@ -97,7 +104,29 @@ class KnowledgeBaseController {
     @GetMapping("/{knowledgeBaseId}/search")
     List<SearchHit> search(@PathVariable long knowledgeBaseId, @RequestParam("q") String question,
             @RequestParam(name = "limit", defaultValue = "10") int limit) {
-        knowledgeBases.get(currentUser.tenantId(), knowledgeBaseId);
-        return search.search(new SearchQuery(currentUser.tenantId(), List.of(knowledgeBaseId), question, limit));
+        knowledgeBases.getAccessible(currentUser.tenantId(), currentUser.userId(), knowledgeBaseId);
+        return search.search(new SearchQuery(currentUser.tenantId(), currentUser.userId(), List.of(knowledgeBaseId),
+                question, limit));
+    }
+
+    @SaCheckRole(Roles.ADMIN)
+    @GetMapping("/{knowledgeBaseId}/members")
+    List<MemberView> members(@PathVariable long knowledgeBaseId) {
+        return knowledgeBases.members(currentUser.tenantId(), knowledgeBaseId).stream()
+                .map(userId -> new MemberView(userId.value())).toList();
+    }
+
+    @SaCheckRole(Roles.ADMIN)
+    @PutMapping("/{knowledgeBaseId}/members/{userId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    void grant(@PathVariable long knowledgeBaseId, @PathVariable long userId) {
+        knowledgeBases.grant(currentUser.tenantId(), knowledgeBaseId, new UserId(userId));
+    }
+
+    @SaCheckRole(Roles.ADMIN)
+    @DeleteMapping("/{knowledgeBaseId}/members/{userId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    void revoke(@PathVariable long knowledgeBaseId, @PathVariable long userId) {
+        knowledgeBases.revoke(currentUser.tenantId(), knowledgeBaseId, new UserId(userId));
     }
 }

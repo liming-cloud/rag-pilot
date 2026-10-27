@@ -30,13 +30,13 @@ class HybridSearchService implements KnowledgeSearch {
     @Transactional(readOnly = true)
     public List<SearchHit> search(SearchQuery query) {
         var text = query.text() == null ? "" : query.text().strip();
-        if (text.isEmpty() || query.knowledgeBaseIds().isEmpty()) {
+        if (text.isEmpty()) {
             return List.of();
         }
         int limit = Math.clamp(query.limit(), 1, MAX_LIMIT);
         var vector = embeddings.embed(List.of(text)).getFirst();
-        var semantic = index.nearest(query.tenantId(), query.knowledgeBaseIds(), vector, CANDIDATES_PER_ROUTE);
-        var keyword = index.keyword(query.tenantId(), query.knowledgeBaseIds(), text, CANDIDATES_PER_ROUTE);
+        var semantic = index.nearest(query.tenantId(), query.userId(), query.knowledgeBaseIds(), vector, CANDIDATES_PER_ROUTE);
+        var keyword = index.keyword(query.tenantId(), query.userId(), query.knowledgeBaseIds(), text, CANDIDATES_PER_ROUTE);
         var fused = RrfFusion.fuse(List.of(semantic, keyword), limit);
         if (fused.isEmpty()) {
             return List.of();

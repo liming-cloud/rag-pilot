@@ -2,6 +2,7 @@ package com.liming.rag.knowledge.infrastructure.persistence;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.liming.rag.common.TenantId;
+import com.liming.rag.common.UserId;
 import com.liming.rag.knowledge.domain.KnowledgeBase;
 import com.liming.rag.knowledge.domain.KnowledgeBaseRepository;
 import java.util.List;
@@ -12,9 +13,11 @@ import org.springframework.stereotype.Repository;
 class MybatisKnowledgeBaseRepository implements KnowledgeBaseRepository {
 
     private final KnowledgeBaseMapper mapper;
+    private final KnowledgeBaseMemberMapper members;
 
-    MybatisKnowledgeBaseRepository(KnowledgeBaseMapper mapper) {
+    MybatisKnowledgeBaseRepository(KnowledgeBaseMapper mapper, KnowledgeBaseMemberMapper members) {
         this.mapper = mapper;
+        this.members = members;
     }
 
     @Override
@@ -40,11 +43,24 @@ class MybatisKnowledgeBaseRepository implements KnowledgeBaseRepository {
     }
 
     @Override
-    public List<KnowledgeBase> list(TenantId tenantId) {
-        return mapper.selectList(new LambdaQueryWrapper<KnowledgeBaseDO>()
-                        .eq(KnowledgeBaseDO::getTenantId, tenantId.value())
-                        .orderByAsc(KnowledgeBaseDO::getId))
-                .stream().map(MybatisKnowledgeBaseRepository::toDomain).toList();
+    public List<KnowledgeBase> listAccessible(TenantId tenantId, UserId userId) {
+        return members.accessible(tenantId.value(), userId.value()).stream()
+                .map(MybatisKnowledgeBaseRepository::toDomain).toList();
+    }
+
+    @Override
+    public void addMember(TenantId tenantId, long knowledgeBaseId, UserId userId) {
+        members.insert(tenantId.value(), knowledgeBaseId, userId.value());
+    }
+
+    @Override
+    public void removeMember(TenantId tenantId, long knowledgeBaseId, UserId userId) {
+        members.delete(tenantId.value(), knowledgeBaseId, userId.value());
+    }
+
+    @Override
+    public List<UserId> members(TenantId tenantId, long knowledgeBaseId) {
+        return members.members(tenantId.value(), knowledgeBaseId).stream().map(UserId::new).toList();
     }
 
     @Override
