@@ -66,7 +66,8 @@ class AnswerReviewLoopTests {
     @DisplayName("回答记录保存改写后的问题，列表里能看到")
     void storesRewrittenQuestion() {
         // 本地确定性模型不会真的改写，这里直接写入一条带改写结果的记录。
-        var answer = Answer.refused(Answer.RefusalReason.LOW_RELEVANCE, 0.01).withRewrittenQuestion("临期商品打几折？");
+        var answer = Answer.refused(Answer.RefusalReason.LOW_RELEVANCE, 0.01).withRewrite(new Answer.Rewrite(
+                Answer.Rewrite.Outcome.REWRITTEN, "临期商品打几折？", 9, 800L, 100L, 200L));
         long id = log.record(new TenantId(1), new UserId(1), "临其商品打几着", answer).id();
 
         var record = review("refused", false).stream().filter(item -> ((Number) item.get("id")).longValue() == id)

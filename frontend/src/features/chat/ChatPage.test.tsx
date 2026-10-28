@@ -65,6 +65,29 @@ describe("问答页", () => {
     expect(await screen.findByRole("article", { name: "回答" })).toBeInTheDocument();
   });
 
+  it("低分改写时提示“换个说法再找找…”", async () => {
+    let finish = () => {};
+    const finished = new Promise<void>((resolve) => (finish = resolve));
+    server.use(
+      http.post("/api/ask/stream", () =>
+        sseResponse(
+          [
+            ["status", { text: "换个说法再找找…" }],
+            ["done", sampleAnswer],
+          ],
+          finished,
+        ),
+      ),
+    );
+    renderPage();
+    ask("临其商品打几着");
+
+    expect(await screen.findByText("换个说法再找找…")).toBeInTheDocument();
+    finish();
+    expect(await screen.findByRole("article", { name: "回答" })).toBeInTheDocument();
+    expect(screen.queryByText("换个说法再找找…")).not.toBeInTheDocument();
+  });
+
   it("拒答时用最终结果替换已显示的文字", async () => {
     server.use(
       http.post("/api/ask/stream", () =>

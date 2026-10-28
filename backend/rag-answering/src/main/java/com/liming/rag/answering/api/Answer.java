@@ -7,11 +7,35 @@ import java.util.List;
  *
  * @param id 回答记录的标识，用于点赞点踩；记录之前为 null
  * @param topRelevance 重排后最高的相关度分数，没有检索结果时为 null；用于评测时校准拒答门槛
- * @param rewrittenQuestion 低分时系统改写后的问题，没有改写时为 null
+ * @param rewrite 低分时的改写情况，没有走到改写这一步时为 null
  * @param timings 各阶段耗时，用于评测和排查延迟
  */
 public record Answer(Long id, String text, boolean refused, RefusalReason refusalReason, List<Citation> citations,
-        Double topRelevance, String rewrittenQuestion, Timings timings) {
+        Double topRelevance, Rewrite rewrite, Timings timings) {
+
+    /**
+     * 低分时改写问题的情况，用于评测和排查。
+     *
+     * @param question 改写后的问题，只有 {@link Outcome#REWRITTEN} 时有值
+     * @param outputChars 模型改写输出的字数（截取前），没有调用模型时为 0
+     * @param modelMillis 模型改写的耗时，没有调用模型时为 null
+     * @param retrievalMillis 用改写后的问题重新检索的耗时，没有重新检索时为 null
+     * @param rerankMillis 重新重排的耗时，没有重新重排时为 null
+     */
+    public record Rewrite(Outcome outcome, String question, int outputChars, Long modelMillis, Long retrievalMillis,
+            Long rerankMillis) {
+
+        public enum Outcome {
+            /** 改写前最高分低于下限，判定改写也救不回，直接拒答。 */
+            SKIPPED_BELOW_FLOOR,
+            /** 模型改写超时，放弃改写。 */
+            TIMED_OUT,
+            /** 模型没给出有效改写（空、NO_ANSWER、太长或和原问题一样）。 */
+            NO_CHANGE,
+            /** 已改写并用新问题重新检索、重排。 */
+            REWRITTEN
+        }
+    }
 
     /**
      * 各阶段耗时（毫秒）。没走到的阶段为 null：检索不到时没有重排，拒答在生成前时没有生成。
@@ -47,14 +71,19 @@ public record Answer(Long id, String text, boolean refused, RefusalReason refusa
     }
 
     public Answer withId(long newId) {
-        return new Answer(newId, text, refused, refusalReason, citations, topRelevance, rewrittenQuestion, timings);
+        return new Answer(newId, text, refused, refusalReason, citations, topRelevance, rewrite, timings);
     }
 
     public Answer withTimings(Timings newTimings) {
-        return new Answer(id, text, refused, refusalReason, citations, topRelevance, rewrittenQuestion, newTimings);
+        return new Answer(id, text, refused, refusalReason, citations, topRelevance, rewrite, newTimings);
     }
 
-    public Answer withRewrittenQuestion(String question) {
-        return new Answer(id, text, refused, refusalReason, citations, topRelevance, question, timings);
+    public Answer withRewrite(Rewrite newRewrite) {
+        return new Answer(id, text, refused, refusalReason, citations, topRelevance, newRewrite, timings);
+    }
+
+    /** 改写后的问题；没有改写时为 null。 */
+    public String rewrittenQuestion() {
+        return rewrite == null ? null : rewrite.question();
     }
 }
