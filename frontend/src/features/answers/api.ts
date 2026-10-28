@@ -1,3 +1,4 @@
+import type { Answer } from "@/features/chat/api";
 import { json } from "@/lib/api";
 import { authFetch } from "@/lib/auth";
 
@@ -14,13 +15,38 @@ export type AnswerReview = {
   comment: string | null;
   createdAt: string;
   citedDocuments: string[];
+  /** 低分时系统改写后的问题。 */
+  rewrittenQuestion: string | null;
+  reviewStatus: "OPEN" | "RESOLVED";
+  resolutionNote: string | null;
+  resolvedAt: string | null;
 };
 
 export type ReviewFilter = "disliked" | "refused" | "all";
 
-/** 管理员查看回答记录，按时间从新到旧。 */
-export async function fetchAnswerReviews(filter: ReviewFilter): Promise<AnswerReview[]> {
-  return json(await authFetch(`/api/answers?filter=${filter}&limit=100`), "读取回答记录失败");
+/** 管理员查看回答记录，按时间从新到旧；默认只看待处理的。 */
+export async function fetchAnswerReviews(filter: ReviewFilter, includeResolved = false): Promise<AnswerReview[]> {
+  return json(
+    await authFetch(`/api/answers?filter=${filter}&includeResolved=${includeResolved}&limit=100`),
+    "读取回答记录失败",
+  );
+}
+
+/** 标记已处理（附说明）或重新打开。 */
+export async function markReview(id: number, status: "RESOLVED" | "OPEN", note?: string): Promise<void> {
+  const response = await authFetch(`/api/answers/${id}/review`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ status, note }),
+  });
+  if (!response.ok) {
+    await json(response, "保存处理状态失败");
+  }
+}
+
+/** 用当前知识库重新回答记录里的问题，结果不写入回答记录。 */
+export async function recheckAnswer(id: number): Promise<Answer> {
+  return json(await authFetch(`/api/answers/${id}/recheck`, { method: "POST" }), "重新回答失败");
 }
 
 /**
@@ -38,7 +64,9 @@ export function toEvalDrafts(reviews: AnswerReview[]) {
     note: [
       "待标注：确认 kind、expectedDocument，并填写答案关键词。",
       review.refused ? "当时没答上来；如果知识库里本该有答案，改成 answerable。" : `当时的回答：${review.answerText}`,
+      review.rewrittenQuestion ? `系统改写为：${review.rewrittenQuestion}` : "",
       review.comment ? `员工留言：${review.comment}` : "",
+      review.resolutionNote ? `处理说明：${review.resolutionNote}` : "",
     ]
       .filter(Boolean)
       .join(" "),

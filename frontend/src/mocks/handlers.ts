@@ -55,8 +55,8 @@ export function resetMockData() {
   documents = Object.fromEntries(Object.entries(sampleDocuments).map(([id, list]) => [id, [...list]]));
   members = { 1: [1, 2], 2: [1] };
   users = sampleUsers.map((user) => ({ ...user }));
+  reviews = sampleReviews.map((review) => ({ ...review }));
 }
-resetMockData();
 
 /**
  * 从 multipart 请求体里读出文件名和大小。不用 request.formData()：Node 24 在 jsdom 测试环境里解析时，
@@ -82,6 +82,10 @@ const sampleReviews: AnswerReview[] = [
     comment: "门店规定是五折",
     createdAt: "2026-10-27T10:20:00+08:00",
     citedDocuments: ["临期与报损管理.md"],
+    rewrittenQuestion: null,
+    reviewStatus: "OPEN",
+    resolutionNote: null,
+    resolvedAt: null,
   },
   {
     id: 602,
@@ -95,8 +99,14 @@ const sampleReviews: AnswerReview[] = [
     comment: null,
     createdAt: "2026-10-27T09:05:00+08:00",
     citedDocuments: [],
+    rewrittenQuestion: "门店的营业结束时间是几点？",
+    reviewStatus: "OPEN",
+    resolutionNote: null,
+    resolvedAt: null,
   },
 ];
+let reviews: AnswerReview[] = [];
+resetMockData();
 
 const problem = (status: number, detail: string) => HttpResponse.json({ status, detail }, { status });
 
@@ -139,13 +149,33 @@ export const handlers = [
   http.get("/api/auth/me", () => HttpResponse.json(sampleUser)),
   http.post("/api/auth/logout", () => new HttpResponse(null, { status: 204 })),
   http.get("/api/answers", ({ request }) => {
-    const filter = new URL(request.url).searchParams.get("filter");
+    const params = new URL(request.url).searchParams;
+    const filter = params.get("filter");
+    const includeResolved = params.get("includeResolved") === "true";
     return HttpResponse.json(
-      sampleReviews.filter((review) =>
-        filter === "refused" ? review.refused : filter === "all" ? true : review.rating === "DOWN",
-      ),
+      reviews
+        .filter((review) => includeResolved || review.reviewStatus === "OPEN")
+        .filter((review) =>
+          filter === "refused" ? review.refused : filter === "all" ? true : review.rating === "DOWN",
+        ),
     );
   }),
+  http.patch("/api/answers/:id/review", async ({ params, request }) => {
+    const { status, note } = (await request.json()) as { status: "OPEN" | "RESOLVED"; note?: string };
+    const review = reviews.find((candidate) => candidate.id === Number(params.id));
+    if (!review) {
+      return problem(404, "回答不存在");
+    }
+    Object.assign(review, {
+      reviewStatus: status,
+      resolutionNote: status === "RESOLVED" ? note?.trim() || null : null,
+      resolvedAt: status === "RESOLVED" ? new Date().toISOString() : null,
+    });
+    return new HttpResponse(null, { status: 204 });
+  }),
+  http.post("/api/answers/:id/recheck", () =>
+    HttpResponse.json({ ...sampleAnswer, id: null, text: "保质期剩余不足三分之一的商品按原价五折销售 [1]。" }),
+  ),
   http.put("/api/answers/:id/feedback", () => new HttpResponse(null, { status: 204 })),
   http.delete("/api/answers/:id/feedback", () => new HttpResponse(null, { status: 204 })),
   http.get("/api/knowledge-bases", () => HttpResponse.json(knowledgeBases)),

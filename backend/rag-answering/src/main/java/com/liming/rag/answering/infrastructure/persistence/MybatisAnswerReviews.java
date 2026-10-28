@@ -21,8 +21,9 @@ class MybatisAnswerReviews implements AnswerReviews {
     }
 
     @Override
-    public List<AnswerReview> list(TenantId tenantId, AnswerReview.Filter filter, int limit) {
-        return mapper.list(tenantId.value(), filter.name(), limit).stream().map(MybatisAnswerReviews::toReview).toList();
+    public List<AnswerReview> list(TenantId tenantId, AnswerReview.Filter filter, boolean includeResolved, int limit) {
+        return mapper.list(tenantId.value(), filter.name(), includeResolved, limit).stream()
+                .map(MybatisAnswerReviews::toReview).toList();
     }
 
     private static AnswerReview toReview(Map<String, Object> row) {
@@ -37,12 +38,16 @@ class MybatisAnswerReviews implements AnswerReviews {
                 row.get("top_relevance") == null ? null : ((Number) row.get("top_relevance")).doubleValue(),
                 (String) row.get("rating"),
                 (String) row.get("feedback_comment"),
-                createdAt(row.get("created_at")),
-                cited == null ? List.of() : Arrays.asList(cited.split("\u001F")));
+                timestamp(row.get("created_at")),
+                cited == null ? List.of() : Arrays.asList(cited.split("\u001F")),
+                (String) row.get("rewritten_question"),
+                (String) row.get("review_status"),
+                (String) row.get("resolution_note"),
+                timestamp(row.get("resolved_at")));
     }
 
     /** 以 Map 读取时 timestamptz 是 java.sql.Timestamp，换成带时区的时间。 */
-    private static OffsetDateTime createdAt(Object value) {
+    private static OffsetDateTime timestamp(Object value) {
         return value instanceof Timestamp timestamp
                 ? OffsetDateTime.ofInstant(timestamp.toInstant(), ZoneId.systemDefault())
                 : (OffsetDateTime) value;

@@ -64,6 +64,41 @@ describe("回答记录页", () => {
     expect(String(cases[0]!.note)).toContain("门店规定是五折");
   });
 
+  it("显示系统改写后的问题", async () => {
+    renderPage();
+    await screen.findByText("临期商品打几折？");
+    fireEvent.click(screen.getByRole("button", { name: "答不上来" }));
+
+    const item = (await screen.findByText("门店几点打烊？")).closest("li")!;
+    expect(within(item).getByText("系统改写为：门店的营业结束时间是几点？")).toBeInTheDocument();
+  });
+
+  it("重新回答：用当前知识库再答一次，显示在记录下方", async () => {
+    renderPage();
+    const item = (await screen.findByText("临期商品打几折？")).closest("li")!;
+
+    fireEvent.click(within(item).getByRole("button", { name: "重新回答" }));
+
+    expect(await within(item).findByText("现在的回答")).toBeInTheDocument();
+    expect(within(item).getByText(/按原价五折销售/)).toBeInTheDocument();
+  });
+
+  it("标记已处理后从待处理里消失；包含已处理时能看到说明并重新打开", async () => {
+    renderPage();
+    const item = (await screen.findByText("临期商品打几折？")).closest("li")!;
+
+    fireEvent.click(within(item).getByRole("button", { name: "标记已处理" }));
+    fireEvent.change(within(item).getByLabelText("处理说明（选填）"), { target: { value: "已上传 2026 版临期规定" } });
+    fireEvent.click(within(item).getByRole("button", { name: "确认" }));
+    await vi.waitFor(() => expect(screen.queryByText("临期商品打几折？")).not.toBeInTheDocument());
+
+    fireEvent.click(screen.getByLabelText("包含已处理"));
+    const resolved = (await screen.findByText("临期商品打几折？")).closest("li")!;
+    expect(within(resolved).getByText("已处理：已上传 2026 版临期规定")).toBeInTheDocument();
+    fireEvent.click(within(resolved).getByRole("button", { name: "重新打开" }));
+    expect(await within(resolved).findByRole("button", { name: "标记已处理" })).toBeInTheDocument();
+  });
+
   it("接口失败时给出中文提示", async () => {
     server.use(http.get("/api/answers", () => new HttpResponse(null, { status: 500 })));
     renderPage();

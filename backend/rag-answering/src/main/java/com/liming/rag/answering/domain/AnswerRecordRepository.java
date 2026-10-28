@@ -15,4 +15,7 @@ public interface AnswerRecordRepository {
 
     /** 保存评价和留言。 */
     void saveFeedback(AnswerRecord record);
+
+    /** 保存处理状态、处理说明和处理人。 */
+    void saveReview(AnswerRecord record);
 }
