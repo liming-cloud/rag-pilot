@@ -1,0 +1,96 @@
+name: eval-public
+
+# 用开源数据集 CRUD-RAG 跑一次大规模评测（默认 500 题、约 2300 篇新闻），回答由评判模型对照参考答案判断。
+# 模型调用费用明显高于 eval 任务（入库向量化 + 每题问答 + 评判），所以只手动运行。
+# 新闻语料版权属于原媒体，运行时下载、转换，不进仓库，也不上传为产物。
+on:
+  workflow_dispatch:
+    inputs:
+      one:
+        description: 单文档题数
+        default: "200"
+      two:
+        description: 双文档题数
+        default: "100"
+      three:
+        description: 三文档题数
+        default: "100"
+      unanswerable:
+        description: 应拒答题数
+        default: "100"
+      distractors:
+        description: 干扰文档篇数上限
+        default: "2000"
+      judge_model:
+        description: 评判模型（OpenAI 兼容接口上的模型名）
+        default: Pro/zai-org/GLM-4.7
+      min_relevance:
+        description: 拒答门槛（重排相关度）
+        default: "0.2"
+      rewrite_min_relevance:
+        description: 低分改写下限
+        default: "0.03"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: eval-public
+  cancel-in-progress: false
+
+jobs:
+  eval-public:
+    name: eval-public
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      # 固定到具体提交并校验摘要，保证每次评测用的是同一份数据。
+      CRUD_RAG_COMMIT: f219391e46944fc838e4fe0f77b2fcde140f75e2
+      CRUD_RAG_SHA256: b199fb281ac526c1c8da7364cad7ea22b7f6fe1d4167e511edbdda8ad3bd943a
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "25"
+          cache: maven
+      - name: 检查密钥
+        env:
+          MODEL_API_KEY: ${{ secrets.MODEL_API_KEY }}
+        run: |
+          if [ -z "$MODEL_API_KEY" ]; then
+            echo "::error title=缺少密钥::请在仓库 Settings → Secrets and variables → Actions 添加 MODEL_API_KEY"
+            exit 1
+          fi
+      - name: 下载并转换 CRUD-RAG
+        env:
+          ONE: ${{ inputs.one }}
+          TWO: ${{ inputs.two }}
+          THREE: ${{ inputs.three }}
+          UNANSWERABLE: ${{ inputs.unanswerable }}
+          DISTRACTORS: ${{ inputs.distractors }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/crud-source"
+          curl -sSfL -o "$RUNNER_TEMP/crud-source/split_merged.json" \
+            "https://raw.githubusercontent.com/IAAR-Shanghai/CRUD_RAG/$CRUD_RAG_COMMIT/data/crud_split/split_merged.json"
+          echo "$CRUD_RAG_SHA256  $RUNNER_TEMP/crud-source/split_merged.json" | sha256sum -c -
+          python3 -I scripts/eval/crud_rag.py "$RUNNER_TEMP/crud-source/split_merged.json" "$RUNNER_TEMP/crud-eval" \
+            --one "$ONE" --two "$TWO" --three "$THREE" --unanswerable "$UNANSWERABLE" --distractors "$DISTRACTORS"
+      - name: 运行评测
+        env:
+          MODEL_API_KEY: ${{ secrets.MODEL_API_KEY }}
+          EVAL_DATA_DIR: ${{ runner.temp }}/crud-eval
+          EVAL_JUDGE_MODEL: ${{ inputs.judge_model }}
+          EVAL_MIN_RELEVANCE: ${{ inputs.min_relevance }}
+          RAG_REWRITE_MIN_RELEVANCE: ${{ inputs.rewrite_min_relevance }}
+        run: >
+          ./mvnw -B -ntp verify -pl backend/rag-app -am
+          -Dtest.groups=eval -Dtest.excludedGroups=none
+          -Dtest=EvaluationRun -Dsurefire.failIfNoSpecifiedTests=false
+      - name: 保存报告
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-public-report
+          path: backend/rag-app/target/eval-report.md
+          if-no-files-found: ignore

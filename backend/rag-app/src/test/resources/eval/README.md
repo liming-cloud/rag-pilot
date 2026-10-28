@@ -19,6 +19,27 @@ MODEL_API_KEY=... EVAL_DATA_DIR=/path/to/private-eval ./mvnw verify -pl backend/
 
 报告写到 `backend/rag-app/target/eval-report.md`。设置 `EVAL_REWRITE=false` 可以关闭“低分时改写问题再检索”，用来对比改写前后的误拒和延迟。先离线检查格式和流程（不调真实模型、分数没有意义）时，再加上 `EVAL_EMBEDDING_PROVIDER=hashing EVAL_RERANK_PROVIDER=lexical EVAL_CHAT_PROVIDER=extractive`，`MODEL_API_KEY` 随便填一个值即可。
 
+## 开源数据集（CRUD-RAG）
+
+用中文新闻问答数据集 [CRUD-RAG](https://github.com/IAAR-Shanghai/CRUD_RAG) 跑大规模评测，覆盖单篇、两篇、三篇新闻综合回答，以及原文被移出语料的应拒答题。新闻版权属于原媒体，数据只在运行时下载、转换，不进仓库。在 GitHub Actions 里手动运行 `eval-public` 工作流即可；本地运行：
+
+```sh
+curl -sSfL -o /tmp/split_merged.json \
+  https://raw.githubusercontent.com/IAAR-Shanghai/CRUD_RAG/f219391e46944fc838e4fe0f77b2fcde140f75e2/data/crud_split/split_merged.json
+python3 scripts/eval/crud_rag.py /tmp/split_merged.json /tmp/crud-eval   # 加 --one 4 --two 3 --three 3 --unanswerable 3 --distractors 20 先小规模试跑
+MODEL_API_KEY=... EVAL_DATA_DIR=/tmp/crud-eval ./mvnw verify -pl backend/rag-app -am \
+  -Dtest.groups=eval -Dtest.excludedGroups=none -Dtest=EvaluationRun -Dsurefire.failIfNoSpecifiedTests=false
+```
+
+题目格式：`expectedDocuments` 列出原文所在的文档（任一篇进前 10 算召回，全部进前 10 另计“多篇原文全部召回”），`referenceAnswer` 是参考答案。带参考答案的题，回答交给评判模型对照判断为正确、部分正确或错误：
+
+- `EVAL_JUDGE_MODEL`：评判模型，默认 `Pro/zai-org/GLM-4.7`。
+- `EVAL_JUDGE_BASE_URL`：OpenAI 兼容接口地址，默认同 `MODEL_BASE_URL`；可以指向自己部署的专用评判模型。
+- `EVAL_JUDGE_API_KEY`：默认用 `MODEL_API_KEY`。
+- `EVAL_JUDGE_PROVIDER=none`：不评判，离线试跑时用。
+
+评判也会判错，结论用于校准门槛前先人工抽查。
+
 ## 真实问题 → 评测题
 
 1. 管理员在“回答记录”页选“差评”或“答不上来”，点“导出为评测题草稿”。

@@ -97,6 +97,34 @@ class EvalReportTest {
     }
 
     @Test
+    @DisplayName("多篇原文：任一进前 10 算召回，全部进前 10 才算全部召回；引用任一原文算引用正确；答案按评判统计")
+    void reportsMultiDocumentRecallAndJudgements() {
+        var twoDocs = new EvalCase("双文档", "两篇新闻都提到了什么", Kind.ANSWERABLE, List.of("a.txt", "b.txt"), List.of(),
+                false, "双文档", "两篇都提到防控近视");
+        var oneDoc = new EvalCase("单文档", "活动针对谁", Kind.ANSWERABLE, List.of("c.txt"), List.of(), false, "单文档",
+                "儿童青少年");
+        var outcomes = List.of(
+                new EvalOutcome(twoDocs, List.of(new Retrieved("a.txt", "防控近视"), new Retrieved("x.txt", "无关")), false,
+                        null, "提到防控近视[1]", List.of("a.txt"), 0.9, 100, 300, 900, null, null,
+                        new EvalOutcome.Judgement("PARTIAL", "只覆盖了一篇")),
+                new EvalOutcome(oneDoc, List.of(new Retrieved("c.txt", "儿童青少年")), false, null, "针对儿童青少年[1]",
+                        List.of("c.txt"), 0.95, 100, 300, 900, null, null, new EvalOutcome.Judgement("CORRECT", "一致")),
+                new EvalOutcome(new EvalCase("单文档2", "活动叫什么", Kind.ANSWERABLE, List.of("d.txt"), List.of(), false,
+                        "单文档", "启明行动"), List.of(new Retrieved("d.txt", "启明行动")), false, null, "叫护眼行动[1]",
+                        List.of("d.txt"), 0.9, 100, 300, 900, null, null, new EvalOutcome.Judgement("WRONG", "名称不对")));
+
+        var report = EvalReport.of(outcomes, Set.of());
+
+        assertThat(report.recallAt10()).isEqualTo(1.0);
+        assertThat(report.citationAccuracy()).isEqualTo(1.0);
+        assertThat(report.toMarkdown())
+                .contains("| 多篇原文全部召回 | 0.0% |")
+                .contains("答案评判 3 题：正确 1 题（33.3%），部分正确 1 题（33.3%），错误 1 题（33.3%）")
+                .contains("单文档2：答案错误（名称不对）")
+                .contains("双文档：答案部分正确（只覆盖了一篇）");
+    }
+
+    @Test
     @DisplayName("p95 用最近秩法")
     void p95() {
         assertThat(EvalReport.p95(List.of(5L, 1L, 3L))).isEqualTo(5);

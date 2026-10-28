@@ -1,7 +1,10 @@
 package com.liming.rag;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.fail;
 
+import com.liming.rag.ai.AnswerJudge;
+import com.liming.rag.ai.ModelCallException;
 import com.liming.rag.evaluation.api.EvalCase;
 import com.liming.rag.evaluation.api.EvalOutcome;
 import com.liming.rag.evaluation.api.EvalReport;
@@ -10,7 +13,9 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.time.Duration;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -45,6 +50,8 @@ import tools.jackson.databind.json.JsonMapper;
  *
  * <p>默认构建不运行（标签 eval），需要环境变量 MODEL_API_KEY。报告写到 target/eval-report.md，
  * 在 GitHub Actions 里同时写进运行摘要。越权泄漏必须为 0，其余指标只报告。
+ *
+ * <p>题目带参考答案时（开源数据集），回答再交给评判模型对照参考答案判断，配置见 {@link #judge()}。
  */
 @Tag("eval")
 @EnabledIfEnvironmentVariable(named = "MODEL_API_KEY", matches = ".+")
@@ -54,10 +61,18 @@ import tools.jackson.databind.json.JsonMapper;
         "rag.ai.rerank.provider=${EVAL_RERANK_PROVIDER:openai}",
         "rag.ai.chat.provider=${EVAL_CHAT_PROVIDER:openai}",
         "rag.answering.min-relevance=${EVAL_MIN_RELEVANCE:0.2}",
-        "rag.answering.rewrite-on-low-relevance=${EVAL_REWRITE:true}"})
+        "rag.answering.rewrite-on-low-relevance=${EVAL_REWRITE:true}",
+        "rag.ingestion.concurrency=${EVAL_INGESTION_CONCURRENCY:4}"})
 @AutoConfigureTestRestTemplate
 @Testcontainers
 class EvaluationRun {
+
+    /** 评判默认用硅基流动上的通用模型；换成自己部署的专用评判模型时改 EVAL_JUDGE_BASE_URL 和 EVAL_JUDGE_MODEL。 */
+    private static final String DEFAULT_JUDGE_MODEL = "Pro/zai-org/GLM-4.7";
+
+    private static final ParameterizedTypeReference<List<Map<String, Object>>> DOCUMENTS =
+            new ParameterizedTypeReference<>() {
+            };
 
     private static final PathMatchingResourcePatternResolver RESOURCES = new PathMatchingResourcePatternResolver();
 
@@ -88,9 +103,14 @@ class EvaluationRun {
         // 以只被授权门店库的店员身份提问，并在请求里主动带上店长专用库，检验越权是否真的被挡住。
         String staff = createStaffWithAccessTo(store);
 
+        var cases = loadCases();
+        var judge = cases.stream().anyMatch(evalCase -> evalCase.referenceAnswer() != null) ? judge() : null;
         var outcomes = new ArrayList<EvalOutcome>();
-        for (var evalCase : loadCases()) {
-            outcomes.add(run(store, restricted, staff, evalCase));
+        for (var evalCase : cases) {
+            outcomes.add(judged(judge, run(store, restricted, staff, evalCase), outcomes.isEmpty()));
+            if (outcomes.size() % 50 == 0) {
+                System.out.printf(Locale.ROOT, "已评测 %d / %d 题%n", outcomes.size(), cases.size());
+            }
         }
         var report = EvalReport.of(outcomes, restrictedDocuments);
         publish(report);
@@ -126,6 +146,47 @@ class EvaluationRun {
     }
 
     /**
+     * 评判模型：{@code EVAL_JUDGE_PROVIDER=none} 时不评判（离线试跑）；否则调用 OpenAI 兼容接口，
+     * 地址 {@code EVAL_JUDGE_BASE_URL}（默认同 MODEL_BASE_URL），模型 {@code EVAL_JUDGE_MODEL}，
+     * 密钥 {@code EVAL_JUDGE_API_KEY}（默认用 MODEL_API_KEY）。
+     */
+    private static AnswerJudge judge() {
+        if ("none".equals(env("EVAL_JUDGE_PROVIDER", "openai"))) {
+            return null;
+        }
+        return AnswerJudge.openAiCompatible(env("EVAL_JUDGE_BASE_URL", env("MODEL_BASE_URL", "https://api.siliconflow.cn/v1")),
+                env("EVAL_JUDGE_API_KEY", System.getenv("MODEL_API_KEY")), env("EVAL_JUDGE_MODEL", DEFAULT_JUDGE_MODEL),
+                Duration.ofSeconds(60));
+    }
+
+    /**
+     * 有参考答案且给出了回答的题交给评判。第一题就失败多半是配置不对（模型名、地址），直接停下；
+     * 之后偶发失败只记警告，这道题不计入评判。
+     */
+    private static EvalOutcome judged(AnswerJudge judge, EvalOutcome outcome, boolean first) {
+        var evalCase = outcome.evalCase();
+        if (judge == null || outcome.refused() || evalCase.referenceAnswer() == null) {
+            return outcome;
+        }
+        try {
+            var judgement = judge.judge(evalCase.question(), evalCase.referenceAnswer(), outcome.answer());
+            return outcome.withJudgement(new EvalOutcome.Judgement(judgement.verdict().name(), judgement.reason()));
+        } catch (ModelCallException e) {
+            var cause = e.getCause() == null ? "" : "：" + e.getCause().getMessage();
+            if (first) {
+                throw new IllegalStateException(e.getMessage() + cause, e);
+            }
+            System.out.println("::warning title=答案评判失败::" + evalCase.id() + cause);
+            return outcome;
+        }
+    }
+
+    private static String env(String name, String fallback) {
+        var value = System.getenv(name);
+        return value == null || value.isBlank() ? fallback : value;
+    }
+
+    /**
      * 评测数据的位置：设置了 {@code EVAL_DATA_DIR} 时用仓库外的私有评测集（客户真实资料和问题），
      * 否则用仓库里的合成集。目录结构相同：{@code corpus/store/}、{@code corpus/restricted/}（可选）、{@code cases.json}。
      */
@@ -145,21 +206,26 @@ class EvaluationRun {
         return raw.stream().map(item -> {
             @SuppressWarnings("unchecked")
             var keywords = (List<String>) item.get("keywords");
+            // 合成集每题一篇原文（expectedDocument），开源数据集可能有多篇（expectedDocuments）。
+            @SuppressWarnings("unchecked")
+            var documents = item.get("expectedDocuments") instanceof List<?> list ? (List<String>) list
+                    : item.get("expectedDocument") instanceof String one ? List.of(one) : List.<String>of();
             var evalCase = new EvalCase((String) item.get("id"), (String) item.get("question"),
                     EvalCase.Kind.valueOf(((String) item.get("kind")).toUpperCase(Locale.ROOT)),
-                    (String) item.get("expectedDocument"), keywords, Boolean.TRUE.equals(item.get("restricted")),
-                    (String) item.get("style"));
+                    documents, keywords, Boolean.TRUE.equals(item.get("restricted")),
+                    (String) item.get("style"), (String) item.get("referenceAnswer"));
             // 从回答记录导出的草稿题要先人工标注，没标完就跑会让指标失真。
-            if (evalCase.kind() == EvalCase.Kind.ANSWERABLE
-                    && (evalCase.expectedDocument() == null || evalCase.keywords().isEmpty())) {
-                throw new IllegalStateException("评测题“" + evalCase.id() + "”还没标注预期文档和答案关键词");
+            if (evalCase.kind() == EvalCase.Kind.ANSWERABLE && (evalCase.expectedDocuments().isEmpty()
+                    || evalCase.keywords().isEmpty() && evalCase.referenceAnswer() == null)) {
+                throw new IllegalStateException("评测题“" + evalCase.id() + "”还没标注预期文档和答案关键词（或参考答案）");
             }
             return evalCase;
         }).toList();
     }
 
+    /** 先把文件全部上传，再统一等入库完成：后台按并发数处理，比逐篇上传逐篇等快得多。 */
     private Set<String> uploadCorpus(long knowledgeBaseId, String folder) throws IOException {
-        var names = new java.util.HashSet<String>();
+        var names = new HashSet<String>();
         for (var resource : RESOURCES.getResources(dataLocation() + "corpus/" + folder + "/*")) {
             var filename = resource.getFilename();
             if (filename == null || filename.startsWith(".") || !resource.isReadable()) {
@@ -177,15 +243,43 @@ class EvaluationRun {
             headers.setContentType(MediaType.MULTIPART_FORM_DATA);
             var uploaded = http.postForEntity("/api/knowledge-bases/{id}/documents", new HttpEntity<>(body, headers),
                     Map.class, knowledgeBaseId);
-            assertThat(TestDocuments.awaitProcessed(http, knowledgeBaseId, uploaded.getBody(), null)).as(filename + " 入库")
-                    .containsEntry("status", "READY");
+            assertThat(uploaded.getStatusCode()).as(filename + " 上传").isEqualTo(HttpStatus.CREATED);
             names.add(filename);
+        }
+        if (!names.isEmpty()) {
+            awaitAllProcessed(knowledgeBaseId, names.size());
         }
         // 私有评测集可以没有店长专用库；合成集两个库都有。
         if (folder.equals("store")) {
             assertThat(names).as(folder + " 语料").isNotEmpty();
         }
         return names;
+    }
+
+    /** 每篇给 3 秒、至少 90 秒，等全部文档离开“解析中”，并要求都是可用。 */
+    private void awaitAllProcessed(long knowledgeBaseId, int count) {
+        var timeout = Duration.ofSeconds(Math.max(90, 3L * count));
+        long deadline = System.nanoTime() + timeout.toNanos();
+        long started = System.nanoTime();
+        while (System.nanoTime() < deadline) {
+            var documents = http.exchange("/api/knowledge-bases/{id}/documents", HttpMethod.GET, null, DOCUMENTS,
+                    knowledgeBaseId).getBody();
+            if (documents.stream().noneMatch(document -> "PARSING".equals(document.get("status")))) {
+                var failed = documents.stream().filter(document -> !"READY".equals(document.get("status")))
+                        .map(document -> document.get("filename") + "：" + document.get("error")).toList();
+                assertThat(failed).as("入库失败的文档").isEmpty();
+                System.out.printf(Locale.ROOT, "%d 篇文档入库用时 %d 秒%n", documents.size(),
+                        (System.nanoTime() - started) / 1_000_000_000);
+                return;
+            }
+            try {
+                Thread.sleep(1000);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                break;
+            }
+        }
+        fail(count + " 篇文档在 " + timeout.toSeconds() + " 秒内没有全部处理完");
     }
 
     private String createStaffWithAccessTo(long knowledgeBaseId) {
