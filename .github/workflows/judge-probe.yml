@@ -7,24 +7,24 @@ on:
     inputs:
       judge_model:
         description: 评判模型（OpenAI 兼容接口上的模型名）
-        default: Qwen/Qwen2.5-7B-Instruct
+        default: THUDM/GLM-4-9B-0414
       per_kind:
         description: 每类样本题数
         default: "15"
-  # 临时：分支上对比候选模型，合并前删掉。
-  push:
-    branches: [fix/63-judge]
+  # 改了评判提示词或自检样本时自动跑一次默认评判模型（免费模型，约 1 分钟）。
+  pull_request:
+    paths:
+      - backend/rag-ai/src/main/java/com/liming/rag/ai/OpenAiCompatibleJudge.java
+      - backend/rag-ai/src/test/java/com/liming/rag/ai/JudgeProbeRun.java
+      - scripts/eval/judge_probe.py
+      - .github/workflows/judge-probe.yml
 
 permissions:
   contents: read
 
 jobs:
   judge-probe:
-    name: judge-probe (${{ matrix.model }})
-    strategy:
-      fail-fast: false
-      matrix:
-        model: ${{ fromJSON(github.event_name == 'push' && '["Qwen/Qwen2.5-7B-Instruct","THUDM/GLM-4-9B-0414","XingChenAGI/Xing4.0-29B","Qwen/Qwen3-8B"]' || format('["{0}"]', inputs.judge_model)) }}
+    name: judge-probe
     runs-on: ubuntu-latest
     timeout-minutes: 40
     env:
@@ -51,7 +51,7 @@ jobs:
         env:
           MODEL_API_KEY: ${{ secrets.MODEL_API_KEY }}
           EVAL_JUDGE_PROBE: ${{ runner.temp }}/judge-probe.json
-          EVAL_JUDGE_MODEL: ${{ matrix.model }}
+          EVAL_JUDGE_MODEL: ${{ inputs.judge_model || 'THUDM/GLM-4-9B-0414' }}
         run: >
           ./mvnw -B -ntp verify -pl backend/rag-ai -am
           -Dtest.groups=eval -Dtest.excludedGroups=none

@@ -26,7 +26,7 @@ on:
         default: deepseek-ai/DeepSeek-V3
       judge_model:
         description: 评判模型（OpenAI 兼容接口上的模型名）
-        default: Qwen/Qwen2.5-7B-Instruct
+        default: THUDM/GLM-4-9B-0414
       min_relevance:
         description: 拒答门槛（重排相关度）
         default: "0.2"

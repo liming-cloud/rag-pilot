@@ -52,7 +52,7 @@ class JudgeProbeRun {
         List<Probe> probes = JsonMapper.builder().build().readValue(
                 Files.readString(Path.of(System.getenv("EVAL_JUDGE_PROBE"))), new TypeReference<>() {
                 });
-        var model = env("EVAL_JUDGE_MODEL", "Qwen/Qwen2.5-7B-Instruct");
+        var model = env("EVAL_JUDGE_MODEL", "THUDM/GLM-4-9B-0414");
         var judge = AnswerJudge.openAiCompatible(env("EVAL_JUDGE_BASE_URL",
                         env("MODEL_BASE_URL", "https://api.siliconflow.cn/v1")),
                 env("EVAL_JUDGE_API_KEY", System.getenv("MODEL_API_KEY")), model, Duration.ofSeconds(120));
