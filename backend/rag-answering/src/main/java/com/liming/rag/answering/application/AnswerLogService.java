@@ -5,6 +5,8 @@ import com.liming.rag.answering.domain.AnswerRecord;
 import com.liming.rag.answering.domain.AnswerRecordRepository;
 import com.liming.rag.common.TenantId;
 import com.liming.rag.common.UserId;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Locale;
 import java.util.NoSuchElementException;
@@ -20,12 +22,34 @@ public class AnswerLogService {
     /** 一次最多查看的条数。 */
     static final int MAX_REVIEW_LIMIT = 200;
 
+    /** 使用统计最多看多少天。 */
+    static final int MAX_STATS_DAYS = 90;
+
+    /** 门店在国内，统计的“一天”按北京时间划分。 */
+    public static final ZoneId STATS_ZONE = ZoneId.of("Asia/Shanghai");
+
     private final AnswerRecordRepository records;
     private final AnswerReviews reviews;
+    private final AnswerStatistics statistics;
 
-    AnswerLogService(AnswerRecordRepository records, AnswerReviews reviews) {
+    AnswerLogService(AnswerRecordRepository records, AnswerReviews reviews, AnswerStatistics statistics) {
         this.records = records;
         this.reviews = reviews;
+        this.statistics = statistics;
+    }
+
+    /**
+     * 最近 {@code days} 天（含今天）的使用统计。
+     *
+     * @throws IllegalArgumentException 天数不在 1 到 {@value #MAX_STATS_DAYS} 之间
+     */
+    @Transactional(readOnly = true)
+    public UsageStats usage(TenantId tenantId, int days) {
+        if (days < 1 || days > MAX_STATS_DAYS) {
+            throw new IllegalArgumentException("统计天数只能是 1 到 " + MAX_STATS_DAYS + " 天");
+        }
+        var today = LocalDate.now(STATS_ZONE);
+        return statistics.usage(tenantId, today.minusDays(days - 1L), today);
     }
 
     /**

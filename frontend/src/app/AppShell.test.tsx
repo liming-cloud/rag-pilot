@@ -28,7 +28,7 @@ describe("页面外壳", () => {
     renderAt("/chat");
 
     const nav = await screen.findByRole("navigation", { name: "主导航" });
-    for (const name of ["问答", "知识库", "账号", "回答记录"]) {
+    for (const name of ["问答", "知识库", "账号", "回答记录", "使用统计"]) {
       expect(await within(nav).findByRole("link", { name })).toBeInTheDocument();
     }
     expect(screen.getByText("管理员")).toBeInTheDocument();

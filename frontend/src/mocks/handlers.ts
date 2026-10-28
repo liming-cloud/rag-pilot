@@ -3,6 +3,7 @@ import type { AnswerReview } from "@/features/answers/api";
 import type { User } from "@/features/auth/api";
 import type { Answer } from "@/features/chat/api";
 import type { KnowledgeBase, KnowledgeDocument } from "@/features/knowledge/api";
+import type { UsageStats } from "@/features/stats/api";
 import { sseResponse } from "./sse";
 
 /** 假接口与后端契约保持一致；示例数据只用于原型和测试。 */
@@ -47,6 +48,8 @@ let knowledgeBases: KnowledgeBase[] = [];
 let documents: Record<number, KnowledgeDocument[]> = {};
 let members: Record<number, number[]> = {};
 let users: User[] = [];
+/** 当前登录的账号，默认是店员。 */
+let currentUser: User = sampleUsers[1]!;
 const pendingChunks = new Map<number, number>();
 let nextId = 100;
 
@@ -56,6 +59,7 @@ export function resetMockData() {
   members = { 1: [1, 2], 2: [1] };
   users = sampleUsers.map((user) => ({ ...user }));
   reviews = sampleReviews.map((review) => ({ ...review }));
+  currentUser = sampleUsers[1]!;
 }
 
 /**
@@ -136,17 +140,70 @@ export const sampleAnswer: Answer = {
   topRelevance: 0.97,
 };
 
-const sampleUser = sampleUsers[1];
+const sampleUser = sampleUsers[1]!;
+
+/** 按天数生成确定的示例统计：工作日问得多，周末少。 */
+function sampleStats(days: number): UsageStats {
+  const to = new Date("2026-10-28T00:00:00+08:00");
+  const daily = Array.from({ length: days }, (_, index) => {
+    const date = new Date(to.getTime() - (days - 1 - index) * 86_400_000);
+    const weekend = [0, 6].includes(date.getDay());
+    const questions = (weekend ? 6 : 18) + ((index * 7) % 11);
+    return {
+      date: date.toISOString().slice(0, 10),
+      questions,
+      refused: Math.round(questions * 0.12) + (index % 3 === 0 ? 1 : 0),
+      disliked: index % 4 === 0 ? 1 : 0,
+    };
+  });
+  const sum = (key: "questions" | "refused" | "disliked") => daily.reduce((total, day) => total + day[key], 0);
+  const questions = sum("questions");
+  const refused = sum("refused");
+  const disliked = sum("disliked");
+  return {
+    from: daily[0]!.date,
+    to: daily.at(-1)!.date,
+    totals: {
+      questions,
+      askers: Math.min(23, 8 + days),
+      refused,
+      rated: Math.round((questions - refused) * 0.3),
+      liked: Math.round((questions - refused) * 0.3) - disliked,
+      disliked,
+      openReviews: Math.round(refused * 0.4) + disliked,
+    },
+    daily,
+    refusalReasons: [
+      { reason: "LOW_RELEVANCE", count: Math.round(refused * 0.7) },
+      { reason: "NO_EVIDENCE", count: Math.round(refused * 0.2) },
+      { reason: "MODEL_DECLINED", count: refused - Math.round(refused * 0.7) - Math.round(refused * 0.2) },
+    ],
+    topRefusedQuestions: [
+      { question: "门店几点打烊？", count: 9 },
+      { question: "员工餐补怎么报销？", count: 6 },
+      { question: "冷柜坏了找谁修？", count: 4 },
+      { question: "会员生日当天有什么优惠？", count: 3 },
+    ],
+    topCitedDocuments: [
+      { documentName: "临期与报损管理.md", count: 64 },
+      { documentName: "商品陈列与补货规范.md", count: 41 },
+      { documentName: "收银与交接班.docx", count: 33 },
+      { documentName: "会员与促销.md", count: 18 },
+    ],
+  };
+}
 
 export const handlers = [
-  // 密码填 wrong-password 时模拟登录失败，其他任意账号密码都能登录。
+  // 密码填 wrong-password 时模拟登录失败，其他任意账号密码都能登录；用户名填 admin 时以管理员登录，用来看管理页原型。
   http.post("/api/auth/login", async ({ request }) => {
-    const { password } = (await request.json()) as { password: string };
-    return password === "wrong-password"
-      ? HttpResponse.json({ detail: "用户名或密码错误" }, { status: 401 })
-      : HttpResponse.json({ token: "mock-token", user: sampleUser });
+    const { username, password } = (await request.json()) as { username: string; password: string };
+    if (password === "wrong-password") {
+      return HttpResponse.json({ detail: "用户名或密码错误" }, { status: 401 });
+    }
+    currentUser = username === "admin" ? sampleUsers[0]! : sampleUser;
+    return HttpResponse.json({ token: "mock-token", user: currentUser });
   }),
-  http.get("/api/auth/me", () => HttpResponse.json(sampleUser)),
+  http.get("/api/auth/me", () => HttpResponse.json(currentUser)),
   http.post("/api/auth/logout", () => new HttpResponse(null, { status: 204 })),
   http.get("/api/answers", ({ request }) => {
     const params = new URL(request.url).searchParams;
@@ -160,6 +217,9 @@ export const handlers = [
         ),
     );
   }),
+  http.get("/api/answers/stats", ({ request }) =>
+    HttpResponse.json(sampleStats(Number(new URL(request.url).searchParams.get("days")) || 30)),
+  ),
   http.patch("/api/answers/:id/review", async ({ params, request }) => {
     const { status, note } = (await request.json()) as { status: "OPEN" | "RESOLVED"; note?: string };
     const review = reviews.find((candidate) => candidate.id === Number(params.id));
