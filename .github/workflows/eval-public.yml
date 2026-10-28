@@ -23,7 +23,7 @@ on:
         default: "2000"
       chat_model:
         description: 回答模型（也用于低分改写）
-        default: THUDM/GLM-4-9B-0414
+        default: deepseek-ai/DeepSeek-V3
       judge_model:
         description: 评判模型（OpenAI 兼容接口上的模型名）
         default: Qwen/Qwen2.5-7B-Instruct

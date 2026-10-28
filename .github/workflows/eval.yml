@@ -54,7 +54,7 @@ jobs:
         env:
           MODEL_API_KEY: ${{ secrets.MODEL_API_KEY }}
           EVAL_MIN_RELEVANCE: ${{ inputs.min_relevance || '0.2' }}
-          CHAT_MODEL: ${{ inputs.chat_model || 'THUDM/GLM-4-9B-0414' }}
+          CHAT_MODEL: ${{ inputs.chat_model || 'deepseek-ai/DeepSeek-V3' }}
         run: >
           ./mvnw -B -ntp verify -pl backend/rag-app -am
           -Dtest.groups=eval -Dtest.excludedGroups=none
