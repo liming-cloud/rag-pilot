@@ -1,5 +1,6 @@
 package com.liming.rag.answering.infrastructure.persistence;
 
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
 import org.apache.ibatis.annotations.Insert;
@@ -58,6 +59,64 @@ interface AnswerRecordMapper {
             """)
     List<Map<String, Object>> list(@Param("tenantId") long tenantId, @Param("filter") String filter,
             @Param("includeResolved") boolean includeResolved, @Param("limit") int limit);
+
+    /** 统计用的时间条件：created_at 落在 [from, to) 内。评价只算给出了回答的记录。 */
+    @Select("""
+            SELECT count(*) AS questions, count(DISTINCT user_id) AS askers,
+                   count(*) FILTER (WHERE refused) AS refused,
+                   count(*) FILTER (WHERE NOT refused AND rating IS NOT NULL) AS rated,
+                   count(*) FILTER (WHERE NOT refused AND rating = 'UP') AS liked,
+                   count(*) FILTER (WHERE NOT refused AND rating = 'DOWN') AS disliked,
+                   count(*) FILTER (WHERE review_status = 'OPEN' AND (refused OR rating = 'DOWN')) AS open_reviews
+            FROM answer_record
+            WHERE tenant_id = #{tenantId} AND created_at >= #{from} AND created_at < #{to}
+            """)
+    Map<String, Object> totals(@Param("tenantId") long tenantId, @Param("from") OffsetDateTime from,
+            @Param("to") OffsetDateTime to);
+
+    @Select("""
+            SELECT CAST(created_at AT TIME ZONE #{zone} AS date) AS day, count(*) AS questions,
+                   count(*) FILTER (WHERE refused) AS refused,
+                   count(*) FILTER (WHERE NOT refused AND rating = 'DOWN') AS disliked
+            FROM answer_record
+            WHERE tenant_id = #{tenantId} AND created_at >= #{from} AND created_at < #{to}
+            GROUP BY day
+            """)
+    List<Map<String, Object>> daily(@Param("tenantId") long tenantId, @Param("from") OffsetDateTime from,
+            @Param("to") OffsetDateTime to, @Param("zone") String zone);
+
+    @Select("""
+            SELECT refusal_reason AS label, count(*) AS count
+            FROM answer_record
+            WHERE tenant_id = #{tenantId} AND created_at >= #{from} AND created_at < #{to} AND refused
+            GROUP BY refusal_reason
+            ORDER BY count DESC, refusal_reason
+            """)
+    List<Map<String, Object>> refusalReasons(@Param("tenantId") long tenantId, @Param("from") OffsetDateTime from,
+            @Param("to") OffsetDateTime to);
+
+    @Select("""
+            SELECT question AS label, count(*) AS count
+            FROM answer_record
+            WHERE tenant_id = #{tenantId} AND created_at >= #{from} AND created_at < #{to} AND refused
+            GROUP BY question
+            ORDER BY count DESC, max(created_at) DESC
+            LIMIT #{limit}
+            """)
+    List<Map<String, Object>> topRefusedQuestions(@Param("tenantId") long tenantId,
+            @Param("from") OffsetDateTime from, @Param("to") OffsetDateTime to, @Param("limit") int limit);
+
+    @Select("""
+            SELECT c.document_name AS label, count(DISTINCT c.answer_id) AS count
+            FROM answer_citation c
+            JOIN answer_record r ON r.id = c.answer_id
+            WHERE r.tenant_id = #{tenantId} AND r.created_at >= #{from} AND r.created_at < #{to}
+            GROUP BY c.document_name
+            ORDER BY count DESC, c.document_name
+            LIMIT #{limit}
+            """)
+    List<Map<String, Object>> topCitedDocuments(@Param("tenantId") long tenantId, @Param("from") OffsetDateTime from,
+            @Param("to") OffsetDateTime to, @Param("limit") int limit);
 
     @Update("""
             UPDATE answer_record

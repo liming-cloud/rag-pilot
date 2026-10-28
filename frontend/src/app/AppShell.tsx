@@ -11,6 +11,7 @@ const LINKS = [
   { to: "/admin/knowledge", label: "知识库", adminOnly: true },
   { to: "/admin/users", label: "账号", adminOnly: true },
   { to: "/admin/answers", label: "回答记录", adminOnly: true },
+  { to: "/admin/stats", label: "使用统计", adminOnly: true },
 ];
 
 function useMe() {

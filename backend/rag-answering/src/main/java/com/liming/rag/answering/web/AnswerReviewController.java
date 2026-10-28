@@ -5,6 +5,7 @@ import com.liming.rag.answering.api.Answer;
 import com.liming.rag.answering.application.AnswerLogService;
 import com.liming.rag.answering.application.AnswerReview;
 import com.liming.rag.answering.application.AnswerService;
+import com.liming.rag.answering.application.UsageStats;
 import com.liming.rag.identity.api.CurrentUser;
 import com.liming.rag.identity.api.Roles;
 import java.util.List;
@@ -43,6 +44,12 @@ class AnswerReviewController {
             @RequestParam(name = "includeResolved", defaultValue = "false") boolean includeResolved,
             @RequestParam(name = "limit", defaultValue = "50") int limit) {
         return log.review(currentUser.tenantId(), filter, includeResolved, limit);
+    }
+
+    /** 最近几天（含今天）的使用统计，供试点汇报。 */
+    @GetMapping("/stats")
+    UsageStats stats(@RequestParam(name = "days", defaultValue = "30") int days) {
+        return log.usage(currentUser.tenantId(), days);
     }
 
     /** 标记已处理（附处理说明）或重新打开。 */

@@ -4,6 +4,7 @@ import { AnswersPage } from "@/features/answers/AnswersPage";
 import { LoginPage } from "@/features/auth/LoginPage";
 import { ChatPage } from "@/features/chat/ChatPage";
 import { KnowledgePage } from "@/features/knowledge/KnowledgePage";
+import { StatsPage } from "@/features/stats/StatsPage";
 import { UsersPage } from "@/features/users/UsersPage";
 import { getToken } from "@/lib/auth";
 import { AppShell, RequireAdmin } from "./AppShell";
@@ -30,6 +31,7 @@ export const routes: RouteObject[] = [
       { path: "/admin/knowledge", element: admin(<KnowledgePage />) },
       { path: "/admin/users", element: admin(<UsersPage />) },
       { path: "/admin/answers", element: admin(<AnswersPage />) },
+      { path: "/admin/stats", element: admin(<StatsPage />) },
     ],
   },
 ];
