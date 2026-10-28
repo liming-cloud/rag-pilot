@@ -24,6 +24,7 @@ public class DocumentDO {
     @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String error;
     private Integer chunkCount;
+    private Long replacesDocumentId;
     /** 由数据库默认值生成。 */
     @TableField(insertStrategy = FieldStrategy.NEVER, updateStrategy = FieldStrategy.NEVER)
     private OffsetDateTime createdAt;
@@ -114,5 +115,13 @@ public class DocumentDO {
 
     public void setCreatedAt(OffsetDateTime createdAt) {
         this.createdAt = createdAt;
+    }
+
+    public Long getReplacesDocumentId() {
+        return replacesDocumentId;
+    }
+
+    public void setReplacesDocumentId(Long replacesDocumentId) {
+        this.replacesDocumentId = replacesDocumentId;
     }
 }

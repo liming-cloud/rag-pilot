@@ -52,10 +52,10 @@ class KnowledgeBaseController {
     }
 
     record DocumentView(long id, String filename, String status, String error, int chunkCount, long sizeBytes,
-            OffsetDateTime createdAt) {
+            OffsetDateTime createdAt, Long replacesDocumentId) {
         static DocumentView of(Document document) {
             return new DocumentView(document.id(), document.filename(), document.status().name(), document.error(),
-                    document.chunkCount(), document.sizeBytes(), document.createdAt());
+                    document.chunkCount(), document.sizeBytes(), document.createdAt(), document.replacesDocumentId());
         }
     }
 
@@ -87,10 +87,17 @@ class KnowledgeBaseController {
     @SaCheckRole(Roles.ADMIN)
     @PostMapping(path = "/{knowledgeBaseId}/documents", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @ResponseStatus(HttpStatus.CREATED)
-    DocumentView upload(@PathVariable long knowledgeBaseId, @RequestParam("file") MultipartFile file)
-            throws IOException {
+    DocumentView upload(@PathVariable long knowledgeBaseId, @RequestParam("file") MultipartFile file,
+            @RequestParam(name = "replaces", required = false) Long replaces) throws IOException {
         return DocumentView.of(ingestion.ingest(currentUser.tenantId(), knowledgeBaseId, file.getOriginalFilename(),
-                file.getBytes()));
+                file.getBytes(), replaces));
+    }
+
+    @SaCheckRole(Roles.ADMIN)
+    @DeleteMapping("/{knowledgeBaseId}/documents/{documentId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    void deleteDocument(@PathVariable long knowledgeBaseId, @PathVariable long documentId) {
+        ingestion.delete(currentUser.tenantId(), knowledgeBaseId, documentId);
     }
 
     @GetMapping("/{knowledgeBaseId}/documents")

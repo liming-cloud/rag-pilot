@@ -20,14 +20,16 @@ class IngestionPipeline {
     private final DocumentRepository documents;
     private final EmbeddingClient embeddings;
     private final TransactionOperations transactions;
+    private final DocumentRemover remover;
     private final HeadingChunker chunker = new HeadingChunker();
 
     IngestionPipeline(DocumentReaders readers, DocumentRepository documents, EmbeddingClient embeddings,
-            TransactionOperations transactions) {
+            TransactionOperations transactions, DocumentRemover remover) {
         this.readers = readers;
         this.documents = documents;
         this.embeddings = embeddings;
         this.transactions = transactions;
+        this.remover = remover;
     }
 
     /** 在后台线程运行，不在数据库事务里；只有最后写入时开一个短事务。 */
@@ -37,7 +39,7 @@ class IngestionPipeline {
             if (chunks.isEmpty()) {
                 fail(document, "文件里没有可检索的文字");
             } else {
-                new ChunkWriter(documents, embeddings, transactions, document).accept(chunks);
+                new ChunkWriter(documents, embeddings, transactions, remover, document).accept(chunks);
             }
         } catch (DocumentParseException | ModelCallException e) {
             fail(document, e.getMessage());

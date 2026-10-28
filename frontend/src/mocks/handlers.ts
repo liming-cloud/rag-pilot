@@ -21,6 +21,7 @@ const sampleDocuments: Record<number, KnowledgeDocument[]> = {
       chunkCount: 12,
       sizeBytes: 18_432,
       createdAt: "2026-10-26T09:00:00+08:00",
+      replacesDocumentId: null,
     },
     {
       id: 12,
@@ -30,6 +31,7 @@ const sampleDocuments: Record<number, KnowledgeDocument[]> = {
       chunkCount: 0,
       sizeBytes: 40_960,
       createdAt: "2026-10-26T09:05:00+08:00",
+      replacesDocumentId: null,
     },
   ],
 };
@@ -193,14 +195,25 @@ export const handlers = [
     members[Number(params.id)] = (members[Number(params.id)] ?? []).filter((id) => id !== Number(params.userId));
     return new HttpResponse(null, { status: 204 });
   }),
-  // 模拟后台入库：解析中的文档被查询一次之后变成可用。
+  // 模拟后台入库：解析中的文档被查询一次之后变成可用；它若是新版本，旧版本随之删除。
   http.get("/api/knowledge-bases/:id/documents", ({ params }) => {
-    const list = documents[Number(params.id)] ?? [];
+    const id = Number(params.id);
+    const list = documents[id] ?? [];
     const snapshot = list.map((document) => ({ ...document }));
     for (const document of list.filter((candidate) => candidate.status === "PARSING")) {
       Object.assign(document, { status: "READY", chunkCount: pendingChunks.get(document.id) ?? 1 });
+      if (document.replacesDocumentId) {
+        documents[id] = (documents[id] ?? []).filter((candidate) => candidate.id !== document.replacesDocumentId);
+        document.replacesDocumentId = null;
+      }
     }
     return HttpResponse.json(snapshot);
+  }),
+  http.delete("/api/knowledge-bases/:id/documents/:documentId", ({ params }) => {
+    const id = Number(params.id);
+    const before = documents[id]?.length ?? 0;
+    documents[id] = (documents[id] ?? []).filter((document) => document.id !== Number(params.documentId));
+    return documents[id].length < before ? new HttpResponse(null, { status: 204 }) : problem(404, "文档不存在");
   }),
   // 与后端一致：只收 PDF、Word、Excel、TXT、Markdown，同名文件视为重复。
   http.post("/api/knowledge-bases/:id/documents", async ({ params, request }) => {
@@ -220,6 +233,7 @@ export const handlers = [
       chunkCount: 0,
       sizeBytes: file.size,
       createdAt: new Date().toISOString(),
+      replacesDocumentId: Number(new URL(request.url).searchParams.get("replaces")) || null,
     };
     list.unshift(created);
     pendingChunks.set(created.id, Math.max(1, Math.ceil(file.size / 1_500)));

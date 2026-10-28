@@ -62,6 +62,66 @@ describe("知识库页", () => {
     expect(await within(screen.getByRole("list", { name: "文档" })).findByText("退换货.txt")).toBeInTheDocument();
   });
 
+  it("删除文档要先确认，确认后从列表消失", async () => {
+    renderPage();
+    const documents = await screen.findByRole("list", { name: "文档" });
+
+    fireEvent.click(within(documents).getByRole("button", { name: "删除 临期与报损管理.md" }));
+    expect(within(documents).getByText("临期与报损管理.md")).toBeInTheDocument();
+    fireEvent.click(within(documents).getByRole("button", { name: "确认删除" }));
+
+    await vi.waitFor(() => expect(within(documents).queryByText("临期与报损管理.md")).not.toBeInTheDocument());
+  });
+
+  it("上传新版本：先标出替换哪份，处理完后旧版本消失", async () => {
+    renderPage();
+    const documents = await screen.findByRole("list", { name: "文档" });
+
+    fireEvent.change(within(documents).getByLabelText("上传新版本 临期与报损管理.md"), {
+      target: { files: [new File(["# 临期\n\n剩余三分之一时打五折。"], "临期与报损管理-2026版.md")] },
+    });
+
+    const row = (await within(documents).findByText("临期与报损管理-2026版.md")).closest("li")!;
+    expect(within(row).getByText("替换《临期与报损管理.md》")).toBeInTheDocument();
+    await vi.waitFor(() => expect(within(documents).queryByText("临期与报损管理.md")).not.toBeInTheDocument(), {
+      timeout: 3000,
+    });
+    expect(within(row).getByText("可用")).toBeInTheDocument();
+  });
+
+  it("新版本解析失败时提示旧版本已保留", async () => {
+    server.use(
+      http.get("/api/knowledge-bases/:id/documents", () =>
+        HttpResponse.json([
+          {
+            id: 21,
+            filename: "收银规范-新版.txt",
+            status: "FAILED",
+            error: "文件不是 UTF-8 编码",
+            chunkCount: 0,
+            sizeBytes: 1024,
+            createdAt: null,
+            replacesDocumentId: 20,
+          },
+          {
+            id: 20,
+            filename: "收银规范.txt",
+            status: "READY",
+            error: null,
+            chunkCount: 3,
+            sizeBytes: 2048,
+            createdAt: null,
+            replacesDocumentId: null,
+          },
+        ]),
+      ),
+    );
+    renderPage();
+
+    const row = (await screen.findByText("收银规范-新版.txt")).closest("li")!;
+    expect(within(row).getByText(/旧版本《收银规范\.txt》已保留/)).toBeInTheDocument();
+  });
+
   it("新建知识库后选中它", async () => {
     renderPage();
     await screen.findByRole("button", { name: "门店运营知识库" });

@@ -50,6 +50,15 @@ class LocalFileStorage implements FileStorage {
         }
     }
 
+    @Override
+    public void delete(TenantId tenantId, String sha256) {
+        try {
+            Files.deleteIfExists(pathOf(tenantId, sha256));
+        } catch (IOException e) {
+            throw new UncheckedIOException("删除上传文件失败", e);
+        }
+    }
+
     private Path pathOf(TenantId tenantId, String sha256) {
         if (!sha256.matches("[0-9a-f]{64}")) {
             throw new IllegalArgumentException("文件摘要格式不正确");

@@ -38,13 +38,15 @@ public class DocumentIngestionService {
     private final DocumentRepository documents;
     private final FileStorage storage;
     private final ApplicationEventPublisher events;
+    private final DocumentRemover remover;
 
     DocumentIngestionService(KnowledgeBaseService knowledgeBases, DocumentRepository documents,
-            FileStorage storage, ApplicationEventPublisher events) {
+            FileStorage storage, ApplicationEventPublisher events, DocumentRemover remover) {
         this.knowledgeBases = knowledgeBases;
         this.documents = documents;
         this.storage = storage;
         this.events = events;
+        this.remover = remover;
     }
 
     /**
@@ -53,7 +55,22 @@ public class DocumentIngestionService {
      */
     @Transactional
     public Document ingest(TenantId tenantId, long knowledgeBaseId, String filename, byte[] content) {
+        return ingest(tenantId, knowledgeBaseId, filename, content, null);
+    }
+
+    /**
+     * 上传一份文档；{@code replacesDocumentId} 不为空时作为该文档的新版本，解析成功后替换它，失败时旧版本保留。
+     *
+     * @throws KnowledgeException 要替换的文档不在这个知识库里时为 NOT_FOUND
+     */
+    @Transactional
+    public Document ingest(TenantId tenantId, long knowledgeBaseId, String filename, byte[] content,
+            Long replacesDocumentId) {
         var knowledgeBase = knowledgeBases.get(tenantId, knowledgeBaseId);
+        if (replacesDocumentId != null && documents.find(tenantId, replacesDocumentId)
+                .filter(old -> old.knowledgeBaseId() == knowledgeBaseId).isEmpty()) {
+            throw new KnowledgeException(KnowledgeException.Reason.NOT_FOUND, "要替换的文档不存在");
+        }
         var mediaType = mediaTypeOf(filename);
         if (content.length == 0) {
             throw new KnowledgeException(KnowledgeException.Reason.INVALID, "文件是空的");
@@ -67,12 +84,28 @@ public class DocumentIngestionService {
         }
 
         storage.store(tenantId, sha256, content);
-        var document = Document.received(tenantId, knowledgeBase.id(), filename, mediaType, sha256, content.length);
+        var document = Document.received(tenantId, knowledgeBase.id(), filename, mediaType, sha256, content.length,
+                replacesDocumentId);
         documents.save(document);
 
         // 解析、分块、向量化在事务提交后由后台完成，上传请求只返回“解析中”的文档。
         events.publishEvent(new DocumentReceived(tenantId, document.id()));
         return document;
+    }
+
+    /**
+     * 删除文档及其分块；正在解析的文档删除后，后台处理结束时不会把它写回来。
+     *
+     * @throws KnowledgeException 文档不在这个知识库里时为 NOT_FOUND
+     */
+    @Transactional
+    public void delete(TenantId tenantId, long knowledgeBaseId, long documentId) {
+        knowledgeBases.get(tenantId, knowledgeBaseId);
+        var inKnowledgeBase = documents.find(tenantId, documentId)
+                .filter(document -> document.knowledgeBaseId() == knowledgeBaseId).isPresent();
+        if (!inKnowledgeBase || !remover.remove(tenantId, documentId)) {
+            throw new KnowledgeException(KnowledgeException.Reason.NOT_FOUND, "文档不存在");
+        }
     }
 
     @Transactional(readOnly = true)

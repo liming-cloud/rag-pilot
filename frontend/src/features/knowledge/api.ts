@@ -12,6 +12,8 @@ export type KnowledgeDocument = {
   chunkCount: number;
   sizeBytes: number;
   createdAt: string | null;
+  /** 这份文档是哪份文档的新版本；替换完成后旧版本被删，这里变回 null。 */
+  replacesDocumentId: number | null;
 };
 
 export async function fetchKnowledgeBases(): Promise<KnowledgeBase[]> {
@@ -46,9 +48,27 @@ export async function setMember(knowledgeBaseId: number, userId: number, granted
 }
 
 /** 后端同步完成解析和入库，返回的文档状态是 READY 或 FAILED（附原因）。 */
-export async function uploadDocument(knowledgeBaseId: number, file: File): Promise<KnowledgeDocument> {
+export async function uploadDocument(
+  knowledgeBaseId: number,
+  file: File,
+  replacesDocumentId?: number,
+): Promise<KnowledgeDocument> {
   const body = new FormData();
   body.append("file", file);
-  const response = await authFetch(`/api/knowledge-bases/${knowledgeBaseId}/documents`, { method: "POST", body });
+  const query = replacesDocumentId ? `?replaces=${replacesDocumentId}` : "";
+  const response = await authFetch(`/api/knowledge-bases/${knowledgeBaseId}/documents${query}`, {
+    method: "POST",
+    body,
+  });
   return json(response, "上传失败");
+}
+
+/** 删除文档及其分块，之后不会再被检索到。 */
+export async function deleteDocument(knowledgeBaseId: number, documentId: number): Promise<void> {
+  const response = await authFetch(`/api/knowledge-bases/${knowledgeBaseId}/documents/${documentId}`, {
+    method: "DELETE",
+  });
+  if (!response.ok) {
+    await json(response, "删除失败");
+  }
 }

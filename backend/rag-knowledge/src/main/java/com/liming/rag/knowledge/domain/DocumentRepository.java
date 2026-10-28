@@ -19,6 +19,12 @@ public interface DocumentRepository {
 
     Optional<Document> find(TenantId tenantId, long id);
 
+    /** 删除文档，分块随之级联删除。返回是否真的删了。 */
+    boolean delete(TenantId tenantId, long id);
+
+    /** 租户里还有没有文档用到这份原始文件（同一文件可能在不同知识库各传一次）。 */
+    boolean existsBySha256(TenantId tenantId, String sha256);
+
     /** 所有租户里还在解析中的文档，应用启动时据此恢复未完成的入库。 */
     List<Document> listParsing();
 }
