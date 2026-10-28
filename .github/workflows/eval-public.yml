@@ -21,9 +21,12 @@ on:
       distractors:
         description: 干扰文档篇数上限
         default: "2000"
+      chat_model:
+        description: 回答模型（也用于低分改写）
+        default: THUDM/GLM-4-9B-0414
       judge_model:
         description: 评判模型（OpenAI 兼容接口上的模型名）
-        default: Qwen/Qwen2.5-72B-Instruct
+        default: Qwen/Qwen2.5-7B-Instruct
       min_relevance:
         description: 拒答门槛（重排相关度）
         default: "0.2"
@@ -80,6 +83,7 @@ jobs:
         env:
           MODEL_API_KEY: ${{ secrets.MODEL_API_KEY }}
           EVAL_DATA_DIR: ${{ runner.temp }}/crud-eval
+          CHAT_MODEL: ${{ inputs.chat_model }}
           EVAL_JUDGE_MODEL: ${{ inputs.judge_model }}
           EVAL_MIN_RELEVANCE: ${{ inputs.min_relevance }}
           RAG_REWRITE_MIN_RELEVANCE: ${{ inputs.rewrite_min_relevance }}

@@ -56,7 +56,7 @@ React 19.2、Vite 8.1、TypeScript 6.0、Vitest 4.1 沿用旧项目验证过的�
 
 ## D-014 重排、生成与拒答（2026-10-26）
 
-重排用硅基流动 `BAAI/bge-reranker-v2-m3`，Spring AI 没有重排抽象，用 JDK HttpClient 调 `/rerank`；对话默认 `deepseek-ai/DeepSeek-V3`（`CHAT_MODEL` 可换）。候选 30 → 重排 → 门槛过滤 → 最多 8 条证据。拒答四道关口：无结果、低于门槛、模型回答 NO_ANSWER、没有有效 [n] 引用。门槛 0.2 是占位值，用评测集校准。先做非流式 `/api/ask`，流式输出随第 3 周问答页一起做。
+重排用硅基流动 `BAAI/bge-reranker-v2-m3`，Spring AI 没有重排抽象，用 JDK HttpClient 调 `/rerank`；对话默认 `deepseek-ai/DeepSeek-V3`（`CHAT_MODEL` 可换，D-025 改为免费模型）。候选 30 → 重排 → 门槛过滤 → 最多 8 条证据。拒答四道关口：无结果、低于门槛、模型回答 NO_ANSWER、没有有效 [n] 引用。门槛 0.2 是占位值，用评测集校准。先做非流式 `/api/ask`，流式输出随第 3 周问答页一起做。
 
 ## D-015 评测集与评测任务（2026-10-26）
 
@@ -99,3 +99,7 @@ React 19.2、Vite 8.1、TypeScript 6.0、Vitest 4.1 沿用旧项目验证过的�
 47 道合成题不足以校准拒答门槛和改写下限，也测不出多篇资料综合回答。加一套开源数据集评测：用 CRUD-RAG 的问答数据（中文新闻，README 标注 Apache 2.0；RGB 是 CC BY-NC-SA，不用于商业项目，不采用），按事件划分抽样，默认单文档 200、双文档 100、三文档 100、应拒答 100 题（拒答题所属事件的新闻全部移出语料），另加约 2000 篇干扰新闻。新闻版权属于原媒体，`scripts/eval/crud_rag.py` 在运行时下载固定提交的数据并转换成 `EVAL_DATA_DIR` 格式，不进仓库；手动运行的 `eval-public` 工作流负责这一步，费用明显高于 `eval`，所以不自动触发。
 
 开源数据只有参考答案、没有关键词，答案对不对交给评判模型：rag-ai 新增 `AnswerJudge`，只在评测里用、不注册为 bean，输出正确 / 部分正确 / 错误和一句理由。评判模型可替换：默认用硅基流动上的通用模型（`EVAL_JUDGE_MODEL`，默认 `Qwen/Qwen2.5-72B-Instruct`，与回答模型 DeepSeek-V3 不同系列，避免自评偏高；原定的 `Pro/zai-org/GLM-4.7` 在硅基流动上返回“Model disabled”，#57 改掉），以后可以把 `EVAL_JUDGE_BASE_URL` 指向自己部署的专用评判模型（如 CompassJudger-2，Apache 2.0，硅基流动没有托管），不改代码。评判本身也会出错，首次运行后抽 30 题人工复核，确认评判可信再用它校准门槛。报告增加“多篇原文全部召回”和答案评判统计；评测语料改成先全部上传再统一等入库完成。
+
+## D-025 试点阶段用硅基流动免费模型（2026-10-28）
+
+试点阶段只用硅基流动的免费模型。嵌入 `BAAI/bge-m3` 和重排 `BAAI/bge-reranker-v2-m3` 本来就免费；默认回答模型由 `deepseek-ai/DeepSeek-V3`（收费）改为 `THUDM/GLM-4-9B-0414`，评测的默认评判模型由 `Qwen/Qwen2.5-72B-Instruct`（收费）改为 `Qwen/Qwen2.5-7B-Instruct`，两者不同系列，避免自评偏高。不用 Qwen3-8B 回答：它默认先输出思考过程，首字延迟更长。9B 回答模型的综合能力弱于 DeepSeek-V3，7B 评判模型也更容易判错，所以开源数据集的结果要先人工抽查再用来校准门槛；需要时用 `CHAT_MODEL`、`EVAL_JUDGE_MODEL` 换回大模型，不改代码。免费额度容易限流，嵌入调用改为遇到 429 和服务端错误时退避重试 3 次（入库在后台进行，不阻塞请求）。

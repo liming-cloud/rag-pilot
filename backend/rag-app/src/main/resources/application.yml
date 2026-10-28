@@ -68,7 +68,7 @@ rag:
       model: ${RERANK_MODEL:BAAI/bge-reranker-v2-m3}
     chat:
       provider: ${RAG_CHAT_PROVIDER:openai}
-      model: ${CHAT_MODEL:deepseek-ai/DeepSeek-V3}
+      model: ${CHAT_MODEL:THUDM/GLM-4-9B-0414}
       temperature: 0.1
       max-tokens: 1024
   answering:
