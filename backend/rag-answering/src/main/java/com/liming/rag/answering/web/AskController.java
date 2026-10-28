@@ -56,6 +56,7 @@ class AskController {
     /**
      * 流式问答（SSE）。事件依次是若干 {@code delta}（{"text": 片段}）和一个 {@code done}（完整的 Answer）；
      * {@code done} 是最终结果，拒答时客户端要用它替换已显示的文字。出错时发 {@code error}（{"status", "detail"}）。
+     * 处理中的状态（如低分时“换个说法再找找…”）发 {@code status}（{"text": 提示}）。
      */
     @PostMapping(path = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     SseEmitter stream(@RequestBody AskRequest request) {
@@ -66,7 +67,8 @@ class AskController {
         STREAMS.execute(() -> {
             try {
                 var answer = answers.ask(tenantId, userId, request.knowledgeBaseIds(), request.question(),
-                        delta -> send(emitter, "delta", Map.of("text", delta)));
+                        delta -> send(emitter, "delta", Map.of("text", delta)),
+                        status -> send(emitter, "status", Map.of("text", status)));
                 send(emitter, "done", log.record(tenantId, userId, request.question(), answer));
                 emitter.complete();
             } catch (IllegalArgumentException e) {

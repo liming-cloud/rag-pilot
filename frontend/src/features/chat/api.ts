@@ -33,10 +33,15 @@ export async function rateAnswer(id: number, rating: "UP" | "DOWN" | null, comme
 }
 
 /**
- * 流式问答：读后端 SSE，每段文字交给 onDelta，返回 done 事件里的最终结果。
+ * 流式问答：读后端 SSE，每段文字交给 onDelta，处理中的状态（如“换个说法再找找…”）交给 onStatus，
+ * 返回 done 事件里的最终结果。
  * 拒答时最终结果和已显示的文字不同，调用方要用它替换。不传知识库，由后端按成员授权决定范围。
  */
-export async function askStream(question: string, onDelta: (text: string) => void): Promise<Answer> {
+export async function askStream(
+  question: string,
+  onDelta: (text: string) => void,
+  onStatus: (text: string) => void = () => {},
+): Promise<Answer> {
   const response = await authFetch("/api/ask/stream", {
     method: "POST",
     headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
@@ -60,6 +65,8 @@ export async function askStream(question: string, onDelta: (text: string) => voi
       const event = parseEvent(block);
       if (event?.name === "delta") {
         onDelta((event.data as { text: string }).text);
+      } else if (event?.name === "status") {
+        onStatus((event.data as { text: string }).text);
       } else if (event?.name === "done") {
         return event.data as Answer;
       } else if (event?.name === "error") {

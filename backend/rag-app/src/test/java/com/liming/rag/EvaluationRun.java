@@ -122,8 +122,7 @@ class EvaluationRun {
                 (String) answer.get("text"),
                 citations.stream().map(citation -> (String) citation.get("documentName")).toList(),
                 answer.get("topRelevance") == null ? null : ((Number) answer.get("topRelevance")).doubleValue(),
-                searchMillis, events.getFirst().atMillis(), done.atMillis(), stages(answer),
-                (String) answer.get("rewrittenQuestion"));
+                searchMillis, events.getFirst().atMillis(), done.atMillis(), stages(answer), rewrite(answer));
     }
 
     /**
@@ -216,6 +215,17 @@ class EvaluationRun {
     /** 没有对应题目时比例是 NaN，显示成“-”。 */
     private static String percent(double value) {
         return Double.isNaN(value) ? "-" : String.format(Locale.ROOT, "%.1f%%", value * 100);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static EvalOutcome.Rewrite rewrite(Map<String, Object> answer) {
+        if (!(answer.get("rewrite") instanceof Map<?, ?> rewrite)) {
+            return null;
+        }
+        var values = (Map<String, Object>) rewrite;
+        return new EvalOutcome.Rewrite((String) values.get("outcome"), (String) values.get("question"),
+                ((Number) values.get("outputChars")).intValue(), millis(values.get("modelMillis")),
+                millis(values.get("retrievalMillis")), millis(values.get("rerankMillis")));
     }
 
     private static Long millis(Object value) {

@@ -13,6 +13,7 @@ import org.springframework.ai.openai.OpenAiChatOptions;
 final class SpringAiChatGateway implements ChatGateway {
 
     private final ChatModel model;
+    private final OpenAiChatOptions options;
 
     SpringAiChatGateway(AiProperties properties) {
         var options = OpenAiChatOptions.builder()
@@ -24,6 +25,7 @@ final class SpringAiChatGateway implements ChatGateway {
                 .timeout(properties.timeout())
                 .maxRetries(0)
                 .build();
+        this.options = options;
         this.model = OpenAiChatModel.builder().options(options).build();
     }
 
@@ -31,6 +33,22 @@ final class SpringAiChatGateway implements ChatGateway {
     public String complete(String systemPrompt, String userMessage) {
         try {
             var response = model.call(prompt(systemPrompt, userMessage));
+            var text = response.getResult().getOutput().getText();
+            return text == null ? "" : text;
+        } catch (RuntimeException e) {
+            throw unavailable(e);
+        }
+    }
+
+    /**
+     * Spring AI 2.0 不会把单次调用的选项和默认选项合并（调用带了选项就只用它），所以从默认选项复制一份再改限制。
+     */
+    @Override
+    public String complete(String systemPrompt, String userMessage, Limits limits) {
+        var limited = options.mutate().maxTokens(limits.maxTokens()).stop(limits.stop()).build();
+        try {
+            var response = model.call(new Prompt(List.of(new SystemMessage(systemPrompt), new UserMessage(userMessage)),
+                    limited));
             var text = response.getResult().getOutput().getText();
             return text == null ? "" : text;
         } catch (RuntimeException e) {

@@ -4,10 +4,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.liming.rag.ai.ChatGateway;
+import com.liming.rag.answering.api.Answer;
 import com.liming.rag.answering.api.Answer.RefusalReason;
 import com.liming.rag.common.TenantId;
 import com.liming.rag.common.UserId;
 import com.liming.rag.knowledge.api.SearchHit;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
@@ -27,7 +29,7 @@ class AnswerServiceTest {
         return new AnswerService(query -> hits, (query, documents) -> scores, (system, user) -> {
             prompts.add(user);
             return reply;
-        }, 30, 8, 0.3, false);
+        }, 30, 8, 0.3, false, 0.03, Duration.ofSeconds(3));
     }
 
     @Test
@@ -122,7 +124,7 @@ class AnswerServiceTest {
             }
         };
         return new AnswerService(query -> List.of(SHELF), (query, documents) -> List.of(score), chat, 30, 8, 0.3,
-                false);
+                false, 0.03, Duration.ofSeconds(3));
     }
 
     /**
@@ -130,10 +132,32 @@ class AnswerServiceTest {
      * 回答时用员工原来的问题，证据来自改写后的检索。
      */
     private AnswerService rewriting(String rewritten, boolean enabled) {
+        return rewriting(rewritten, enabled, 0.05, 0);
+    }
+
+    /** 改写时传给模型的输出上限，用来核对改写调用确实单独限了长度。 */
+    private final List<ChatGateway.Limits> rewriteLimits = new ArrayList<>();
+
+    /**
+     * 改写场景：只有问题里出现“货架”时重排才给高分，原问题得 {@code originalScore}；改写器把口语问题改成规范说法，
+     * 耗时 {@code delayMillis}。回答时用员工原来的问题，证据来自改写后的检索。
+     */
+    private AnswerService rewriting(String rewritten, boolean enabled, double originalScore, long delayMillis) {
         ChatGateway chat = new ChatGateway() {
             @Override
             public String complete(String systemPrompt, String userMessage) {
+                throw new AssertionError("改写应当带输出上限调用");
+            }
+
+            @Override
+            public String complete(String systemPrompt, String userMessage, Limits limits) {
                 prompts.add(userMessage);
+                rewriteLimits.add(limits);
+                try {
+                    Thread.sleep(delayMillis);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
                 return rewritten;
             }
 
@@ -145,7 +169,54 @@ class AnswerServiceTest {
             }
         };
         return new AnswerService(query -> List.of(SHELF),
-                (query, documents) -> List.of(query.contains("货架") ? 0.9 : 0.05), chat, 30, 8, 0.3, enabled);
+                (query, documents) -> List.of(query.contains("货架") ? 0.9 : originalScore), chat, 30, 8, 0.3, enabled,
+                0.03, Duration.ofMillis(300));
+    }
+
+    @Test
+    @DisplayName("改写单独限制输出长度、遇换行停止；分段记下模型改写、重新检索、重新重排的耗时；开始改写时发状态提示")
+    void limitsRewriteAndTracesStages() {
+        var statuses = new ArrayList<String>();
+        var answer = rewriting("青柚气泡水放在哪个货架？", true).ask(TENANT, USER, List.of(), "青柚放哪了", delta -> {
+        }, statuses::add);
+
+        assertThat(rewriteLimits).singleElement().satisfies(limits -> {
+            assertThat(limits.maxTokens()).isEqualTo(64);
+            assertThat(limits.stop()).containsExactly("\n");
+        });
+        assertThat(answer.rewrite().outcome()).isEqualTo(Answer.Rewrite.Outcome.REWRITTEN);
+        assertThat(answer.rewrite().outputChars()).isEqualTo("青柚气泡水放在哪个货架？".length());
+        assertThat(answer.rewrite().modelMillis()).isNotNull();
+        assertThat(answer.rewrite().retrievalMillis()).isNotNull();
+        assertThat(answer.rewrite().rerankMillis()).isNotNull();
+        assertThat(statuses).containsExactly("换个说法再找找…");
+    }
+
+    @Test
+    @DisplayName("改写前最高分低于下限时直接拒答，不调用模型、不发状态提示")
+    void skipsRewriteBelowFloor() {
+        var statuses = new ArrayList<String>();
+        var answer = rewriting("青柚气泡水放在哪个货架？", true, 0.01, 0).ask(TENANT, USER, List.of(), "青柚放哪了",
+                delta -> {
+                }, statuses::add);
+
+        assertThat(answer.refusalReason()).isEqualTo(RefusalReason.LOW_RELEVANCE);
+        assertThat(answer.rewrite().outcome()).isEqualTo(Answer.Rewrite.Outcome.SKIPPED_BELOW_FLOOR);
+        assertThat(answer.rewrittenQuestion()).isNull();
+        assertThat(prompts).isEmpty();
+        assertThat(statuses).isEmpty();
+    }
+
+    @Test
+    @DisplayName("改写超时就放弃，按原方式拒答，不等模型返回")
+    void givesUpWhenRewriteTimesOut() {
+        long start = System.nanoTime();
+        var answer = rewriting("青柚气泡水放在哪个货架？", true, 0.05, 2_000).ask(TENANT, USER, List.of(), "青柚放哪了");
+
+        assertThat((System.nanoTime() - start) / 1_000_000).isLessThan(1_500);
+        assertThat(answer.refusalReason()).isEqualTo(RefusalReason.LOW_RELEVANCE);
+        assertThat(answer.rewrite().outcome()).isEqualTo(Answer.Rewrite.Outcome.TIMED_OUT);
+        assertThat(answer.rewrittenQuestion()).isNull();
     }
 
     @Test
@@ -173,6 +244,7 @@ class AnswerServiceTest {
             var answer = rewriting(invalid, true).ask(TENANT, USER, List.of(), "青柚放哪了");
             assertThat(answer.refusalReason()).isEqualTo(RefusalReason.LOW_RELEVANCE);
             assertThat(answer.rewrittenQuestion()).isNull();
+            assertThat(answer.rewrite().outcome()).isEqualTo(Answer.Rewrite.Outcome.NO_CHANGE);
         }
 
         prompts.clear();

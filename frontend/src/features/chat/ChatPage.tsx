@@ -5,7 +5,7 @@ import { type Answer, askStream } from "./api";
 import { AnswerCard } from "./AnswerCard";
 
 type Turn = { id: number; question: string } & (
-  | { status: "pending" }
+  | { status: "pending"; note?: string }
   | { status: "streaming"; text: string }
   | { status: "done"; answer: Answer }
   | { status: "failed" }
@@ -31,10 +31,14 @@ export function ChatPage() {
     const settle = (next: Turn) => setTurns((current) => current.map((turn) => (turn.id === id ? next : turn)));
     let text = "";
     try {
-      const answer = await askStream(question, (delta) => {
-        text += delta;
-        settle({ id, question, status: "streaming", text });
-      });
+      const answer = await askStream(
+        question,
+        (delta) => {
+          text += delta;
+          settle({ id, question, status: "streaming", text });
+        },
+        (note) => settle({ id, question, status: "pending", note }),
+      );
       settle({ id, question, status: "done", answer });
     } catch {
       settle({ id, question, status: "failed" });
@@ -54,7 +58,7 @@ export function ChatPage() {
             </p>
             {turn.status === "pending" && (
               <p role="status" className="text-sm text-muted-foreground">
-                正在查找资料…
+                {turn.note ?? "正在查找资料…"}
               </p>
             )}
             {turn.status === "streaming" && (
