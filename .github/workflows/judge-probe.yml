@@ -11,13 +11,20 @@ on:
       per_kind:
         description: 每类样本题数
         default: "15"
+  # 临时：分支上对比候选模型，合并前删掉。
+  push:
+    branches: [fix/63-judge]
 
 permissions:
   contents: read
 
 jobs:
   judge-probe:
-    name: judge-probe
+    name: judge-probe (${{ matrix.model }})
+    strategy:
+      fail-fast: false
+      matrix:
+        model: ${{ fromJSON(github.event_name == 'push' && '["Qwen/Qwen2.5-7B-Instruct","THUDM/GLM-4-9B-0414","XingChenAGI/Xing4.0-29B","Qwen/Qwen3-8B"]' || format('["{0}"]', inputs.judge_model)) }}
     runs-on: ubuntu-latest
     timeout-minutes: 40
     env:
@@ -32,7 +39,7 @@ jobs:
           cache: maven
       - name: 生成自检样本
         env:
-          PER_KIND: ${{ inputs.per_kind }}
+          PER_KIND: ${{ inputs.per_kind || '15' }}
         run: |
           mkdir -p "$RUNNER_TEMP/crud-source"
           curl -sSfL -o "$RUNNER_TEMP/crud-source/split_merged.json" \
@@ -44,7 +51,7 @@ jobs:
         env:
           MODEL_API_KEY: ${{ secrets.MODEL_API_KEY }}
           EVAL_JUDGE_PROBE: ${{ runner.temp }}/judge-probe.json
-          EVAL_JUDGE_MODEL: ${{ inputs.judge_model }}
+          EVAL_JUDGE_MODEL: ${{ matrix.model }}
         run: >
           ./mvnw -B -ntp verify -pl backend/rag-ai -am
           -Dtest.groups=eval -Dtest.excludedGroups=none
