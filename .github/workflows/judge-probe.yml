@@ -1,0 +1,51 @@
+name: judge-probe
+
+# 评判自检：用结论事先知道的样本检验评判模型准不准，用来挑选和调整评判模型。约 60 次评判调用。
+# 样本从 CRUD-RAG 运行时生成，不进仓库。
+on:
+  workflow_dispatch:
+    inputs:
+      judge_model:
+        description: 评判模型（OpenAI 兼容接口上的模型名）
+        default: Qwen/Qwen2.5-7B-Instruct
+      per_kind:
+        description: 每类样本题数
+        default: "15"
+
+permissions:
+  contents: read
+
+jobs:
+  judge-probe:
+    name: judge-probe
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      CRUD_RAG_COMMIT: f219391e46944fc838e4fe0f77b2fcde140f75e2
+      CRUD_RAG_SHA256: b199fb281ac526c1c8da7364cad7ea22b7f6fe1d4167e511edbdda8ad3bd943a
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "25"
+          cache: maven
+      - name: 生成自检样本
+        env:
+          PER_KIND: ${{ inputs.per_kind }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/crud-source"
+          curl -sSfL -o "$RUNNER_TEMP/crud-source/split_merged.json" \
+            "https://raw.githubusercontent.com/IAAR-Shanghai/CRUD_RAG/$CRUD_RAG_COMMIT/data/crud_split/split_merged.json"
+          echo "$CRUD_RAG_SHA256  $RUNNER_TEMP/crud-source/split_merged.json" | sha256sum -c -
+          python3 -I scripts/eval/judge_probe.py "$RUNNER_TEMP/crud-source/split_merged.json" \
+            "$RUNNER_TEMP/judge-probe.json" --per-kind "$PER_KIND"
+      - name: 运行自检
+        env:
+          MODEL_API_KEY: ${{ secrets.MODEL_API_KEY }}
+          EVAL_JUDGE_PROBE: ${{ runner.temp }}/judge-probe.json
+          EVAL_JUDGE_MODEL: ${{ inputs.judge_model }}
+        run: >
+          ./mvnw -B -ntp verify -pl backend/rag-ai -am
+          -Dtest.groups=eval -Dtest.excludedGroups=none
+          -Dtest=JudgeProbeRun -Dsurefire.failIfNoSpecifiedTests=false

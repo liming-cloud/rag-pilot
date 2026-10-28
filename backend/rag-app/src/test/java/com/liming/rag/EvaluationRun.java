@@ -156,7 +156,7 @@ class EvaluationRun {
         }
         return AnswerJudge.openAiCompatible(env("EVAL_JUDGE_BASE_URL", env("MODEL_BASE_URL", "https://api.siliconflow.cn/v1")),
                 env("EVAL_JUDGE_API_KEY", System.getenv("MODEL_API_KEY")), env("EVAL_JUDGE_MODEL", DEFAULT_JUDGE_MODEL),
-                Duration.ofSeconds(60));
+                Duration.ofSeconds(120));
     }
 
     /**
