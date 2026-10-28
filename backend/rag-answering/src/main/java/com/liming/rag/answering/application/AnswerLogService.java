@@ -32,17 +32,44 @@ public class AnswerLogService {
      * 管理员查看回答记录，按时间从新到旧。
      *
      * @param filter disliked（被点踩）、refused（答不上来）或 all，不区分大小写
+     * @param includeResolved 是否包含已处理的记录；默认只看待处理的
      * @throws IllegalArgumentException 范围不认识
      */
     @Transactional(readOnly = true)
-    public List<AnswerReview> review(TenantId tenantId, String filter, int limit) {
+    public List<AnswerReview> review(TenantId tenantId, String filter, boolean includeResolved, int limit) {
         AnswerReview.Filter parsed;
         try {
             parsed = AnswerReview.Filter.valueOf(filter == null ? "" : filter.toUpperCase(Locale.ROOT));
         } catch (IllegalArgumentException e) {
             throw new IllegalArgumentException("查看范围只能是 disliked、refused 或 all");
         }
-        return reviews.list(tenantId, parsed, Math.clamp(limit, 1, MAX_REVIEW_LIMIT));
+        return reviews.list(tenantId, parsed, includeResolved, Math.clamp(limit, 1, MAX_REVIEW_LIMIT));
+    }
+
+    /**
+     * 管理员把记录标记为已处理（附处理说明）或重新打开。
+     *
+     * @param status RESOLVED 或 OPEN
+     * @throws NoSuchElementException 记录不存在
+     * @throws IllegalArgumentException 状态不认识，或处理说明太长
+     */
+    @Transactional
+    public void markReview(TenantId tenantId, UserId by, long answerId, String status, String note) {
+        AnswerRecord.ReviewStatus parsed;
+        try {
+            parsed = AnswerRecord.ReviewStatus.valueOf(status == null ? "" : status);
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("处理状态只能是 RESOLVED 或 OPEN");
+        }
+        var record = find(tenantId, answerId);
+        record.review(by, parsed, note);
+        records.saveReview(record);
+    }
+
+    /** 记录里员工原来的问题，供管理员“重新回答”。 */
+    @Transactional(readOnly = true)
+    public String questionOf(TenantId tenantId, long answerId) {
+        return find(tenantId, answerId).question();
     }
 
     /** 记下一次问答，返回带 id 的回答。 */

@@ -38,4 +38,22 @@ class AnswerRecordTest {
         assertThatThrownBy(() -> record.rate(ASKER, AnswerRecord.Rating.DOWN, "很".repeat(501)))
                 .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("500");
     }
+
+    @Test
+    @DisplayName("管理员标记已处理时记下说明和处理人；重新打开时清掉；说明不超过 500 字")
+    void reviews() {
+        var admin = new UserId(1);
+        record.review(admin, AnswerRecord.ReviewStatus.RESOLVED, "  已上传 2026 版收银规范 ");
+        assertThat(record.reviewStatus()).isEqualTo(AnswerRecord.ReviewStatus.RESOLVED);
+        assertThat(record.resolutionNote()).isEqualTo("已上传 2026 版收银规范");
+        assertThat(record.resolvedBy()).isEqualTo(admin);
+
+        record.review(admin, AnswerRecord.ReviewStatus.OPEN, "忽略");
+        assertThat(record.reviewStatus()).isEqualTo(AnswerRecord.ReviewStatus.OPEN);
+        assertThat(record.resolutionNote()).isNull();
+        assertThat(record.resolvedBy()).isNull();
+
+        assertThatThrownBy(() -> record.review(admin, AnswerRecord.ReviewStatus.RESOLVED, "很".repeat(501)))
+                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("500");
+    }
 }
