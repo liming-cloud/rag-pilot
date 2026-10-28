@@ -67,8 +67,8 @@ import tools.jackson.databind.json.JsonMapper;
 @Testcontainers
 class EvaluationRun {
 
-    /** 评判默认用硅基流动上的通用模型；换成自己部署的专用评判模型时改 EVAL_JUDGE_BASE_URL 和 EVAL_JUDGE_MODEL。 */
-    private static final String DEFAULT_JUDGE_MODEL = "Qwen/Qwen2.5-72B-Instruct";
+    /** 评判默认用硅基流动上的免费模型，与回答模型不同系列；换成自己部署的专用评判模型时改 EVAL_JUDGE_BASE_URL 和 EVAL_JUDGE_MODEL。 */
+    private static final String DEFAULT_JUDGE_MODEL = "Qwen/Qwen2.5-7B-Instruct";
 
     private static final ParameterizedTypeReference<List<Map<String, Object>>> DOCUMENTS =
             new ParameterizedTypeReference<>() {

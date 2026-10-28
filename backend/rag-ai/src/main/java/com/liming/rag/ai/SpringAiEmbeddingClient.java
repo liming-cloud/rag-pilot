@@ -9,9 +9,12 @@ import org.springframework.ai.openai.OpenAiEmbeddingOptions;
 /**
  * 通过 Spring AI 调用 OpenAI 兼容的嵌入接口（默认硅基流动 BAAI/bge-m3）。
  *
- * <p>不重试：入库失败时文档标记为失败并给出原因，由管理员重试，避免在请求里长时间阻塞。
+ * <p>入库在后台进行，不阻塞请求，所以遇到限流（429）和服务端错误时按退避重试 {@value #MAX_RETRIES} 次；
+ * 仍失败时文档标记为失败并给出原因，由管理员重新上传。
  */
 final class SpringAiEmbeddingClient implements EmbeddingClient {
+
+    static final int MAX_RETRIES = 3;
 
     private final EmbeddingModel model;
     private final int batchSize;
@@ -22,7 +25,7 @@ final class SpringAiEmbeddingClient implements EmbeddingClient {
                 .apiKey(properties.requireApiKey())
                 .model(properties.embedding().model())
                 .timeout(properties.timeout())
-                .maxRetries(0)
+                .maxRetries(MAX_RETRIES)
                 .build();
         this.model = OpenAiEmbeddingModel.builder().options(options).build();
         this.batchSize = Math.max(1, properties.embedding().batchSize());

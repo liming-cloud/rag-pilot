@@ -33,7 +33,7 @@ MODEL_API_KEY=... EVAL_DATA_DIR=/tmp/crud-eval ./mvnw verify -pl backend/rag-app
 
 题目格式：`expectedDocuments` 列出原文所在的文档（任一篇进前 10 算召回，全部进前 10 另计“多篇原文全部召回”），`referenceAnswer` 是参考答案。带参考答案的题，回答交给评判模型对照判断为正确、部分正确或错误：
 
-- `EVAL_JUDGE_MODEL`：评判模型，默认 `Qwen/Qwen2.5-72B-Instruct`。
+- `EVAL_JUDGE_MODEL`：评判模型，默认 `Qwen/Qwen2.5-7B-Instruct`。
 - `EVAL_JUDGE_BASE_URL`：OpenAI 兼容接口地址，默认同 `MODEL_BASE_URL`；可以指向自己部署的专用评判模型。
 - `EVAL_JUDGE_API_KEY`：默认用 `MODEL_API_KEY`。
 - `EVAL_JUDGE_PROVIDER=none`：不评判，离线试跑时用。

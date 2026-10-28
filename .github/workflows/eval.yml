@@ -8,6 +8,9 @@ on:
       min_relevance:
         description: 拒答门槛（重排相关度）
         default: "0.2"
+      chat_model:
+        description: 回答模型（也用于低分改写），不填用 application.yml 的默认值
+        default: ""
   pull_request:
     paths:
       - backend/rag-ai/**
@@ -51,6 +54,7 @@ jobs:
         env:
           MODEL_API_KEY: ${{ secrets.MODEL_API_KEY }}
           EVAL_MIN_RELEVANCE: ${{ inputs.min_relevance || '0.2' }}
+          CHAT_MODEL: ${{ inputs.chat_model || 'deepseek-ai/DeepSeek-V3' }}
         run: >
           ./mvnw -B -ntp verify -pl backend/rag-app -am
           -Dtest.groups=eval -Dtest.excludedGroups=none
