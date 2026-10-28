@@ -12,10 +12,32 @@ import java.util.List;
  * @param askMillis 流式问答从发出请求到收到最终结果的毫秒数
  * @param stages 服务端各阶段耗时；没有时为 null
  * @param rewrite 低分时的改写情况，没有走到改写时为 null
+ * @param judgement 评判模型对回答的判断；没有参考答案、拒答了或没开评判时为 null
  */
 public record EvalOutcome(EvalCase evalCase, List<Retrieved> retrieved, boolean refused, String refusalReason,
         String answer, List<String> citedDocuments, Double topRelevance, long searchMillis, long firstEventMillis,
-        long askMillis, Stages stages, Rewrite rewrite) {
+        long askMillis, Stages stages, Rewrite rewrite, Judgement judgement) {
+
+    /**
+     * 评判模型对照参考答案给出的结论。
+     *
+     * @param verdict CORRECT、PARTIAL 或 WRONG
+     */
+    public record Judgement(String verdict, String reason) {
+    }
+
+    public EvalOutcome(EvalCase evalCase, List<Retrieved> retrieved, boolean refused, String refusalReason,
+            String answer, List<String> citedDocuments, Double topRelevance, long searchMillis, long firstEventMillis,
+            long askMillis, Stages stages, Rewrite rewrite) {
+        this(evalCase, retrieved, refused, refusalReason, answer, citedDocuments, topRelevance, searchMillis,
+                firstEventMillis, askMillis, stages, rewrite, null);
+    }
+
+    /** 补上评判结果。 */
+    public EvalOutcome withJudgement(Judgement judgement) {
+        return new EvalOutcome(evalCase, retrieved, refused, refusalReason, answer, citedDocuments, topRelevance,
+                searchMillis, firstEventMillis, askMillis, stages, rewrite, judgement);
+    }
 
     /**
      * 低分改写的情况，与服务端 Answer.Rewrite 对应。
@@ -45,14 +67,14 @@ public record EvalOutcome(EvalCase evalCase, List<Retrieved> retrieved, boolean 
             String answer, List<String> citedDocuments, Double topRelevance, long searchMillis, long firstEventMillis,
             long askMillis, Stages stages) {
         this(evalCase, retrieved, refused, refusalReason, answer, citedDocuments, topRelevance, searchMillis,
-                firstEventMillis, askMillis, stages, null);
+                firstEventMillis, askMillis, stages, null, null);
     }
 
     public EvalOutcome(EvalCase evalCase, List<Retrieved> retrieved, boolean refused, String refusalReason,
             String answer, List<String> citedDocuments, Double topRelevance, long searchMillis, long firstEventMillis,
             long askMillis) {
         this(evalCase, retrieved, refused, refusalReason, answer, citedDocuments, topRelevance, searchMillis,
-                firstEventMillis, askMillis, null, null);
+                firstEventMillis, askMillis, null, null, null);
     }
 
     public record Retrieved(String document, String content) {
