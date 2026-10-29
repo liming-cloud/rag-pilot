@@ -4,11 +4,14 @@ import static com.tngtech.archunit.base.DescribedPredicate.describe;
 import static com.tngtech.archunit.core.domain.properties.HasName.Predicates.nameMatching;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
+import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noMethods;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.liming.rag.archfixture.FixtureDO;
 import com.liming.rag.archfixture.answering.CallsChatModelDirectly;
 import com.liming.rag.archfixture.application.UsesQueryWrapper;
+import com.liming.rag.archfixture.infrastructure.AnnotatedSqlMapper;
+import com.liming.rag.archfixture.infrastructure.RawSqlWrapper;
 import com.liming.rag.archfixture.web.ChecksRoleByHand;
 import com.liming.rag.knowledge.infrastructure.persistence.BypassesSearchFilter;
 import com.tngtech.archunit.core.domain.JavaClasses;
@@ -60,8 +63,27 @@ class ArchitectureRulesTest {
                             && call.getName().matches("check.*|has.*|isLogin")))
             .as("登录和角色校验只用 Sa-Token 注解，不在代码里调用 StpUtil.check*/has*/isLogin");
 
+    static final ArchRule NO_SQL_ANNOTATIONS = noMethods()
+            .should().beAnnotatedWith("org.apache.ibatis.annotations.Select")
+            .orShould().beAnnotatedWith("org.apache.ibatis.annotations.Update")
+            .orShould().beAnnotatedWith("org.apache.ibatis.annotations.Insert")
+            .orShould().beAnnotatedWith("org.apache.ibatis.annotations.Delete")
+            .orShould().beAnnotatedWith("org.apache.ibatis.annotations.SelectProvider")
+            .orShould().beAnnotatedWith("org.apache.ibatis.annotations.UpdateProvider")
+            .orShould().beAnnotatedWith("org.apache.ibatis.annotations.InsertProvider")
+            .orShould().beAnnotatedWith("org.apache.ibatis.annotations.DeleteProvider")
+            .as("SQL 只写在 Mapper XML（mapper/<模块名>/）里，不用 @Select 等注解");
+
+    static final ArchRule NO_RAW_SQL_IN_WRAPPER = noClasses()
+            .should().callMethodWhere(describe("MyBatis-Plus 条件构造器的原始 SQL 方法",
+                    (JavaMethodCall call) -> call.getTargetOwner().getPackageName()
+                            .startsWith("com.baomidou.mybatisplus.core.conditions")
+                            && call.getName().matches("apply|last|inSql|notInSql|exists|notExists|having")))
+            .as("条件构造器只用类型安全的条件，不拼原始 SQL（apply、last、inSql 等）");
+
     static final List<ArchRule> RULES = List.of(MYBATIS_ONLY_IN_INFRASTRUCTURE, DO_ONLY_IN_INFRASTRUCTURE,
-            MODEL_CALLS_ONLY_IN_RAG_AI, SEARCH_FILTER_IN_ONE_PLACE, LOGIN_AND_ROLE_ONLY_BY_ANNOTATION);
+            MODEL_CALLS_ONLY_IN_RAG_AI, SEARCH_FILTER_IN_ONE_PLACE, LOGIN_AND_ROLE_ONLY_BY_ANNOTATION,
+            NO_SQL_ANNOTATIONS, NO_RAW_SQL_IN_WRAPPER);
 
     @Test
     @DisplayName("生产代码遵守全部架构规则")
@@ -81,9 +103,11 @@ class ArchitectureRulesTest {
         assertViolates(MODEL_CALLS_ONLY_IN_RAG_AI, CallsChatModelDirectly.class);
         assertViolates(SEARCH_FILTER_IN_ONE_PLACE, BypassesSearchFilter.class);
         assertViolates(LOGIN_AND_ROLE_ONLY_BY_ANNOTATION, ChecksRoleByHand.class);
+        assertViolates(NO_SQL_ANNOTATIONS, AnnotatedSqlMapper.class);
+        assertViolates(NO_RAW_SQL_IN_WRAPPER, RawSqlWrapper.class);
     }
 
-    private static void assertViolates(ArchRule rule, Class<?> sample) {
+    static void assertViolates(ArchRule rule, Class<?> sample) {
         JavaClasses classes = new ClassFileImporter().importClasses(sample);
         assertThat(rule.evaluate(classes).hasViolation())
                 .as("%s 应被规则“%s”拦下", sample.getSimpleName(), rule.getDescription())

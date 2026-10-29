@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.liming.rag.answering.infrastructure.persistence.AnswerRecordMapper">
+
+    <!-- INSERT … RETURNING 要用 select 取回主键；每次都执行，不用一级缓存。 -->
+    <select id="insert" resultType="long" flushCache="true" useCache="false">
+        INSERT INTO answer_record (tenant_id, user_id, question, answer_text, refused, refusal_reason, top_relevance,
+                                   rewritten_question)
+        VALUES (#{tenantId}, #{userId}, #{question}, #{answerText}, #{refused}, #{refusalReason}, #{topRelevance},
+                #{rewrittenQuestion})
+        RETURNING id
+    </select>
+
+    <insert id="insertCitation">
+        INSERT INTO answer_citation (answer_id, citation_index, chunk_id, document_id, document_name, heading_path)
+        VALUES (#{answerId}, #{index}, #{chunkId}, #{documentId}, #{documentName}, #{headingPath})
+    </insert>
+
+    <select id="find" resultType="map">
+        SELECT id, tenant_id, user_id, question, rating, feedback_comment, review_status, resolution_note
+        FROM answer_record
+        WHERE tenant_id = #{tenantId} AND id = #{id}
+    </select>
+
+    <select id="list" resultType="map">
+        SELECT r.id, r.user_id, r.question, r.answer_text, r.refused, r.refusal_reason, r.top_relevance,
+               r.rating, r.feedback_comment, r.created_at, r.rewritten_question, r.review_status,
+               r.resolution_note, r.resolved_at,
+               (SELECT string_agg(DISTINCT c.document_name, chr(31)) FROM answer_citation c
+                 WHERE c.answer_id = r.id) AS cited_documents
+        FROM answer_record r
+        WHERE r.tenant_id = #{tenantId}
+        <if test="filter == 'DISLIKED'">AND r.rating = 'DOWN'</if>
+        <if test="filter == 'REFUSED'">AND r.refused</if>
+        <if test="!includeResolved">AND r.review_status = 'OPEN'</if>
+        ORDER BY r.created_at DESC, r.id DESC
+        LIMIT #{limit}
+    </select>
+
+    <select id="totals" resultType="map">
+        <![CDATA[
+        SELECT count(*) AS questions, count(DISTINCT user_id) AS askers,
+               count(*) FILTER (WHERE refused) AS refused,
+               count(*) FILTER (WHERE NOT refused AND rating IS NOT NULL) AS rated,
+               count(*) FILTER (WHERE NOT refused AND rating = 'UP') AS liked,
+               count(*) FILTER (WHERE NOT refused AND rating = 'DOWN') AS disliked,
+               count(*) FILTER (WHERE review_status = 'OPEN' AND (refused OR rating = 'DOWN')) AS open_reviews
+        FROM answer_record
+        WHERE tenant_id = #{tenantId} AND created_at >= #{from} AND created_at < #{to}
+        ]]>
+    </select>
+
+    <select id="daily" resultType="map">
+        <![CDATA[
+        SELECT CAST(created_at AT TIME ZONE #{zone} AS date) AS day, count(*) AS questions,
+               count(*) FILTER (WHERE refused) AS refused,
+               count(*) FILTER (WHERE NOT refused AND rating = 'DOWN') AS disliked
+        FROM answer_record
+        WHERE tenant_id = #{tenantId} AND created_at >= #{from} AND created_at < #{to}
+        GROUP BY day
+        ]]>
+    </select>
+
+    <select id="refusalReasons" resultType="map">
+        <![CDATA[
+        SELECT refusal_reason AS label, count(*) AS count
+        FROM answer_record
+        WHERE tenant_id = #{tenantId} AND created_at >= #{from} AND created_at < #{to} AND refused
+        GROUP BY refusal_reason
+        ORDER BY count DESC, refusal_reason
+        ]]>
+    </select>
+
+    <select id="topRefusedQuestions" resultType="map">
+        <![CDATA[
+        SELECT question AS label, count(*) AS count
+        FROM answer_record
+        WHERE tenant_id = #{tenantId} AND created_at >= #{from} AND created_at < #{to} AND refused
+        GROUP BY question
+        ORDER BY count DESC, max(created_at) DESC
+        LIMIT #{limit}
+        ]]>
+    </select>
+
+    <select id="topCitedDocuments" resultType="map">
+        <![CDATA[
+        SELECT c.document_name AS label, count(DISTINCT c.answer_id) AS count
+        FROM answer_citation c
+        JOIN answer_record r ON r.id = c.answer_id
+        WHERE r.tenant_id = #{tenantId} AND r.created_at >= #{from} AND r.created_at < #{to}
+        GROUP BY c.document_name
+        ORDER BY count DESC, c.document_name
+        LIMIT #{limit}
+        ]]>
+    </select>
+
+    <update id="updateReview">
+        UPDATE answer_record
+        SET review_status = #{status}, resolution_note = #{note}, resolved_by = #{resolvedBy},
+            resolved_at = CASE WHEN #{status} = 'RESOLVED' THEN now() ELSE NULL END
+        WHERE tenant_id = #{tenantId} AND id = #{id}
+    </update>
+
+    <update id="updateFeedback">
+        UPDATE answer_record
+        SET rating = #{rating}, feedback_comment = #{comment},
+            rated_at = CASE WHEN CAST(#{rating} AS varchar) IS NULL THEN NULL ELSE now() END
+        WHERE tenant_id = #{tenantId} AND id = #{id}
+    </update>
+</mapper>
