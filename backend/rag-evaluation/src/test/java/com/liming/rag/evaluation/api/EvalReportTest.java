@@ -130,4 +130,18 @@ class EvalReportTest {
         assertThat(EvalReport.p95(List.of(5L, 1L, 3L))).isEqualTo(5);
         assertThat(EvalReport.p95(List.of())).isZero();
     }
+
+    @Test
+    @DisplayName("拒答时写出被替换掉的模型原文，用来判断没带引用的原因")
+    void reportsDiscardedReply() {
+        var uncited = new EvalOutcome(CASH, List.of(new Retrieved("收银.md", "备用金 800 元")), true, "UNCITED",
+                "知识库里没有找到能回答这个问题的可靠依据", List.of(), 0.99, 100, 400, 1000)
+                .withDiscardedReply("开班备用金为 800 元（资料1）。\n|其中硬币不少于 100 元");
+
+        var report = EvalReport.of(List.of(uncited), Set.of());
+
+        assertThat(report.failures())
+                .containsExactly("备用金：误拒（UNCITED），模型原文：开班备用金为 800 元（资料1）。 ／其中硬币不少于 100 元");
+        assertThat(report.toMarkdown()).contains("| 被替换的原文：开班备用金为 800 元（资料1）。 ／其中硬币不少于 100 元 |");
+    }
 }

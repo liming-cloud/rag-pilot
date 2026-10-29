@@ -13,10 +13,11 @@ import java.util.List;
  * @param stages 服务端各阶段耗时；没有时为 null
  * @param rewrite 低分时的改写情况，没有走到改写时为 null
  * @param judgement 评判模型对回答的判断；没有参考答案、拒答了或没开评判时为 null
+ * @param discardedReply 拒答时模型已流式输出、随后被拒答替换掉的原文；没有时为 null
  */
 public record EvalOutcome(EvalCase evalCase, List<Retrieved> retrieved, boolean refused, String refusalReason,
         String answer, List<String> citedDocuments, Double topRelevance, long searchMillis, long firstEventMillis,
-        long askMillis, Stages stages, Rewrite rewrite, Judgement judgement) {
+        long askMillis, Stages stages, Rewrite rewrite, Judgement judgement, String discardedReply) {
 
     /**
      * 评判模型对照参考答案给出的结论。
@@ -33,10 +34,23 @@ public record EvalOutcome(EvalCase evalCase, List<Retrieved> retrieved, boolean 
                 firstEventMillis, askMillis, stages, rewrite, null);
     }
 
+    public EvalOutcome(EvalCase evalCase, List<Retrieved> retrieved, boolean refused, String refusalReason,
+            String answer, List<String> citedDocuments, Double topRelevance, long searchMillis, long firstEventMillis,
+            long askMillis, Stages stages, Rewrite rewrite, Judgement judgement) {
+        this(evalCase, retrieved, refused, refusalReason, answer, citedDocuments, topRelevance, searchMillis,
+                firstEventMillis, askMillis, stages, rewrite, judgement, null);
+    }
+
     /** 补上评判结果。 */
     public EvalOutcome withJudgement(Judgement judgement) {
         return new EvalOutcome(evalCase, retrieved, refused, refusalReason, answer, citedDocuments, topRelevance,
-                searchMillis, firstEventMillis, askMillis, stages, rewrite, judgement);
+                searchMillis, firstEventMillis, askMillis, stages, rewrite, judgement, discardedReply);
+    }
+
+    /** 补上被拒答替换掉的模型原文。 */
+    public EvalOutcome withDiscardedReply(String discardedReply) {
+        return new EvalOutcome(evalCase, retrieved, refused, refusalReason, answer, citedDocuments, topRelevance,
+                searchMillis, firstEventMillis, askMillis, stages, rewrite, judgement, discardedReply);
     }
 
     /**

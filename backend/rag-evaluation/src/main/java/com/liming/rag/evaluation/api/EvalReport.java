@@ -44,7 +44,8 @@ public record EvalReport(int cases, double recallAt10, double citationAccuracy, 
                 failures.add(o.evalCase().id() + "：前 10 条没有召回预期分块");
             }
             if (o.refused()) {
-                failures.add(o.evalCase().id() + "：误拒（" + o.refusalReason() + "）");
+                failures.add(o.evalCase().id() + "：误拒（" + o.refusalReason() + "）"
+                        + (o.discardedReply() == null ? "" : "，模型原文：" + cell(o.discardedReply())));
             } else if (!citedCorrectly.test(o)) {
                 failures.add(o.evalCase().id() + "：引用或答案不对，引用了 " + o.citedDocuments());
             }
@@ -205,10 +206,11 @@ public record EvalReport(int cases, double recallAt10, double citationAccuracy, 
         for (var o : outcomes) {
             row(text, o.evalCase().id(), o.refused() ? "是（" + o.refusalReason() + "）" : "否",
                     o.topRelevance() == null ? "-" : fmt(o.topRelevance()),
-                    o.rewrittenQuestion() == null ? "" : o.rewrittenQuestion().replace("|", "／"),
+                    o.rewrittenQuestion() == null ? "" : cell(o.rewrittenQuestion()),
                     String.join("、", o.citedDocuments()),
                     o.judgement() == null ? "" : verdictLabel(o.judgement().verdict()),
-                    o.answer() == null ? "" : o.answer().replace("\n", " ").replace("|", "／"));
+                    o.discardedReply() != null ? "被替换的原文：" + cell(o.discardedReply())
+                            : o.answer() == null ? "" : cell(o.answer()));
         }
         return text.append("\n</details>\n").toString();
     }
@@ -244,6 +246,11 @@ public record EvalReport(int cases, double recallAt10, double citationAccuracy, 
 
     private static void row(StringBuilder text, String... cells) {
         text.append("| ").append(String.join(" | ", cells)).append(" |\n");
+    }
+
+    /** 放进表格单元格或单行列表：换行变空格，竖线换成全角。 */
+    private static String cell(String text) {
+        return text.replace("\n", " ").replace("|", "／");
     }
 
     private static String percent(double value) {
