@@ -28,7 +28,7 @@
         <spring-boot.version>4.1.0</spring-boot.version>
         <spring-ai.version>2.0.0</spring-ai.version>
         <spring-modulith.version>2.1.2</spring-modulith.version>
-        <mybatis-plus.version>3.5.17</mybatis-plus.version>
+        <mybatis-plus.version>3.5.18</mybatis-plus.version>
         <sa-token.version>1.45.0</sa-token.version>
         <pdfbox.version>3.0.7</pdfbox.version>
         <poi.version>5.5.1</poi.version>
