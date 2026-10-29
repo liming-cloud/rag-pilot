@@ -161,4 +161,20 @@ class EvalReportTest {
                 .containsExactly("备用金：误拒（UNCITED），模型原文：开班备用金为 800 元（资料1）。 ／其中硬币不少于 100 元");
         assertThat(report.toMarkdown()).contains("| 被替换的原文：开班备用金为 800 元（资料1）。 ／其中硬币不少于 100 元 |");
     }
+
+    @Test
+    @DisplayName("模型服务不可用的题不计入指标，在报告里列出；超过 5% 时结果不可信")
+    void excludesUnavailableCases() {
+        var answered = new EvalOutcome(SHELF, List.of(new Retrieved("陈列.md", "放在 03 号货架")), false, null,
+                "在 03 号货架[1]", List.of("陈列.md"), 0.9, 100, 400, 1000);
+
+        var report = EvalReport.of(List.of(answered), Set.of(), List.of("备用金"));
+
+        assertThat(report.cases()).isEqualTo(1);
+        assertThat(report.falseRefusalRate()).isZero();
+        assertThat(report.unavailable()).containsExactly("备用金");
+        assertThat(report.credible()).isFalse();
+        assertThat(report.toMarkdown()).contains("模型服务不可用、未计入指标的题 1 道：备用金");
+        assertThat(EvalReport.of(List.of(answered), Set.of()).credible()).isTrue();
+    }
 }

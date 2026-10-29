@@ -113,18 +113,25 @@ class EvaluationRun {
         var reports = new ArrayList<EvalReport>();
         for (int round = 1; round <= roundCount; round++) {
             var outcomes = new ArrayList<EvalOutcome>();
+            var unavailable = new ArrayList<String>();
             for (var evalCase : cases) {
-                outcomes.add(judged(judge, run(store, restricted, staff, evalCase), reports.isEmpty() && outcomes.isEmpty()));
+                var outcome = run(store, restricted, staff, evalCase);
+                if (outcome == null) {
+                    unavailable.add(evalCase.id());
+                    continue;
+                }
+                outcomes.add(judged(judge, outcome, reports.isEmpty() && outcomes.isEmpty()));
                 if (outcomes.size() % 50 == 0) {
                     System.out.printf(Locale.ROOT, "第 %d 轮：已评测 %d / %d 题%n", round, outcomes.size(), cases.size());
                 }
             }
-            reports.add(EvalReport.of(outcomes, restrictedDocuments));
+            reports.add(EvalReport.of(outcomes, restrictedDocuments, unavailable));
         }
         var rounds = EvalRounds.of(reports);
         publish(rounds);
 
         assertThat(rounds.leaks()).as("越权泄漏必须为 0（各轮合计）").isZero();
+        assertThat(reports).as("模型服务不可用的题超过 5%，结果不可信").allMatch(EvalReport::credible);
     }
 
     private EvalOutcome run(long knowledgeBaseId, long restricted, String staff, EvalCase evalCase) {
@@ -133,9 +140,10 @@ class EvaluationRun {
                 knowledgeBaseId, evalCase.question()).getBody();
         long searchMillis = (System.nanoTime() - start) / 1_000_000;
 
-        var events = SseEvents.post(http, "/api/ask/stream",
-                Map.of("question", evalCase.question(), "knowledgeBaseIds", List.of(knowledgeBaseId, restricted)), staff);
-        assertThat(events).as(evalCase.id() + " 流式问答").isNotEmpty();
+        var events = askWithRetry(knowledgeBaseId, restricted, staff, evalCase);
+        if (events == null) {
+            return null;
+        }
         var done = events.getLast();
         assertThat(done.name()).as(evalCase.id() + " 流式问答结果：" + done.data()).isEqualTo("done");
         var json = JsonMapper.builder().build();
@@ -163,6 +171,32 @@ class EvaluationRun {
                 answer.get("topRelevance") == null ? null : ((Number) answer.get("topRelevance")).doubleValue(),
                 searchMillis, events.getFirst().atMillis(), done.atMillis(), stages(answer), rewrite(answer))
                 .withDiscardedReply(refused && !streamed.isEmpty() ? streamed.toString() : null);
+    }
+
+    /** 模型服务不可用（503）时的重试间隔；服务商偶尔成批 503（D-028），隔一会儿通常就恢复。 */
+    private static final List<Duration> RETRY_DELAYS = List.of(Duration.ofSeconds(10), Duration.ofSeconds(30));
+
+    /** 流式问答；模型服务不可用时退避重试，仍不可用返回 null，这道题不计入指标。 */
+    private List<SseEvents.Event> askWithRetry(long knowledgeBaseId, long restricted, String staff, EvalCase evalCase) {
+        for (int attempt = 0; ; attempt++) {
+            var events = SseEvents.post(http, "/api/ask/stream",
+                    Map.of("question", evalCase.question(), "knowledgeBaseIds", List.of(knowledgeBaseId, restricted)), staff);
+            assertThat(events).as(evalCase.id() + " 流式问答").isNotEmpty();
+            var last = events.getLast();
+            if (!"error".equals(last.name()) || !last.data().contains("\"status\":503")) {
+                return events;
+            }
+            if (attempt == RETRY_DELAYS.size()) {
+                System.out.println("::warning title=模型服务不可用::" + evalCase.id() + " 重试 " + attempt + " 次仍失败，不计入指标");
+                return null;
+            }
+            try {
+                Thread.sleep(RETRY_DELAYS.get(attempt));
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException(e);
+            }
+        }
     }
 
     /**

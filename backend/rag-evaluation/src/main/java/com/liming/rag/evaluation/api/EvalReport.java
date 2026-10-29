@@ -26,12 +26,23 @@ import java.util.stream.Collectors;
  * </ul>
  *
  * @param failedCases 未通过的题（id），去重并保持出现顺序；多轮汇总用它区分稳定失败和偶发失败
+ * @param unavailable 重试后模型服务仍不可用、没有结果的题（id），不计入任何指标
  */
 public record EvalReport(int cases, double recallAt10, double citationAccuracy, double refusalAccuracy,
         double falseRefusalRate, int leaks, long searchP95Millis, long firstTokenP95Millis, long askP95Millis, List<String> failures,
-        List<EvalOutcome> outcomes, List<String> failedCases) {
+        List<EvalOutcome> outcomes, List<String> failedCases, List<String> unavailable) {
+
+    /** 服务不可用的题超过这个比例时，这次结果不可信。 */
+    static final double MAX_UNAVAILABLE_SHARE = 0.05;
 
     public static EvalReport of(List<EvalOutcome> outcomes, Set<String> restrictedDocuments) {
+        return of(outcomes, restrictedDocuments, List.of());
+    }
+
+    /**
+     * @param unavailable 模型服务不可用、重试后仍没有结果的题；一道题碰上 503 不该让整次评测作废（#81）
+     */
+    public static EvalReport of(List<EvalOutcome> outcomes, Set<String> restrictedDocuments, List<String> unavailable) {
         var answerable = outcomes.stream().filter(o -> o.evalCase().kind() == Kind.ANSWERABLE).toList();
         var unanswerable = outcomes.stream().filter(o -> o.evalCase().kind() == Kind.UNANSWERABLE).toList();
         var answered = answerable.stream().filter(o -> !o.refused()).toList();
@@ -87,10 +98,17 @@ public record EvalReport(int cases, double recallAt10, double citationAccuracy, 
                 p95(outcomes.stream().map(EvalOutcome::askMillis).toList()),
                 List.copyOf(failures),
                 List.copyOf(outcomes),
-                List.copyOf(failedCases));
+                List.copyOf(failedCases),
+                List.copyOf(unavailable));
     }
 
     private static final String CORRECT = "CORRECT";
+
+    /** 服务不可用的题不超过 5% 时，结果才可信。 */
+    public boolean credible() {
+        int total = cases + unavailable.size();
+        return total > 0 && (double) unavailable.size() / total <= MAX_UNAVAILABLE_SHARE;
+    }
     /** 首字延迟的参考线（D-030 起不作为验收硬指标），超过的题逐个列出。 */
     private static final long SLOW_FIRST_TOKEN_MILLIS = 3000;
 
@@ -142,6 +160,11 @@ public record EvalReport(int cases, double recallAt10, double citationAccuracy, 
     public String toMarkdown() {
         var text = new StringBuilder("## 评测结果\n\n");
         text.append("共 ").append(cases).append(" 题。目标值见 README。\n\n");
+        if (!unavailable.isEmpty()) {
+            text.append("模型服务不可用、未计入指标的题 ").append(unavailable.size()).append(" 道：")
+                    .append(String.join("、", unavailable))
+                    .append(credible() ? "。\n\n" : "。超过 5%，这次结果不可信。\n\n");
+        }
         text.append("| 指标 | 结果 | 目标 |\n| --- | --- | --- |\n");
         row(text, "检索召回 Recall@10", percent(recallAt10), "≥ 85%");
         row(text, "引用正确率", percent(citationAccuracy), "≥ 90%");
