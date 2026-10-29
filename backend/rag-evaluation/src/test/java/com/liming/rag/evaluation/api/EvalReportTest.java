@@ -132,6 +132,23 @@ class EvalReportTest {
     }
 
     @Test
+    @DisplayName("列出首字超过 3 秒的题和其中模型首字的耗时，逐题明细写首字延迟")
+    void reportsSlowFirstTokens() {
+        var slow = new EvalOutcome(SHELF, List.of(new Retrieved("陈列.md", "放在 03 号货架")), false, null,
+                "在 03 号货架[1]", List.of("陈列.md"), 0.9, 100, 7300, 8000, new EvalOutcome.Stages(120L, 300L, 6800L));
+        var slower = new EvalOutcome(CASH, List.of(new Retrieved("收银.md", "备用金 800 元")), false, null,
+                "800 元[1]", List.of("收银.md"), 0.9, 100, 9100, 9500, new EvalOutcome.Stages(110L, 280L, 8650L));
+        var fast = new EvalOutcome(CASH, List.of(new Retrieved("收银.md", "备用金 800 元")), false, null,
+                "800 元[1]", List.of("收银.md"), 0.9, 100, 2900, 3500, new EvalOutcome.Stages(110L, 280L, 2400L));
+
+        var markdown = EvalReport.of(List.of(slow, fast, slower), Set.of()).toMarkdown();
+
+        assertThat(markdown).contains("首字超过 3 s 的题 2 / 3：备用金 9100 ms（模型首字 8650 ms）、货架 7300 ms（模型首字 6800 ms）")
+                .contains("| 题 | 拒答 | 最高分 | 首字 | 改写为 |")
+                .contains("| 货架 | 否 | 0.900 | 7300 ms |");
+    }
+
+    @Test
     @DisplayName("拒答时写出被替换掉的模型原文，用来判断没带引用的原因")
     void reportsDiscardedReply() {
         var uncited = new EvalOutcome(CASH, List.of(new Retrieved("收银.md", "备用金 800 元")), true, "UNCITED",

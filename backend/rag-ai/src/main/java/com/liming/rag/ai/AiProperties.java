@@ -25,8 +25,11 @@ public record AiProperties(String baseUrl, String apiKey, Duration timeout, Embe
     public record Rerank(String provider, String model) {
     }
 
-    /** @param provider openai 或 extractive */
-    public record Chat(String provider, String model, double temperature, int maxTokens) {
+    /**
+     * @param provider openai 或 extractive
+     * @param hedgeAfter 流式生成过了这么久还没出首字，就再发一个相同的请求，用先出字的那个；为空时不发
+     */
+    public record Chat(String provider, String model, double temperature, int maxTokens, Duration hedgeAfter) {
     }
 
     String requireApiKey() {
