@@ -68,7 +68,7 @@ import tools.jackson.databind.json.JsonMapper;
 class EvaluationRun {
 
     /** 评判默认用硅基流动上的免费模型，与回答模型不同系列；换成自己部署的专用评判模型时改 EVAL_JUDGE_BASE_URL 和 EVAL_JUDGE_MODEL。 */
-    private static final String DEFAULT_JUDGE_MODEL = "Qwen/Qwen2.5-7B-Instruct";
+    private static final String DEFAULT_JUDGE_MODEL = "THUDM/GLM-4-9B-0414";
 
     private static final ParameterizedTypeReference<List<Map<String, Object>>> DOCUMENTS =
             new ParameterizedTypeReference<>() {
@@ -156,7 +156,7 @@ class EvaluationRun {
         }
         return AnswerJudge.openAiCompatible(env("EVAL_JUDGE_BASE_URL", env("MODEL_BASE_URL", "https://api.siliconflow.cn/v1")),
                 env("EVAL_JUDGE_API_KEY", System.getenv("MODEL_API_KEY")), env("EVAL_JUDGE_MODEL", DEFAULT_JUDGE_MODEL),
-                Duration.ofSeconds(60));
+                Duration.ofSeconds(120));
     }
 
     /**
