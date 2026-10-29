@@ -16,7 +16,7 @@ import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -190,12 +190,7 @@ class EvaluationRun {
                 System.out.println("::warning title=模型服务不可用::" + evalCase.id() + " 重试 " + attempt + " 次仍失败，不计入指标");
                 return null;
             }
-            try {
-                Thread.sleep(RETRY_DELAYS.get(attempt));
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                throw new IllegalStateException(e);
-            }
+            sleep(RETRY_DELAYS.get(attempt));
         }
     }
 
@@ -278,40 +273,68 @@ class EvaluationRun {
     }
 
     /** 先把文件全部上传，再统一等入库完成：后台按并发数处理，比逐篇上传逐篇等快得多。 */
+    /** 入库重试后仍失败的文档；不超过 1% 时照常评测，在报告开头列出（#81）。 */
+    private final List<String> corpusFailures = new ArrayList<>();
+
+    /** 入库失败（多是嵌入模型偶发不可用）的文档最多占这个比例，超过就停止评测。 */
+    private static final double MAX_CORPUS_FAILURE_SHARE = 0.01;
+
     private Set<String> uploadCorpus(long knowledgeBaseId, String folder) throws IOException {
-        var names = new HashSet<String>();
+        var files = new LinkedHashMap<String, byte[]>();
         for (var resource : RESOURCES.getResources(dataLocation() + "corpus/" + folder + "/*")) {
             var filename = resource.getFilename();
             if (filename == null || filename.startsWith(".") || !resource.isReadable()) {
                 continue;
             }
-            var file = new ByteArrayResource(resource.getContentAsByteArray()) {
-                @Override
-                public String getFilename() {
-                    return filename;
-                }
-            };
-            var body = new LinkedMultiValueMap<String, Object>();
-            body.add("file", file);
-            var headers = new HttpHeaders();
-            headers.setContentType(MediaType.MULTIPART_FORM_DATA);
-            var uploaded = http.postForEntity("/api/knowledge-bases/{id}/documents", new HttpEntity<>(body, headers),
-                    Map.class, knowledgeBaseId);
-            assertThat(uploaded.getStatusCode()).as(filename + " 上传").isEqualTo(HttpStatus.CREATED);
-            names.add(filename);
+            files.put(filename, resource.getContentAsByteArray());
         }
-        if (!names.isEmpty()) {
-            awaitAllProcessed(knowledgeBaseId, names.size());
+        files.forEach((filename, bytes) -> upload(knowledgeBaseId, filename, bytes));
+        if (!files.isEmpty()) {
+            var failed = awaitAllProcessed(knowledgeBaseId, files.size());
+            if (!failed.isEmpty()) {
+                // 嵌入模型偶尔整段不可用，入库内部的重试也躲不过；隔一会儿删掉重传一次。
+                System.out.println("::warning title=入库失败::" + failed.size() + " 篇，30 秒后重传：" + failed.values());
+                sleep(Duration.ofSeconds(30));
+                failed.forEach((id, filename) -> {
+                    http.delete("/api/knowledge-bases/{id}/documents/{documentId}", knowledgeBaseId, id);
+                    upload(knowledgeBaseId, filename, files.get(filename));
+                });
+                failed = awaitAllProcessed(knowledgeBaseId, files.size());
+            }
+            var messages = failed.values().stream().toList();
+            assertThat((double) failed.size() / files.size()).as("重传后仍入库失败的文档超过 1%：" + messages)
+                    .isLessThanOrEqualTo(MAX_CORPUS_FAILURE_SHARE);
+            corpusFailures.addAll(messages);
         }
         // 私有评测集可以没有店长专用库；合成集两个库都有。
         if (folder.equals("store")) {
-            assertThat(names).as(folder + " 语料").isNotEmpty();
+            assertThat(files).as(folder + " 语料").isNotEmpty();
         }
-        return names;
+        return files.keySet();
     }
 
-    /** 每篇给 3 秒、至少 90 秒，等全部文档离开“解析中”，并要求都是可用。 */
-    private void awaitAllProcessed(long knowledgeBaseId, int count) {
+    private void upload(long knowledgeBaseId, String filename, byte[] bytes) {
+        var file = new ByteArrayResource(bytes) {
+            @Override
+            public String getFilename() {
+                return filename;
+            }
+        };
+        var body = new LinkedMultiValueMap<String, Object>();
+        body.add("file", file);
+        var headers = new HttpHeaders();
+        headers.setContentType(MediaType.MULTIPART_FORM_DATA);
+        var uploaded = http.postForEntity("/api/knowledge-bases/{id}/documents", new HttpEntity<>(body, headers),
+                Map.class, knowledgeBaseId);
+        assertThat(uploaded.getStatusCode()).as(filename + " 上传").isEqualTo(HttpStatus.CREATED);
+    }
+
+    /**
+     * 每篇给 3 秒、至少 90 秒，等全部文档离开“解析中”。
+     *
+     * @return 入库失败的文档：文档 id → “文件名：原因”
+     */
+    private Map<Long, String> awaitAllProcessed(long knowledgeBaseId, int count) {
         var timeout = Duration.ofSeconds(Math.max(90, 3L * count));
         long deadline = System.nanoTime() + timeout.toNanos();
         long started = System.nanoTime();
@@ -319,21 +342,26 @@ class EvaluationRun {
             var documents = http.exchange("/api/knowledge-bases/{id}/documents", HttpMethod.GET, null, DOCUMENTS,
                     knowledgeBaseId).getBody();
             if (documents.stream().noneMatch(document -> "PARSING".equals(document.get("status")))) {
-                var failed = documents.stream().filter(document -> !"READY".equals(document.get("status")))
-                        .map(document -> document.get("filename") + "：" + document.get("error")).toList();
-                assertThat(failed).as("入库失败的文档").isEmpty();
+                var failed = new LinkedHashMap<Long, String>();
+                documents.stream().filter(document -> !"READY".equals(document.get("status")))
+                        .forEach(document -> failed.put(((Number) document.get("id")).longValue(),
+                                document.get("filename") + "：" + document.get("error")));
                 System.out.printf(Locale.ROOT, "%d 篇文档入库用时 %d 秒%n", documents.size(),
                         (System.nanoTime() - started) / 1_000_000_000);
-                return;
+                return failed;
             }
-            try {
-                Thread.sleep(1000);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                break;
-            }
+            sleep(Duration.ofSeconds(1));
         }
-        fail(count + " 篇文档在 " + timeout.toSeconds() + " 秒内没有全部处理完");
+        return fail(count + " 篇文档在 " + timeout.toSeconds() + " 秒内没有全部处理完");
+    }
+
+    private static void sleep(Duration duration) {
+        try {
+            Thread.sleep(duration);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException(e);
+        }
     }
 
     private String createStaffWithAccessTo(long knowledgeBaseId) {
@@ -380,8 +408,12 @@ class EvaluationRun {
         return value == null ? null : ((Number) value).longValue();
     }
 
-    private static void publish(EvalRounds rounds) throws IOException {
+    private void publish(EvalRounds rounds) throws IOException {
         var markdown = rounds.toMarkdown();
+        if (!corpusFailures.isEmpty()) {
+            markdown = "> 重传后仍入库失败、不在语料里的文档 " + corpusFailures.size() + " 篇：" + String.join("；", corpusFailures)
+                    + "\n\n" + markdown;
+        }
         Files.writeString(Path.of("target", "eval-report.md"), markdown);
         var summary = System.getenv("GITHUB_STEP_SUMMARY");
         if (summary != null && !summary.isBlank()) {
