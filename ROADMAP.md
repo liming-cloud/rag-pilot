@@ -284,4 +284,5 @@ M1 做完只说明问答主链路**质量达标**。离 1.0 还差：
 
 不属于当前结果、排期时再合并成结果型 Issue 的事项。
 
-- （暂无）
+- **Spring AI 升级到 2.0.2 后备用请求失效**（#101，2026-10-29 发现）：2.0.2 下慢请求取消后流不立即结束，`SpringAiChatGatewayTest.hedgesSlowFirstToken` 稳定失败（耗时约 3 s，要求 < 2 s；2.0.0 上稳定通过），备用请求（D-028，默认关闭）失去作用。先不合并 #101；修复 `SpringAiChatGateway` 的取消逻辑后再升级，合并前手动跑一次 `eval`。适合并入 M4 模型管理。
+- **msw 升级到 3.x**（#93，2026-10-30 决定暂缓）：大版本只支持 ESM，`onUnhandledRequest` 改名为 `onUnhandledFrame`，不再绕开假定时器，需要重新生成 `mockServiceWorker.js`。M2 原型大量依赖 MSW，M2 原型完成后再升；已让 Dependabot 忽略 3.x，到时手动升级。
