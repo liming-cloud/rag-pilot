@@ -36,10 +36,12 @@ JDK 25、Spring Boot 4.1、Spring AI 2.0、Spring Modulith 2.1、MyBatis-Plus、
 需要 Docker。
 
 ```sh
-cp deploy/.env.example deploy/.env   # 填写 DB_PASSWORD 和 MODEL_API_KEY
+cp deploy/.env.example deploy/.env   # 填写 DB_PASSWORD、MODEL_API_KEY 和 RAG_ADMIN_PASSWORD
 docker compose -f deploy/compose.yml --env-file deploy/.env up --build
-curl http://localhost:8080/actuator/health
+curl http://localhost:8080/actuator/health   # 后端健康检查，只在本机可访问
 ```
+
+浏览器打开 `http://<服务器地址>`（端口改 `WEB_PORT`），用管理员账号登录。页面、字体和接口都从这一个地址提供，不访问外网（模型调用除外）。
 
 ## 开发
 

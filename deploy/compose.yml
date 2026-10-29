@@ -1,4 +1,4 @@
-# 试点部署：db + app。docling-serve 和 web（Nginx）在后续 PR 中加入。
+# 试点部署：db + app + web（Nginx 提供前端并转发 /api，见 DECISIONS.md D-029）。员工访问 web 的端口。
 # 用法：cp deploy/.env.example deploy/.env，设置密码后执行
 #   docker compose -f deploy/compose.yml --env-file deploy/.env up --build
 name: rag-pilot
@@ -37,7 +37,17 @@ services:
       db:
         condition: service_healthy
     ports:
-      - "8080:8080"
+      # 只绑定本机，用于运维检查健康状态；员工经 web 访问接口。
+      - "127.0.0.1:8080:8080"
+
+  web:
+    build:
+      context: ..
+      dockerfile: deploy/web.Dockerfile
+    depends_on:
+      - app
+    ports:
+      - "${WEB_PORT:-80}:80"
 
 volumes:
   db-data:

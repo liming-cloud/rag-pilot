@@ -1,3 +1,8 @@
+// 字体随前端打包，按 unicode-range 分片按需加载，客户内网也能用（D-011、D-029）；字重与页面用到的一致。
+import "@fontsource/noto-sans-sc/400.css";
+import "@fontsource/noto-sans-sc/500.css";
+import "@fontsource/noto-sans-sc/600.css";
+import "@fontsource/noto-serif-sc/600.css";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
