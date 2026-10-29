@@ -27,15 +27,15 @@
         <!-- 以下版本组合已在旧项目 ai-platform 的 Spring Boot 4.1 上实际构建通过。 -->
         <spring-boot.version>4.1.0</spring-boot.version>
         <spring-ai.version>2.0.0</spring-ai.version>
-        <spring-modulith.version>2.1.0</spring-modulith.version>
-        <mybatis-plus.version>3.5.17</mybatis-plus.version>
+        <spring-modulith.version>2.1.2</spring-modulith.version>
+        <mybatis-plus.version>3.5.18</mybatis-plus.version>
         <sa-token.version>1.45.0</sa-token.version>
         <pdfbox.version>3.0.7</pdfbox.version>
-        <poi.version>5.5.1</poi.version>
+        <poi.version>6.0.0</poi.version>
         <!-- 与 spring-modulith-core 2.1.0 自带的版本一致，见 DECISIONS.md D-031。 -->
         <archunit.version>1.4.2</archunit.version>
-        <maven-compiler-plugin.version>3.14.1</maven-compiler-plugin.version>
-        <maven-surefire-plugin.version>3.5.3</maven-surefire-plugin.version>
+        <maven-compiler-plugin.version>3.16.0</maven-compiler-plugin.version>
+        <maven-surefire-plugin.version>3.6.1</maven-surefire-plugin.version>
         <!-- 调用真实模型的评测默认不跑；评测任务用 -Dtest.groups=eval -Dtest.excludedGroups=none 运行。 -->
         <test.groups></test.groups>
         <test.excludedGroups>eval</test.excludedGroups>
