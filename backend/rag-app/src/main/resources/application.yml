@@ -71,8 +71,10 @@ rag:
       model: ${CHAT_MODEL:deepseek-ai/DeepSeek-V3}
       temperature: 0.1
       max-tokens: 1024
-      # 流式回答过了这么久还没出首字，就再发一个相同的请求，用先出字的那个（见 DECISIONS.md D-028）；为空时不发。
+      # 流式回答过了这么久还没出首字，就再发一个备用请求，用先出字的那个（见 DECISIONS.md D-028）；为空时不发。
       hedge-after: ${CHAT_HEDGE_AFTER:}
+      # 备用请求用的模型，为空时与 model 相同。
+      hedge-model: ${CHAT_HEDGE_MODEL:}
   answering:
     # 检索候选数、送进提示词的证据数、重排相关度门槛（占位值，用评测集校准）。
     candidates: 30

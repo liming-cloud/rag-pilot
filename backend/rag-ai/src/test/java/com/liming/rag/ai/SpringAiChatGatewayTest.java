@@ -13,6 +13,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.regex.Pattern;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -20,6 +21,7 @@ import org.junit.jupiter.api.Test;
 class SpringAiChatGatewayTest {
 
     private final AtomicInteger calls = new AtomicInteger();
+    private final List<String> models = Collections.synchronizedList(new ArrayList<>());
     private HttpServer server;
 
     @AfterEach
@@ -42,6 +44,17 @@ class SpringAiChatGatewayTest {
         assertThat(String.join("", deltas)).isEqualTo("快的回答");
         assertThat(calls).hasValue(2);
         assertThat(millis).isLessThan(2000);
+    }
+
+    @Test
+    @DisplayName("配置了备用模型时，备用请求改用它：原模型整体卡住时换一个模型更可能及时出字")
+    void hedgesToBackupModel() throws Exception {
+        start(call -> call == 1 ? new Reply(3000, 200, "慢的回答") : new Reply(0, 200, "备用回答"));
+        var gateway = gateway(Duration.ofMillis(300), "backup-model");
+
+        assertThat(gateway.stream("系统", "问题", delta -> {
+        })).isEqualTo("备用回答");
+        assertThat(models).containsExactly("m", "backup-model");
     }
 
     @Test
@@ -77,18 +90,24 @@ class SpringAiChatGatewayTest {
         assertThat(calls).hasValue(1);
     }
 
+    private static final Pattern MODEL = Pattern.compile("\"model\"\\s*:\\s*\"([^\"]+)\"");
+
     private record Reply(long delayMillis, int status, String text) {
     }
 
     private void start(java.util.function.IntFunction<Reply> replies) throws IOException {
         server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.setExecutor(Executors.newVirtualThreadPerTaskExecutor());
-        server.createContext("/v1/chat/completions", exchange -> respond(exchange, replies.apply(calls.incrementAndGet())));
+        server.createContext("/v1/chat/completions", exchange -> {
+            var request = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+            var model = MODEL.matcher(request);
+            models.add(model.find() ? model.group(1) : "");
+            respond(exchange, replies.apply(calls.incrementAndGet()));
+        });
         server.start();
     }
 
     private static void respond(HttpExchange exchange, Reply reply) throws IOException {
-        exchange.getRequestBody().readAllBytes();
         try (exchange) {
             if (reply.status() != 200) {
                 var body = "{\"error\":{\"message\":\"busy\"}}".getBytes(StandardCharsets.UTF_8);
@@ -118,8 +137,13 @@ class SpringAiChatGatewayTest {
     }
 
     private SpringAiChatGateway gateway(Duration hedgeAfter) {
+        return gateway(hedgeAfter, null);
+    }
+
+    private SpringAiChatGateway gateway(Duration hedgeAfter, String hedgeModel) {
         var properties = new AiProperties("http://127.0.0.1:" + server.getAddress().getPort() + "/v1", "test-key",
-                Duration.ofSeconds(10), null, null, new AiProperties.Chat("openai", "m", 0.1, 256, hedgeAfter));
+                Duration.ofSeconds(10), null, null,
+                new AiProperties.Chat("openai", "m", 0.1, 256, hedgeAfter, hedgeModel));
         return new SpringAiChatGateway(properties);
     }
 }

@@ -22,6 +22,7 @@ final class SpringAiChatGateway implements ChatGateway {
     private final ChatModel model;
     private final OpenAiChatOptions options;
     private final Duration hedgeAfter;
+    private final OpenAiChatOptions hedgeOptions;
 
     SpringAiChatGateway(AiProperties properties) {
         var options = OpenAiChatOptions.builder()
@@ -35,6 +36,9 @@ final class SpringAiChatGateway implements ChatGateway {
                 .build();
         this.options = options;
         this.hedgeAfter = properties.chat().hedgeAfter();
+        var hedgeModel = properties.chat().hedgeModel();
+        this.hedgeOptions = hedgeModel == null || hedgeModel.isBlank() ? options
+                : options.mutate().model(hedgeModel).build();
         this.model = OpenAiChatModel.builder().options(options).build();
     }
 
@@ -68,16 +72,18 @@ final class SpringAiChatGateway implements ChatGateway {
     /**
      * 在调用线程上阻塞到生成结束；调用方在虚拟线程里运行，不占用平台线程。
      *
-     * <p>配置了 {@code hedgeAfter} 时，过了这么久还没出首字就再发一个相同的请求，哪个先出字用哪个，另一个取消。
-     * 服务商排队造成的首字慢是偶发的，第二个请求多半很快；第一个请求在此之前失败时，备用请求也起到一次重试的作用。
+     * <p>配置了 {@code hedgeAfter} 时，过了这么久还没出首字就再发一个备用请求，哪个先出字用哪个，另一个取消；
+     * 第一个请求在此之前失败时，备用请求也起到一次重试的作用。服务商的同一个模型常常整体卡住（D-028），
+     * 所以备用请求可以用另一个模型（{@code hedgeModel}）。
      */
     @Override
     public String stream(String systemPrompt, String userMessage, Consumer<String> onDelta) {
         var prompt = prompt(systemPrompt, userMessage);
         var deltas = hedgeAfter == null ? deltas(prompt)
                 : Flux.firstWithValue(deltas(prompt), Mono.delay(hedgeAfter)
-                        .doOnNext(tick -> log.info("对话模型 {} 内没出首字，发出备用请求", hedgeAfter))
-                        .thenMany(Flux.defer(() -> deltas(prompt))));
+                        .doOnNext(tick -> log.info("对话模型 {} 内没出首字，发出备用请求（{}）", hedgeAfter,
+                                hedgeOptions.getModel()))
+                        .thenMany(Flux.defer(() -> deltas(new Prompt(prompt.getInstructions(), hedgeOptions)))));
         var text = new StringBuilder();
         try {
             deltas.doOnNext(delta -> {

@@ -20,6 +20,9 @@ on:
       hedge_after:
         description: 流式回答多久没出首字就发备用请求（如 2s），填 off 不发，不填用 application.yml 的默认值
         default: ""
+      hedge_model:
+        description: 备用请求用的模型，填 same 与回答模型相同，不填用 application.yml 的默认值
+        default: ""
   pull_request:
     paths:
       - backend/rag-ai/**
@@ -67,11 +70,13 @@ jobs:
           RERANK: ${{ inputs.rerank_model }}
           EVIDENCE_LIMIT: ${{ inputs.evidence_limit }}
           HEDGE_AFTER: ${{ inputs.hedge_after }}
+          HEDGE_MODEL: ${{ inputs.hedge_model }}
         # 空环境变量会覆盖 application.yml 的默认值，所以只在填了输入时才设置。
         run: |
           if [ -n "$RERANK" ]; then export RERANK_MODEL="$RERANK"; fi
           if [ -n "$EVIDENCE_LIMIT" ]; then export RAG_ANSWERING_EVIDENCE_LIMIT="$EVIDENCE_LIMIT"; fi
           if [ "$HEDGE_AFTER" = off ]; then export CHAT_HEDGE_AFTER=; elif [ -n "$HEDGE_AFTER" ]; then export CHAT_HEDGE_AFTER="$HEDGE_AFTER"; fi
+          if [ "$HEDGE_MODEL" = same ]; then export CHAT_HEDGE_MODEL=; elif [ -n "$HEDGE_MODEL" ]; then export CHAT_HEDGE_MODEL="$HEDGE_MODEL"; fi
           ./mvnw -B -ntp verify -pl backend/rag-app -am \
             -Dtest.groups=eval -Dtest.excludedGroups=none \
             -Dtest=EvaluationRun -Dsurefire.failIfNoSpecifiedTests=false
