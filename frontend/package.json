@@ -34,13 +34,13 @@
     "@types/node": "26.1.1",
     "@types/react": "19.2.18",
     "@types/react-dom": "19.2.7",
-    "@vitejs/plugin-react": "6.0.4",
+    "@vitejs/plugin-react": "6.1.2",
     "jsdom": "27.4.0",
     "msw": "2.15.0",
     "tailwindcss": "4.3.3",
     "typescript": "6.0.3",
-    "vite": "8.1.5",
-    "vitest": "4.1.10"
+    "vite": "8.3.5",
+    "vitest": "5.0.5"
   },
   "msw": {
     "workerDirectory": [
