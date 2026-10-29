@@ -110,6 +110,33 @@ class AnswerServiceTest {
         assertThat(deltas).isEmpty();
     }
 
+    @Test
+    @DisplayName("答了一部分又在末尾或中间输出 NO_ANSWER：去掉这个标记，流式输出也不出现；只剩标记时按模型拒答")
+    void stripsTrailingNoAnswerMarker() {
+        var deltas = new ArrayList<String>();
+        var answer = streaming(List.of("在 03 号货架[1]。估值资料里没有提到。", "  NO_", "ANSWER"), 0.9)
+                .ask(TENANT, USER, List.of(), "青柚在哪，卖多少钱", deltas::add);
+
+        assertThat(answer.refused()).isFalse();
+        assertThat(answer.text()).isEqualTo("在 03 号货架[1]。估值资料里没有提到。");
+        assertThat(String.join("", deltas)).doesNotContain("NO_").doesNotContain("ANSWER")
+                .startsWith("在 03 号货架[1]。估值资料里没有提到。");
+
+        deltas.clear();
+        var middle = streaming(List.of("在 03 号货架[1]。NO_ANSWER（价格未提及）"), 0.9)
+                .ask(TENANT, USER, List.of(), "青柚在哪，卖多少钱", deltas::add);
+        assertThat(middle.text()).isEqualTo("在 03 号货架[1]。（价格未提及）");
+        assertThat(String.join("", deltas)).isEqualTo("在 03 号货架[1]。（价格未提及）");
+
+        // 没被标记截断的普通文字照常全部流出，结尾刚好像标记开头的片段也不丢。
+        deltas.clear();
+        streaming(List.of("在 03 号货架[1]。N"), 0.9).ask(TENANT, USER, List.of(), "问", deltas::add);
+        assertThat(String.join("", deltas)).isEqualTo("在 03 号货架[1]。N");
+
+        assertThat(service(List.of(SHELF), List.of(0.9), "  NO_ANSWER\n").ask(TENANT, USER, List.of(1L), "问")
+                .refusalReason()).isEqualTo(RefusalReason.MODEL_DECLINED);
+    }
+
     private AnswerService streaming(List<String> pieces, double score) {
         ChatGateway chat = new ChatGateway() {
             @Override

@@ -139,9 +139,13 @@ public class AnswerService {
         }
         // 证据可能来自改写后的检索，但回答针对员工原来的问题。
         var prompt = augmenter.augment(query, evidence).text();
-        var reply = chat.stream(AnswerPrompt.SYSTEM, prompt, new NoAnswerGate(onDelta, clock::firstToken)).strip();
+        var gate = new NoAnswerGate(onDelta, clock::firstToken);
+        var raw = chat.stream(AnswerPrompt.SYSTEM, prompt, gate).strip();
+        gate.flush();
         clock.generated();
-        if (reply.isEmpty() || reply.startsWith(AnswerPrompt.NO_ANSWER)) {
+        // 模型有时先答一部分，再在中间或末尾补一个 NO_ANSWER：去掉标记，剩下的照常校验引用。
+        var reply = raw.replace(AnswerPrompt.NO_ANSWER, "").strip();
+        if (reply.isEmpty() || raw.startsWith(AnswerPrompt.NO_ANSWER)) {
             return finish(Answer.refused(RefusalReason.MODEL_DECLINED, topRelevance), clock, rewrite);
         }
         var parsed = CitationParser.parse(reply, evidence.size());
@@ -220,7 +224,8 @@ public class AnswerService {
     }
 
     /**
-     * 先攒住开头的文字，确认不是 NO_ANSWER 之后再放行，之后的片段直接转发。
+     * 先攒住开头的文字，确认不是 NO_ANSWER 之后再放行；放行之后也过滤掉夹在中间或末尾的 NO_ANSWER，
+     * 末尾可能是标记开头的几个字先留着，等下一段或 {@link #flush()} 再决定。
      * {@code onModelDelta} 在收到模型的任何片段时调用（包括被拦下的），用来记模型首字时间。
      */
     private static final class NoAnswerGate implements Consumer<String> {
@@ -228,6 +233,7 @@ public class AnswerService {
         private final Consumer<String> downstream;
         private final Runnable onModelDelta;
         private final StringBuilder head = new StringBuilder();
+        private final StringBuilder pending = new StringBuilder();
         private boolean open;
         private boolean declined;
 
@@ -240,7 +246,7 @@ public class AnswerService {
         public void accept(String delta) {
             onModelDelta.run();
             if (open) {
-                downstream.accept(delta);
+                forward(delta);
                 return;
             }
             if (declined) {
@@ -252,8 +258,38 @@ public class AnswerService {
                 declined = true;
             } else if (!AnswerPrompt.NO_ANSWER.startsWith(start)) {
                 open = true;
-                downstream.accept(head.toString());
+                forward(head.toString());
             }
+        }
+
+        /** 生成结束时把留着的几个字放出去（它们最终没有组成标记）。 */
+        void flush() {
+            if (open && !pending.isEmpty()) {
+                downstream.accept(pending.toString());
+                pending.setLength(0);
+            }
+        }
+
+        private void forward(String delta) {
+            pending.append(delta);
+            var text = pending.toString().replace(AnswerPrompt.NO_ANSWER, "");
+            int keep = markerPrefixAtEnd(text);
+            var ready = text.substring(0, text.length() - keep);
+            pending.setLength(0);
+            pending.append(text, text.length() - keep, text.length());
+            if (!ready.isEmpty()) {
+                downstream.accept(ready);
+            }
+        }
+
+        /** 文字末尾有几个字可能是标记的开头。 */
+        private static int markerPrefixAtEnd(String text) {
+            for (int length = Math.min(text.length(), AnswerPrompt.NO_ANSWER.length() - 1); length > 0; length--) {
+                if (AnswerPrompt.NO_ANSWER.startsWith(text.substring(text.length() - length))) {
+                    return length;
+                }
+            }
+            return 0;
         }
     }
 
