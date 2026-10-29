@@ -40,7 +40,7 @@ class EvalReportTest {
         assertThat(report.askP95Millis()).isEqualTo(2000);
         assertThat(report.failures()).contains("备用金：前 10 条没有召回预期分块", "奖金：越权泄漏", "奖金：应拒答却回答了");
         assertThat(report.toMarkdown()).contains("| 越权泄漏 | 1 | 0 |", "| 检索召回 Recall@10 | 50.0% | ≥ 85% |",
-                "| 首字延迟 p95（流式） | 900 ms | < 3 s |");
+                "| 首字延迟 p95（流式） | 900 ms | 参考（D-030） |");
     }
 
     @Test

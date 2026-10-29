@@ -8,6 +8,7 @@ import com.liming.rag.ai.ModelCallException;
 import com.liming.rag.evaluation.api.EvalCase;
 import com.liming.rag.evaluation.api.EvalOutcome;
 import com.liming.rag.evaluation.api.EvalReport;
+import com.liming.rag.evaluation.api.EvalRounds;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -52,6 +53,9 @@ import tools.jackson.databind.json.JsonMapper;
  * 在 GitHub Actions 里同时写进运行摘要。越权泄漏必须为 0，其余指标只报告。
  *
  * <p>题目带参考答案时（开源数据集），回答再交给评判模型对照参考答案判断，配置见 {@link #judge()}。
+ *
+ * <p>{@code EVAL_ROUNDS}（默认 1）指定连续跑几轮：语料只上传一次，每轮把全部题目问一遍，报告给出各项指标的
+ * 均值和波动范围，并区分稳定失败和偶发失败的题（#81）。
  */
 @Tag("eval")
 @EnabledIfEnvironmentVariable(named = "MODEL_API_KEY", matches = ".+")
@@ -105,17 +109,22 @@ class EvaluationRun {
 
         var cases = loadCases();
         var judge = cases.stream().anyMatch(evalCase -> evalCase.referenceAnswer() != null) ? judge() : null;
-        var outcomes = new ArrayList<EvalOutcome>();
-        for (var evalCase : cases) {
-            outcomes.add(judged(judge, run(store, restricted, staff, evalCase), outcomes.isEmpty()));
-            if (outcomes.size() % 50 == 0) {
-                System.out.printf(Locale.ROOT, "已评测 %d / %d 题%n", outcomes.size(), cases.size());
+        int roundCount = Integer.parseInt(env("EVAL_ROUNDS", "1"));
+        var reports = new ArrayList<EvalReport>();
+        for (int round = 1; round <= roundCount; round++) {
+            var outcomes = new ArrayList<EvalOutcome>();
+            for (var evalCase : cases) {
+                outcomes.add(judged(judge, run(store, restricted, staff, evalCase), reports.isEmpty() && outcomes.isEmpty()));
+                if (outcomes.size() % 50 == 0) {
+                    System.out.printf(Locale.ROOT, "第 %d 轮：已评测 %d / %d 题%n", round, outcomes.size(), cases.size());
+                }
             }
+            reports.add(EvalReport.of(outcomes, restrictedDocuments));
         }
-        var report = EvalReport.of(outcomes, restrictedDocuments);
-        publish(report);
+        var rounds = EvalRounds.of(reports);
+        publish(rounds);
 
-        assertThat(report.leaks()).as("越权泄漏必须为 0").isZero();
+        assertThat(rounds.leaks()).as("越权泄漏必须为 0（各轮合计）").isZero();
     }
 
     private EvalOutcome run(long knowledgeBaseId, long restricted, String staff, EvalCase evalCase) {
@@ -337,18 +346,31 @@ class EvaluationRun {
         return value == null ? null : ((Number) value).longValue();
     }
 
-    private static void publish(EvalReport report) throws IOException {
-        var markdown = report.toMarkdown();
+    private static void publish(EvalRounds rounds) throws IOException {
+        var markdown = rounds.toMarkdown();
         Files.writeString(Path.of("target", "eval-report.md"), markdown);
         var summary = System.getenv("GITHUB_STEP_SUMMARY");
         if (summary != null && !summary.isBlank()) {
             Files.writeString(Path.of(summary), markdown, StandardOpenOption.CREATE, StandardOpenOption.APPEND);
         }
-        System.out.printf(Locale.ROOT,
-                "::notice title=评测结果::召回 %s，引用正确 %s，拒答正确 %s，误拒 %s，越权 %d，检索 p95 %d ms，首字 p95 %d ms，整段 p95 %d ms%n",
-                percent(report.recallAt10()), percent(report.citationAccuracy()), percent(report.refusalAccuracy()),
-                percent(report.falseRefusalRate()), report.leaks(), report.searchP95Millis(), report.firstTokenP95Millis(),
-                report.askP95Millis());
+        for (var report : rounds.rounds()) {
+            System.out.printf(Locale.ROOT,
+                    "::notice title=评测结果::召回 %s，引用正确 %s，拒答正确 %s，误拒 %s，越权 %d，检索 p95 %d ms，首字 p95 %d ms，整段 p95 %d ms%n",
+                    percent(report.recallAt10()), percent(report.citationAccuracy()), percent(report.refusalAccuracy()),
+                    percent(report.falseRefusalRate()), report.leaks(), report.searchP95Millis(),
+                    report.firstTokenP95Millis(), report.askP95Millis());
+        }
+        if (rounds.rounds().size() > 1) {
+            // 多轮时逐条失败太多，只写汇总和稳定、偶发失败的题；明细在报告里。
+            System.out.printf(Locale.ROOT, "::notice title=多轮汇总::%d 轮均值：召回 %s，引用正确 %s，拒答正确 %s，误拒 %s（%s～%s），越权合计 %d%n",
+                    rounds.rounds().size(), percent(rounds.recallAt10().mean()), percent(rounds.citationAccuracy().mean()),
+                    percent(rounds.refusalAccuracy().mean()), percent(rounds.falseRefusalRate().mean()),
+                    percent(rounds.falseRefusalRate().min()), percent(rounds.falseRefusalRate().max()), rounds.leaks());
+            System.out.println("::warning title=稳定失败::" + String.join("、", rounds.stableFailures()));
+            System.out.println("::warning title=偶发失败::" + String.join("、", rounds.flakyFailures()));
+            return;
+        }
+        var report = rounds.rounds().getFirst();
         // 失败题和分数逐条写成注释，不下载报告也能在 PR 检查页看到。
         report.failures().forEach(failure -> System.out.println("::warning title=评测未通过::" + failure));
         // GitHub 每步每类注释最多显示 10 条，逐题分数合成一条；%0A 是注释里的换行。

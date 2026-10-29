@@ -4,6 +4,7 @@ import com.liming.rag.evaluation.api.EvalCase.Kind;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
@@ -23,16 +24,19 @@ import java.util.stream.Collectors;
  *   <li>越权泄漏：检索结果或引用里出现无权访问文档的题数，必须为 0。</li>
  *   <li>首字延迟：流式问答从发出请求到收到第一个事件（第一段文字，或拒答结果）的时间。</li>
  * </ul>
+ *
+ * @param failedCases 未通过的题（id），去重并保持出现顺序；多轮汇总用它区分稳定失败和偶发失败
  */
 public record EvalReport(int cases, double recallAt10, double citationAccuracy, double refusalAccuracy,
         double falseRefusalRate, int leaks, long searchP95Millis, long firstTokenP95Millis, long askP95Millis, List<String> failures,
-        List<EvalOutcome> outcomes) {
+        List<EvalOutcome> outcomes, List<String> failedCases) {
 
     public static EvalReport of(List<EvalOutcome> outcomes, Set<String> restrictedDocuments) {
         var answerable = outcomes.stream().filter(o -> o.evalCase().kind() == Kind.ANSWERABLE).toList();
         var unanswerable = outcomes.stream().filter(o -> o.evalCase().kind() == Kind.UNANSWERABLE).toList();
         var answered = answerable.stream().filter(o -> !o.refused()).toList();
         var failures = new ArrayList<String>();
+        var failedCases = new LinkedHashSet<String>();
 
         Predicate<EvalOutcome> recalled = EvalReport::recalled;
         Predicate<EvalOutcome> citedCorrectly = EvalReport::citedCorrectly;
@@ -42,21 +46,26 @@ public record EvalReport(int cases, double recallAt10, double citationAccuracy, 
         for (var o : answerable) {
             if (!recalled.test(o)) {
                 failures.add(o.evalCase().id() + "：前 10 条没有召回预期分块");
+                failedCases.add(o.evalCase().id());
             }
             if (o.refused()) {
                 failures.add(o.evalCase().id() + "：误拒（" + o.refusalReason() + "）"
                         + (o.discardedReply() == null ? "" : "，模型原文：" + cell(o.discardedReply())));
+                failedCases.add(o.evalCase().id());
             } else if (!citedCorrectly.test(o)) {
                 failures.add(o.evalCase().id() + "：引用或答案不对，引用了 " + o.citedDocuments());
+                failedCases.add(o.evalCase().id());
             }
             if (!o.refused() && o.judgement() != null && !CORRECT.equals(o.judgement().verdict())) {
                 failures.add(o.evalCase().id() + "：答案" + verdictLabel(o.judgement().verdict()) + "（"
                         + o.judgement().reason() + "）");
+                failedCases.add(o.evalCase().id());
             }
         }
         for (var o : unanswerable) {
             if (!o.refused()) {
                 failures.add(o.evalCase().id() + "：应拒答却回答了");
+                failedCases.add(o.evalCase().id());
             }
         }
         int leaks = 0;
@@ -64,6 +73,7 @@ public record EvalReport(int cases, double recallAt10, double citationAccuracy, 
             if (leaked.test(o)) {
                 leaks++;
                 failures.add(o.evalCase().id() + "：越权泄漏");
+                failedCases.add(o.evalCase().id());
             }
         }
         return new EvalReport(outcomes.size(),
@@ -76,11 +86,12 @@ public record EvalReport(int cases, double recallAt10, double citationAccuracy, 
                 p95(outcomes.stream().map(EvalOutcome::firstEventMillis).toList()),
                 p95(outcomes.stream().map(EvalOutcome::askMillis).toList()),
                 List.copyOf(failures),
-                List.copyOf(outcomes));
+                List.copyOf(outcomes),
+                List.copyOf(failedCases));
     }
 
     private static final String CORRECT = "CORRECT";
-    /** README 的首字延迟目标。 */
+    /** 首字延迟的参考线（D-030 起不作为验收硬指标），超过的题逐个列出。 */
     private static final long SLOW_FIRST_TOKEN_MILLIS = 3000;
 
     /** 前 10 条检索结果里有来自预期文档（任一篇）、且含答案关键词的分块。 */
@@ -144,7 +155,7 @@ public record EvalReport(int cases, double recallAt10, double citationAccuracy, 
         }
         row(text, "越权泄漏", String.valueOf(leaks), "0");
         row(text, "检索延迟 p95", searchP95Millis + " ms", "< 800 ms");
-        row(text, "首字延迟 p95（流式）", firstTokenP95Millis + " ms", "< 3 s");
+        row(text, "首字延迟 p95（流式）", firstTokenP95Millis + " ms", "参考（D-030）");
         row(text, "整段回答 p95（流式）", askP95Millis + " ms", "—");
         text.append("\n### 首字延迟拆分（服务端各阶段 p95）\n\n");
         text.append("首字延迟 ≈ 检索 + 重排 + 模型首字 + 网络。\n\n| 阶段 | p95 |\n| --- | --- |\n");
