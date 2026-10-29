@@ -11,6 +11,9 @@ on:
       chat_model:
         description: 回答模型（也用于低分改写），不填用 application.yml 的默认值
         default: ""
+      rerank_model:
+        description: 重排模型，不填用 application.yml 的默认值
+        default: ""
       evidence_limit:
         description: 送进提示词的最多证据条数，不填用 application.yml 的默认值
         default: ""
@@ -61,10 +64,12 @@ jobs:
           MODEL_API_KEY: ${{ secrets.MODEL_API_KEY }}
           EVAL_MIN_RELEVANCE: ${{ inputs.min_relevance || '0.2' }}
           CHAT_MODEL: ${{ inputs.chat_model || 'deepseek-ai/DeepSeek-V3' }}
+          RERANK: ${{ inputs.rerank_model }}
           EVIDENCE_LIMIT: ${{ inputs.evidence_limit }}
           HEDGE_AFTER: ${{ inputs.hedge_after }}
         # 空环境变量会覆盖 application.yml 的默认值，所以只在填了输入时才设置。
         run: |
+          if [ -n "$RERANK" ]; then export RERANK_MODEL="$RERANK"; fi
           if [ -n "$EVIDENCE_LIMIT" ]; then export RAG_ANSWERING_EVIDENCE_LIMIT="$EVIDENCE_LIMIT"; fi
           if [ "$HEDGE_AFTER" = off ]; then export CHAT_HEDGE_AFTER=; elif [ -n "$HEDGE_AFTER" ]; then export CHAT_HEDGE_AFTER="$HEDGE_AFTER"; fi
           ./mvnw -B -ntp verify -pl backend/rag-app -am \
