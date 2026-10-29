@@ -129,20 +129,31 @@ class EvaluationRun {
         assertThat(events).as(evalCase.id() + " 流式问答").isNotEmpty();
         var done = events.getLast();
         assertThat(done.name()).as(evalCase.id() + " 流式问答结果：" + done.data()).isEqualTo("done");
-        Map<String, Object> answer = JsonMapper.builder().build().readValue(done.data(), new TypeReference<>() {
+        var json = JsonMapper.builder().build();
+        Map<String, Object> answer = json.readValue(done.data(), new TypeReference<>() {
         });
         @SuppressWarnings("unchecked")
         var citations = (List<Map<String, Object>>) answer.get("citations");
+        // 引用校验不通过时，已流出的文字会被拒答替换；记下原文，才看得出模型为什么没带引用。
+        var streamed = new StringBuilder();
+        for (var event : events) {
+            if ("delta".equals(event.name())) {
+                streamed.append(json.readValue(event.data(), new TypeReference<Map<String, String>>() {
+                }).get("text"));
+            }
+        }
+        boolean refused = Boolean.TRUE.equals(answer.get("refused"));
 
         return new EvalOutcome(evalCase,
                 hits.stream().map(hit -> new EvalOutcome.Retrieved((String) hit.get("documentName"),
                         (String) hit.get("content"))).toList(),
-                Boolean.TRUE.equals(answer.get("refused")),
+                refused,
                 (String) answer.get("refusalReason"),
                 (String) answer.get("text"),
                 citations.stream().map(citation -> (String) citation.get("documentName")).toList(),
                 answer.get("topRelevance") == null ? null : ((Number) answer.get("topRelevance")).doubleValue(),
-                searchMillis, events.getFirst().atMillis(), done.atMillis(), stages(answer), rewrite(answer));
+                searchMillis, events.getFirst().atMillis(), done.atMillis(), stages(answer), rewrite(answer))
+                .withDiscardedReply(refused && !streamed.isEmpty() ? streamed.toString() : null);
     }
 
     /**

@@ -25,4 +25,11 @@ class AnswerPromptTest {
         assertThat(List.of(AnswerPrompt.SYSTEM.split("\n")))
                 .anyMatch(line -> line.contains("资料里没有提到") && line.contains("不用标注"));
     }
+
+    @Test
+    @DisplayName("引用序号是资料前面的编号，不是资料正文里条目的序号（#71：正文第 2 条被写成 [2]）")
+    void citesEvidenceNumberNotListItemNumber() {
+        assertThat(List.of(AnswerPrompt.SYSTEM.split("\n")))
+                .anyMatch(line -> line.contains("资料前面的编号") && line.contains("不是资料正文里条目的序号"));
+    }
 }
