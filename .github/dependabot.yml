@@ -1,4 +1,5 @@
 # 依赖与漏洞提醒：只开 PR 提醒，不自动合并。新增依赖仍按 DECISIONS.md 记录；Spring Boot、Spring AI 等大版本升级单独评估。
+# 必须一起升级的包放进同一组（如 react 与 react-dom 版本必须一致），同类小升级合成一个 PR，减少 PR 数量。
 version: 2
 updates:
   - package-ecosystem: maven
@@ -6,12 +7,34 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    groups:
+      maven-plugins:
+        patterns:
+          - "org.apache.maven.plugins:*"
+          - "org.apache.maven:apache-maven"
   - package-ecosystem: npm
     directory: /frontend
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    groups:
+      react:
+        patterns:
+          - "react"
+          - "react-dom"
+          - "@types/react"
+          - "@types/react-dom"
+      vite:
+        patterns:
+          - "vite"
+          - "@vitejs/*"
+          - "vitest"
+          - "@vitest/*"
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: monthly
+    groups:
+      actions:
+        patterns:
+          - "*"
