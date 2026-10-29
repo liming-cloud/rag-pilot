@@ -25,6 +25,8 @@ permissions:
 jobs:
   judge-probe:
     name: judge-probe
+    # Dependabot 触发的运行拿不到仓库的 Actions 密钥，跑了只会报“缺少密钥”；依赖升级由 backend、frontend 检查把关。
+    if: github.actor != 'dependabot[bot]'
     runs-on: ubuntu-latest
     timeout-minutes: 40
     env:
