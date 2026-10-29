@@ -80,6 +80,8 @@ public record EvalReport(int cases, double recallAt10, double citationAccuracy, 
     }
 
     private static final String CORRECT = "CORRECT";
+    /** README 的首字延迟目标。 */
+    private static final long SLOW_FIRST_TOKEN_MILLIS = 3000;
 
     /** 前 10 条检索结果里有来自预期文档（任一篇）、且含答案关键词的分块。 */
     static boolean recalled(EvalOutcome o) {
@@ -153,6 +155,16 @@ public record EvalReport(int cases, double recallAt10, double citationAccuracy, 
         row(text, "　改写·模型", rewriteP95(EvalOutcome.Rewrite::modelMillis));
         row(text, "　改写·重新检索", rewriteP95(EvalOutcome.Rewrite::retrievalMillis));
         row(text, "　改写·重新重排", rewriteP95(EvalOutcome.Rewrite::rerankMillis));
+        // p95 只看得出尾部有多慢，看不出是几道题偶尔卡住还是整体都慢，所以把超标的题逐个列出来。
+        var slow = outcomes.stream()
+                .filter(o -> o.firstEventMillis() > SLOW_FIRST_TOKEN_MILLIS)
+                .sorted(Comparator.comparingLong(EvalOutcome::firstEventMillis).reversed())
+                .map(o -> o.evalCase().id() + " " + o.firstEventMillis() + " ms"
+                        + (o.stages() == null || o.stages().modelFirstTokenMillis() == null ? ""
+                                : "（模型首字 " + o.stages().modelFirstTokenMillis() + " ms）"))
+                .toList();
+        text.append("\n首字超过 3 s 的题 ").append(slow.size()).append(" / ").append(outcomes.size())
+                .append(slow.isEmpty() ? "。" : "：" + String.join("、", slow)).append('\n');
         var attempted = outcomes.stream().filter(o -> o.rewrite() != null).toList();
         var rewritten = attempted.stream().filter(o -> "REWRITTEN".equals(o.rewrite().outcome())).toList();
         text.append("\n### 低分改写\n\n");
@@ -202,10 +214,10 @@ public record EvalReport(int cases, double recallAt10, double citationAccuracy, 
             text.append("无。\n");
         }
         failures.forEach(failure -> text.append("- ").append(failure).append('\n'));
-        text.append("\n<details><summary>逐题明细</summary>\n\n| 题 | 拒答 | 最高分 | 改写为 | 引用 | 评判 | 回答 |\n| --- | --- | --- | --- | --- | --- | --- |\n");
+        text.append("\n<details><summary>逐题明细</summary>\n\n| 题 | 拒答 | 最高分 | 首字 | 改写为 | 引用 | 评判 | 回答 |\n| --- | --- | --- | --- | --- | --- | --- | --- |\n");
         for (var o : outcomes) {
             row(text, o.evalCase().id(), o.refused() ? "是（" + o.refusalReason() + "）" : "否",
-                    o.topRelevance() == null ? "-" : fmt(o.topRelevance()),
+                    o.topRelevance() == null ? "-" : fmt(o.topRelevance()), o.firstEventMillis() + " ms",
                     o.rewrittenQuestion() == null ? "" : cell(o.rewrittenQuestion()),
                     String.join("、", o.citedDocuments()),
                     o.judgement() == null ? "" : verdictLabel(o.judgement().verdict()),

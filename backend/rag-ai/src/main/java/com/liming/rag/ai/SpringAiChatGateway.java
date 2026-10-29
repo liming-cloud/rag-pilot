@@ -1,19 +1,28 @@
 package com.liming.rag.ai;
 
+import java.time.Duration;
 import java.util.List;
 import java.util.function.Consumer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.ai.openai.OpenAiChatOptions;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 
-/** 通过 Spring AI 调用 OpenAI 兼容的对话接口。不重试，失败直接告诉用户稍后再问。 */
+/** 通过 Spring AI 调用 OpenAI 兼容的对话接口。不重试，失败直接告诉用户稍后再问（流式生成的备用请求见 {@link #stream}）。 */
 final class SpringAiChatGateway implements ChatGateway {
+
+    private static final Logger log = LoggerFactory.getLogger(SpringAiChatGateway.class);
 
     private final ChatModel model;
     private final OpenAiChatOptions options;
+    private final Duration hedgeAfter;
+    private final OpenAiChatOptions hedgeOptions;
 
     SpringAiChatGateway(AiProperties properties) {
         var options = OpenAiChatOptions.builder()
@@ -26,6 +35,10 @@ final class SpringAiChatGateway implements ChatGateway {
                 .maxRetries(0)
                 .build();
         this.options = options;
+        this.hedgeAfter = properties.chat().hedgeAfter();
+        var hedgeModel = properties.chat().hedgeModel();
+        this.hedgeOptions = hedgeModel == null || hedgeModel.isBlank() ? options
+                : options.mutate().model(hedgeModel).build();
         this.model = OpenAiChatModel.builder().options(options).build();
     }
 
@@ -56,23 +69,38 @@ final class SpringAiChatGateway implements ChatGateway {
         }
     }
 
-    /** 在调用线程上阻塞到生成结束；调用方在虚拟线程里运行，不占用平台线程。 */
+    /**
+     * 在调用线程上阻塞到生成结束；调用方在虚拟线程里运行，不占用平台线程。
+     *
+     * <p>配置了 {@code hedgeAfter} 时，过了这么久还没出首字就再发一个备用请求，哪个先出字用哪个，另一个取消；
+     * 第一个请求在此之前失败时，备用请求也起到一次重试的作用。服务商的同一个模型常常整体卡住（D-028），
+     * 所以备用请求可以用另一个模型（{@code hedgeModel}）。
+     */
     @Override
     public String stream(String systemPrompt, String userMessage, Consumer<String> onDelta) {
+        var prompt = prompt(systemPrompt, userMessage);
+        var deltas = hedgeAfter == null ? deltas(prompt)
+                : Flux.firstWithValue(deltas(prompt), Mono.delay(hedgeAfter)
+                        .doOnNext(tick -> log.info("对话模型 {} 内没出首字，发出备用请求（{}）", hedgeAfter,
+                                hedgeOptions.getModel()))
+                        .thenMany(Flux.defer(() -> deltas(new Prompt(prompt.getInstructions(), hedgeOptions)))));
         var text = new StringBuilder();
         try {
-            model.stream(prompt(systemPrompt, userMessage))
-                    .mapNotNull(response -> response.getResult() == null ? null : response.getResult().getOutput().getText())
-                    .filter(delta -> !delta.isEmpty())
-                    .doOnNext(delta -> {
-                        text.append(delta);
-                        onDelta.accept(delta);
-                    })
-                    .blockLast();
+            deltas.doOnNext(delta -> {
+                text.append(delta);
+                onDelta.accept(delta);
+            }).blockLast();
         } catch (RuntimeException e) {
             throw unavailable(e);
         }
         return text.toString();
+    }
+
+    /** 只保留有文字的片段，这样“先出字”指的是真正的首字，而不是只带角色的空片段。 */
+    private Flux<String> deltas(Prompt prompt) {
+        return model.stream(prompt)
+                .mapNotNull(response -> response.getResult() == null ? null : response.getResult().getOutput().getText())
+                .filter(delta -> !delta.isEmpty());
     }
 
     private static Prompt prompt(String systemPrompt, String userMessage) {
