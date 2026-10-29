@@ -35,7 +35,7 @@
         <!-- 与 spring-modulith-core 2.1.0 自带的版本一致，见 DECISIONS.md D-031。 -->
         <archunit.version>1.4.2</archunit.version>
         <maven-compiler-plugin.version>3.14.1</maven-compiler-plugin.version>
-        <maven-surefire-plugin.version>3.5.3</maven-surefire-plugin.version>
+        <maven-surefire-plugin.version>3.6.1</maven-surefire-plugin.version>
         <!-- 调用真实模型的评测默认不跑；评测任务用 -Dtest.groups=eval -Dtest.excludedGroups=none 运行。 -->
         <test.groups></test.groups>
         <test.excludedGroups>eval</test.excludedGroups>
