@@ -26,7 +26,7 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <!-- 以下版本组合已在旧项目 ai-platform 的 Spring Boot 4.1 上实际构建通过。 -->
         <spring-boot.version>4.1.0</spring-boot.version>
-        <spring-ai.version>2.0.0</spring-ai.version>
+        <spring-ai.version>2.0.2</spring-ai.version>
         <spring-modulith.version>2.1.2</spring-modulith.version>
         <mybatis-plus.version>3.5.17</mybatis-plus.version>
         <sa-token.version>1.45.0</sa-token.version>
