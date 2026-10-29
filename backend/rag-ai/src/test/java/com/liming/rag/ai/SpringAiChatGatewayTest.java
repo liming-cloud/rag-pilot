@@ -89,11 +89,6 @@ class SpringAiChatGatewayTest {
 
     private static void respond(HttpExchange exchange, Reply reply) throws IOException {
         exchange.getRequestBody().readAllBytes();
-        try {
-            Thread.sleep(reply.delayMillis());
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
         try (exchange) {
             if (reply.status() != 200) {
                 var body = "{\"error\":{\"message\":\"busy\"}}".getBytes(StandardCharsets.UTF_8);
@@ -105,6 +100,9 @@ class SpringAiChatGatewayTest {
             exchange.getResponseHeaders().add("Content-Type", "text/event-stream");
             exchange.sendResponseHeaders(200, 0);
             var out = exchange.getResponseBody();
+            // 像真实服务一样先回响应头，首字迟迟不来。
+            out.flush();
+            Thread.sleep(reply.delayMillis());
             for (var piece : List.of(reply.text().substring(0, 2), reply.text().substring(2))) {
                 out.write(("data: {\"id\":\"c\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"m\","
                         + "\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"" + piece
@@ -114,6 +112,8 @@ class SpringAiChatGatewayTest {
             out.write("data: [DONE]\n\n".getBytes(StandardCharsets.UTF_8));
         } catch (IOException e) {
             // 被取消的请求，客户端已断开。
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
         }
     }
 

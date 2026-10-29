@@ -3,6 +3,8 @@ package com.liming.rag.ai;
 import java.time.Duration;
 import java.util.List;
 import java.util.function.Consumer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatModel;
@@ -14,6 +16,8 @@ import reactor.core.publisher.Mono;
 
 /** 通过 Spring AI 调用 OpenAI 兼容的对话接口。不重试，失败直接告诉用户稍后再问（流式生成的备用请求见 {@link #stream}）。 */
 final class SpringAiChatGateway implements ChatGateway {
+
+    private static final Logger log = LoggerFactory.getLogger(SpringAiChatGateway.class);
 
     private final ChatModel model;
     private final OpenAiChatOptions options;
@@ -71,7 +75,9 @@ final class SpringAiChatGateway implements ChatGateway {
     public String stream(String systemPrompt, String userMessage, Consumer<String> onDelta) {
         var prompt = prompt(systemPrompt, userMessage);
         var deltas = hedgeAfter == null ? deltas(prompt)
-                : Flux.firstWithValue(deltas(prompt), Mono.delay(hedgeAfter).thenMany(Flux.defer(() -> deltas(prompt))));
+                : Flux.firstWithValue(deltas(prompt), Mono.delay(hedgeAfter)
+                        .doOnNext(tick -> log.info("对话模型 {} 内没出首字，发出备用请求", hedgeAfter))
+                        .thenMany(Flux.defer(() -> deltas(prompt))));
         var text = new StringBuilder();
         try {
             deltas.doOnNext(delta -> {
