@@ -1,0 +1,24 @@
+# 编辑器统一设置（IntelliJ、VS Code 等都会读取）。只约束新改动，不对全仓库重新格式化。
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 4
+max_line_length = 120
+
+[*.java]
+ij_continuation_indent_size = 8
+
+[*.{ts,tsx,js,jsx,css,json,yml,yaml,html}]
+indent_size = 2
+
+[*.md]
+trim_trailing_whitespace = false
+max_line_length = off
+
+[{mvnw,mvnw.cmd}]
+end_of_line = unset

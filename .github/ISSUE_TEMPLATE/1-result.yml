@@ -1,0 +1,48 @@
+name: 结果
+description: 路线图上一个能验收的结果，一个 PR 交付；过程中的修复、决策、文档、测试都放进同一个 PR
+title: ""
+labels: ["kind/result", "status/needs-decision"]
+body:
+  - type: markdown
+    attributes:
+      value: 描述是唯一的事实来源，进度和决定更新在描述里，不靠评论。流程见 AGENTS.md。建好后选里程碑；未决问题全部答复后，把 `status/needs-decision` 换成 `status/ready`。
+  - type: textarea
+    id: goal
+    attributes:
+      label: 目标
+      description: 交付什么结果、解决什么问题；对应 ROADMAP.md 的哪个里程碑
+    validations:
+      required: true
+  - type: textarea
+    id: work
+    attributes:
+      label: 要做的
+      description: 主要改动；涉及界面的先做 MSW 原型
+    validations:
+      required: true
+  - type: textarea
+    id: questions
+    attributes:
+      label: 未决问题
+      description: 需要人决定的事（见 AGENTS.md“先停下来问人”）。答复后勾选，并写进 DECISIONS.md；没有写“无”
+      value: "- [ ] "
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: 验收标准
+      description: 每条写明怎么验证：测试类名、评测指标和门槛（几轮）、或手工步骤和记录位置
+      value: "- [ ] "
+    validations:
+      required: true
+  - type: textarea
+    id: out
+    attributes:
+      label: 不做的
+      description: 明确不在本 Issue 范围内的事
+  - type: textarea
+    id: history
+    attributes:
+      label: 实施记录
+      description: PR 链接；质量类结果写每轮评测数据的摘要
