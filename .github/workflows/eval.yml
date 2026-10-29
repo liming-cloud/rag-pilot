@@ -5,9 +5,15 @@ name: eval
 on:
   workflow_dispatch:
     inputs:
+      rounds:
+        description: 连续跑几轮（看指标波动；每轮约 47 题的模型费用）
+        default: "1"
       min_relevance:
         description: 拒答门槛（重排相关度）
         default: "0.2"
+      rewrite_min_relevance:
+        description: 低分改写下限，不填用 application.yml 的默认值
+        default: ""
       chat_model:
         description: 回答模型（也用于低分改写），不填用 application.yml 的默认值
         default: ""
@@ -70,7 +76,9 @@ jobs:
       - name: 运行评测
         env:
           MODEL_API_KEY: ${{ secrets.MODEL_API_KEY }}
+          EVAL_ROUNDS: ${{ inputs.rounds || '1' }}
           EVAL_MIN_RELEVANCE: ${{ inputs.min_relevance || '0.2' }}
+          REWRITE_MIN_RELEVANCE: ${{ inputs.rewrite_min_relevance }}
           CHAT_MODEL: ${{ inputs.chat_model || 'deepseek-ai/DeepSeek-V3' }}
           RERANK: ${{ inputs.rerank_model }}
           CANDIDATES: ${{ inputs.candidates }}
@@ -80,6 +88,7 @@ jobs:
         # 空环境变量会覆盖 application.yml 的默认值，所以只在填了输入时才设置。
         run: |
           if [ -n "$RERANK" ]; then export RERANK_MODEL="$RERANK"; fi
+          if [ -n "$REWRITE_MIN_RELEVANCE" ]; then export RAG_REWRITE_MIN_RELEVANCE="$REWRITE_MIN_RELEVANCE"; fi
           if [ -n "$CANDIDATES" ]; then export RAG_ANSWERING_CANDIDATES="$CANDIDATES"; fi
           if [ -n "$EVIDENCE_LIMIT" ]; then export RAG_ANSWERING_EVIDENCE_LIMIT="$EVIDENCE_LIMIT"; fi
           if [ "$HEDGE_AFTER" = off ]; then export CHAT_HEDGE_AFTER=; elif [ -n "$HEDGE_AFTER" ]; then export CHAT_HEDGE_AFTER="$HEDGE_AFTER"; fi

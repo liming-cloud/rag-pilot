@@ -8,6 +8,7 @@ import com.liming.rag.ai.ModelCallException;
 import com.liming.rag.evaluation.api.EvalCase;
 import com.liming.rag.evaluation.api.EvalOutcome;
 import com.liming.rag.evaluation.api.EvalReport;
+import com.liming.rag.evaluation.api.EvalRounds;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -15,7 +16,7 @@ import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -52,6 +53,9 @@ import tools.jackson.databind.json.JsonMapper;
  * 在 GitHub Actions 里同时写进运行摘要。越权泄漏必须为 0，其余指标只报告。
  *
  * <p>题目带参考答案时（开源数据集），回答再交给评判模型对照参考答案判断，配置见 {@link #judge()}。
+ *
+ * <p>{@code EVAL_ROUNDS}（默认 1）指定连续跑几轮：语料只上传一次，每轮把全部题目问一遍，报告给出各项指标的
+ * 均值和波动范围，并区分稳定失败和偶发失败的题（#81）。
  */
 @Tag("eval")
 @EnabledIfEnvironmentVariable(named = "MODEL_API_KEY", matches = ".+")
@@ -105,17 +109,29 @@ class EvaluationRun {
 
         var cases = loadCases();
         var judge = cases.stream().anyMatch(evalCase -> evalCase.referenceAnswer() != null) ? judge() : null;
-        var outcomes = new ArrayList<EvalOutcome>();
-        for (var evalCase : cases) {
-            outcomes.add(judged(judge, run(store, restricted, staff, evalCase), outcomes.isEmpty()));
-            if (outcomes.size() % 50 == 0) {
-                System.out.printf(Locale.ROOT, "已评测 %d / %d 题%n", outcomes.size(), cases.size());
+        int roundCount = Integer.parseInt(env("EVAL_ROUNDS", "1"));
+        var reports = new ArrayList<EvalReport>();
+        for (int round = 1; round <= roundCount; round++) {
+            var outcomes = new ArrayList<EvalOutcome>();
+            var unavailable = new ArrayList<String>();
+            for (var evalCase : cases) {
+                var outcome = run(store, restricted, staff, evalCase);
+                if (outcome == null) {
+                    unavailable.add(evalCase.id());
+                    continue;
+                }
+                outcomes.add(judged(judge, outcome, reports.isEmpty() && outcomes.isEmpty()));
+                if (outcomes.size() % 50 == 0) {
+                    System.out.printf(Locale.ROOT, "第 %d 轮：已评测 %d / %d 题%n", round, outcomes.size(), cases.size());
+                }
             }
+            reports.add(EvalReport.of(outcomes, restrictedDocuments, unavailable));
         }
-        var report = EvalReport.of(outcomes, restrictedDocuments);
-        publish(report);
+        var rounds = EvalRounds.of(reports);
+        publish(rounds);
 
-        assertThat(report.leaks()).as("越权泄漏必须为 0").isZero();
+        assertThat(rounds.leaks()).as("越权泄漏必须为 0（各轮合计）").isZero();
+        assertThat(reports).as("模型服务不可用的题超过 5%，结果不可信").allMatch(EvalReport::credible);
     }
 
     private EvalOutcome run(long knowledgeBaseId, long restricted, String staff, EvalCase evalCase) {
@@ -124,9 +140,10 @@ class EvaluationRun {
                 knowledgeBaseId, evalCase.question()).getBody();
         long searchMillis = (System.nanoTime() - start) / 1_000_000;
 
-        var events = SseEvents.post(http, "/api/ask/stream",
-                Map.of("question", evalCase.question(), "knowledgeBaseIds", List.of(knowledgeBaseId, restricted)), staff);
-        assertThat(events).as(evalCase.id() + " 流式问答").isNotEmpty();
+        var events = askWithRetry(knowledgeBaseId, restricted, staff, evalCase);
+        if (events == null) {
+            return null;
+        }
         var done = events.getLast();
         assertThat(done.name()).as(evalCase.id() + " 流式问答结果：" + done.data()).isEqualTo("done");
         var json = JsonMapper.builder().build();
@@ -154,6 +171,27 @@ class EvaluationRun {
                 answer.get("topRelevance") == null ? null : ((Number) answer.get("topRelevance")).doubleValue(),
                 searchMillis, events.getFirst().atMillis(), done.atMillis(), stages(answer), rewrite(answer))
                 .withDiscardedReply(refused && !streamed.isEmpty() ? streamed.toString() : null);
+    }
+
+    /** 模型服务不可用（503）时的重试间隔；服务商偶尔成批 503（D-028），隔一会儿通常就恢复。 */
+    private static final List<Duration> RETRY_DELAYS = List.of(Duration.ofSeconds(10), Duration.ofSeconds(30));
+
+    /** 流式问答；模型服务不可用时退避重试，仍不可用返回 null，这道题不计入指标。 */
+    private List<SseEvents.Event> askWithRetry(long knowledgeBaseId, long restricted, String staff, EvalCase evalCase) {
+        for (int attempt = 0; ; attempt++) {
+            var events = SseEvents.post(http, "/api/ask/stream",
+                    Map.of("question", evalCase.question(), "knowledgeBaseIds", List.of(knowledgeBaseId, restricted)), staff);
+            assertThat(events).as(evalCase.id() + " 流式问答").isNotEmpty();
+            var last = events.getLast();
+            if (!"error".equals(last.name()) || !last.data().contains("\"status\":503")) {
+                return events;
+            }
+            if (attempt == RETRY_DELAYS.size()) {
+                System.out.println("::warning title=模型服务不可用::" + evalCase.id() + " 重试 " + attempt + " 次仍失败，不计入指标");
+                return null;
+            }
+            sleep(RETRY_DELAYS.get(attempt));
+        }
     }
 
     /**
@@ -235,40 +273,68 @@ class EvaluationRun {
     }
 
     /** 先把文件全部上传，再统一等入库完成：后台按并发数处理，比逐篇上传逐篇等快得多。 */
+    /** 入库重试后仍失败的文档；不超过 1% 时照常评测，在报告开头列出（#81）。 */
+    private final List<String> corpusFailures = new ArrayList<>();
+
+    /** 入库失败（多是嵌入模型偶发不可用）的文档最多占这个比例，超过就停止评测。 */
+    private static final double MAX_CORPUS_FAILURE_SHARE = 0.01;
+
     private Set<String> uploadCorpus(long knowledgeBaseId, String folder) throws IOException {
-        var names = new HashSet<String>();
+        var files = new LinkedHashMap<String, byte[]>();
         for (var resource : RESOURCES.getResources(dataLocation() + "corpus/" + folder + "/*")) {
             var filename = resource.getFilename();
             if (filename == null || filename.startsWith(".") || !resource.isReadable()) {
                 continue;
             }
-            var file = new ByteArrayResource(resource.getContentAsByteArray()) {
-                @Override
-                public String getFilename() {
-                    return filename;
-                }
-            };
-            var body = new LinkedMultiValueMap<String, Object>();
-            body.add("file", file);
-            var headers = new HttpHeaders();
-            headers.setContentType(MediaType.MULTIPART_FORM_DATA);
-            var uploaded = http.postForEntity("/api/knowledge-bases/{id}/documents", new HttpEntity<>(body, headers),
-                    Map.class, knowledgeBaseId);
-            assertThat(uploaded.getStatusCode()).as(filename + " 上传").isEqualTo(HttpStatus.CREATED);
-            names.add(filename);
+            files.put(filename, resource.getContentAsByteArray());
         }
-        if (!names.isEmpty()) {
-            awaitAllProcessed(knowledgeBaseId, names.size());
+        files.forEach((filename, bytes) -> upload(knowledgeBaseId, filename, bytes));
+        if (!files.isEmpty()) {
+            var failed = awaitAllProcessed(knowledgeBaseId, files.size());
+            if (!failed.isEmpty()) {
+                // 嵌入模型偶尔整段不可用，入库内部的重试也躲不过；隔一会儿删掉重传一次。
+                System.out.println("::warning title=入库失败::" + failed.size() + " 篇，30 秒后重传：" + failed.values());
+                sleep(Duration.ofSeconds(30));
+                failed.forEach((id, filename) -> {
+                    http.delete("/api/knowledge-bases/{id}/documents/{documentId}", knowledgeBaseId, id);
+                    upload(knowledgeBaseId, filename, files.get(filename));
+                });
+                failed = awaitAllProcessed(knowledgeBaseId, files.size());
+            }
+            var messages = failed.values().stream().toList();
+            assertThat((double) failed.size() / files.size()).as("重传后仍入库失败的文档超过 1%：" + messages)
+                    .isLessThanOrEqualTo(MAX_CORPUS_FAILURE_SHARE);
+            corpusFailures.addAll(messages);
         }
         // 私有评测集可以没有店长专用库；合成集两个库都有。
         if (folder.equals("store")) {
-            assertThat(names).as(folder + " 语料").isNotEmpty();
+            assertThat(files).as(folder + " 语料").isNotEmpty();
         }
-        return names;
+        return files.keySet();
     }
 
-    /** 每篇给 3 秒、至少 90 秒，等全部文档离开“解析中”，并要求都是可用。 */
-    private void awaitAllProcessed(long knowledgeBaseId, int count) {
+    private void upload(long knowledgeBaseId, String filename, byte[] bytes) {
+        var file = new ByteArrayResource(bytes) {
+            @Override
+            public String getFilename() {
+                return filename;
+            }
+        };
+        var body = new LinkedMultiValueMap<String, Object>();
+        body.add("file", file);
+        var headers = new HttpHeaders();
+        headers.setContentType(MediaType.MULTIPART_FORM_DATA);
+        var uploaded = http.postForEntity("/api/knowledge-bases/{id}/documents", new HttpEntity<>(body, headers),
+                Map.class, knowledgeBaseId);
+        assertThat(uploaded.getStatusCode()).as(filename + " 上传").isEqualTo(HttpStatus.CREATED);
+    }
+
+    /**
+     * 每篇给 3 秒、至少 90 秒，等全部文档离开“解析中”。
+     *
+     * @return 入库失败的文档：文档 id → “文件名：原因”
+     */
+    private Map<Long, String> awaitAllProcessed(long knowledgeBaseId, int count) {
         var timeout = Duration.ofSeconds(Math.max(90, 3L * count));
         long deadline = System.nanoTime() + timeout.toNanos();
         long started = System.nanoTime();
@@ -276,21 +342,26 @@ class EvaluationRun {
             var documents = http.exchange("/api/knowledge-bases/{id}/documents", HttpMethod.GET, null, DOCUMENTS,
                     knowledgeBaseId).getBody();
             if (documents.stream().noneMatch(document -> "PARSING".equals(document.get("status")))) {
-                var failed = documents.stream().filter(document -> !"READY".equals(document.get("status")))
-                        .map(document -> document.get("filename") + "：" + document.get("error")).toList();
-                assertThat(failed).as("入库失败的文档").isEmpty();
+                var failed = new LinkedHashMap<Long, String>();
+                documents.stream().filter(document -> !"READY".equals(document.get("status")))
+                        .forEach(document -> failed.put(((Number) document.get("id")).longValue(),
+                                document.get("filename") + "：" + document.get("error")));
                 System.out.printf(Locale.ROOT, "%d 篇文档入库用时 %d 秒%n", documents.size(),
                         (System.nanoTime() - started) / 1_000_000_000);
-                return;
+                return failed;
             }
-            try {
-                Thread.sleep(1000);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                break;
-            }
+            sleep(Duration.ofSeconds(1));
         }
-        fail(count + " 篇文档在 " + timeout.toSeconds() + " 秒内没有全部处理完");
+        return fail(count + " 篇文档在 " + timeout.toSeconds() + " 秒内没有全部处理完");
+    }
+
+    private static void sleep(Duration duration) {
+        try {
+            Thread.sleep(duration);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException(e);
+        }
     }
 
     private String createStaffWithAccessTo(long knowledgeBaseId) {
@@ -337,18 +408,35 @@ class EvaluationRun {
         return value == null ? null : ((Number) value).longValue();
     }
 
-    private static void publish(EvalReport report) throws IOException {
-        var markdown = report.toMarkdown();
+    private void publish(EvalRounds rounds) throws IOException {
+        var markdown = rounds.toMarkdown();
+        if (!corpusFailures.isEmpty()) {
+            markdown = "> 重传后仍入库失败、不在语料里的文档 " + corpusFailures.size() + " 篇：" + String.join("；", corpusFailures)
+                    + "\n\n" + markdown;
+        }
         Files.writeString(Path.of("target", "eval-report.md"), markdown);
         var summary = System.getenv("GITHUB_STEP_SUMMARY");
         if (summary != null && !summary.isBlank()) {
             Files.writeString(Path.of(summary), markdown, StandardOpenOption.CREATE, StandardOpenOption.APPEND);
         }
-        System.out.printf(Locale.ROOT,
-                "::notice title=评测结果::召回 %s，引用正确 %s，拒答正确 %s，误拒 %s，越权 %d，检索 p95 %d ms，首字 p95 %d ms，整段 p95 %d ms%n",
-                percent(report.recallAt10()), percent(report.citationAccuracy()), percent(report.refusalAccuracy()),
-                percent(report.falseRefusalRate()), report.leaks(), report.searchP95Millis(), report.firstTokenP95Millis(),
-                report.askP95Millis());
+        for (var report : rounds.rounds()) {
+            System.out.printf(Locale.ROOT,
+                    "::notice title=评测结果::召回 %s，引用正确 %s，拒答正确 %s，误拒 %s，越权 %d，检索 p95 %d ms，首字 p95 %d ms，整段 p95 %d ms%n",
+                    percent(report.recallAt10()), percent(report.citationAccuracy()), percent(report.refusalAccuracy()),
+                    percent(report.falseRefusalRate()), report.leaks(), report.searchP95Millis(),
+                    report.firstTokenP95Millis(), report.askP95Millis());
+        }
+        if (rounds.rounds().size() > 1) {
+            // 多轮时逐条失败太多，只写汇总和稳定、偶发失败的题；明细在报告里。
+            System.out.printf(Locale.ROOT, "::notice title=多轮汇总::%d 轮均值：召回 %s，引用正确 %s，拒答正确 %s，误拒 %s（%s～%s），越权合计 %d%n",
+                    rounds.rounds().size(), percent(rounds.recallAt10().mean()), percent(rounds.citationAccuracy().mean()),
+                    percent(rounds.refusalAccuracy().mean()), percent(rounds.falseRefusalRate().mean()),
+                    percent(rounds.falseRefusalRate().min()), percent(rounds.falseRefusalRate().max()), rounds.leaks());
+            System.out.println("::warning title=稳定失败::" + String.join("、", rounds.stableFailures()));
+            System.out.println("::warning title=偶发失败::" + String.join("、", rounds.flakyFailures()));
+            return;
+        }
+        var report = rounds.rounds().getFirst();
         // 失败题和分数逐条写成注释，不下载报告也能在 PR 检查页看到。
         report.failures().forEach(failure -> System.out.println("::warning title=评测未通过::" + failure));
         // GitHub 每步每类注释最多显示 10 条，逐题分数合成一条；%0A 是注释里的换行。

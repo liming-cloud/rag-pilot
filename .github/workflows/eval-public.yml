@@ -27,6 +27,9 @@ on:
       judge_model:
         description: 评判模型（OpenAI 兼容接口上的模型名）
         default: THUDM/GLM-4-9B-0414
+      rounds:
+        description: 连续跑几轮（费用按轮数成倍增加）
+        default: "1"
       min_relevance:
         description: 拒答门槛（重排相关度）
         default: "0.2"
@@ -85,6 +88,7 @@ jobs:
           EVAL_DATA_DIR: ${{ runner.temp }}/crud-eval
           CHAT_MODEL: ${{ inputs.chat_model }}
           EVAL_JUDGE_MODEL: ${{ inputs.judge_model }}
+          EVAL_ROUNDS: ${{ inputs.rounds }}
           EVAL_MIN_RELEVANCE: ${{ inputs.min_relevance }}
           RAG_REWRITE_MIN_RELEVANCE: ${{ inputs.rewrite_min_relevance }}
         run: >
