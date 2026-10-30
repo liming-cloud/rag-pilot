@@ -38,10 +38,6 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 @Testcontainers
 class DocumentLifecycleTests {
 
-    private static final ParameterizedTypeReference<List<Map<String, Object>>> LIST =
-            new ParameterizedTypeReference<>() {
-            };
-
     @Container
     @ServiceConnection
     static final PostgreSQLContainer POSTGRES = TestDatabase.container();
@@ -105,6 +101,8 @@ class DocumentLifecycleTests {
         var processed = TestDocuments.awaitProcessed(http, kb, failed.getBody(), null);
         assertThat(processed).containsEntry("status", "FAILED");
         assertThat(((Number) processed.get("replacesDocumentId")).longValue()).isEqualTo(oldId);
+        assertThat(processed).as("分页后旧版本不一定在同一页，列表直接给出它的文件名")
+                .containsEntry("replacesFilename", "陈列规范.txt");
         assertThat(documents(kb)).extracting(d -> d.get("filename")).contains("陈列规范.txt");
 
         var wrongKb = upload(other, "陈列规范-新版.txt", "新内容".getBytes(StandardCharsets.UTF_8), oldId);
@@ -132,7 +130,7 @@ class DocumentLifecycleTests {
         body.add("file", file);
         var headers = new HttpHeaders();
         headers.setContentType(MediaType.MULTIPART_FORM_DATA);
-        var path = "/api/knowledge-bases/{id}/documents" + (replaces == null ? "" : "?replaces=" + replaces);
+        var path = "/api/knowledge-bases/{id}/documents" + (replaces == null ? "" : "/" + replaces + "/versions");
         org.springframework.http.ResponseEntity response = http.postForEntity(path, new HttpEntity<>(body, headers),
                 Map.class, kb);
         return response;
@@ -144,7 +142,7 @@ class DocumentLifecycleTests {
     }
 
     private List<Map<String, Object>> documents(long kb) {
-        return http.exchange("/api/knowledge-bases/{id}/documents", HttpMethod.GET, null, LIST, kb).getBody();
+        return TestDocuments.all(http, kb, new HttpHeaders());
     }
 
     @SuppressWarnings("unchecked")

@@ -3,6 +3,7 @@ package com.liming.rag.answering.application;
 import com.liming.rag.answering.api.Answer;
 import com.liming.rag.answering.domain.AnswerRecord;
 import com.liming.rag.answering.domain.AnswerRecordRepository;
+import com.liming.rag.identity.api.UserDirectory;
 import com.liming.rag.shared.TenantId;
 import com.liming.rag.shared.UserId;
 import java.time.LocalDate;
@@ -18,9 +19,6 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class AnswerLogService {
 
-    /** 一次最多查看的条数。 */
-    static final int MAX_REVIEW_LIMIT = 200;
-
     /** 使用统计最多看多少天。 */
     static final int MAX_STATS_DAYS = 90;
 
@@ -30,11 +28,14 @@ public class AnswerLogService {
     private final AnswerRecordRepository records;
     private final AnswerReviews reviews;
     private final AnswerStatistics statistics;
+    private final UserDirectory users;
 
-    AnswerLogService(AnswerRecordRepository records, AnswerReviews reviews, AnswerStatistics statistics) {
+    AnswerLogService(AnswerRecordRepository records, AnswerReviews reviews, AnswerStatistics statistics,
+            UserDirectory users) {
         this.records = records;
         this.reviews = reviews;
         this.statistics = statistics;
+        this.users = users;
     }
 
     /**
@@ -52,21 +53,40 @@ public class AnswerLogService {
     }
 
     /**
-     * 管理员查看回答记录，按时间从新到旧。
+     * 管理员按筛选条件分页查看回答记录，按时间从新到旧（D-039），带上提问人的显示名。
      *
      * @param filter disliked（被点踩）、refused（答不上来）或 all，不区分大小写
-     * @param includeResolved 是否包含已处理的记录；默认只看待处理的
-     * @throws AnsweringException 范围不认识
+     * @param status open（待处理）、resolved（已处理）或 all
+     * @param days 最近几天（含今天），为 null 不限
+     * @param keyword 匹配问题，为空不筛
+     * @throws AnsweringException 筛选条件不认识
      */
     @Transactional(readOnly = true)
-    public List<AnswerReview> review(TenantId tenantId, String filter, boolean includeResolved, int limit) {
-        AnswerReview.Filter parsed;
-        try {
-            parsed = AnswerReview.Filter.valueOf(filter == null ? "" : filter.toUpperCase(Locale.ROOT));
-        } catch (IllegalArgumentException e) {
-            throw invalid("查看范围只能是 disliked、refused 或 all");
+    public Paged<AnswerReview> review(TenantId tenantId, String filter, String status, Integer days, String keyword,
+            int page, int size) {
+        var parsedFilter = parse(AnswerReview.Filter.class, filter, "查看范围只能是 disliked、refused 或 all");
+        var parsedStatus = parse(AnswerReview.Status.class, status, "处理状态只能是 open、resolved 或 all");
+        if (days != null && (days < 1 || days > MAX_STATS_DAYS)) {
+            throw invalid("天数只能是 1 到 " + MAX_STATS_DAYS + " 天");
         }
-        return reviews.list(tenantId, parsed, includeResolved, Math.clamp(limit, 1, MAX_REVIEW_LIMIT));
+        var since = days == null ? null
+                : LocalDate.now(STATS_ZONE).minusDays(days - 1L).atStartOfDay(STATS_ZONE).toOffsetDateTime();
+        var trimmed = keyword == null || keyword.isBlank() ? null : keyword.strip();
+        var found = reviews.page(tenantId, new AnswerReview.Query(parsedFilter, parsedStatus, since, trimmed,
+                new Paged.Request(page, size)));
+        var names = users.summaries(tenantId, found.items().stream().map(AnswerReview::userId).distinct().toList());
+        return found.map(review -> {
+            var asker = names.get(review.userId());
+            return review.withAskerName(asker == null ? null : asker.displayName());
+        });
+    }
+
+    private static <E extends Enum<E>> E parse(Class<E> type, String value, String message) {
+        try {
+            return Enum.valueOf(type, value == null ? "" : value.toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException e) {
+            throw invalid(message);
+        }
     }
 
     /**

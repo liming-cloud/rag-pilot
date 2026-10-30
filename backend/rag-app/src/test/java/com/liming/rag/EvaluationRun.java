@@ -75,10 +75,6 @@ class EvaluationRun {
     /** 评判默认用硅基流动上的免费模型，与回答模型不同系列；换成自己部署的专用评判模型时改 EVAL_JUDGE_BASE_URL 和 EVAL_JUDGE_MODEL。 */
     private static final String DEFAULT_JUDGE_MODEL = "THUDM/GLM-4-9B-0414";
 
-    private static final ParameterizedTypeReference<List<Map<String, Object>>> DOCUMENTS =
-            new ParameterizedTypeReference<>() {
-            };
-
     private static final PathMatchingResourcePatternResolver RESOURCES = new PathMatchingResourcePatternResolver();
 
     private static final ParameterizedTypeReference<List<Map<String, Object>>> HITS =
@@ -106,7 +102,7 @@ class EvaluationRun {
         var restrictedDocuments = uploadCorpus(restricted, "restricted");
 
         // 以只被授权门店库的店员身份提问，并在请求里主动带上店长专用库，检验越权是否真的被挡住。
-        String staff = createStaffWithAccessTo(store);
+        String staff = createStaffWithAccessTo(store, restricted);
 
         var cases = loadCases();
         var judge = cases.stream().anyMatch(evalCase -> evalCase.referenceAnswer() != null) ? judge() : null;
@@ -386,8 +382,7 @@ class EvaluationRun {
         long deadline = System.nanoTime() + timeout.toNanos();
         long started = System.nanoTime();
         while (System.nanoTime() < deadline) {
-            var documents = http.exchange("/api/knowledge-bases/{id}/documents", HttpMethod.GET, null, DOCUMENTS,
-                    knowledgeBaseId).getBody();
+            var documents = TestDocuments.all(http, knowledgeBaseId, new HttpHeaders());
             if (documents.stream().noneMatch(document -> "PARSING".equals(document.get("status")))) {
                 var failed = new LinkedHashMap<Long, String>();
                 documents.stream().filter(document -> !"READY".equals(document.get("status")))
@@ -411,12 +406,21 @@ class EvaluationRun {
         }
     }
 
-    private String createStaffWithAccessTo(long knowledgeBaseId) {
+    /**
+     * 评测店员只通过角色获得授权（D-038）：角色“评测店员”授权门店库；店长专用库先授权给这个角色、再收回，
+     * 越权题因此覆盖“通过角色获得授权”和“收回角色授权后”两种情况。店员没有任何直接授权。
+     */
+    private String createStaffWithAccessTo(long knowledgeBaseId, long restricted) {
+        var role = http.postForEntity("/api/roles", Map.of("name", "评测店员", "permissions", List.of("chat:use")),
+                Map.class);
+        assertThat(role.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        long roleId = ((Number) role.getBody().get("id")).longValue();
         var created = http.postForEntity("/api/users", Map.of("username", "eval-staff", "displayName", "评测店员",
-                "password", "eval-staff-password", "role", "STAFF"), Map.class);
+                "password", "eval-staff-password", "roleIds", List.of(roleId)), Map.class);
         assertThat(created.getStatusCode()).isEqualTo(HttpStatus.CREATED);
-        long userId = ((Number) created.getBody().get("id")).longValue();
-        http.put("/api/knowledge-bases/{id}/members/{userId}", null, knowledgeBaseId, userId);
+        http.put("/api/knowledge-bases/{id}/role-grants/{roleId}", null, knowledgeBaseId, roleId);
+        http.put("/api/knowledge-bases/{id}/role-grants/{roleId}", null, restricted, roleId);
+        http.delete("/api/knowledge-bases/{id}/role-grants/{roleId}", restricted, roleId);
         return TestLogin.token(http, "eval-staff", "eval-staff-password");
     }
 

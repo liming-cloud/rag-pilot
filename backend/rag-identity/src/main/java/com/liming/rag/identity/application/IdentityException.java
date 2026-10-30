@@ -12,7 +12,11 @@ public class IdentityException extends BusinessException {
         BAD_CREDENTIALS(ErrorKind.UNAUTHENTICATED),
         NOT_FOUND(ErrorKind.NOT_FOUND),
         CONFLICT(ErrorKind.CONFLICT),
-        INVALID(ErrorKind.INVALID);
+        INVALID(ErrorKind.INVALID),
+        /** 分配或修改超出自己权限的角色、账号（D-038）。 */
+        ESCALATION(ErrorKind.FORBIDDEN),
+        /** 连续输错密码被锁定（D-038）。 */
+        LOCKED(ErrorKind.FORBIDDEN);
 
         private final ErrorKind kind;
 

@@ -40,14 +40,24 @@ export async function createUser(account: NewAccount): Promise<Account> {
   return json(response, "新建账号失败");
 }
 
-/** 启用、停用或改角色。停用后该账号已登录的会话立即失效；只能分配不超过自己权限的角色（D-038）。 */
-export async function updateUser(id: number, change: { enabled?: boolean; roleIds?: number[] }): Promise<Account> {
-  const response = await authFetch(`/api/users/${id}`, {
-    method: "PATCH",
+/** 启用或停用。停用后该账号已登录的会话立即失效（user:disable）。 */
+export async function setUserEnabled(id: number, enabled: boolean): Promise<Account> {
+  const response = await authFetch(`/api/users/${id}/enabled`, {
+    method: "PUT",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(change),
+    body: JSON.stringify({ enabled }),
   });
   return json(response, "保存账号失败");
+}
+
+/** 整体替换账号的角色，至少一个；只能分配不超过自己权限的角色（user:assign-role，D-038）。 */
+export async function assignRoles(id: number, roleIds: number[]): Promise<Account> {
+  const response = await authFetch(`/api/users/${id}/roles`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ roleIds }),
+  });
+  return json(response, "保存角色失败");
 }
 
 /** 重置为管理员给的临时密码；员工下次登录必须先改密码。 */

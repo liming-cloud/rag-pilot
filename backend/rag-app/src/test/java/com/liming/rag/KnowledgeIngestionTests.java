@@ -77,8 +77,11 @@ class KnowledgeIngestionTests {
         assertThat(jdbc.queryForObject("select count(*) from chunk where knowledge_base_id = ? and content like ?",
                 Integer.class, knowledgeBaseId, "%青柚气泡水%")).isPositive();
 
-        var listed = http.getForEntity("/api/knowledge-bases/{id}/documents", List.class, knowledgeBaseId);
-        assertThat(listed.getBody()).hasSize(1);
+        var listed = http.getForEntity("/api/knowledge-bases/{id}/documents?keyword=商品知识&status=ready", Map.class,
+                knowledgeBaseId);
+        assertThat(listed.getBody()).containsEntry("total", 1);
+        assertThat(http.getForEntity("/api/knowledge-bases/{id}/documents?status=failed", Map.class, knowledgeBaseId)
+                .getBody()).containsEntry("total", 0);
 
         var duplicate = upload(knowledgeBaseId, "副本.txt", sample);
         assertThat(duplicate.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);

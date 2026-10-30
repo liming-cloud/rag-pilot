@@ -22,12 +22,13 @@ import { Can } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
 import {
   type Account,
+  assignRoles,
   createUser,
   fetchUsers,
   type NewAccount,
   resetPassword,
+  setUserEnabled,
   unlockUser,
-  updateUser,
   type UserFilter,
 } from "./api";
 
@@ -53,7 +54,7 @@ export function UsersPage() {
   );
   const refresh = () => queryClient.invalidateQueries({ queryKey: ["users"] });
   const toggle = useMutation({
-    mutationFn: (account: Account) => updateUser(account.id, { enabled: !account.enabled }),
+    mutationFn: (account: Account) => setUserEnabled(account.id, !account.enabled),
     onSuccess: refresh,
   });
   const unlock = useMutation({ mutationFn: (account: Account) => unlockUser(account.id), onSuccess: refresh });
@@ -358,7 +359,7 @@ function RolesDialog({ account, roles, onDone }: { account: Account; roles: Role
   const refresh = useRefreshUsers();
   const [roleIds, setRoleIds] = useState(account.roles.map((role) => role.id));
   const save = useMutation({
-    mutationFn: () => updateUser(account.id, { roleIds }),
+    mutationFn: () => assignRoles(account.id, roleIds),
     onSuccess: async () => {
       await refresh();
       onDone();

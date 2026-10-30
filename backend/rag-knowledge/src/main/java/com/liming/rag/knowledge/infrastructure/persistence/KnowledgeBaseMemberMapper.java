@@ -4,7 +4,7 @@ import java.util.List;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
-/** knowledge_base_member 表；成员关系只有主键，不需要单独的 DO。 */
+/** 知识库授权：knowledge_base_member（授权给账号）和 knowledge_base_role_grant（授权给角色）。 */
 @Mapper
 interface KnowledgeBaseMemberMapper {
 
@@ -16,5 +16,17 @@ interface KnowledgeBaseMemberMapper {
 
     List<Long> members(@Param("tenantId") long tenantId, @Param("knowledgeBaseId") long knowledgeBaseId);
 
-    List<KnowledgeBaseDO> accessible(@Param("tenantId") long tenantId, @Param("userId") long userId);
+    /** 授权给用户本人或其角色的知识库，过滤条件与检索共用 ChunkSearchMapper 的 accessibleKnowledgeBases。 */
+    List<KnowledgeBaseDO> accessible(@Param("tenantId") long tenantId, @Param("userId") long userId,
+            @Param("roleIds") List<Long> roleIds);
+
+    void insertRoleGrant(@Param("tenantId") long tenantId, @Param("knowledgeBaseId") long knowledgeBaseId,
+            @Param("roleId") long roleId);
+
+    void deleteRoleGrant(@Param("tenantId") long tenantId, @Param("knowledgeBaseId") long knowledgeBaseId,
+            @Param("roleId") long roleId);
+
+    List<Long> roleGrants(@Param("tenantId") long tenantId, @Param("knowledgeBaseId") long knowledgeBaseId);
+
+    void deleteGrantsOfRole(@Param("tenantId") long tenantId, @Param("roleId") long roleId);
 }

@@ -2,12 +2,26 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.liming.rag.knowledge.infrastructure.persistence.ChunkSearchMapper">
 
-    <!-- nearest、keyword 两条召回 SQL 只在提问人是成员的知识库里查，这是检索链路里唯一的权限过滤点（AGENTS.md）。 -->
+    <!--
+      用户能访问的知识库 = 直接授权给本人的 ∪ 授权给其角色的（D-038）。这是检索链路里唯一的权限过滤定义（AGENTS.md）：
+      nearest、keyword 两条召回 SQL 和 accessibleContents 都只在这个范围里查；KnowledgeBaseMemberMapper 列出可访问的库时
+      也引用它。roleIds 由检索服务向 identity 查得，不由调用方传入。
+    -->
+    <sql id="accessibleKnowledgeBases">
+        SELECT knowledge_base_id FROM knowledge_base_member
+        WHERE tenant_id = #{tenantId} AND user_id = #{userId}
+        <if test="roleIds != null and !roleIds.isEmpty()">
+            UNION
+            SELECT knowledge_base_id FROM knowledge_base_role_grant
+            WHERE tenant_id = #{tenantId}
+              AND role_id IN <foreach collection="roleIds" item="roleId" open="(" separator="," close=")">#{roleId}</foreach>
+        </if>
+    </sql>
+
     <select id="nearest" resultType="long">
         SELECT id FROM chunk
         WHERE tenant_id = #{tenantId}
-          AND knowledge_base_id IN (SELECT knowledge_base_id FROM knowledge_base_member
-                                    WHERE tenant_id = #{tenantId} AND user_id = #{userId})
+          AND knowledge_base_id IN (<include refid="accessibleKnowledgeBases"/>)
           <if test="knowledgeBaseIds != null and !knowledgeBaseIds.isEmpty()">
             AND knowledge_base_id IN <foreach collection="knowledgeBaseIds" item="kb" open="(" separator="," close=")">#{kb}</foreach>
           </if>
@@ -19,8 +33,7 @@
     <select id="keyword" resultType="long">
         SELECT id FROM chunk
         WHERE tenant_id = #{tenantId}
-          AND knowledge_base_id IN (SELECT knowledge_base_id FROM knowledge_base_member
-                                    WHERE tenant_id = #{tenantId} AND user_id = #{userId})
+          AND knowledge_base_id IN (<include refid="accessibleKnowledgeBases"/>)
           <if test="knowledgeBaseIds != null and !knowledgeBaseIds.isEmpty()">
             AND knowledge_base_id IN <foreach collection="knowledgeBaseIds" item="kb" open="(" separator="," close=")">#{kb}</foreach>
           </if>
@@ -39,8 +52,7 @@
     <select id="accessibleContents" resultType="map">
         SELECT id AS chunk_id, content FROM chunk
         WHERE tenant_id = #{tenantId}
-          AND knowledge_base_id IN (SELECT knowledge_base_id FROM knowledge_base_member
-                                    WHERE tenant_id = #{tenantId} AND user_id = #{userId})
+          AND knowledge_base_id IN (<include refid="accessibleKnowledgeBases"/>)
           AND id IN <foreach collection="chunkIds" item="id" open="(" separator="," close=")">#{id}</foreach>
     </select>
 </mapper>

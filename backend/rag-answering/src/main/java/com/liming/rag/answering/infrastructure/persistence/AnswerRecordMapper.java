@@ -26,9 +26,16 @@ interface AnswerRecordMapper {
 
     List<Map<String, Object>> citations(@Param("tenantId") long tenantId, @Param("ids") Collection<Long> ids);
 
-    /** filter 为 DISLIKED、REFUSED 或 ALL；引用的文档名用 \u001F 连接，由调用方拆开。 */
+    /**
+     * filter 为 DISLIKED、REFUSED 或 ALL；status 为 OPEN、RESOLVED 或 null（不筛）；since、keyword 为 null 不筛。
+     * 引用的文档名用 \u001F 连接，由调用方拆开。
+     */
     List<Map<String, Object>> list(@Param("tenantId") long tenantId, @Param("filter") String filter,
-            @Param("includeResolved") boolean includeResolved, @Param("limit") int limit);
+            @Param("status") String status, @Param("since") OffsetDateTime since, @Param("keyword") String keyword,
+            @Param("offset") long offset, @Param("size") int size);
+
+    long count(@Param("tenantId") long tenantId, @Param("filter") String filter, @Param("status") String status,
+            @Param("since") OffsetDateTime since, @Param("keyword") String keyword);
 
     /** 统计用的时间条件：created_at 落在 [from, to) 内。评价只算给出了回答的记录。 */
     Map<String, Object> totals(@Param("tenantId") long tenantId, @Param("from") OffsetDateTime from,

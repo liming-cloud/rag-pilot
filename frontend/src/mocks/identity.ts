@@ -220,7 +220,7 @@ export const identityHandlers = [
     const account = state.accounts.find((candidate) => candidate.username === username) ?? state.accounts[1]!;
     if (account.lockedUntil && new Date(account.lockedUntil) > new Date()) {
       const minutes = Math.ceil((new Date(account.lockedUntil).getTime() - Date.now()) / 60_000);
-      return problem(423, "IDENTITY_LOCKED", `密码连续输错 5 次，账号已锁定，请 ${minutes} 分钟后再试或联系管理员解锁`);
+      return problem(403, "IDENTITY_LOCKED", `密码连续输错 5 次，账号已锁定，请 ${minutes} 分钟后再试或联系管理员解锁`);
     }
     if (password === "wrong-password") {
       account.failures += 1;
@@ -332,23 +332,26 @@ export const identityHandlers = [
     state.accounts.push(created);
     return HttpResponse.json(view(created), { status: 201 });
   }),
-  http.patch("/api/users/:id", async ({ params, request }) => {
+  http.put("/api/users/:id/enabled", async ({ params, request }) => {
+    const denied = forbidden("user:disable");
+    if (denied) return denied;
     const account = state.accounts.find((candidate) => candidate.id === Number(params.id));
     if (!account) return problem(404, "IDENTITY_NOT_FOUND", "账号不存在");
-    if (account.superAdmin) return problem(400, "IDENTITY_INVALID", "超级管理员不能修改");
-    const change = (await request.json()) as { enabled?: boolean; roleIds?: number[] };
-    if (change.enabled !== undefined) {
-      const denied = forbidden("user:disable");
-      if (denied) return denied;
-      if (account.id === current().id) return problem(400, "IDENTITY_INVALID", "不能停用自己的账号");
-      account.enabled = change.enabled;
-    }
-    if (change.roleIds !== undefined) {
-      const denied = forbidden("user:assign-role") ?? escalation(change.roleIds);
-      if (denied) return denied;
-      if (change.roleIds.length === 0) return problem(400, "IDENTITY_INVALID", "至少要有一个角色");
-      account.roleIds = change.roleIds;
-    }
+    if (account.superAdmin) return problem(403, "IDENTITY_ESCALATION", "超级管理员不能被别人修改");
+    const { enabled } = (await request.json()) as { enabled: boolean };
+    if (!enabled && account.id === current().id) return problem(400, "IDENTITY_INVALID", "不能停用自己的账号");
+    account.enabled = enabled;
+    return HttpResponse.json(view(account));
+  }),
+  http.put("/api/users/:id/roles", async ({ params, request }) => {
+    const account = state.accounts.find((candidate) => candidate.id === Number(params.id));
+    if (!account) return problem(404, "IDENTITY_NOT_FOUND", "账号不存在");
+    if (account.superAdmin) return problem(403, "IDENTITY_ESCALATION", "超级管理员不能被别人修改");
+    const { roleIds } = (await request.json()) as { roleIds: number[] };
+    const denied = forbidden("user:assign-role") ?? escalation(roleIds);
+    if (denied) return denied;
+    if (roleIds.length === 0) return problem(400, "IDENTITY_INVALID", "至少要有一个角色");
+    account.roleIds = roleIds;
     return HttpResponse.json(view(account));
   }),
   http.post("/api/users/:id/reset-password", async ({ params, request }) => {

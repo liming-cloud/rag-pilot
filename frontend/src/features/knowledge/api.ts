@@ -109,8 +109,9 @@ export async function uploadDocument(
 ): Promise<KnowledgeDocument> {
   const body = new FormData();
   body.append("file", file);
-  const query = replacesDocumentId ? `?replaces=${replacesDocumentId}` : "";
-  const response = await authFetch(`/api/knowledge-bases/${knowledgeBaseId}/documents${query}`, {
+  // 上传新版本是单独的接口（doc:replace），新版本处理成功后旧版本自动删除。
+  const path = replacesDocumentId ? `/documents/${replacesDocumentId}/versions` : "/documents";
+  const response = await authFetch(`/api/knowledge-bases/${knowledgeBaseId}${path}`, {
     method: "POST",
     body,
   });

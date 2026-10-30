@@ -1,14 +1,18 @@
 package com.liming.rag.knowledge.web;
 
 import cn.dev33.satoken.annotation.SaCheckLogin;
-import cn.dev33.satoken.annotation.SaCheckRole;
+import cn.dev33.satoken.annotation.SaCheckPermission;
 import com.liming.rag.identity.api.CurrentUser;
-import com.liming.rag.identity.api.Roles;
+import com.liming.rag.identity.api.Permissions;
 import com.liming.rag.knowledge.api.KnowledgeSearch;
 import com.liming.rag.knowledge.api.SearchHit;
 import com.liming.rag.knowledge.api.SearchQuery;
 import com.liming.rag.knowledge.application.DocumentIngestionService;
 import com.liming.rag.knowledge.application.KnowledgeBaseService;
+import com.liming.rag.knowledge.application.KnowledgeBaseService.Member;
+import com.liming.rag.knowledge.application.KnowledgeQueries.DocumentRow;
+import com.liming.rag.knowledge.application.KnowledgeQueries.KnowledgeBaseSummary;
+import com.liming.rag.knowledge.application.Paged;
 import com.liming.rag.knowledge.domain.Document;
 import com.liming.rag.knowledge.domain.KnowledgeBase;
 import com.liming.rag.shared.UserId;
@@ -30,9 +34,8 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 /**
- * 知识库与文档接口。
- *
- * <p>都要登录，租户从登录会话取；建库、上传、检索调试、管理成员只有管理员能用。列表和文档只对知识库成员可见。
+ * 知识库、文档与授权接口。都要登录，租户从登录会话取，每个操作对应一个权限点（D-038）。
+ * 员工端选库只列授权给自己或自己角色的库；管理操作也只对这些库有效（超级管理员能管理本租户全部的库）。
  */
 @RestController
 @RequestMapping("/api/knowledge-bases")
@@ -42,7 +45,7 @@ class KnowledgeBaseController {
     record CreateKnowledgeBaseRequest(String name) {
     }
 
-    record MemberView(long userId) {
+    record RoleGrantView(long roleId) {
     }
 
     record KnowledgeBaseView(long id, String name) {
@@ -52,10 +55,23 @@ class KnowledgeBaseController {
     }
 
     record DocumentView(long id, String filename, String status, String error, int chunkCount, long sizeBytes,
-            OffsetDateTime createdAt, Long replacesDocumentId) {
-        static DocumentView of(Document document) {
+            OffsetDateTime createdAt, Long replacesDocumentId, String replacesFilename) {
+        static DocumentView of(Document document, String replacesFilename) {
             return new DocumentView(document.id(), document.filename(), document.status().name(), document.error(),
-                    document.chunkCount(), document.sizeBytes(), document.createdAt(), document.replacesDocumentId());
+                    document.chunkCount(), document.sizeBytes(), document.createdAt(), document.replacesDocumentId(),
+                    replacesFilename);
+        }
+
+        static DocumentView of(DocumentRow row) {
+            return of(row.document(), row.replacesFilename());
+        }
+    }
+
+    /** 分页响应（D-039）：{@code {items, total, page, size}}。 */
+    record PageView<T>(List<T> items, long total, int page, int size) {
+        static <S, T> PageView<T> of(Paged<S> paged, java.util.function.Function<S, T> mapper) {
+            return new PageView<>(paged.items().stream().map(mapper).toList(), paged.total(), paged.page(),
+                    paged.size());
         }
     }
 
@@ -72,68 +88,131 @@ class KnowledgeBaseController {
         this.currentUser = currentUser;
     }
 
-    @SaCheckRole(Roles.ADMIN)
+    /** 员工端选库：授权给自己或自己角色的库。 */
+    @SaCheckPermission(Permissions.CHAT_USE)
+    @GetMapping
+    List<KnowledgeBaseView> list() {
+        return knowledgeBases.listAccessible(currentUser.tenantId(), currentUser.userId()).stream()
+                .map(KnowledgeBaseView::of).toList();
+    }
+
+    /** 管理端列表（D-039）：按名称筛选、分页。 */
+    @SaCheckPermission(Permissions.KB_VIEW)
+    @GetMapping("/page")
+    PageView<KnowledgeBaseSummary> page(@RequestParam(name = "keyword", required = false) String keyword,
+            @RequestParam(name = "page", defaultValue = "1") int page,
+            @RequestParam(name = "size", defaultValue = "20") int size) {
+        return PageView.of(knowledgeBases.page(currentUser.tenantId(), currentUser.userId(), keyword, page, size),
+                summary -> summary);
+    }
+
+    @SaCheckPermission(Permissions.KB_VIEW)
+    @GetMapping("/{knowledgeBaseId}")
+    KnowledgeBaseView get(@PathVariable long knowledgeBaseId) {
+        return KnowledgeBaseView.of(manageable(knowledgeBaseId));
+    }
+
+    @SaCheckPermission(Permissions.KB_CREATE)
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     KnowledgeBaseView create(@RequestBody CreateKnowledgeBaseRequest request) {
         return KnowledgeBaseView.of(knowledgeBases.create(currentUser.tenantId(), currentUser.userId(), request.name()));
     }
 
-    @GetMapping
-    List<KnowledgeBaseView> list() {
-        return knowledgeBases.listAccessible(currentUser.tenantId(), currentUser.userId()).stream().map(KnowledgeBaseView::of).toList();
+    /** 按文件名、状态筛选，分页（D-039）。 */
+    @SaCheckPermission(Permissions.KB_VIEW)
+    @GetMapping("/{knowledgeBaseId}/documents")
+    PageView<DocumentView> documents(@PathVariable long knowledgeBaseId,
+            @RequestParam(name = "keyword", required = false) String keyword,
+            @RequestParam(name = "status", required = false) String status,
+            @RequestParam(name = "page", defaultValue = "1") int page,
+            @RequestParam(name = "size", defaultValue = "20") int size) {
+        return PageView.of(knowledgeBases.documents(currentUser.tenantId(), currentUser.userId(), knowledgeBaseId,
+                keyword, status, page, size), DocumentView::of);
     }
 
-    @SaCheckRole(Roles.ADMIN)
+    @SaCheckPermission(Permissions.DOC_UPLOAD)
     @PostMapping(path = "/{knowledgeBaseId}/documents", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @ResponseStatus(HttpStatus.CREATED)
-    DocumentView upload(@PathVariable long knowledgeBaseId, @RequestParam("file") MultipartFile file,
-            @RequestParam(name = "replaces", required = false) Long replaces) throws IOException {
+    DocumentView upload(@PathVariable long knowledgeBaseId, @RequestParam("file") MultipartFile file)
+            throws IOException {
+        manageable(knowledgeBaseId);
         return DocumentView.of(ingestion.ingest(currentUser.tenantId(), knowledgeBaseId, file.getOriginalFilename(),
-                file.getBytes(), replaces));
+                file.getBytes(), null), null);
     }
 
-    @SaCheckRole(Roles.ADMIN)
+    /** 上传新版本：新版本处理成功后自动删除旧版本（D-026）。 */
+    @SaCheckPermission(Permissions.DOC_REPLACE)
+    @PostMapping(path = "/{knowledgeBaseId}/documents/{documentId}/versions",
+            consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @ResponseStatus(HttpStatus.CREATED)
+    DocumentView replace(@PathVariable long knowledgeBaseId, @PathVariable long documentId,
+            @RequestParam("file") MultipartFile file) throws IOException {
+        manageable(knowledgeBaseId);
+        return DocumentView.of(ingestion.ingest(currentUser.tenantId(), knowledgeBaseId, file.getOriginalFilename(),
+                file.getBytes(), documentId), null);
+    }
+
+    @SaCheckPermission(Permissions.DOC_DELETE)
     @DeleteMapping("/{knowledgeBaseId}/documents/{documentId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     void deleteDocument(@PathVariable long knowledgeBaseId, @PathVariable long documentId) {
+        manageable(knowledgeBaseId);
         ingestion.delete(currentUser.tenantId(), knowledgeBaseId, documentId);
     }
 
-    @GetMapping("/{knowledgeBaseId}/documents")
-    List<DocumentView> documents(@PathVariable long knowledgeBaseId) {
-        knowledgeBases.getAccessible(currentUser.tenantId(), currentUser.userId(), knowledgeBaseId);
-        return ingestion.list(currentUser.tenantId(), knowledgeBaseId).stream().map(DocumentView::of).toList();
-    }
-
-    /** 检索调试与评测用：直接看某个知识库对一个问题召回了哪些分块。 */
-    @SaCheckRole(Roles.ADMIN)
+    /** 检索调试与评测用：直接看某个知识库对一个问题召回了哪些分块，同样按授权过滤。 */
+    @SaCheckPermission(Permissions.KB_VIEW)
     @GetMapping("/{knowledgeBaseId}/search")
     List<SearchHit> search(@PathVariable long knowledgeBaseId, @RequestParam("q") String question,
             @RequestParam(name = "limit", defaultValue = "10") int limit) {
-        knowledgeBases.getAccessible(currentUser.tenantId(), currentUser.userId(), knowledgeBaseId);
+        manageable(knowledgeBaseId);
         return search.search(new SearchQuery(currentUser.tenantId(), currentUser.userId(), List.of(knowledgeBaseId),
                 question, limit));
     }
 
-    @SaCheckRole(Roles.ADMIN)
+    @SaCheckPermission(Permissions.KB_GRANT)
     @GetMapping("/{knowledgeBaseId}/members")
-    List<MemberView> members(@PathVariable long knowledgeBaseId) {
-        return knowledgeBases.members(currentUser.tenantId(), knowledgeBaseId).stream()
-                .map(userId -> new MemberView(userId.value())).toList();
+    List<Member> members(@PathVariable long knowledgeBaseId) {
+        return knowledgeBases.members(currentUser.tenantId(), currentUser.userId(), knowledgeBaseId);
     }
 
-    @SaCheckRole(Roles.ADMIN)
+    @SaCheckPermission(Permissions.KB_GRANT)
     @PutMapping("/{knowledgeBaseId}/members/{userId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     void grant(@PathVariable long knowledgeBaseId, @PathVariable long userId) {
-        knowledgeBases.grant(currentUser.tenantId(), knowledgeBaseId, new UserId(userId));
+        knowledgeBases.grant(currentUser.tenantId(), currentUser.userId(), knowledgeBaseId, new UserId(userId));
     }
 
-    @SaCheckRole(Roles.ADMIN)
+    @SaCheckPermission(Permissions.KB_GRANT)
     @DeleteMapping("/{knowledgeBaseId}/members/{userId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     void revoke(@PathVariable long knowledgeBaseId, @PathVariable long userId) {
-        knowledgeBases.revoke(currentUser.tenantId(), knowledgeBaseId, new UserId(userId), currentUser.userId());
+        knowledgeBases.revoke(currentUser.tenantId(), currentUser.userId(), knowledgeBaseId, new UserId(userId));
+    }
+
+    @SaCheckPermission(Permissions.KB_GRANT)
+    @GetMapping("/{knowledgeBaseId}/role-grants")
+    List<RoleGrantView> roleGrants(@PathVariable long knowledgeBaseId) {
+        return knowledgeBases.roleGrants(currentUser.tenantId(), currentUser.userId(), knowledgeBaseId).stream()
+                .map(RoleGrantView::new).toList();
+    }
+
+    @SaCheckPermission(Permissions.KB_GRANT)
+    @PutMapping("/{knowledgeBaseId}/role-grants/{roleId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    void grantRole(@PathVariable long knowledgeBaseId, @PathVariable long roleId) {
+        knowledgeBases.grantRole(currentUser.tenantId(), currentUser.userId(), knowledgeBaseId, roleId);
+    }
+
+    @SaCheckPermission(Permissions.KB_GRANT)
+    @DeleteMapping("/{knowledgeBaseId}/role-grants/{roleId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    void revokeRole(@PathVariable long knowledgeBaseId, @PathVariable long roleId) {
+        knowledgeBases.revokeRole(currentUser.tenantId(), currentUser.userId(), knowledgeBaseId, roleId);
+    }
+
+    private KnowledgeBase manageable(long knowledgeBaseId) {
+        return knowledgeBases.getManageable(currentUser.tenantId(), currentUser.userId(), knowledgeBaseId);
     }
 }

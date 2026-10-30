@@ -44,8 +44,8 @@ class MybatisKnowledgeBaseRepository implements KnowledgeBaseRepository {
     }
 
     @Override
-    public List<KnowledgeBase> listAccessible(TenantId tenantId, UserId userId) {
-        return members.accessible(tenantId.value(), userId.value()).stream()
+    public List<KnowledgeBase> listAccessible(TenantId tenantId, UserId userId, List<Long> roleIds) {
+        return members.accessible(tenantId.value(), userId.value(), roleIds).stream()
                 .map(MybatisKnowledgeBaseRepository::toDomain).toList();
     }
 
@@ -73,6 +73,26 @@ class MybatisKnowledgeBaseRepository implements KnowledgeBaseRepository {
     @Override
     public List<UserId> members(TenantId tenantId, long knowledgeBaseId) {
         return members.members(tenantId.value(), knowledgeBaseId).stream().map(UserId::new).toList();
+    }
+
+    @Override
+    public void addRoleGrant(TenantId tenantId, long knowledgeBaseId, long roleId) {
+        members.insertRoleGrant(tenantId.value(), knowledgeBaseId, roleId);
+    }
+
+    @Override
+    public void removeRoleGrant(TenantId tenantId, long knowledgeBaseId, long roleId) {
+        members.deleteRoleGrant(tenantId.value(), knowledgeBaseId, roleId);
+    }
+
+    @Override
+    public List<Long> roleGrants(TenantId tenantId, long knowledgeBaseId) {
+        return members.roleGrants(tenantId.value(), knowledgeBaseId);
+    }
+
+    @Override
+    public void removeGrantsOfRole(TenantId tenantId, long roleId) {
+        members.deleteGrantsOfRole(tenantId.value(), roleId);
     }
 
     @Override

@@ -2,6 +2,7 @@ package com.liming.rag;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -21,7 +22,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
 /**
- * 登录与角色：未登录 401、角色不够 403；管理员由环境变量初始化（测试值见 test 下的 config/application.yml）。
+ * 登录与权限：未登录 401、没有权限点 403；超级管理员由环境变量初始化（测试值见 test 下的 config/application.yml）。
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @AutoConfigureTestRestTemplate
@@ -60,24 +61,29 @@ class AuthTests {
     void adminCreatesStaffWithLimitedRights() {
         String admin = TestLogin.token(http, TestLogin.ADMIN_USERNAME, TestLogin.ADMIN_PASSWORD);
         var me = call(HttpMethod.GET, "/api/auth/me", admin, null);
-        assertThat(me.getBody()).containsEntry("username", TestLogin.ADMIN_USERNAME).containsEntry("role", "ADMIN");
+        assertThat(me.getBody()).containsEntry("username", TestLogin.ADMIN_USERNAME).containsEntry("superAdmin", true)
+                .containsEntry("mustChangePassword", false);
+        assertThat((List<Object>) me.getBody().get("permissions")).contains("role:update", "kb:grant", "chat:use");
 
         var created = call(HttpMethod.POST, "/api/users", admin,
-                Map.of("username", "staff01", "displayName", "店员小王", "password", "staff-password", "role", "STAFF"));
+                Map.of("username", "staff01", "displayName", "店员小王", "password", "staff-password", "roleIds", List.of(TestLogin.staffRoleId(http))));
         assertThat(created.getStatusCode()).isEqualTo(HttpStatus.CREATED);
         assertThat(created.getBody()).doesNotContainKey("password").doesNotContainKey("passwordHash");
         var duplicate = call(HttpMethod.POST, "/api/users", admin,
-                Map.of("username", "staff01", "displayName", "重名", "password", "staff-password", "role", "STAFF"));
+                Map.of("username", "staff01", "displayName", "重名", "password", "staff-password", "roleIds", List.of(TestLogin.staffRoleId(http))));
         assertThat(duplicate.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
         assertThat(duplicate.getBody()).containsEntry("code", "IDENTITY_CONFLICT");
 
         String staff = TestLogin.token(http, "staff01", "staff-password");
+        var staffMe = call(HttpMethod.GET, "/api/auth/me", staff, null).getBody();
+        assertThat(staffMe).containsEntry("superAdmin", false).containsEntry("permissions", List.of("chat:use"));
         assertThat(status(HttpMethod.GET, "/api/knowledge-bases", staff, null)).isEqualTo(HttpStatus.OK);
         var forbidden = call(HttpMethod.POST, "/api/knowledge-bases", staff, Map.of("name", "店员建的库"));
         assertThat(forbidden.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
         assertThat(forbidden.getBody()).containsEntry("code", "FORBIDDEN");
         assertThat(call(HttpMethod.POST, "/api/users", staff,
-                Map.of("username", "staff02", "displayName", "x", "password", "staff-password", "role", "ADMIN"))
+                Map.of("username", "staff02", "displayName", "x", "password", "staff-password",
+                        "roleIds", List.of(TestLogin.builtInRoleId(http, "ADMIN"))))
                 .getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
 
         assertThat(call(HttpMethod.POST, "/api/auth/logout", staff, null).getStatusCode())
@@ -91,12 +97,12 @@ class AuthTests {
     void listsUsersForAdminOnly() {
         String admin = TestLogin.token(http, TestLogin.ADMIN_USERNAME, TestLogin.ADMIN_PASSWORD);
         call(HttpMethod.POST, "/api/users", admin,
-                Map.of("username", "lister01", "displayName", "店员小李", "password", "staff-password", "role", "STAFF"));
+                Map.of("username", "lister01", "displayName", "店员小李", "password", "staff-password", "roleIds", List.of(TestLogin.staffRoleId(http))));
 
         var users = http.exchange("/api/users", HttpMethod.GET, new HttpEntity<>(headers(admin)), String.class);
         assertThat(users.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(users.getBody()).contains("\"username\":\"admin\"").contains("\"displayName\":\"店员小李\"")
-                .doesNotContain("password");
+                .contains("\"total\":").doesNotContain("password");
 
         String staff = TestLogin.token(http, "lister01", "staff-password");
         assertThat(status(HttpMethod.GET, "/api/users", staff, null)).isEqualTo(HttpStatus.FORBIDDEN);
@@ -107,21 +113,21 @@ class AuthTests {
     void disablesAndEnablesUsers() {
         String admin = TestLogin.token(http, TestLogin.ADMIN_USERNAME, TestLogin.ADMIN_PASSWORD);
         var created = call(HttpMethod.POST, "/api/users", admin,
-                Map.of("username", "leaver01", "displayName", "离职店员", "password", "staff-password", "role", "STAFF"));
+                Map.of("username", "leaver01", "displayName", "离职店员", "password", "staff-password", "roleIds", List.of(TestLogin.staffRoleId(http))));
         long staffId = ((Number) created.getBody().get("id")).longValue();
         assertThat(created.getBody()).containsEntry("enabled", true);
         String staff = TestLogin.token(http, "leaver01", "staff-password");
 
-        var disabled = call(HttpMethod.PATCH, "/api/users/" + staffId, admin, Map.of("enabled", false));
+        var disabled = call(HttpMethod.PUT, "/api/users/" + staffId + "/enabled", admin, Map.of("enabled", false));
         assertThat(disabled.getBody()).containsEntry("enabled", false);
         assertThat(status(HttpMethod.GET, "/api/auth/me", staff, null)).isEqualTo(HttpStatus.UNAUTHORIZED);
         assertThat(login("leaver01", "staff-password").getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
 
         long adminId = ((Number) call(HttpMethod.GET, "/api/auth/me", admin, null).getBody().get("id")).longValue();
-        assertThat(status(HttpMethod.PATCH, "/api/users/" + adminId, admin, Map.of("enabled", false)))
+        assertThat(status(HttpMethod.PUT, "/api/users/" + adminId + "/enabled", admin, Map.of("enabled", false)))
                 .isEqualTo(HttpStatus.BAD_REQUEST);
 
-        call(HttpMethod.PATCH, "/api/users/" + staffId, admin, Map.of("enabled", true));
+        call(HttpMethod.PUT, "/api/users/" + staffId + "/enabled", admin, Map.of("enabled", true));
         assertThat(login("leaver01", "staff-password").getStatusCode()).isEqualTo(HttpStatus.OK);
     }
 

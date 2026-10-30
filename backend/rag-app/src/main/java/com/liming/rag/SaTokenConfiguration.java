@@ -9,7 +9,7 @@ import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 /**
- * 打开 Sa-Token 注解校验。接口是否需要登录、需要什么角色，只看控制器上的 {@code @SaCheckLogin} / {@code @SaCheckRole}。
+ * 打开 Sa-Token 注解校验。接口是否需要登录、需要什么角色，只看控制器上的 {@code @SaCheckLogin} / {@code @SaCheckPermission}（权限点见 identity 的 Permissions）。
  */
 @Configuration
 class SaTokenConfiguration implements WebMvcConfigurer {

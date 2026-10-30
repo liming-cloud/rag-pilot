@@ -26,7 +26,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
 /**
- * 知识库成员授权：员工只能看到、问到自己是成员的知识库；请求里点名无权限的库也查不到。
+ * 知识库授权：员工只能看到、问到直接授权给自己或自己角色的知识库；请求里点名无权限的库也查不到。
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
         properties = "rag.knowledge.storage.root=${java.io.tmpdir}/rag-access-test-files")
@@ -68,13 +68,14 @@ class KnowledgeAccessTests {
 
         assertThat(list(staff, "/api/knowledge-bases")).extracting(kb -> kb.get("name")).containsExactly("授权测试门店库");
         assertThat(list(admin, "/api/knowledge-bases/" + store + "/members"))
-                .extracting(member -> ((Number) member.get("userId")).longValue()).contains(staffId);
+                .filteredOn(member -> ((Number) member.get("userId")).longValue() == staffId)
+                .singleElement().satisfies(member -> assertThat(member).containsEntry("username", "access01"));
         assertThat(ask(staff, "青柚气泡水在哪个货架", null)).containsEntry("refused", false);
 
         var probe = ask(staff, "店长季度奖金怎么计算", List.of(store, manager));
         assertThat(probe.toString()).doesNotContain("店长奖金.txt").doesNotContain("1.2 倍");
         assertThat(send(HttpMethod.GET, "/api/knowledge-bases/" + manager + "/documents", staff))
-                .isEqualTo(HttpStatus.NOT_FOUND);
+                .as("员工没有 kb:view，进不了管理端").isEqualTo(HttpStatus.FORBIDDEN);
 
         long adminId = ((Number) list(admin, "/api/knowledge-bases/" + store + "/members").getFirst().get("userId"))
                 .longValue();
@@ -83,6 +84,64 @@ class KnowledgeAccessTests {
         assertThat(send(HttpMethod.DELETE, "/api/knowledge-bases/" + store + "/members/" + staffId, admin))
                 .isEqualTo(HttpStatus.NO_CONTENT);
         assertThat(list(staff, "/api/knowledge-bases")).isEmpty();
+    }
+
+    @Test
+    @DisplayName("授权给角色：属于该角色的员工能问到，不属于的问不到；收回角色授权、移出角色后立即问不到（D-038）")
+    void roleGrantsFollowRoleMembership() {
+        String admin = TestLogin.token(http, TestLogin.ADMIN_USERNAME, TestLogin.ADMIN_PASSWORD);
+        long cashierDesk = createKnowledgeBase(admin, "角色授权收银库");
+        upload(admin, cashierDesk, "收银差异.txt", "收银台交班差额超过 50 元时，要填写差异单并由店长签字确认。");
+        var role = http.exchange("/api/roles", HttpMethod.POST, new HttpEntity<>(Map.of("name", "收银员",
+                "permissions", List.of("chat:use")), auth(admin)), Map.class);
+        long cashierRole = ((Number) role.getBody().get("id")).longValue();
+        long cashierId = createUser(admin, "cashier01", cashierRole);
+        createStaff(admin, "outsider01");
+        String cashier = TestLogin.token(http, "cashier01", "staff-password");
+        String outsider = TestLogin.token(http, "outsider01", "staff-password");
+        var question = "交班差额超过 50 元怎么处理";
+        String grant = "/api/knowledge-bases/" + cashierDesk + "/role-grants/" + cashierRole;
+
+        assertNoAccess(ask(cashier, question, List.of(cashierDesk)));
+        assertThat(send(HttpMethod.PUT, grant, admin)).isEqualTo(HttpStatus.NO_CONTENT);
+        assertThat(list(admin, "/api/knowledge-bases/" + cashierDesk + "/role-grants"))
+                .extracting(item -> ((Number) item.get("roleId")).longValue()).containsExactly(cashierRole);
+
+        assertThat(list(cashier, "/api/knowledge-bases")).extracting(kb -> kb.get("name")).containsExactly("角色授权收银库");
+        var granted = ask(cashier, question, List.of(cashierDesk));
+        assertThat(granted).containsEntry("refused", false);
+        assertThat(granted.toString()).contains("收银差异.txt");
+        assertNoAccess(ask(outsider, question, List.of(cashierDesk)));
+        assertThat(list(outsider, "/api/knowledge-bases")).isEmpty();
+
+        assertThat(send(HttpMethod.DELETE, grant, admin)).isEqualTo(HttpStatus.NO_CONTENT);
+        assertNoAccess(ask(cashier, question, List.of(cashierDesk)));
+        assertThat(list(cashier, "/api/knowledge-bases")).isEmpty();
+
+        assertThat(send(HttpMethod.PUT, grant, admin)).isEqualTo(HttpStatus.NO_CONTENT);
+        assertThat(ask(cashier, question, List.of(cashierDesk))).containsEntry("refused", false);
+        var moved = http.exchange("/api/users/" + cashierId + "/roles", HttpMethod.PUT,
+                new HttpEntity<>(Map.of("roleIds", List.of(TestLogin.staffRoleId(http))), auth(admin)), Map.class);
+        assertThat(moved.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertNoAccess(ask(cashier, question, List.of(cashierDesk)));
+
+        // 删除角色时一并收回授权给它的库。
+        assertThat(send(HttpMethod.DELETE, "/api/roles/" + cashierRole, admin)).isEqualTo(HttpStatus.NO_CONTENT);
+        assertThat(list(admin, "/api/knowledge-bases/" + cashierDesk + "/role-grants")).isEmpty();
+    }
+
+    /** 没有权限时拒答，且回答里没有那份文档的名字和原文。 */
+    private static void assertNoAccess(Map<String, Object> answer) {
+        assertThat(answer).containsEntry("refused", true);
+        assertThat(answer.toString()).doesNotContain("收银差异.txt").doesNotContain("差异单");
+    }
+
+    private long createUser(String admin, String username, long roleId) {
+        var created = http.exchange("/api/users", HttpMethod.POST, new HttpEntity<>(Map.of("username", username,
+                "displayName", "店员", "password", "staff-password", "roleIds", List.of(roleId)), auth(admin)),
+                Map.class);
+        assertThat(created.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        return ((Number) created.getBody().get("id")).longValue();
     }
 
     private long createKnowledgeBase(String token, String name) {
@@ -94,7 +153,7 @@ class KnowledgeAccessTests {
 
     private long createStaff(String admin, String username) {
         var created = http.exchange("/api/users", HttpMethod.POST, new HttpEntity<>(Map.of("username", username,
-                "displayName", "店员", "password", "staff-password", "role", "STAFF"), auth(admin)), Map.class);
+                "displayName", "店员", "password", "staff-password", "roleIds", List.of(TestLogin.staffRoleId(http))), auth(admin)), Map.class);
         assertThat(created.getStatusCode()).isEqualTo(HttpStatus.CREATED);
         return ((Number) created.getBody().get("id")).longValue();
     }

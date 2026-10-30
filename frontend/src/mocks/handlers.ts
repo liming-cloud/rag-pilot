@@ -241,6 +241,35 @@ function sampleStats(days: number): UsageStats {
   };
 }
 
+async function upload(knowledgeBaseId: number, request: Request, replacesDocumentId: number | null) {
+  const file = await uploadedFile(request);
+  if (!/\.(txt|md|markdown|pdf|docx|xlsx|xls)$/i.test(file.name)) {
+    return problem(
+      415,
+      "KNOWLEDGE_UNSUPPORTED_TYPE",
+      "目前支持 PDF、Word（.docx）、Excel（.xlsx / .xls）、TXT 和 Markdown；旧版 .doc 请先另存为 .docx",
+    );
+  }
+  const list = (documents[knowledgeBaseId] ??= []);
+  if (list.some((document) => document.filename === file.name)) {
+    return problem(409, "KNOWLEDGE_CONFLICT", `这份文件已经在知识库里了：${file.name}`);
+  }
+  const created: KnowledgeDocument = {
+    id: nextId++,
+    filename: file.name,
+    status: "PARSING",
+    error: null,
+    chunkCount: 0,
+    sizeBytes: file.size,
+    createdAt: new Date().toISOString(),
+    replacesDocumentId,
+    replacesFilename: null,
+  };
+  list.unshift(created);
+  pendingChunks.set(created.id, Math.max(1, Math.ceil(file.size / 1_500)));
+  return HttpResponse.json(created, { status: 201 });
+}
+
 export const handlers = [
   ...identityHandlers,
   http.get("/api/answers", ({ request }) => {
@@ -392,34 +421,11 @@ export const handlers = [
       : problem(404, "KNOWLEDGE_NOT_FOUND", "文档不存在");
   }),
   // 与后端一致：只收 PDF、Word、Excel、TXT、Markdown，同名文件视为重复。
-  http.post("/api/knowledge-bases/:id/documents", async ({ params, request }) => {
-    const file = await uploadedFile(request);
-    if (!/\.(txt|md|markdown|pdf|docx|xlsx|xls)$/i.test(file.name)) {
-      return problem(
-        415,
-        "KNOWLEDGE_UNSUPPORTED_TYPE",
-        "目前支持 PDF、Word（.docx）、Excel（.xlsx / .xls）、TXT 和 Markdown；旧版 .doc 请先另存为 .docx",
-      );
-    }
-    const list = (documents[Number(params.id)] ??= []);
-    if (list.some((document) => document.filename === file.name)) {
-      return problem(409, "KNOWLEDGE_CONFLICT", `这份文件已经在知识库里了：${file.name}`);
-    }
-    const created: KnowledgeDocument = {
-      id: nextId++,
-      filename: file.name,
-      status: "PARSING",
-      error: null,
-      chunkCount: 0,
-      sizeBytes: file.size,
-      createdAt: new Date().toISOString(),
-      replacesDocumentId: Number(new URL(request.url).searchParams.get("replaces")) || null,
-      replacesFilename: null,
-    };
-    list.unshift(created);
-    pendingChunks.set(created.id, Math.max(1, Math.ceil(file.size / 1_500)));
-    return HttpResponse.json(created, { status: 201 });
-  }),
+  http.post("/api/knowledge-bases/:id/documents", ({ params, request }) => upload(Number(params.id), request, null)),
+  // 上传新版本是单独的接口（doc:replace），与后端一致。
+  http.post("/api/knowledge-bases/:id/documents/:documentId/versions", ({ params, request }) =>
+    upload(Number(params.id), request, Number(params.documentId)),
+  ),
   ...conversationHandlers({
     currentUserId: () => currentIdentity().id,
     knowledgeBaseName: (id) => knowledgeBases.find((knowledgeBase) => knowledgeBase.id === id)?.name ?? `知识库 ${id}`,

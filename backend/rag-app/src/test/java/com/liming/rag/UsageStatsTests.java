@@ -102,7 +102,7 @@ class UsageStatsTests {
                 .isEqualTo(HttpStatus.BAD_REQUEST);
 
         http.postForEntity("/api/users", Map.of("username", "stats-staff", "displayName", "店员",
-                "password", "staff-password", "role", "STAFF"), Map.class);
+                "password", "staff-password", "roleIds", List.of(TestLogin.staffRoleId(http))), Map.class);
         var headers = new HttpHeaders();
         headers.setBearerAuth(TestLogin.token(http, "stats-staff", "staff-password"));
         assertThat(http.exchange("/api/answers/stats?days=7", HttpMethod.GET, new HttpEntity<>(headers), String.class)
