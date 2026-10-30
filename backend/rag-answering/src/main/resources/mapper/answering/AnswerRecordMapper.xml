@@ -37,6 +37,15 @@
         ORDER BY c.answer_id, c.citation_index
     </select>
 
+    <sql id="reviewFilter">
+        WHERE r.tenant_id = #{tenantId}
+        <if test="filter == 'DISLIKED'">AND r.rating = 'DOWN'</if>
+        <if test="filter == 'REFUSED'">AND r.refused</if>
+        <if test="status != null">AND r.review_status = #{status}</if>
+        <if test="since != null">AND r.created_at &gt;= #{since}</if>
+        <if test="keyword != null">AND r.question ILIKE '%' || #{keyword} || '%'</if>
+    </sql>
+
     <select id="list" resultType="map">
         SELECT r.id, r.user_id, r.question, r.answer_text, r.refused, r.refusal_reason, r.top_relevance,
                r.rating, r.feedback_comment, r.created_at, r.rewritten_question, r.review_status,
@@ -44,12 +53,14 @@
                (SELECT string_agg(DISTINCT c.document_name, chr(31)) FROM answer_citation c
                  WHERE c.answer_id = r.id) AS cited_documents
         FROM answer_record r
-        WHERE r.tenant_id = #{tenantId}
-        <if test="filter == 'DISLIKED'">AND r.rating = 'DOWN'</if>
-        <if test="filter == 'REFUSED'">AND r.refused</if>
-        <if test="!includeResolved">AND r.review_status = 'OPEN'</if>
+        <include refid="reviewFilter"/>
         ORDER BY r.created_at DESC, r.id DESC
-        LIMIT #{limit}
+        LIMIT #{size} OFFSET #{offset}
+    </select>
+
+    <select id="count" resultType="long">
+        SELECT count(*) FROM answer_record r
+        <include refid="reviewFilter"/>
     </select>
 
     <select id="totals" resultType="map">

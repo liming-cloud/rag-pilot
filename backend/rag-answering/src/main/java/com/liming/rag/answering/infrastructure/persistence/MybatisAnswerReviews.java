@@ -2,6 +2,7 @@ package com.liming.rag.answering.infrastructure.persistence;
 
 import com.liming.rag.answering.application.AnswerReview;
 import com.liming.rag.answering.application.AnswerReviews;
+import com.liming.rag.answering.application.Paged;
 import com.liming.rag.shared.TenantId;
 import java.sql.Timestamp;
 import java.time.OffsetDateTime;
@@ -21,9 +22,14 @@ class MybatisAnswerReviews implements AnswerReviews {
     }
 
     @Override
-    public List<AnswerReview> list(TenantId tenantId, AnswerReview.Filter filter, boolean includeResolved, int limit) {
-        return mapper.list(tenantId.value(), filter.name(), includeResolved, limit).stream()
-                .map(MybatisAnswerReviews::toReview).toList();
+    public Paged<AnswerReview> page(TenantId tenantId, AnswerReview.Query query) {
+        var status = query.status() == AnswerReview.Status.ALL ? null : query.status().name();
+        var page = query.page();
+        var rows = mapper.list(tenantId.value(), query.filter().name(), status, query.since(), query.keyword(),
+                page.offset(), page.size());
+        long total = mapper.count(tenantId.value(), query.filter().name(), status, query.since(), query.keyword());
+        return new Paged<>(rows.stream().map(MybatisAnswerReviews::toReview).toList(), total, page.page(),
+                page.size());
     }
 
     private static AnswerReview toReview(Map<String, Object> row) {
@@ -31,6 +37,7 @@ class MybatisAnswerReviews implements AnswerReviews {
         return new AnswerReview(
                 ((Number) row.get("id")).longValue(),
                 ((Number) row.get("user_id")).longValue(),
+                null,
                 (String) row.get("question"),
                 (String) row.get("answer_text"),
                 (Boolean) row.get("refused"),

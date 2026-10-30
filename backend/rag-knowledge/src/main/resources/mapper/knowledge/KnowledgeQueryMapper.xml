@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.liming.rag.knowledge.infrastructure.persistence.KnowledgeQueryMapper">
+
+    <sql id="knowledgeBaseFilter">
+        WHERE kb.tenant_id = #{tenantId}
+        <if test="!all">
+            AND kb.id IN (<include refid="com.liming.rag.knowledge.infrastructure.persistence.ChunkSearchMapper.accessibleKnowledgeBases"/>)
+        </if>
+        <if test="keyword != null">AND kb.name ILIKE '%' || #{keyword} || '%'</if>
+    </sql>
+
+    <select id="knowledgeBases" resultType="map">
+        SELECT kb.id, kb.name,
+               (SELECT count(*) FROM document d WHERE d.knowledge_base_id = kb.id) AS document_count,
+               (SELECT count(*) FROM document d WHERE d.knowledge_base_id = kb.id AND d.status = 'FAILED') AS failed_count,
+               (SELECT count(*) FROM knowledge_base_role_grant g WHERE g.knowledge_base_id = kb.id) AS role_grant_count,
+               (SELECT count(*) FROM knowledge_base_member m WHERE m.knowledge_base_id = kb.id) AS member_count
+        FROM knowledge_base kb
+        <include refid="knowledgeBaseFilter"/>
+        ORDER BY kb.id
+        LIMIT #{size} OFFSET #{offset}
+    </select>
+
+    <select id="countKnowledgeBases" resultType="long">
+        SELECT count(*) FROM knowledge_base kb
+        <include refid="knowledgeBaseFilter"/>
+    </select>
+
+    <sql id="documentFilter">
+        WHERE d.tenant_id = #{tenantId} AND d.knowledge_base_id = #{knowledgeBaseId}
+        <if test="keyword != null">AND d.filename ILIKE '%' || #{keyword} || '%'</if>
+        <if test="status != null">AND d.status = #{status}</if>
+    </sql>
+
+    <select id="documents" resultType="map">
+        SELECT d.id, d.tenant_id, d.knowledge_base_id, d.filename, d.media_type, d.sha256, d.size_bytes, d.status,
+               d.error, d.chunk_count, d.created_at, d.replaces_document_id, old.filename AS replaces_filename
+        FROM document d
+        LEFT JOIN document old ON old.id = d.replaces_document_id
+        <include refid="documentFilter"/>
+        ORDER BY d.id DESC
+        LIMIT #{size} OFFSET #{offset}
+    </select>
+
+    <select id="countDocuments" resultType="long">
+        SELECT count(*) FROM document d
+        <include refid="documentFilter"/>
+    </select>
+</mapper>

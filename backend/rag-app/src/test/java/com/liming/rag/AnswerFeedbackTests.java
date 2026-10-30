@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -132,7 +133,7 @@ class AnswerFeedbackTests {
     private String otherUserToken() {
         var username = "other-" + System.nanoTime() % 1_000_000;
         var user = new HashMap<String, Object>(Map.of("username", username, "displayName", "另一位店员",
-                "password", "staff-password", "role", "STAFF"));
+                "password", "staff-password", "roleIds", List.of(TestLogin.staffRoleId(http))));
         http.postForEntity("/api/users", user, Map.class);
         return TestLogin.token(http, username, "staff-password");
     }

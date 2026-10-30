@@ -1,6 +1,7 @@
 package com.liming.rag.knowledge.application;
 
 import com.liming.rag.ai.EmbeddingClient;
+import com.liming.rag.identity.api.UserDirectory;
 import com.liming.rag.knowledge.api.KnowledgeSearch;
 import com.liming.rag.knowledge.api.SearchHit;
 import com.liming.rag.knowledge.api.SearchQuery;
@@ -24,10 +25,17 @@ class HybridSearchService implements KnowledgeSearch {
 
     private final ChunkIndex index;
     private final EmbeddingClient embeddings;
+    private final UserDirectory users;
 
-    HybridSearchService(ChunkIndex index, EmbeddingClient embeddings) {
+    HybridSearchService(ChunkIndex index, EmbeddingClient embeddings, UserDirectory users) {
         this.index = index;
         this.embeddings = embeddings;
+        this.users = users;
+    }
+
+    /** 提问人所属的角色由这里向 identity 查，调用方不能指定（D-038）。 */
+    private Grantee grantee(TenantId tenantId, UserId userId) {
+        return new Grantee(tenantId, userId, users.roleIds(tenantId, userId));
     }
 
     @Override
@@ -39,8 +47,9 @@ class HybridSearchService implements KnowledgeSearch {
         }
         int limit = Math.clamp(query.limit(), 1, MAX_LIMIT);
         var vector = embeddings.embed(List.of(text)).getFirst();
-        var semantic = index.nearest(query.tenantId(), query.userId(), query.knowledgeBaseIds(), vector, CANDIDATES_PER_ROUTE);
-        var keyword = index.keyword(query.tenantId(), query.userId(), query.knowledgeBaseIds(), text, CANDIDATES_PER_ROUTE);
+        var grantee = grantee(query.tenantId(), query.userId());
+        var semantic = index.nearest(grantee, query.knowledgeBaseIds(), vector, CANDIDATES_PER_ROUTE);
+        var keyword = index.keyword(grantee, query.knowledgeBaseIds(), text, CANDIDATES_PER_ROUTE);
         var fused = RrfFusion.fuse(List.of(semantic, keyword), limit);
         if (fused.isEmpty()) {
             return List.of();
@@ -63,6 +72,6 @@ class HybridSearchService implements KnowledgeSearch {
         if (chunkIds.isEmpty()) {
             return Map.of();
         }
-        return index.accessibleContents(tenantId, userId, List.copyOf(chunkIds));
+        return index.accessibleContents(grantee(tenantId, userId), List.copyOf(chunkIds));
     }
 }

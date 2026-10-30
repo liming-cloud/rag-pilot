@@ -21,8 +21,29 @@
 
     <select id="accessible" resultType="com.liming.rag.knowledge.infrastructure.persistence.KnowledgeBaseDO">
         SELECT kb.id, kb.tenant_id, kb.name FROM knowledge_base kb
-        JOIN knowledge_base_member m ON m.knowledge_base_id = kb.id
-        WHERE kb.tenant_id = #{tenantId} AND m.user_id = #{userId}
+        WHERE kb.tenant_id = #{tenantId}
+          AND kb.id IN (<include refid="com.liming.rag.knowledge.infrastructure.persistence.ChunkSearchMapper.accessibleKnowledgeBases"/>)
         ORDER BY kb.id
     </select>
+
+    <insert id="insertRoleGrant">
+        INSERT INTO knowledge_base_role_grant (tenant_id, knowledge_base_id, role_id)
+        VALUES (#{tenantId}, #{knowledgeBaseId}, #{roleId})
+        ON CONFLICT DO NOTHING
+    </insert>
+
+    <delete id="deleteRoleGrant">
+        DELETE FROM knowledge_base_role_grant
+        WHERE tenant_id = #{tenantId} AND knowledge_base_id = #{knowledgeBaseId} AND role_id = #{roleId}
+    </delete>
+
+    <select id="roleGrants" resultType="long">
+        SELECT role_id FROM knowledge_base_role_grant
+        WHERE tenant_id = #{tenantId} AND knowledge_base_id = #{knowledgeBaseId}
+        ORDER BY created_at, role_id
+    </select>
+
+    <delete id="deleteGrantsOfRole">
+        DELETE FROM knowledge_base_role_grant WHERE tenant_id = #{tenantId} AND role_id = #{roleId}
+    </delete>
 </mapper>

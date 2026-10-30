@@ -6,6 +6,6 @@ package com.liming.rag.knowledge.infrastructure.persistence;
 public class BypassesSearchFilter {
 
     Object search(ChunkSearchMapper mapper) {
-        return mapper.keyword(1L, 1L, null, "冷柜", 10);
+        return mapper.keyword(1L, 1L, null, null, "冷柜", 10);
     }
 }

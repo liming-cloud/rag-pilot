@@ -13,6 +13,7 @@ import org.springframework.http.HttpStatus;
  */
 final class TestLogin {
 
+    /** 测试配置里的初始账号，是超级管理员。 */
     static final String ADMIN_USERNAME = "admin";
     static final String ADMIN_PASSWORD = "admin-test-password";
 
@@ -24,6 +25,25 @@ final class TestLogin {
                 Map.class);
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         return (String) response.getBody().get("token");
+    }
+
+    /** 内置“员工”角色的 id（只有 chat:use），用超级管理员的令牌查。新建账号时用它代替原来的 role=STAFF。 */
+    static long staffRoleId(TestRestTemplate http) {
+        return builtInRoleId(http, "STAFF");
+    }
+
+    static long builtInRoleId(TestRestTemplate http, String builtIn) {
+        var headers = new HttpHeaders();
+        headers.setBearerAuth(token(http, ADMIN_USERNAME, ADMIN_PASSWORD));
+        List<?> roles = http.exchange("/api/roles", org.springframework.http.HttpMethod.GET,
+                new org.springframework.http.HttpEntity<>(headers), List.class).getBody();
+        for (Object role : roles) {
+            var fields = (Map<?, ?>) role;
+            if (builtIn.equals(fields.get("builtIn"))) {
+                return ((Number) fields.get("id")).longValue();
+            }
+        }
+        throw new IllegalStateException("没有内置角色 " + builtIn);
     }
 
     /** 以管理员身份登录，之后这个客户端的请求默认带上管理员令牌；请求里已显式带了令牌的不覆盖。 */

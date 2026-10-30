@@ -11,8 +11,8 @@ export default defineConfig(({ mode }) => ({
     alias: { "@": path.resolve(import.meta.dirname, "src") },
   },
   server: {
-    // 开发时把接口转发到本机后端；用 npm run dev:mock 时由 MSW 假接口应答。
-    proxy: { "/api": "http://127.0.0.1:8080" },
+    // 开发时把接口转发到本机后端（API_PROXY 可改地址，默认 8080）；用 npm run dev:mock 时由 MSW 假接口应答。
+    proxy: { "/api": process.env.API_PROXY ?? "http://127.0.0.1:8080" },
   },
   test: {
     environment: "jsdom",

@@ -34,6 +34,13 @@ async function toNodeFormData(form: FormData) {
   return converted;
 }
 
+// jsdom 没有 ResizeObserver；Radix 的 Checkbox 放在表单里时要用它量尺寸，测试里给一个什么也不做的实现。
+globalThis.ResizeObserver ??= class {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+};
+
 globalThis.fetch = (input, init) =>
   originalFetch(typeof input === "string" && input.startsWith("/") ? `http://localhost${input}` : input, init);
 
@@ -46,6 +53,8 @@ beforeAll(() => {
 });
 afterEach(() => {
   server.resetHandlers();
+  // 假接口记住的登录账号存在 sessionStorage（见 mocks/identity.ts），每个测试之后清掉。
+  sessionStorage.clear();
   resetMockData();
   cleanup();
 });

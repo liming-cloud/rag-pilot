@@ -3,6 +3,7 @@ package com.liming.rag;
 import static com.tngtech.archunit.base.DescribedPredicate.describe;
 import static com.tngtech.archunit.core.domain.properties.HasName.Predicates.nameMatching;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
+import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.methods;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noMethods;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -14,6 +15,17 @@ import com.liming.rag.archfixture.application.UsesQueryWrapper;
 import com.liming.rag.archfixture.infrastructure.AnnotatedSqlMapper;
 import com.liming.rag.archfixture.infrastructure.RawSqlWrapper;
 import com.liming.rag.archfixture.web.ChecksRoleByHand;
+import com.liming.rag.archfixture.web.UnguardedEndpoint;
+import com.liming.rag.archfixture.web.UnknownPermission;
+import com.liming.rag.identity.api.Permissions;
+import com.tngtech.archunit.base.DescribedPredicate;
+import com.tngtech.archunit.core.domain.JavaClass;
+import com.tngtech.archunit.core.domain.JavaMethod;
+import com.tngtech.archunit.lang.ArchCondition;
+import com.tngtech.archunit.lang.ConditionEvents;
+import com.tngtech.archunit.lang.SimpleConditionEvent;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 import com.liming.rag.archfixture.web.ModuleExceptionAdvice;
 import com.liming.rag.knowledge.infrastructure.persistence.BypassesSearchFilter;
 import com.tngtech.archunit.core.domain.JavaClasses;
@@ -65,6 +77,54 @@ class ArchitectureRulesTest {
                             && call.getName().matches("check.*|has.*|isLogin")))
             .as("登录和角色校验只用 Sa-Token 注解，不在代码里调用 StpUtil.check*/has*/isLogin");
 
+    static final String SA_CHECK_PERMISSION = "cn.dev33.satoken.annotation.SaCheckPermission";
+
+    /** 接口方法：Controller 里标了 Spring 请求映射注解的方法。 */
+    static final DescribedPredicate<JavaMethod> ENDPOINT = describe("接口方法", method ->
+            method.getOwner().isAnnotatedWith(RestController.class)
+                    && method.getAnnotations().stream().anyMatch(annotation ->
+                            annotation.getRawType().isAnnotatedWith(RequestMapping.class)
+                                    || annotation.getRawType().isEquivalentTo(RequestMapping.class)));
+
+    /** 登录、退出、当前用户、改自己的密码只要求登录（必须先改密码的账号也要能用），其他接口都要标权限点。 */
+    static final DescribedPredicate<JavaMethod> AUTH_ENDPOINT = describe("/api/auth 下的接口", method ->
+            method.getOwner().tryGetAnnotationOfType(RequestMapping.class)
+                    .map(mapping -> List.of(mapping.value()).contains("/api/auth"))
+                    .orElse(false));
+
+    static final ArchRule ENDPOINTS_NEED_PERMISSION = methods()
+            .that(ENDPOINT).and(DescribedPredicate.not(AUTH_ENDPOINT))
+            .should(new ArchCondition<>("在方法或类上标 @SaCheckPermission") {
+                @Override
+                public void check(JavaMethod method, ConditionEvents events) {
+                    if (!method.isAnnotatedWith(SA_CHECK_PERMISSION)
+                            && !method.getOwner().isAnnotatedWith(SA_CHECK_PERMISSION)) {
+                        events.add(SimpleConditionEvent.violated(method, method.getFullName() + " 没有标权限点"));
+                    }
+                }
+            })
+            .as("每个接口都标了权限点（@SaCheckPermission），/api/auth 除外（ROADMAP 第四节）");
+
+    static final ArchRule PERMISSIONS_IN_CATALOG = classes()
+            .should(new ArchCondition<>("只用 Permissions 清单里的权限点") {
+                @Override
+                public void check(JavaClass javaClass, ConditionEvents events) {
+                    var annotated = new java.util.ArrayList<com.tngtech.archunit.core.domain.JavaAnnotation<?>>();
+                    javaClass.tryGetAnnotationOfType(SA_CHECK_PERMISSION).ifPresent(annotated::add);
+                    javaClass.getMethods().forEach(method ->
+                            method.tryGetAnnotationOfType(SA_CHECK_PERMISSION).ifPresent(annotated::add));
+                    for (var annotation : annotated) {
+                        for (Object code : (Object[]) annotation.get("value").orElse(new Object[0])) {
+                            if (!Permissions.ALL.contains(code)) {
+                                events.add(SimpleConditionEvent.violated(javaClass,
+                                        javaClass.getName() + " 用了清单外的权限点 " + code));
+                            }
+                        }
+                    }
+                }
+            })
+            .as("@SaCheckPermission 的权限点都在 Permissions 清单里");
+
     static final ArchRule NO_SQL_ANNOTATIONS = noMethods()
             .should().beAnnotatedWith("org.apache.ibatis.annotations.Select")
             .orShould().beAnnotatedWith("org.apache.ibatis.annotations.Update")
@@ -95,7 +155,8 @@ class ArchitectureRulesTest {
 
     static final List<ArchRule> RULES = List.of(MYBATIS_ONLY_IN_INFRASTRUCTURE, DO_ONLY_IN_INFRASTRUCTURE,
             MODEL_CALLS_ONLY_IN_RAG_AI, SEARCH_FILTER_IN_ONE_PLACE, LOGIN_AND_ROLE_ONLY_BY_ANNOTATION,
-            NO_SQL_ANNOTATIONS, NO_RAW_SQL_IN_WRAPPER, ONE_EXCEPTION_HANDLER, NO_VALUE_INJECTION);
+            NO_SQL_ANNOTATIONS, NO_RAW_SQL_IN_WRAPPER, ONE_EXCEPTION_HANDLER, NO_VALUE_INJECTION,
+            ENDPOINTS_NEED_PERMISSION, PERMISSIONS_IN_CATALOG);
 
     @Test
     @DisplayName("生产代码遵守全部架构规则")
@@ -119,6 +180,8 @@ class ArchitectureRulesTest {
         assertViolates(NO_RAW_SQL_IN_WRAPPER, RawSqlWrapper.class);
         assertViolates(ONE_EXCEPTION_HANDLER, ModuleExceptionAdvice.class);
         assertViolates(NO_VALUE_INJECTION, ReadsConfigWithValue.class);
+        assertViolates(ENDPOINTS_NEED_PERMISSION, UnguardedEndpoint.class);
+        assertViolates(PERMISSIONS_IN_CATALOG, UnknownPermission.class);
     }
 
     /** 只导入违规样例（以及它需要的类），规则应报出违规。 */

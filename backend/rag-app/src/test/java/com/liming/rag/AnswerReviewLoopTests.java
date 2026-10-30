@@ -40,7 +40,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 @Testcontainers
 class AnswerReviewLoopTests {
 
-    private static final ParameterizedTypeReference<List<Map<String, Object>>> LIST =
+    private static final ParameterizedTypeReference<Map<String, Object>> PAGE =
             new ParameterizedTypeReference<>() {
             };
 
@@ -100,6 +100,31 @@ class AnswerReviewLoopTests {
     }
 
     @Test
+    @DisplayName("回答记录分页筛选（D-039）：按问题关键词、处理状态、最近几天；带提问人名字；每页最多 100 条")
+    void pagesAndFilters() {
+        var tenant = new TenantId(1);
+        for (int i = 0; i < 3; i++) {
+            log.record(tenant, new UserId(1), "分页测试：冷柜第 " + i + " 层放什么",
+                    Answer.refused(Answer.RefusalReason.LOW_RELEVANCE, 0.0));
+        }
+        long old = log.record(tenant, new UserId(1), "分页测试：去年的问题",
+                Answer.refused(Answer.RefusalReason.LOW_RELEVANCE, 0.0)).id();
+        jdbc.update("update answer_record set created_at = now() - interval '40 days' where id = ?", old);
+
+        var first = page("/api/answers?filter=refused&status=all&keyword=分页测试&page=1&size=2");
+        assertThat(first).containsEntry("total", 4).containsEntry("page", 1).containsEntry("size", 2);
+        assertThat(items(first)).hasSize(2).allSatisfy(item -> assertThat(item).containsEntry("askerName", "超级管理员"));
+        var second = page("/api/answers?filter=refused&status=all&keyword=分页测试&page=2&size=2");
+        assertThat(ids(items(second))).doesNotContainAnyElementsOf(ids(items(first))).contains(old);
+
+        assertThat(page("/api/answers?filter=refused&status=all&keyword=分页测试&days=30")).containsEntry("total", 3);
+        assertThat(page("/api/answers?filter=refused&status=resolved&keyword=分页测试")).containsEntry("total", 0);
+        assertThat(page("/api/answers?filter=refused&status=all&size=500")).containsEntry("size", 100);
+        assertThat(http.getForEntity("/api/answers?status=maybe", String.class).getStatusCode())
+                .isEqualTo(HttpStatus.BAD_REQUEST);
+    }
+
+    @Test
     @DisplayName("补上文档后重新回答，确认已能答出来；重新回答不新增回答记录")
     void rechecksWithCurrentKnowledge() {
         long kb = createKnowledgeBase();
@@ -122,10 +147,19 @@ class AnswerReviewLoopTests {
     }
 
     private List<Map<String, Object>> review(String filter, boolean includeResolved) {
-        var response = http.exchange("/api/answers?filter={filter}&includeResolved={include}", HttpMethod.GET, null,
-                LIST, filter, includeResolved);
+        return items(page("/api/answers?filter=" + filter + "&status=" + (includeResolved ? "all" : "open")
+                + "&size=100"));
+    }
+
+    private Map<String, Object> page(String path) {
+        var response = http.exchange(path, HttpMethod.GET, null, PAGE);
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         return response.getBody();
+    }
+
+    @SuppressWarnings("unchecked")
+    private static List<Map<String, Object>> items(Map<String, Object> page) {
+        return (List<Map<String, Object>>) page.get("items");
     }
 
     private static List<Long> ids(List<Map<String, Object>> items) {
@@ -144,7 +178,7 @@ class AnswerReviewLoopTests {
     private String staffToken() {
         var username = "review-staff-" + System.nanoTime() % 1_000_000;
         http.postForEntity("/api/users", Map.of("username", username, "displayName", "店员",
-                "password", "staff-password", "role", "STAFF"), Map.class);
+                "password", "staff-password", "roleIds", List.of(TestLogin.staffRoleId(http))), Map.class);
         return TestLogin.token(http, username, "staff-password");
     }
 

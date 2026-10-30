@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.liming.rag.identity.infrastructure.persistence.AppUserMapper">
+
+    <sql id="pageFilter">
+        WHERE u.tenant_id = #{tenantId}
+        <if test="keyword != null">
+            AND (u.username ILIKE '%' || #{keyword} || '%' OR u.display_name ILIKE '%' || #{keyword} || '%')
+        </if>
+        <if test="roleId != null">
+            AND EXISTS (SELECT 1 FROM app_user_role ur WHERE ur.user_id = u.id AND ur.role_id = #{roleId})
+        </if>
+        <if test="status == 'ENABLED'">AND u.enabled</if>
+        <if test="status == 'DISABLED'">AND NOT u.enabled</if>
+        <if test="status == 'LOCKED'">AND u.locked_until &gt; #{now}</if>
+    </sql>
+
+    <select id="page" resultType="com.liming.rag.identity.infrastructure.persistence.AppUserDO">
+        SELECT u.id, u.tenant_id, u.username, u.display_name, u.password_hash, u.enabled, u.must_change_password,
+               u.failed_attempts, u.locked_until
+        FROM app_user u
+        <include refid="pageFilter"/>
+        ORDER BY u.id
+        LIMIT #{size} OFFSET #{offset}
+    </select>
+
+    <select id="countPage" resultType="long">
+        SELECT count(*) FROM app_user u
+        <include refid="pageFilter"/>
+    </select>
+
+    <!-- 换密码时清掉失败计数和锁定。 -->
+    <update id="updatePassword">
+        UPDATE app_user
+        SET password_hash = #{passwordHash}, must_change_password = #{mustChangePassword},
+            failed_attempts = 0, locked_until = NULL
+        WHERE id = #{id}
+    </update>
+
+    <update id="updateFailedLogins">
+        UPDATE app_user SET failed_attempts = #{failedAttempts}, locked_until = #{lockedUntil}
+        WHERE id = #{id}
+    </update>
+</mapper>

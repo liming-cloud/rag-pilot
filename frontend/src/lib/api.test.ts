@@ -2,9 +2,12 @@ import { ApiError, json } from "@/lib/api";
 
 describe("接口错误", () => {
   it("把问题详情的说明和错误码交给调用方", async () => {
-    const response = new Response(JSON.stringify({ status: 409, code: "KNOWLEDGE_CONFLICT", detail: "已有同名知识库：门店规范" }), {
-      status: 409,
-    });
+    const response = new Response(
+      JSON.stringify({ status: 409, code: "KNOWLEDGE_CONFLICT", detail: "已有同名知识库：门店规范" }),
+      {
+        status: 409,
+      },
+    );
 
     const error = await json(response, "保存失败").catch((e: unknown) => e);
 

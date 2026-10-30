@@ -6,7 +6,7 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
 /**
  * 账号配置（{@code rag.identity}）。
  *
- * @param admin 账号表为空时用来创建第一个管理员；已有账号时不生效
+ * @param admin 账号表为空时用来创建超级管理员；已有账号时不生效
  */
 @ConfigurationProperties("rag.identity")
 public record IdentityProperties(@DefaultValue Admin admin) {
@@ -15,9 +15,10 @@ public record IdentityProperties(@DefaultValue Admin admin) {
      * @param tenantId 初始管理员所在的租户；之后的账号跟随创建它的管理员，请求的租户从登录会话取
      * @param username 为空时不创建，只提示
      * @param password 不进日志
+     * @param resetPassword 不为空时，启动时把超级管理员的密码重置为它；用完要删掉（D-038）。不进日志
      */
     public record Admin(@DefaultValue("1") long tenantId, @DefaultValue("") String username,
-            @DefaultValue("") String password) {
+            @DefaultValue("") String password, @DefaultValue("") String resetPassword) {
 
         public Admin {
             if (tenantId <= 0) {

@@ -333,7 +333,7 @@ class ConversationTests {
 
     private long createStaff(String username) {
         return id(exchange(HttpMethod.POST, "/api/users", Map.of("username", username, "displayName", "店员",
-                "password", "staff-password", "role", "STAFF"), admin));
+                "password", "staff-password", "roleIds", List.of(TestLogin.staffRoleId(http))), admin));
     }
 
     private void grant(long knowledgeBaseId, long userId) {

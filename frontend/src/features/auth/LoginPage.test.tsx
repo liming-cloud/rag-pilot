@@ -38,4 +38,11 @@ describe("登录页", () => {
     expect(await screen.findByText("用户名或密码错误")).toBeInTheDocument();
     expect(getToken()).toBeNull();
   });
+
+  it("账号被锁定时显示原因和要等多久", async () => {
+    renderLogin();
+    submit("staff02", "any-password");
+
+    expect(await screen.findByText(/账号已锁定，请 \d+ 分钟后再试/)).toBeInTheDocument();
+  });
 });

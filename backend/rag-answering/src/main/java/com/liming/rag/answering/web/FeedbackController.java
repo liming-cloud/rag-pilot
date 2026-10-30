@@ -1,8 +1,10 @@
 package com.liming.rag.answering.web;
 
 import cn.dev33.satoken.annotation.SaCheckLogin;
+import cn.dev33.satoken.annotation.SaCheckPermission;
 import com.liming.rag.answering.application.AnswerLogService;
 import com.liming.rag.identity.api.CurrentUser;
+import com.liming.rag.identity.api.Permissions;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -16,6 +18,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/answers/{answerId}/feedback")
 @SaCheckLogin
+@SaCheckPermission(Permissions.CHAT_USE)
 class FeedbackController {
 
     record FeedbackRequest(String rating, String comment) {

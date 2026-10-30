@@ -49,7 +49,11 @@ function StatsView({ stats }: { stats: UsageStats }) {
     { label: "提问", value: String(totals.questions), note: `${totals.askers} 位员工` },
     { label: "拒答率", value: percent(totals.refused, totals.questions), note: `${totals.refused} 题答不上来` },
     { label: "评价率", value: percent(totals.rated, answered), note: `已回答 ${answered} 题中有评价的` },
-    { label: "差评率", value: percent(totals.disliked, answered), note: `${totals.disliked} 个差评，${totals.liked} 个好评` },
+    {
+      label: "差评率",
+      value: percent(totals.disliked, answered),
+      note: `${totals.disliked} 个差评，${totals.liked} 个好评`,
+    },
     { label: "待处理", value: String(totals.openReviews), note: "差评和答不上来，未标记已处理" },
   ];
 
