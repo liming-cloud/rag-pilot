@@ -79,6 +79,12 @@ public record EvalReport(int cases, double recallAt10, double citationAccuracy, 
                 failedCases.add(o.evalCase().id());
             }
         }
+        for (var o : outcomes) {
+            if (o.evalCase().kind() == Kind.SMALL_TALK && !harmlessSmallTalk(o)) {
+                failures.add(o.evalCase().id() + "：寒暄回复带了引用或数字");
+                failedCases.add(o.evalCase().id());
+            }
+        }
         int leaks = 0;
         for (var o : outcomes) {
             if (leaked.test(o)) {
@@ -111,6 +117,11 @@ public record EvalReport(int cases, double recallAt10, double citationAccuracy, 
     }
     /** 首字延迟的参考线（D-030 起不作为验收硬指标），超过的题逐个列出。 */
     private static final long SLOW_FIRST_TOKEN_MILLIS = 3000;
+
+    /** 寒暄只能回一句没有事实的话：没拒答、不带引用、不含数字。 */
+    static boolean harmlessSmallTalk(EvalOutcome o) {
+        return !o.refused() && o.citedDocuments().isEmpty() && o.answer() != null && !o.answer().matches("(?s).*\\d.*");
+    }
 
     /** 前 10 条检索结果里有来自预期文档（任一篇）、且含答案关键词的分块。 */
     static boolean recalled(EvalOutcome o) {
@@ -220,6 +231,11 @@ public record EvalReport(int cases, double recallAt10, double citationAccuracy, 
                     .append(verdictCount(judged, CORRECT, "正确")).append("，")
                     .append(verdictCount(judged, "PARTIAL", "部分正确")).append("，")
                     .append(verdictCount(judged, "WRONG", "错误")).append("。\n");
+        }
+        var smallTalk = outcomes.stream().filter(o -> o.evalCase().kind() == Kind.SMALL_TALK).toList();
+        if (!smallTalk.isEmpty()) {
+            text.append("\n### 寒暄\n\n寒暄题 ").append(smallTalk.size()).append(" 道：回复不带引用、不含数字的 ")
+                    .append(smallTalk.stream().filter(EvalReport::harmlessSmallTalk).count()).append(" 道。\n");
         }
         text.append("\n### 按问法统计（可回答题）\n\n| 问法 | 题数 | 召回 | 引用正确 | 误拒 |\n| --- | --- | --- | --- | --- |\n");
         var byStyle = outcomes.stream()

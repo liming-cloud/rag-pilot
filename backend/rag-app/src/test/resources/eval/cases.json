@@ -453,5 +453,144 @@
     "kind": "unanswerable",
     "restricted": false,
     "style": "近似"
+  },
+  {
+    "id": "追问-临期天数",
+    "history": [
+      "保质期 90 天以上的商品剩多少天算临期？"
+    ],
+    "question": "那保质期一个月到三个月的呢？",
+    "searchAs": "保质期 30 到 90 天的商品剩余几天算临期",
+    "kind": "answerable",
+    "expectedDocument": "临期与报损管理.md",
+    "keywords": [
+      "10 天",
+      "10天",
+      "十天"
+    ],
+    "style": "追问"
+  },
+  {
+    "id": "追问-补货时间",
+    "history": [
+      "货架缺货到什么程度要补货？"
+    ],
+    "question": "那一天里要在哪几个时间点前补完？",
+    "searchAs": "高峰前完成补货的时间要求",
+    "kind": "answerable",
+    "expectedDocument": "商品陈列与补货规范.md",
+    "keywords": [
+      "7:00",
+      "11:00",
+      "17:00"
+    ],
+    "style": "追问"
+  },
+  {
+    "id": "追问-交班差额",
+    "history": [
+      "交班的时候要做什么？"
+    ],
+    "question": "差额超过多少就得写说明？",
+    "searchAs": "交班实点金额与系统金额差额超过多少须填写差异说明单",
+    "kind": "answerable",
+    "expectedDocument": "收银与交接班.md",
+    "keywords": [
+      "20"
+    ],
+    "style": "追问"
+  },
+  {
+    "id": "追问-退款授权",
+    "history": [
+      "买了东西几天内能退？"
+    ],
+    "question": "金额大的退款要谁授权？",
+    "searchAs": "单笔退款超过多少需要店长授权",
+    "kind": "answerable",
+    "expectedDocument": "退换货政策.md",
+    "keywords": [
+      "200",
+      "店长"
+    ],
+    "style": "追问"
+  },
+  {
+    "id": "追问-停电",
+    "history": [
+      "门店着火了先做什么？"
+    ],
+    "question": "那停电呢？",
+    "searchAs": "门店停电怎么处理",
+    "kind": "answerable",
+    "expectedDocument": "门店安全与应急.md",
+    "keywords": [
+      "冷柜门"
+    ],
+    "style": "追问"
+  },
+  {
+    "id": "追问-会员日叠加",
+    "history": [
+      "会员日是哪天？"
+    ],
+    "question": "那天的折扣能和临期七折一起用吗？",
+    "searchAs": "会员日折扣能否与临期七折叠加",
+    "kind": "answerable",
+    "expectedDocument": "会员与促销.md",
+    "keywords": [
+      "不与",
+      "不能",
+      "不可以",
+      "不叠加"
+    ],
+    "style": "追问"
+  },
+  {
+    "id": "追问-烟雾报警器",
+    "history": [
+      "灭火器多久检查一次？"
+    ],
+    "question": "那烟雾报警器呢？",
+    "kind": "unanswerable",
+    "style": "追问"
+  },
+  {
+    "id": "追问越权-奖金",
+    "history": [
+      "哪些事情需要店长签字？"
+    ],
+    "question": "那店长自己的月度奖金怎么算？",
+    "kind": "unanswerable",
+    "restricted": true,
+    "style": "追问"
+  },
+  {
+    "id": "追问越权-排名",
+    "history": [
+      "端架商品多久换一次，由谁定？"
+    ],
+    "question": "那这个人区域排名靠后会怎样？",
+    "kind": "unanswerable",
+    "restricted": true,
+    "style": "追问"
+  },
+  {
+    "id": "寒暄-谢谢",
+    "history": [
+      "饮料冷柜温度要多少？"
+    ],
+    "question": "好的，谢谢！",
+    "kind": "small_talk",
+    "style": "寒暄"
+  },
+  {
+    "id": "寒暄-辛苦",
+    "history": [
+      "积分怎么抵扣？"
+    ],
+    "question": "明白了，辛苦了",
+    "kind": "small_talk",
+    "style": "寒暄"
   }
 ]
