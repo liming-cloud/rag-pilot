@@ -338,6 +338,14 @@ class EvaluationRun {
     /** 入库重试后仍失败的文档；不超过 1% 时照常评测，在报告开头列出（#81）。 */
     private final List<String> corpusFailures = new ArrayList<>();
 
+    /** 入库失败的文档。重传时按文件名取原文件，所以文件名和原因分开存。 */
+    private record FailedDocument(String filename, String error) {
+        @Override
+        public String toString() {
+            return filename + "：" + error;
+        }
+    }
+
     /** 入库失败（多是嵌入模型偶发不可用）的文档最多占这个比例，超过就停止评测。 */
     private static final double MAX_CORPUS_FAILURE_SHARE = 0.01;
 
@@ -406,7 +414,8 @@ class EvaluationRun {
                 var failed = new LinkedHashMap<Long, FailedDocument>();
                 documents.stream().filter(document -> !"READY".equals(document.get("status")))
                         .forEach(document -> failed.put(((Number) document.get("id")).longValue(),
-                                document.get("filename") + "：" + document.get("error")));
+                                new FailedDocument((String) document.get("filename"),
+                                        (String) document.get("error"))));
                 System.out.printf(Locale.ROOT, "%d 篇文档入库用时 %d 秒%n", documents.size(),
                         (System.nanoTime() - started) / 1_000_000_000);
                 return failed;
