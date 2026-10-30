@@ -32,7 +32,6 @@ import org.springframework.boot.resttestclient.TestRestTemplate;
 import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureTestRestTemplate;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
-import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 import org.springframework.http.HttpEntity;
@@ -76,10 +75,6 @@ class EvaluationRun {
     private static final String DEFAULT_JUDGE_MODEL = "THUDM/GLM-4-9B-0414";
 
     private static final PathMatchingResourcePatternResolver RESOURCES = new PathMatchingResourcePatternResolver();
-
-    private static final ParameterizedTypeReference<List<Map<String, Object>>> HITS =
-            new ParameterizedTypeReference<>() {
-            };
 
     @Container
     @ServiceConnection
@@ -133,8 +128,10 @@ class EvaluationRun {
 
     private EvalOutcome run(long knowledgeBaseId, long restricted, String staff, EvalCase evalCase) {
         long start = System.nanoTime();
-        var hits = http.exchange("/api/knowledge-bases/{id}/search?q={q}&limit=10", HttpMethod.GET, null, HITS,
-                knowledgeBaseId, evalCase.searchText()).getBody();
+        var hits = searchWithRetry(knowledgeBaseId, evalCase);
+        if (hits == null) {
+            return null;
+        }
         long searchMillis = (System.nanoTime() - start) / 1_000_000;
 
         boolean inConversation = !evalCase.history().isEmpty() || evalCase.kind() == EvalCase.Kind.SMALL_TALK;
@@ -185,6 +182,28 @@ class EvaluationRun {
     private static final List<Duration> RETRY_DELAYS = List.of(Duration.ofSeconds(10), Duration.ofSeconds(30));
 
     /** 流式问答；模型服务不可用时退避重试，仍不可用返回 null，这道题不计入指标。 */
+    /**
+     * 检索调试接口也要向量化问题，模型服务暂时不可用（503）时和提问一样重试，仍失败就不计入指标；
+     * 其他失败直接报出状态码和响应，便于定位。
+     */
+    private List<Map<String, Object>> searchWithRetry(long knowledgeBaseId, EvalCase evalCase) {
+        for (int attempt = 0; ; attempt++) {
+            var response = http.exchange("/api/knowledge-bases/{id}/search?q={q}&limit=10", HttpMethod.GET, null,
+                    String.class, knowledgeBaseId, evalCase.searchText());
+            if (response.getStatusCode().is2xxSuccessful()) {
+                return JsonMapper.builder().build().readValue(response.getBody(), new TypeReference<>() {
+                });
+            }
+            assertThat(response.getStatusCode().value()).as(evalCase.id() + " 检索：" + response.getBody())
+                    .isEqualTo(503);
+            if (attempt == RETRY_DELAYS.size()) {
+                System.out.println("::warning title=模型服务不可用::" + evalCase.id() + " 检索重试 " + attempt + " 次仍失败，不计入指标");
+                return null;
+            }
+            sleep(RETRY_DELAYS.get(attempt));
+        }
+    }
+
     private List<SseEvents.Event> askWithRetry(EvalCase evalCase, Supplier<List<SseEvents.Event>> ask) {
         for (int attempt = 0; ; attempt++) {
             var events = ask.get();
