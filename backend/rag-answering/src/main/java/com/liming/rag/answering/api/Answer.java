@@ -65,6 +65,11 @@ public record Answer(Long id, String text, boolean refused, RefusalReason refusa
         return new Answer(null, text, false, null, List.copyOf(citations), topRelevance, null, null);
     }
 
+    /** 寒暄的回复（D-036）：没有检索、没有引用，也不含事实内容。 */
+    public static Answer smallTalk(String text) {
+        return new Answer(null, text, false, null, List.of(), null, null, null);
+    }
+
     public static Answer refused(RefusalReason reason, Double topRelevance) {
         return new Answer(null, "知识库里没有找到能回答这个问题的可靠依据，建议换个问法，或联系店长确认。", true, reason, List.of(),
                 topRelevance, null, null);

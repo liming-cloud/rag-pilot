@@ -12,6 +12,7 @@ import com.liming.rag.knowledge.api.KnowledgeSearch;
 import com.liming.rag.shared.TenantId;
 import com.liming.rag.shared.UserId;
 import java.util.HashMap;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -32,13 +33,15 @@ public class ConversationService {
     private final AnswerRecordRepository answers;
     private final KnowledgeAccess access;
     private final KnowledgeSearch search;
+    private final AnswerLogService log;
 
     ConversationService(ConversationRepository conversations, AnswerRecordRepository answers, KnowledgeAccess access,
-            KnowledgeSearch search) {
+            KnowledgeSearch search, AnswerLogService log) {
         this.conversations = conversations;
         this.answers = answers;
         this.access = access;
         this.search = search;
+        this.log = log;
     }
 
     @Transactional(readOnly = true)
@@ -79,7 +82,8 @@ public class ConversationService {
                 .map(Citation::chunkId).collect(Collectors.toSet());
         var excerpts = search.excerpts(tenantId, userId, chunkIds);
         var views = turns.stream().map(turn -> new ConversationViews.Turn(turn.id(), turn.question(), turn.status(),
-                withExcerpts(recorded.get(turn.answerRecordId()), excerpts), turn.knowledgeBaseIds(), turn.askedAt()))
+                turn.answerRecordId() == null ? null : withExcerpts(recorded.get(turn.answerRecordId()), excerpts),
+                turn.knowledgeBaseIds(), turn.askedAt()))
                 .toList();
         return new ConversationViews.Detail(id, conversation.title(), conversation.lastAskedAt(), options, views);
     }
@@ -113,6 +117,76 @@ public class ConversationService {
     public void delete(TenantId tenantId, UserId userId, long id) {
         owned(tenantId, userId, id);
         conversations.delete(tenantId, id);
+    }
+
+    /**
+     * 提问前要用到的东西：会话、主线历史（替换时不含被替换的那一轮）、这一轮实际检索的库（所选的库与当前授权取交集）。
+     *
+     * @throws AnsweringException 会话不存在或不是自己的
+     * @throws AnsweringException 要替换的不是主线最后一轮
+     */
+    @Transactional(readOnly = true)
+    TurnContext prepareTurn(TenantId tenantId, UserId userId, long id, Long replacesTurnId) {
+        var conversation = owned(tenantId, userId, id);
+        var mainLine = conversations.mainLine(id);
+        if (replacesTurnId != null && (mainLine.isEmpty() || mainLine.getLast().id() != replacesTurnId)) {
+            throw invalid("只能重新生成或修改最后一轮");
+        }
+        var history = replacesTurnId == null ? mainLine : mainLine.subList(0, mainLine.size() - 1);
+        var recorded = answers.answers(tenantId, history.stream().map(ConversationTurn::answerRecordId)
+                .filter(Objects::nonNull).toList());
+        var entries = history.stream()
+                .map(turn -> new ConversationHistory.Entry(turn.question(),
+                        turn.answerRecordId() == null ? null : recorded.get(turn.answerRecordId())))
+                .toList();
+        var accessible = accessibleIds(tenantId, userId);
+        var effective = conversation.knowledgeBaseIds().stream().filter(accessible::contains).toList();
+        return new TurnContext(conversation.titleSource() == Conversation.TitleSource.NEW, entries, effective);
+    }
+
+    /**
+     * @param firstTurn 会话还没有提问过，回答后要生成标题
+     * @param history 主线历史，按先后排列
+     * @param knowledgeBaseIds 这一轮实际检索的库；为空表示所选的库都已收回授权
+     */
+    record TurnContext(boolean firstTurn, List<ConversationHistory.Entry> history, List<Long> knowledgeBaseIds) {
+    }
+
+    /**
+     * 存下一轮：有回答时先记回答记录，再把这一轮接到主线上，更新最后提问时间（第一次提问时标题用问题截断）。
+     *
+     * @param answer 停止时没留下可核对的内容、或出错时为 null
+     */
+    @Transactional
+    ConversationViews.Turn recordTurn(TenantId tenantId, UserId userId, long id, long turnId, String question,
+            ConversationTurn.Status status, Answer answer, List<Long> knowledgeBaseIds, Long replacesTurnId) {
+        var conversation = owned(tenantId, userId, id);
+        var recorded = answer == null ? null : log.record(tenantId, userId, question, answer);
+        var now = Instant.now();
+        var turn = new ConversationTurn(turnId, null, question.strip(), status, recorded == null ? null : recorded.id(),
+                knowledgeBaseIds, now);
+        try {
+            conversations.addTurn(id, turn, replacesTurnId);
+        } catch (IllegalArgumentException e) {
+            throw invalid(e.getMessage());
+        }
+        conversation.asked(question, now);
+        conversations.save(conversation);
+        return new ConversationViews.Turn(turnId, turn.question(), status, recorded, knowledgeBaseIds, now);
+    }
+
+    /** 预先分配轮次 id：生成开始时就告诉前端，停止生成要用它。 */
+    long nextTurnId() {
+        return conversations.nextTurnId();
+    }
+
+    /** 模型在后台生成的标题；会话已被删除或员工改过标题时不动。 */
+    @Transactional
+    void applyGeneratedTitle(TenantId tenantId, long id, String title) {
+        conversations.find(tenantId, id).ifPresent(conversation -> {
+            conversation.titleGenerated(title);
+            conversations.save(conversation);
+        });
     }
 
     /** 自己的会话；不存在或不是自己的都按不存在处理。 */

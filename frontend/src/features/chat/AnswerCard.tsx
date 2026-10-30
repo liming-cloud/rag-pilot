@@ -62,7 +62,7 @@ export function AnswerCard({ answer }: { answer: Answer }) {
             </Button>
           </div>
           {opened.excerpt === null ? (
-            <p className="text-muted-foreground">已无权查看原文：这条引用所在的知识库已不再授权给你。</p>
+            <p className="text-muted-foreground">已无权查看原文：所在的知识库已不再授权给你，或原文已被删除。</p>
           ) : (
             <p className="font-serif leading-relaxed">{opened.excerpt}</p>
           )}

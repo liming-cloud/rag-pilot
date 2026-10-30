@@ -8,7 +8,7 @@ export type Citation = {
   documentId: number;
   documentName: string;
   headingPath: string;
-  /** 原文片段；提问人已无权访问这条引用所在的知识库时为 null，界面显示“已无权查看原文”（D-036）。 */
+  /** 原文片段；按当前授权读取，知识库授权已收回或原文已删除时为 null，界面显示“已无权查看原文”（D-036）。 */
   excerpt: string | null;
 };
 

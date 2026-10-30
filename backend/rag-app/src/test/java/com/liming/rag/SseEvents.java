@@ -53,4 +53,31 @@ final class SseEvents {
                     return events;
                 });
     }
+
+    /** POST 后只读到第一个事件就断开，模拟员工刷新或关掉页面。 */
+    static Event postAndDisconnect(TestRestTemplate http, String path, Object body, String token) {
+        var headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.setAccept(List.of(MediaType.TEXT_EVENT_STREAM));
+        headers.setBearerAuth(token);
+        var restTemplate = http.getRestTemplate();
+        return restTemplate.execute(path, HttpMethod.POST,
+                restTemplate.httpEntityCallback(new HttpEntity<>(body, headers)),
+                response -> {
+                    var reader = new BufferedReader(new InputStreamReader(response.getBody(), StandardCharsets.UTF_8));
+                    String name = null;
+                    var data = new StringBuilder();
+                    for (String line = reader.readLine(); line != null; line = reader.readLine()) {
+                        if (line.startsWith("event:")) {
+                            name = line.substring("event:".length()).strip();
+                        } else if (line.startsWith("data:")) {
+                            data.append(line.substring("data:".length()));
+                        } else if (line.isEmpty() && name != null) {
+                            response.close();
+                            return new Event(name, data.toString(), 0);
+                        }
+                    }
+                    return null;
+                });
+    }
 }
