@@ -42,13 +42,33 @@
 - 模型调用只经 rag-ai 模块（Spring AI 的 ChatClient / EmbeddingModel 和 RerankClient）；密钥只从环境变量读，不进日志。
 - DDD：聚合只在 knowledge、answering；上下文模块之间只用对方的 `api` 包或监听事件。
 - MyBatis-Plus 的 DO、Wrapper、Page 只出现在 infrastructure 包；不引入 MapStruct，不做多层 DTO 转换。
+- SQL 只写在 Mapper XML（`src/main/resources/mapper/<模块名>/<Mapper 名>.xml`）里；不用 `@Select` 等 SQL 注解，条件构造器不拼原始 SQL（`apply`、`last`、`inSql` 等）。简单的单表条件用 `LambdaQueryWrapper`。
 - 登录和角色校验只用 Sa-Token 注解。
 - 不新增 Maven 模块、外部服务、依赖或抽象层，除非 DECISIONS.md 已记录理由。
 - Flyway 迁移放在所属模块的 `db/migration/<模块名>/`，版本号用 `V<yyyyMMddNNNN>__说明.sql`。
 - 界面只用 shadcn/ui 组件和 tokens.css 变量；新页面先做 MSW 假数据原型，确认后再接接口；不做像素级调整。
 - 客户数据、密钥、截图不进仓库（本仓库当前为公开仓库）。
 
-能明确判定的约束由 `ArchitectureRulesTest`、`MigrationLayoutTest`、`ModularityTests` 自动检查。规则误判或漏判时，修改规则并补违规样例（`archfixture` 包），不绕过、不加例外。
+能明确判定的约束和下面的目录结构由 `ArchitectureRulesTest`、`PackageLayoutTest`、`MigrationLayoutTest`、`MapperXmlLayoutTest`、`ModularityTests` 和前端的 `src/app/structure.test.ts` 自动检查。规则误判或漏判时，修改规则并补违规样例（`archfixture` 包），不绕过、不加例外。
+
+## 目录结构
+
+后端每个 Maven 模块 `rag-<名>` 对应根包 `com.liming.rag.<名>`：
+
+- **上下文模块**（identity、knowledge、answering、evaluation）：根包只放 `package-info.java`，类只能在五个子包里：
+  - `api`：对其他模块公开的合同（接口、record、枚举、事件），不暴露模块内部类型；
+  - `web`：Controller、请求响应 record、本模块的异常转换；
+  - `application`：用例服务，以及它需要的端口接口（如 `ChunkIndex`、`FileStorage`）；
+  - `domain`：聚合、值对象、领域规则，只在 knowledge、answering；
+  - `infrastructure`：端口的实现，按技术分子包（`persistence`、`storage`）。
+- **依赖方向**：`domain` 只依赖 JDK、rag-common 和本模块的 `domain`、`api`；`application` 不依赖 `infrastructure`、`web`；`web` 不依赖 `infrastructure`；`api` 不依赖本模块其他子包。
+- **技术模块**（common、ai）扁平：对外只公开接口、record、枚举和异常，实现类包内可见；rag-app 只放启动类和全局配置。
+- **资源**：Flyway 迁移在 `db/migration/<模块名>/`，Mapper XML 在 `mapper/<模块名>/`。单元测试与被测类同包；跨模块的集成测试放在 rag-app。
+
+前端 `frontend/src`：
+
+- `app/`：路由、布局；`components/ui/`：只放 shadcn 生成的组件；`lib/`：通用工具与请求封装；`mocks/`：MSW 假接口；`styles/`：`tokens.css`；`test/`：测试初始化。
+- `features/<领域>/`：页面（`XxxPage.tsx`）、`api.ts`（接口调用和类型）、子组件，测试与源文件同目录。feature 之间只能引用对方的 `api.ts`，不引用 `app/`。
 
 ## 测试
 
