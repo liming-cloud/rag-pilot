@@ -182,7 +182,7 @@ export function DocumentsPanel({ knowledgeBaseId }: { knowledgeBaseId: number })
           page={documents.data.page}
           size={documents.data.size}
           total={documents.data.total}
-          onPageChange={(page) => setFilter({ ...filter, page })}
+          onChange={(next) => setFilter({ ...filter, ...next })}
         />
       )}
     </section>

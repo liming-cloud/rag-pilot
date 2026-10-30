@@ -107,24 +107,40 @@ describe("会话侧栏", () => {
 });
 
 describe("知识库选择", () => {
+  /** 顶部只有一个按钮，点开弹窗才列出库。 */
+  async function openPicker(name: RegExp) {
+    const picker = await screen.findByRole("group", { name: "知识库" });
+    fireEvent.click(await within(picker).findByRole("button", { name }));
+    return screen.findByRole("dialog", { name: "选择知识库" });
+  }
+
   it("新对话只列已授权的库并默认全选", async () => {
     renderPage();
 
-    const picker = await screen.findByRole("group", { name: "知识库" });
-    expect(await within(picker).findByRole("button", { name: /门店运营知识库/ })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
-    expect(within(picker).queryByRole("button", { name: /商品知识库/ })).not.toBeInTheDocument();
+    const dialog = await openPicker(/门店运营知识库/);
+    expect(within(dialog).getByRole("checkbox", { name: /门店运营知识库/ })).toBeChecked();
+    expect(within(dialog).queryByText(/商品知识库/)).not.toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "确定" })).toBeEnabled();
+  });
+
+  it("至少要选一个库才能确定", async () => {
+    renderPage();
+
+    const dialog = await openPicker(/门店运营知识库/);
+    fireEvent.click(within(dialog).getByRole("checkbox", { name: /门店运营知识库/ }));
+    expect(within(dialog).getByText("已选 0 个")).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "确定" })).toBeDisabled();
   });
 
   it("授权收回的库标“已无权限”、不能再选，引用原文显示已无权查看", async () => {
     renderPage("/chat/902");
 
-    const picker = await screen.findByRole("group", { name: "知识库" });
-    const revoked = await within(picker).findByRole("button", { name: /商品知识库/ });
-    expect(revoked).toHaveTextContent("已无权限");
+    expect(await screen.findByText("1 个库已无权限")).toBeInTheDocument();
+    const dialog = await openPicker(/门店运营知识库/);
+    const revoked = within(dialog).getByRole("checkbox", { name: /商品知识库/ });
     expect(revoked).toBeDisabled();
+    expect(revoked).not.toBeChecked();
+    fireEvent.click(within(dialog).getByRole("button", { name: "取消" }));
 
     const followUp = await screen.findByRole("region", { name: "问答：那冷冻柜呢？" });
     fireEvent.click(within(followUp).getAllByRole("button", { name: "查看引用 1" })[0]!);

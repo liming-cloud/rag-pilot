@@ -30,10 +30,10 @@ describe("知识库的文档", () => {
 
     expect(within(await row("临期与报损管理.md")).getByText("可用")).toBeInTheDocument();
     expect(within(await row("旧版陈列手册.txt")).getByText(/不是 UTF-8 编码/)).toBeInTheDocument();
-    expect(screen.getByText("共 32 条 · 第 1 / 2 页")).toBeInTheDocument();
+    expect(screen.getByText("共 32 条")).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText("状态"), { target: { value: "FAILED" } });
-    expect(await screen.findByText("共 1 条 · 第 1 / 1 页")).toBeInTheDocument();
+    expect(await screen.findByText("共 1 条")).toBeInTheDocument();
   });
 
   it("上传后先显示解析中，后台处理完自动变成可用", async () => {

@@ -182,12 +182,7 @@ export function AnswersPage() {
         </Table>
       </div>
       {reviews.data && (
-        <Pagination
-          page={reviews.data.page}
-          size={reviews.data.size}
-          total={reviews.data.total}
-          onPageChange={(page) => change({ page })}
-        />
+        <Pagination page={reviews.data.page} size={reviews.data.size} total={reviews.data.total} onChange={change} />
       )}
       <Dialog open={opened !== null} onOpenChange={(open) => !open && setOpened(null)}>
         {opened && <ReviewDialog review={opened} onDone={() => setOpened(null)} />}

@@ -36,10 +36,11 @@ describe("知识库列表", () => {
     expect(within(row).getByText("32 份")).toBeInTheDocument();
     expect(within(row).getByText("1 份失败")).toBeInTheDocument();
     expect(within(row).getByText("1 个角色 · 2 个账号")).toBeInTheDocument();
-    expect(screen.getByText("共 24 条 · 第 1 / 2 页")).toBeInTheDocument();
+    expect(screen.getByText("共 24 条")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "下一页" }));
-    expect(await screen.findByText("共 24 条 · 第 2 / 2 页")).toBeInTheDocument();
+    expect(await within(table).findByText("区域 22 门店规范")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "第 2 页" })).toHaveAttribute("aria-current", "page");
   });
 
   it("按名称筛选", async () => {
@@ -49,7 +50,7 @@ describe("知识库列表", () => {
     fireEvent.change(screen.getByLabelText("名称"), { target: { value: "商品" } });
     fireEvent.click(screen.getByRole("button", { name: "查询" }));
 
-    expect(await screen.findByText("共 1 条 · 第 1 / 1 页")).toBeInTheDocument();
+    expect(await screen.findByText("共 1 条")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "商品知识库" })).toBeInTheDocument();
   });
 

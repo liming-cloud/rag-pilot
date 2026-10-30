@@ -120,7 +120,7 @@ export function KnowledgePage() {
           page={knowledgeBases.data.page}
           size={knowledgeBases.data.size}
           total={knowledgeBases.data.total}
-          onPageChange={(page) => setFilter({ ...filter, page })}
+          onChange={(next) => setFilter({ ...filter, ...next })}
         />
       )}
       <Dialog open={creating} onOpenChange={setCreating}>

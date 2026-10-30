@@ -154,12 +154,7 @@ export function UsersPage() {
         </Table>
       </div>
       {users.data && (
-        <Pagination
-          page={users.data.page}
-          size={users.data.size}
-          total={users.data.total}
-          onPageChange={(page) => change({ page })}
-        />
+        <Pagination page={users.data.page} size={users.data.size} total={users.data.total} onChange={change} />
       )}
       <Dialog open={dialog !== null} onOpenChange={(open) => !open && setDialog(null)}>
         {dialog?.kind === "create" && <CreateDialog roles={assignable} onDone={() => setDialog(null)} />}

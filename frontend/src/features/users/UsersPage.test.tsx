@@ -27,7 +27,7 @@ describe("用户管理页", () => {
     const superAdmin = await row("admin");
     expect(within(superAdmin).getByText("超级管理员")).toBeInTheDocument();
     expect(within(superAdmin).queryByRole("button")).not.toBeInTheDocument();
-    expect(screen.getByText("共 45 条 · 第 1 / 3 页")).toBeInTheDocument();
+    expect(screen.getByText("共 45 条")).toBeInTheDocument();
   });
 
   it("按关键词、角色、状态筛选", async () => {
@@ -35,7 +35,7 @@ describe("用户管理页", () => {
     await row("staff01");
 
     fireEvent.change(screen.getByLabelText("状态"), { target: { value: "locked" } });
-    expect(await screen.findByText("共 1 条 · 第 1 / 1 页")).toBeInTheDocument();
+    expect(await screen.findByText("共 1 条")).toBeInTheDocument();
     expect(await row("staff02")).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText("状态"), { target: { value: "" } });
@@ -45,7 +45,7 @@ describe("用户管理页", () => {
     fireEvent.change(screen.getByLabelText("角色"), { target: { value: "" } });
     fireEvent.change(screen.getByLabelText("关键词"), { target: { value: "store0" } });
     fireEvent.click(screen.getByRole("button", { name: "查询" }));
-    expect(await screen.findByText("共 9 条 · 第 1 / 1 页")).toBeInTheDocument();
+    expect(await screen.findByText("共 9 条")).toBeInTheDocument();
   });
 
   it("新建账号在弹窗里做，要选角色；用户名重复时提示", async () => {

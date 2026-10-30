@@ -34,7 +34,7 @@ describe("回答记录页", () => {
     expect(within(first).getByText("店员小王")).toBeInTheDocument();
     expect(within(first).getByText("没帮助")).toBeInTheDocument();
     expect(screen.queryByText("门店几点打烊？")).not.toBeInTheDocument();
-    expect(screen.getByText(/共 \d+ 条 · 第 1 \/ \d+ 页/)).toBeInTheDocument();
+    expect(screen.getByText(/共 \d+ 条/)).toBeInTheDocument();
   });
 
   it("点一行在弹窗里看完整问答、留言和引用", async () => {
@@ -53,7 +53,7 @@ describe("回答记录页", () => {
     fireEvent.change(screen.getByLabelText("问题关键词"), { target: { value: "打烊" } });
     fireEvent.click(screen.getByRole("button", { name: "查询" }));
 
-    expect(await screen.findByText("共 1 条 · 第 1 / 1 页")).toBeInTheDocument();
+    expect(await screen.findByText("共 1 条")).toBeInTheDocument();
     const dialog = await open("门店几点打烊？");
     expect(within(dialog).getByText("系统改写为：门店的营业结束时间是几点？")).toBeInTheDocument();
   });
@@ -69,7 +69,7 @@ describe("回答记录页", () => {
     await row("临期商品打几折？");
     fireEvent.change(screen.getByLabelText("问题关键词"), { target: { value: "临期商品打几折" } });
     fireEvent.click(screen.getByRole("button", { name: "查询" }));
-    await screen.findByText("共 1 条 · 第 1 / 1 页");
+    await screen.findByText("共 1 条");
 
     fireEvent.click(screen.getByRole("button", { name: "导出为评测题草稿" }));
 
