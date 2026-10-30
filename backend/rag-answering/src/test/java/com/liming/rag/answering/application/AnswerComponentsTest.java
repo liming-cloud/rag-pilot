@@ -3,8 +3,8 @@ package com.liming.rag.answering.application;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.liming.rag.common.TenantId;
-import com.liming.rag.common.UserId;
+import com.liming.rag.shared.TenantId;
+import com.liming.rag.shared.UserId;
 import com.liming.rag.knowledge.api.SearchHit;
 import com.liming.rag.knowledge.api.SearchQuery;
 import java.util.ArrayList;

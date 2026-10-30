@@ -1,8 +1,8 @@
 package com.liming.rag.answering.domain;
 
 import com.liming.rag.answering.api.Answer;
-import com.liming.rag.common.TenantId;
-import com.liming.rag.common.UserId;
+import com.liming.rag.shared.TenantId;
+import com.liming.rag.shared.UserId;
 import java.util.Optional;
 
 /** 回答记录仓储。所有查询都带租户。 */

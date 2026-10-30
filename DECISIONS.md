@@ -161,3 +161,7 @@ Compose 增加 web 服务（`deploy/web.Dockerfile`）：Node 24 构建前端，
 ## D-033 SQL 只写在 Mapper XML，目录结构规范化并自动检查（2026-10-30）
 
 代码规范评审（#108）经人工决定：保持 domain-forge 的“禁止注解 SQL”。原先 3 个 Mapper 的 18 处 `@Select` 等注解迁到 `mapper/<模块名>/*.xml`（`mapper-locations` 显式配置），条件构造器禁止 `apply`、`last` 等原始 SQL 拼接；长的动态 SQL 在 XML 里更好读，SQL 与 Java 分开评审。`INSERT … RETURNING` 用 `<select>` 取主键，加 `flushCache="true"`，避免同一会话里命中一级缓存。目录结构写进 AGENTS.md：上下文模块只用 api、web、application、domain、infrastructure 五个子包（沿用 `web`，不改成 domain-forge 的 `interfaces`），定下层间依赖方向；技术模块 rag-ai 不拆 api／internal 子包，因为实现类已经是包内可见，拆包反而要把实现改成 public。规则由 `PackageLayoutTest`、`MapperXmlLayoutTest` 和前端 `structure.test.ts` 检查，每条有违规样例。
+
+## D-034 rag-common 改为严格的共享内核 rag-shared（2026-10-30）
+
+参照 domain-forge 的 `shared` 和 DDD 共享内核的定义（#110），经人工决定：模块和包改名为 `rag-shared` / `com.liming.rag.shared`，“common”容易变成什么都往里放的地方（README 曾写着并不存在的“错误码、任务表执行器”）。共享内核只放多个上下文共同依赖、纯 Java、很少变动的概念：`TenantId`、`UserId`，新增 `ErrorKind`、`BusinessException`（各模块异常改为继承它，错误码 `<模块>_<原因>`）和 `AggregateRoot` 标记（`KnowledgeBase`、`Document`、`AnswerRecord`）。不放 `CurrentUser`、权限码（identity 是认证的上游上下文，其他模块经它的 api 取当前用户；domain-forge 把它放进 shared 是因为 IAM 是独立服务）。启用 `vector`、`pg_search` 的两个迁移移到 rag-knowledge（只有分块表用到），文件内容一字不改：Flyway 只校验版本、描述和内容校验和，不看目录，已部署的库照常通过；文件头注释仍写着 rag-common，属于历史，不能改。三个模块各自的异常处理器合并为 rag-app 的 `ApiExceptionHandler`：问题详情带 `code`，Sa-Token 的无权限点（`NotPermissionException`，M3 会用到）转 403，意外异常记日志、返回 500 且不带内部信息；流式问答的 `error` 事件改为 `{code, detail}`（前端只用 detail）。规则：`SharedKernelTest`（只依赖 JDK、无资源、聚合根位置、仓储只为聚合根）和 `ArchitectureRulesTest` 的“唯一异常出口”。

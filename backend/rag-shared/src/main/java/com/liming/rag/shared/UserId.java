@@ -1,4 +1,4 @@
-package com.liming.rag.common;
+package com.liming.rag.shared;
 
 /**
  * 用户标识。各模块之间只传递标识，不传递用户实体，避免跨模块共享可变对象。

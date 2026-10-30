@@ -1,7 +1,7 @@
 package com.liming.rag.knowledge.infrastructure.persistence;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.liming.rag.common.TenantId;
+import com.liming.rag.shared.TenantId;
 import com.liming.rag.knowledge.domain.Chunk;
 import com.liming.rag.knowledge.domain.Document;
 import com.liming.rag.knowledge.domain.DocumentRepository;

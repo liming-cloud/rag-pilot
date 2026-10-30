@@ -1,7 +1,8 @@
 package com.liming.rag.answering.domain;
 
-import com.liming.rag.common.TenantId;
-import com.liming.rag.common.UserId;
+import com.liming.rag.shared.AggregateRoot;
+import com.liming.rag.shared.TenantId;
+import com.liming.rag.shared.UserId;
 import java.util.Objects;
 
 /**
@@ -11,7 +12,7 @@ import java.util.Objects;
  * <p>只有提问人本人能评价，别人的评价会被拒绝。处理只有管理员能做，角色由接口层的 Sa-Token 注解校验。
  * 仓储只加载评价和处理相关的字段。
  */
-public final class AnswerRecord {
+public final class AnswerRecord implements AggregateRoot {
 
     /** 留言和处理说明的长度上限，与数据库列宽一致。 */
     public static final int MAX_COMMENT_LENGTH = 500;

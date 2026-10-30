@@ -3,13 +3,12 @@ package com.liming.rag.answering.application;
 import com.liming.rag.answering.api.Answer;
 import com.liming.rag.answering.domain.AnswerRecord;
 import com.liming.rag.answering.domain.AnswerRecordRepository;
-import com.liming.rag.common.TenantId;
-import com.liming.rag.common.UserId;
+import com.liming.rag.shared.TenantId;
+import com.liming.rag.shared.UserId;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.List;
 import java.util.Locale;
-import java.util.NoSuchElementException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -41,12 +40,12 @@ public class AnswerLogService {
     /**
      * 最近 {@code days} 天（含今天）的使用统计。
      *
-     * @throws IllegalArgumentException 天数不在 1 到 {@value #MAX_STATS_DAYS} 之间
+     * @throws AnsweringException 天数不在 1 到 {@value #MAX_STATS_DAYS} 之间
      */
     @Transactional(readOnly = true)
     public UsageStats usage(TenantId tenantId, int days) {
         if (days < 1 || days > MAX_STATS_DAYS) {
-            throw new IllegalArgumentException("统计天数只能是 1 到 " + MAX_STATS_DAYS + " 天");
+            throw invalid("统计天数只能是 1 到 " + MAX_STATS_DAYS + " 天");
         }
         var today = LocalDate.now(STATS_ZONE);
         return statistics.usage(tenantId, today.minusDays(days - 1L), today);
@@ -57,7 +56,7 @@ public class AnswerLogService {
      *
      * @param filter disliked（被点踩）、refused（答不上来）或 all，不区分大小写
      * @param includeResolved 是否包含已处理的记录；默认只看待处理的
-     * @throws IllegalArgumentException 范围不认识
+     * @throws AnsweringException 范围不认识
      */
     @Transactional(readOnly = true)
     public List<AnswerReview> review(TenantId tenantId, String filter, boolean includeResolved, int limit) {
@@ -65,7 +64,7 @@ public class AnswerLogService {
         try {
             parsed = AnswerReview.Filter.valueOf(filter == null ? "" : filter.toUpperCase(Locale.ROOT));
         } catch (IllegalArgumentException e) {
-            throw new IllegalArgumentException("查看范围只能是 disliked、refused 或 all");
+            throw invalid("查看范围只能是 disliked、refused 或 all");
         }
         return reviews.list(tenantId, parsed, includeResolved, Math.clamp(limit, 1, MAX_REVIEW_LIMIT));
     }
@@ -74,8 +73,8 @@ public class AnswerLogService {
      * 管理员把记录标记为已处理（附处理说明）或重新打开。
      *
      * @param status RESOLVED 或 OPEN
-     * @throws NoSuchElementException 记录不存在
-     * @throws IllegalArgumentException 状态不认识，或处理说明太长
+     * @throws AnsweringException 记录不存在
+     * @throws AnsweringException 状态不认识，或处理说明太长
      */
     @Transactional
     public void markReview(TenantId tenantId, UserId by, long answerId, String status, String note) {
@@ -83,10 +82,14 @@ public class AnswerLogService {
         try {
             parsed = AnswerRecord.ReviewStatus.valueOf(status == null ? "" : status);
         } catch (IllegalArgumentException e) {
-            throw new IllegalArgumentException("处理状态只能是 RESOLVED 或 OPEN");
+            throw invalid("处理状态只能是 RESOLVED 或 OPEN");
         }
         var record = find(tenantId, answerId);
-        record.review(by, parsed, note);
+        try {
+            record.review(by, parsed, note);
+        } catch (IllegalArgumentException e) {
+            throw invalid(e.getMessage());
+        }
         records.saveReview(record);
     }
 
@@ -103,8 +106,8 @@ public class AnswerLogService {
     }
 
     /**
-     * @throws NoSuchElementException 回答不存在，或不是这位用户问的
-     * @throws IllegalArgumentException 评分不是 UP / DOWN，或留言太长
+     * @throws AnsweringException 回答不存在，或不是这位用户问的
+     * @throws AnsweringException 评分不是 UP / DOWN，或留言太长
      */
     @Transactional
     public void rate(TenantId tenantId, UserId by, long answerId, String rating, String comment) {
@@ -112,13 +115,15 @@ public class AnswerLogService {
         try {
             parsed = AnswerRecord.Rating.valueOf(rating == null ? "" : rating);
         } catch (IllegalArgumentException e) {
-            throw new IllegalArgumentException("评分只能是 UP 或 DOWN");
+            throw invalid("评分只能是 UP 或 DOWN");
         }
         var record = find(tenantId, answerId);
         try {
             record.rate(by, parsed, comment);
         } catch (AnswerRecord.NotAskerException e) {
             throw notFound();
+        } catch (IllegalArgumentException e) {
+            throw invalid(e.getMessage());
         }
         records.saveFeedback(record);
     }
@@ -139,7 +144,11 @@ public class AnswerLogService {
         return records.find(tenantId, answerId).orElseThrow(AnswerLogService::notFound);
     }
 
-    private static NoSuchElementException notFound() {
-        return new NoSuchElementException("回答不存在");
+    private static AnsweringException notFound() {
+        return new AnsweringException(AnsweringException.Reason.NOT_FOUND, "回答不存在");
+    }
+
+    private static AnsweringException invalid(String message) {
+        return new AnsweringException(AnsweringException.Reason.INVALID, message);
     }
 }

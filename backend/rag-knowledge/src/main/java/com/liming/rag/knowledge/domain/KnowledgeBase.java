@@ -1,12 +1,13 @@
 package com.liming.rag.knowledge.domain;
 
-import com.liming.rag.common.TenantId;
+import com.liming.rag.shared.AggregateRoot;
+import com.liming.rag.shared.TenantId;
 import java.util.Objects;
 
 /**
  * 知识库聚合：一组文档和它的访问范围。成员授权在第 4 周加入。
  */
-public final class KnowledgeBase {
+public final class KnowledgeBase implements AggregateRoot {
 
     /** 名称长度上限，与数据库列宽一致。 */
     public static final int MAX_NAME_LENGTH = 100;

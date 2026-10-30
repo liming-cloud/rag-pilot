@@ -1,7 +1,7 @@
 package com.liming.rag.knowledge.application;
 
-import com.liming.rag.common.TenantId;
-import com.liming.rag.common.UserId;
+import com.liming.rag.shared.TenantId;
+import com.liming.rag.shared.UserId;
 import com.liming.rag.identity.api.UserDirectory;
 import com.liming.rag.knowledge.domain.KnowledgeBase;
 import com.liming.rag.knowledge.domain.KnowledgeBaseRepository;

@@ -16,7 +16,6 @@ spring:
   flyway:
     # 每个模块一个迁移目录；版本号统一用时间戳，避免目录之间版本冲突。
     locations:
-      - classpath:db/migration/common
       - classpath:db/migration/identity
       - classpath:db/migration/knowledge
       - classpath:db/migration/answering

@@ -1,6 +1,7 @@
 package com.liming.rag.knowledge.domain;
 
-import com.liming.rag.common.TenantId;
+import com.liming.rag.shared.AggregateRoot;
+import com.liming.rag.shared.TenantId;
 import java.time.OffsetDateTime;
 import java.util.Objects;
 
@@ -9,7 +10,7 @@ import java.util.Objects;
  *
  * <p>状态只能从 PARSING 进入 READY 或 FAILED；失败原因面向管理员展示，必须是可操作的中文说明。
  */
-public final class Document {
+public final class Document implements AggregateRoot {
 
     /** 失败原因的长度上限，与数据库列宽一致。 */
     public static final int MAX_ERROR_LENGTH = 500;

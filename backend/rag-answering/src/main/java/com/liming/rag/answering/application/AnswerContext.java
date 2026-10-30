@@ -1,7 +1,7 @@
 package com.liming.rag.answering.application;
 
-import com.liming.rag.common.TenantId;
-import com.liming.rag.common.UserId;
+import com.liming.rag.shared.TenantId;
+import com.liming.rag.shared.UserId;
 import java.util.List;
 import java.util.Map;
 import org.springframework.ai.rag.Query;

@@ -1,6 +1,6 @@
 package com.liming.rag.knowledge.application;
 
-import com.liming.rag.common.TenantId;
+import com.liming.rag.shared.TenantId;
 
 /** 原始文件存储端口。按内容摘要寻址，同一文件只存一份。 */
 public interface FileStorage {

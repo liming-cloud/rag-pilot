@@ -6,8 +6,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.liming.rag.ai.ChatGateway;
 import com.liming.rag.answering.api.Answer;
 import com.liming.rag.answering.api.Answer.RefusalReason;
-import com.liming.rag.common.TenantId;
-import com.liming.rag.common.UserId;
+import com.liming.rag.shared.ErrorKind;
+import com.liming.rag.shared.TenantId;
+import com.liming.rag.shared.UserId;
 import com.liming.rag.knowledge.api.SearchHit;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -64,7 +65,8 @@ class AnswerServiceTest {
     @DisplayName("空问题报参数错误")
     void validatesInput() {
         var service = service(List.of(), List.of(), "x");
-        assertThatThrownBy(() -> service.ask(TENANT, USER, List.of(1L), " ")).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> service.ask(TENANT, USER, List.of(1L), " ")).isInstanceOf(AnsweringException.class)
+                .extracting("kind").isEqualTo(ErrorKind.INVALID);
     }
 
     @Test

@@ -1,4 +1,4 @@
-package com.liming.rag.common;
+package com.liming.rag.shared;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;

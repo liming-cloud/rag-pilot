@@ -1,4 +1,4 @@
-package com.liming.rag.common;
+package com.liming.rag.shared;
 
 /**
  * 租户标识。

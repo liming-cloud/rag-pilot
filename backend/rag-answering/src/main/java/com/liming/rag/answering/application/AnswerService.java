@@ -5,8 +5,8 @@ import com.liming.rag.ai.RerankClient;
 import com.liming.rag.answering.api.Answer;
 import com.liming.rag.answering.api.Answer.RefusalReason;
 import com.liming.rag.answering.domain.CitationParser;
-import com.liming.rag.common.TenantId;
-import com.liming.rag.common.UserId;
+import com.liming.rag.shared.TenantId;
+import com.liming.rag.shared.UserId;
 import com.liming.rag.knowledge.api.KnowledgeSearch;
 import java.time.Duration;
 import java.util.List;
@@ -90,7 +90,7 @@ public class AnswerService {
             Consumer<String> onDelta, Consumer<String> onStatus) {
         var text = question == null ? "" : question.strip();
         if (text.isEmpty() || text.length() > MAX_QUESTION_LENGTH) {
-            throw new IllegalArgumentException("问题不能为空，且不超过 " + MAX_QUESTION_LENGTH + " 个字");
+            throw new AnsweringException(AnsweringException.Reason.INVALID, "问题不能为空，且不超过 " + MAX_QUESTION_LENGTH + " 个字");
         }
         var clock = new StageClock();
         var query = AnswerContext.query(text, tenantId, userId, knowledgeBaseIds);

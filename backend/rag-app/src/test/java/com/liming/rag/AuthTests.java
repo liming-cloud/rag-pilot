@@ -52,6 +52,7 @@ class AuthTests {
         assertThat(wrongPassword.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
         assertThat(unknownUser.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
         assertThat(wrongPassword.getBody().get("detail")).isEqualTo(unknownUser.getBody().get("detail"));
+        assertThat(wrongPassword.getBody()).containsEntry("code", "IDENTITY_BAD_CREDENTIALS");
     }
 
     @Test
@@ -68,11 +69,13 @@ class AuthTests {
         var duplicate = call(HttpMethod.POST, "/api/users", admin,
                 Map.of("username", "staff01", "displayName", "重名", "password", "staff-password", "role", "STAFF"));
         assertThat(duplicate.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(duplicate.getBody()).containsEntry("code", "IDENTITY_CONFLICT");
 
         String staff = TestLogin.token(http, "staff01", "staff-password");
         assertThat(status(HttpMethod.GET, "/api/knowledge-bases", staff, null)).isEqualTo(HttpStatus.OK);
-        assertThat(call(HttpMethod.POST, "/api/knowledge-bases", staff, Map.of("name", "店员建的库")).getStatusCode())
-                .isEqualTo(HttpStatus.FORBIDDEN);
+        var forbidden = call(HttpMethod.POST, "/api/knowledge-bases", staff, Map.of("name", "店员建的库"));
+        assertThat(forbidden.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(forbidden.getBody()).containsEntry("code", "FORBIDDEN");
         assertThat(call(HttpMethod.POST, "/api/users", staff,
                 Map.of("username", "staff02", "displayName", "x", "password", "staff-password", "role", "ADMIN"))
                 .getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);

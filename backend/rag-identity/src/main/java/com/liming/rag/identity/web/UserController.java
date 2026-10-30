@@ -1,7 +1,7 @@
 package com.liming.rag.identity.web;
 
 import cn.dev33.satoken.annotation.SaCheckRole;
-import com.liming.rag.common.UserId;
+import com.liming.rag.shared.UserId;
 import com.liming.rag.identity.api.CurrentUser;
 import com.liming.rag.identity.api.Roles;
 import com.liming.rag.identity.application.AccountService;

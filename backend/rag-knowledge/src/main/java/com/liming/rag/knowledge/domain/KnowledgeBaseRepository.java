@@ -1,7 +1,7 @@
 package com.liming.rag.knowledge.domain;
 
-import com.liming.rag.common.TenantId;
-import com.liming.rag.common.UserId;
+import com.liming.rag.shared.TenantId;
+import com.liming.rag.shared.UserId;
 import java.util.List;
 import java.util.Optional;
 

@@ -3,8 +3,8 @@ package com.liming.rag.answering.infrastructure.persistence;
 import com.liming.rag.answering.api.Answer;
 import com.liming.rag.answering.domain.AnswerRecord;
 import com.liming.rag.answering.domain.AnswerRecordRepository;
-import com.liming.rag.common.TenantId;
-import com.liming.rag.common.UserId;
+import com.liming.rag.shared.TenantId;
+import com.liming.rag.shared.UserId;
 import java.util.Optional;
 import org.springframework.stereotype.Repository;
 
