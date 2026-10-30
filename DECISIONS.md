@@ -169,3 +169,10 @@ Compose 增加 web 服务（`deploy/web.Dockerfile`）：Node 24 构建前端，
 ## D-035 配置统一为 @ConfigurationProperties，前端加 ESLint，补 shadcn 组件（2026-10-30）
 
 代码质量评审剩余项（#112），新增依赖经人工同意。配置：散落的 `@Value` 改为每个模块一个 `@ConfigurationProperties` record（`AnsweringProperties`、`IdentityProperties`、`KnowledgeProperties`，rag-app 用 `@ConfigurationPropertiesScan` 注册），取值在 record 构造器里校验，不引入校验框架；非法配置让绑定失败、应用启动不起来，而不是带着错误的门槛运行。改写下限不要求小于拒答门槛，因为评测校准时会把门槛调到 0 附近。配置键 `rag.pilot.tenant-id`、`rag.ingestion.*`、`rag.storage.*` 归入 `rag.identity.admin.tenant-id`、`rag.knowledge.*`，环境变量名不变。前端：开发依赖 `eslint`、`@eslint/js`、`typescript-eslint`、`eslint-plugin-react-hooks`、`globals`，`npm run lint` 有警告也算失败并进 CI；组件新增 `@radix-ui/react-label`、`@radix-ui/react-checkbox`。下拉用 shadcn 的 NativeSelect 而不是 Radix Select，保留原生交互和无障碍语义；Table 不再包滚动容器，否则吸顶表头失效；Dialog 等没用到的组件不预先加。替换前后用测试环境导出各页面 DOM 对比：元素和原有 class 不变，只有“包含已处理”换成 shadcn Checkbox、成员下拉的聚焦样式与其他输入框一致。
+
+## D-036 员工端会话与追问的设计（2026-10-30）
+
+#107 参考 ChatGPT、Claude、Codex CLI、Claude Code 的会话做法，经人工决定：会话和消息按树存（消息带父消息），1.0 界面只走一条主线；追问时先让模型读最近 6 轮（回答去掉引用标记、每条最多 300 字），给出 0–2 个检索词，**检索由系统按授权执行**、照常过门槛，不用框架的自动工具循环，否则会绕过低分拒答和引用校验；模型判断不需要检索时，只允许没有事实内容的寒暄回复。生成只带最近 3 轮、约 2000 token，不做摘要压缩；拒答的轮次只带问题和“（这一轮没有找到依据）”。
+
+界面做停止生成、重新生成最后一条、修改最后一个问题后重问，新内容替换显示，旧版本作为兄弟消息保留供审计；更早的编辑和版本切换以后做。知识库按会话选，新会话默认全选已授权的库，中途可改、下一问生效，每条回答记下所用的库；授权收回后历史回答文字仍可见，引用原文和后续检索都按当前授权拦住。标题在第一轮回答后由免费模型在后台生成，先显示问题截断。员工端会话从最后一次提问起保留 30 天（可配置），员工删除或到期清理都不删回答记录。客户端断开或刷新后服务端仍把这一轮生成完并保存，只有“停止生成”才中止。
+
