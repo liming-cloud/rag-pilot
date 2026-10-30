@@ -17,7 +17,7 @@ export type Branding = {
 
 /** 读取失败时的兜底，与后端没有配置时的默认值一致。默认值只写在这里。 */
 export const DEFAULT_BRANDING: Branding = {
-  name: "知枢",
+  name: "明答",
   tagline: "每个回答，都有出处",
   loginHint: "账号由管理员开通；忘记密码请联系管理员。",
 };

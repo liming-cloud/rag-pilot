@@ -52,7 +52,7 @@ describe("登录页", () => {
     server.use(http.get("/api/auth/branding", () => new HttpResponse(null, { status: 500 })));
     renderLogin();
 
-    expect(await screen.findByRole("heading", { name: "登录知枢" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "登录明答" })).toBeInTheDocument();
     expect(screen.getByText("账号由管理员开通；忘记密码请联系管理员。")).toBeInTheDocument();
     submit("staff01", "staff-password");
     expect(await screen.findByText("问答页")).toBeInTheDocument();

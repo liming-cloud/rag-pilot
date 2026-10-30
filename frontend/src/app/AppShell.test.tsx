@@ -34,7 +34,7 @@ describe("页面外壳与管理端菜单", () => {
   it("顶栏显示部署配置的产品名称（D-042）", async () => {
     renderAt("/chat");
     const [shellHeader] = await screen.findAllByRole("banner");
-    expect(await within(shellHeader!).findByText("知枢")).toBeInTheDocument();
+    expect(await within(shellHeader!).findByText("明答")).toBeInTheDocument();
   });
 
   it("员工没有管理入口；直接打开管理页回到问答页", async () => {

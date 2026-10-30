@@ -54,11 +54,14 @@ export function nativeElementProblems(file: string, source: string): string[] {
 }
 
 /** 写死的产品名称（D-042）：名称由部署配置，默认值只在 lib/branding.ts。测试和假接口里可以出现。 */
-const PRODUCT_NAMES = ["知枢", "门店运营知识库", "门店助手"];
+const PRODUCT_NAMES = ["明答", "门店运营知识库", "门店助手"];
+
+/** 只认独立出现的名称：前后挨着汉字的不算，比如“说明答案”里的“明答”。 */
+const standalone = (name: string) => new RegExp(`(?<![\\u4e00-\\u9fff])${name}(?![\\u4e00-\\u9fff])`);
 
 export function productNameProblems(file: string, source: string): string[] {
   if (file === "lib/branding.ts" || file.startsWith("mocks/") || /\.test\.tsx?$/.test(file)) return [];
-  return PRODUCT_NAMES.filter((name) => source.includes(name)).map(
+  return PRODUCT_NAMES.filter((name) => standalone(name).test(source)).map(
     (name) => `${file} 写死了产品名称“${name}”：改用 useBranding()`,
   );
 }
@@ -98,9 +101,10 @@ describe("前端目录结构", () => {
 
   it("写死产品名称会被指出；默认值、测试和假接口不算", () => {
     expect(productNameProblems("app/AppShell.tsx", "<span>门店运营知识库</span>")).toHaveLength(1);
-    expect(productNameProblems("features/auth/LoginPage.tsx", "<h1>知枢</h1>")).toHaveLength(1);
-    expect(productNameProblems("lib/branding.ts", 'name: "知枢"')).toEqual([]);
-    expect(productNameProblems("features/auth/LoginPage.test.tsx", "知枢")).toEqual([]);
+    expect(productNameProblems("features/auth/LoginPage.tsx", "<h1>明答</h1>")).toHaveLength(1);
+    expect(productNameProblems("lib/branding.ts", 'name: "明答"')).toEqual([]);
+    expect(productNameProblems("features/chat/ChatPage.tsx", "<p>请说明答案的出处</p>")).toEqual([]);
+    expect(productNameProblems("features/auth/LoginPage.test.tsx", "明答")).toEqual([]);
     expect(productNameProblems("mocks/identity.ts", "门店运营知识库")).toEqual([]);
   });
 

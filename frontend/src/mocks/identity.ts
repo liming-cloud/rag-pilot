@@ -215,11 +215,11 @@ function roleView(role: Omit<Role, "userCount">): Role {
 }
 
 /**
- * 产品名称和登录页文案的两套示例（D-042）：默认是内核的“知枢”；地址后加 ?brand=retail 换成新零售试点的配置，
+ * 产品名称和登录页文案的两套示例（D-042）：默认是内核的“明答”；地址后加 ?brand=retail 换成新零售试点的配置，
  * 加 ?brand=default 换回来。选择记在 sessionStorage，刷新后不丢。
  */
 const BRANDINGS = {
-  default: { name: "知枢", tagline: "每个回答，都有出处", loginHint: "账号由管理员开通；忘记密码请联系管理员。" },
+  default: { name: "明答", tagline: "每个回答，都有出处", loginHint: "账号由管理员开通；忘记密码请联系管理员。" },
   retail: {
     name: "门店运营知识库",
     tagline: "门店规范、商品、促销，问了就有出处",

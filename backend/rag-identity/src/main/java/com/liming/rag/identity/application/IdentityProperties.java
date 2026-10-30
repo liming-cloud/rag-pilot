@@ -23,7 +23,7 @@ public record IdentityProperties(@DefaultValue Admin admin, @DefaultValue Brandi
             @DefaultValue("") String loginHint) {
 
         /** 内核默认值，与前端 lib/branding.ts 的兜底一致。 */
-        public static final String DEFAULT_NAME = "知枢";
+        public static final String DEFAULT_NAME = "明答";
         public static final String DEFAULT_TAGLINE = "每个回答，都有出处";
         public static final String DEFAULT_LOGIN_HINT = "账号由管理员开通；忘记密码请联系管理员。";
 
