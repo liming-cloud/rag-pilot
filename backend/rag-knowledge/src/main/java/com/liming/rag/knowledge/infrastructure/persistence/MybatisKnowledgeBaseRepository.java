@@ -1,10 +1,10 @@
 package com.liming.rag.knowledge.infrastructure.persistence;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.liming.rag.shared.TenantId;
-import com.liming.rag.shared.UserId;
 import com.liming.rag.knowledge.domain.KnowledgeBase;
 import com.liming.rag.knowledge.domain.KnowledgeBaseRepository;
+import com.liming.rag.shared.TenantId;
+import com.liming.rag.shared.UserId;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.stereotype.Repository;

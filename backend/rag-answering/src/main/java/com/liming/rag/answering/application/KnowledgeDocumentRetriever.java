@@ -1,9 +1,9 @@
 package com.liming.rag.answering.application;
 
-import com.liming.rag.shared.TenantId;
-import com.liming.rag.shared.UserId;
 import com.liming.rag.knowledge.api.KnowledgeSearch;
 import com.liming.rag.knowledge.api.SearchQuery;
+import com.liming.rag.shared.TenantId;
+import com.liming.rag.shared.UserId;
 import java.util.List;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.rag.Query;

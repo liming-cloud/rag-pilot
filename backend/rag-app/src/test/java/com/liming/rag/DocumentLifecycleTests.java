@@ -33,7 +33,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
  * 删除文档与上传新版本：删除后旧内容不再被检索和引用；新版本解析成功才替换旧版本，失败时旧版本保留。
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-        properties = "rag.storage.root=${java.io.tmpdir}/rag-lifecycle-test-files")
+        properties = "rag.knowledge.storage.root=${java.io.tmpdir}/rag-lifecycle-test-files")
 @AutoConfigureTestRestTemplate
 @Testcontainers
 class DocumentLifecycleTests {
@@ -52,7 +52,7 @@ class DocumentLifecycleTests {
     @Autowired
     private JdbcTemplate jdbc;
 
-    @Value("${rag.storage.root}")
+    @Value("${rag.knowledge.storage.root}")
     private String storageRoot;
 
     @BeforeEach

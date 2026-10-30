@@ -9,6 +9,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.liming.rag.archfixture.FixtureDO;
 import com.liming.rag.archfixture.answering.CallsChatModelDirectly;
+import com.liming.rag.archfixture.application.ReadsConfigWithValue;
 import com.liming.rag.archfixture.application.UsesQueryWrapper;
 import com.liming.rag.archfixture.infrastructure.AnnotatedSqlMapper;
 import com.liming.rag.archfixture.infrastructure.RawSqlWrapper;
@@ -88,9 +89,13 @@ class ArchitectureRulesTest {
             .should().haveFullyQualifiedName("com.liming.rag.ApiExceptionHandler")
             .as("只有 rag-app 的 ApiExceptionHandler 一个异常出口；模块抛继承 BusinessException 的业务异常，不自己写处理器");
 
+    static final ArchRule NO_VALUE_INJECTION = noClasses()
+            .should().dependOnClassesThat().haveFullyQualifiedName("org.springframework.beans.factory.annotation.Value")
+            .as("配置只通过各模块的 @ConfigurationProperties record 读取（带取值校验），不用 @Value");
+
     static final List<ArchRule> RULES = List.of(MYBATIS_ONLY_IN_INFRASTRUCTURE, DO_ONLY_IN_INFRASTRUCTURE,
             MODEL_CALLS_ONLY_IN_RAG_AI, SEARCH_FILTER_IN_ONE_PLACE, LOGIN_AND_ROLE_ONLY_BY_ANNOTATION,
-            NO_SQL_ANNOTATIONS, NO_RAW_SQL_IN_WRAPPER, ONE_EXCEPTION_HANDLER);
+            NO_SQL_ANNOTATIONS, NO_RAW_SQL_IN_WRAPPER, ONE_EXCEPTION_HANDLER, NO_VALUE_INJECTION);
 
     @Test
     @DisplayName("生产代码遵守全部架构规则")
@@ -113,6 +118,7 @@ class ArchitectureRulesTest {
         assertViolates(NO_SQL_ANNOTATIONS, AnnotatedSqlMapper.class);
         assertViolates(NO_RAW_SQL_IN_WRAPPER, RawSqlWrapper.class);
         assertViolates(ONE_EXCEPTION_HANDLER, ModuleExceptionAdvice.class);
+        assertViolates(NO_VALUE_INJECTION, ReadsConfigWithValue.class);
     }
 
     /** 只导入违规样例（以及它需要的类），规则应报出违规。 */

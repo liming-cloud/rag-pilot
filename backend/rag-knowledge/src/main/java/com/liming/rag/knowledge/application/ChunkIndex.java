@@ -1,8 +1,8 @@
 package com.liming.rag.knowledge.application;
 
+import com.liming.rag.knowledge.api.SearchHit;
 import com.liming.rag.shared.TenantId;
 import com.liming.rag.shared.UserId;
-import com.liming.rag.knowledge.api.SearchHit;
 import java.util.List;
 
 /** 分块检索端口，实现里的每条召回 SQL 都必须带租户和成员过滤；knowledgeBaseIds 为空表示不再缩小范围。 */

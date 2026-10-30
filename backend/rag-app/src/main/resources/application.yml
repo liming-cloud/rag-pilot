@@ -88,17 +88,19 @@ rag:
     rewrite-min-relevance: ${RAG_REWRITE_MIN_RELEVANCE:0.03}
     # 改写超过这个时限就放弃，按原方式拒答。
     rewrite-timeout: ${RAG_REWRITE_TIMEOUT:3s}
-  pilot:
-    # 试点单租户：初始管理员建在这个租户下，之后的账号跟随创建它的管理员；请求的租户从登录会话取。
-    tenant-id: 1
+  # 各模块的配置由对应的 @ConfigurationProperties record 读取并校验（AnsweringProperties、IdentityProperties、
+  # KnowledgeProperties、AiProperties），取值说明见这些类。
   identity:
     # 账号表为空时用它创建第一个管理员；已有账号时不生效。
     admin:
+      # 试点单租户：初始管理员建在这个租户下，之后的账号跟随创建它的管理员；请求的租户从登录会话取。
+      tenant-id: 1
       username: ${RAG_ADMIN_USERNAME:}
       password: ${RAG_ADMIN_PASSWORD:}
-  ingestion:
-    # 后台同时处理的文档数，限制对嵌入模型的并发调用。
-    concurrency: ${RAG_INGESTION_CONCURRENCY:2}
-  storage:
-    # 原始文件存放目录；Compose 中挂载为数据卷。
-    root: ${RAG_STORAGE_ROOT:./data/files}
+  knowledge:
+    ingestion:
+      # 后台同时处理的文档数，限制对嵌入模型的并发调用。
+      concurrency: ${RAG_INGESTION_CONCURRENCY:2}
+    storage:
+      # 原始文件存放目录；Compose 中挂载为数据卷。
+      root: ${RAG_STORAGE_ROOT:./data/files}

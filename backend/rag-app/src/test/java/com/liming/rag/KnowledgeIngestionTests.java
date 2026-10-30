@@ -35,7 +35,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
  * 通过 HTTP 走一遍文档入库：建知识库 → 上传 TXT → 分块入库，以及重复、格式不支持、编码错误三种失败。
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-        properties = "rag.storage.root=${java.io.tmpdir}/rag-test-files")
+        properties = "rag.knowledge.storage.root=${java.io.tmpdir}/rag-test-files")
 @AutoConfigureTestRestTemplate
 @Testcontainers
 class KnowledgeIngestionTests {

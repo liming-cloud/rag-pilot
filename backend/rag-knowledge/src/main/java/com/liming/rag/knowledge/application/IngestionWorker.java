@@ -1,8 +1,8 @@
 package com.liming.rag.knowledge.application;
 
-import com.liming.rag.shared.TenantId;
 import com.liming.rag.knowledge.domain.DocumentRepository;
 import com.liming.rag.knowledge.domain.DocumentStatus;
+import com.liming.rag.shared.TenantId;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
@@ -10,7 +10,6 @@ import java.util.concurrent.Executors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.DisposableBean;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
@@ -19,7 +18,7 @@ import org.springframework.transaction.event.TransactionalEventListener;
 /**
  * 后台入库：上传事务提交后把文档交给 {@link IngestionPipeline}。
  *
- * <p>同时处理的文档数由 {@code rag.ingestion.concurrency} 限制，避免大批上传时打满嵌入模型的限流。
+ * <p>同时处理的文档数由 {@code rag.knowledge.ingestion.concurrency} 限制，避免大批上传时打满嵌入模型的限流。
  * 文档表里的“解析中”状态就是持久化的任务记录：应用启动时把它们重新排队，所以重启不会丢任务。
  */
 @Component
@@ -35,11 +34,11 @@ public class IngestionWorker implements DisposableBean {
     private final Set<Long> inFlight = ConcurrentHashMap.newKeySet();
 
     IngestionWorker(DocumentRepository documents, FileStorage storage, IngestionPipeline pipeline,
-            @Value("${rag.ingestion.concurrency:2}") int concurrency) {
+            KnowledgeProperties properties) {
         this.documents = documents;
         this.storage = storage;
         this.pipeline = pipeline;
-        this.executor = Executors.newFixedThreadPool(concurrency, Thread.ofVirtual().name("ingestion-", 0).factory());
+        this.executor = Executors.newFixedThreadPool(properties.ingestion().concurrency(), Thread.ofVirtual().name("ingestion-", 0).factory());
     }
 
     @TransactionalEventListener

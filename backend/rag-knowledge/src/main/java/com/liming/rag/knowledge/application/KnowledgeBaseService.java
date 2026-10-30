@@ -1,10 +1,10 @@
 package com.liming.rag.knowledge.application;
 
-import com.liming.rag.shared.TenantId;
-import com.liming.rag.shared.UserId;
 import com.liming.rag.identity.api.UserDirectory;
 import com.liming.rag.knowledge.domain.KnowledgeBase;
 import com.liming.rag.knowledge.domain.KnowledgeBaseRepository;
+import com.liming.rag.shared.TenantId;
+import com.liming.rag.shared.UserId;
 import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;

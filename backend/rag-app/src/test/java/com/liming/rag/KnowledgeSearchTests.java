@@ -32,7 +32,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
  * <p>测试用本地哈希向量（见 test 下的 config/application.yml），不访问外部模型。
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-        properties = "rag.storage.root=${java.io.tmpdir}/rag-search-test-files")
+        properties = "rag.knowledge.storage.root=${java.io.tmpdir}/rag-search-test-files")
 @AutoConfigureTestRestTemplate
 @Testcontainers
 class KnowledgeSearchTests {

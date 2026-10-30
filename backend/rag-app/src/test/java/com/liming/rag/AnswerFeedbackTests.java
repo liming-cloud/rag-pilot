@@ -30,7 +30,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
  * 回答记录与反馈：每次问答都记下来并返回 id；只有提问人本人能点赞点踩。
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-        properties = "rag.storage.root=${java.io.tmpdir}/rag-feedback-test-files")
+        properties = "rag.knowledge.storage.root=${java.io.tmpdir}/rag-feedback-test-files")
 @AutoConfigureTestRestTemplate
 @Testcontainers
 class AnswerFeedbackTests {

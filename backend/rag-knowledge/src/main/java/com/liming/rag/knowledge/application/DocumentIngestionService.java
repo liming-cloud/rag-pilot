@@ -1,8 +1,8 @@
 package com.liming.rag.knowledge.application;
 
-import com.liming.rag.shared.TenantId;
 import com.liming.rag.knowledge.domain.Document;
 import com.liming.rag.knowledge.domain.DocumentRepository;
+import com.liming.rag.shared.TenantId;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;

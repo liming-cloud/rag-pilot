@@ -4,12 +4,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.liming.rag.ai.ChatGateway;
-import com.liming.rag.answering.api.Answer;
 import com.liming.rag.answering.api.Answer.RefusalReason;
+import com.liming.rag.answering.api.Answer;
+import com.liming.rag.knowledge.api.SearchHit;
 import com.liming.rag.shared.ErrorKind;
 import com.liming.rag.shared.TenantId;
 import com.liming.rag.shared.UserId;
-import com.liming.rag.knowledge.api.SearchHit;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -30,7 +30,7 @@ class AnswerServiceTest {
         return new AnswerService(query -> hits, (query, documents) -> scores, (system, user) -> {
             prompts.add(user);
             return reply;
-        }, 30, 8, 0.3, false, 0.03, Duration.ofSeconds(3));
+        }, new AnsweringProperties(30, 8, 0.3, false, 0.03, Duration.ofSeconds(3)));
     }
 
     @Test
@@ -152,8 +152,8 @@ class AnswerServiceTest {
                 return String.join("", pieces);
             }
         };
-        return new AnswerService(query -> List.of(SHELF), (query, documents) -> List.of(score), chat, 30, 8, 0.3,
-                false, 0.03, Duration.ofSeconds(3));
+        return new AnswerService(query -> List.of(SHELF), (query, documents) -> List.of(score), chat,
+                new AnsweringProperties(30, 8, 0.3, false, 0.03, Duration.ofSeconds(3)));
     }
 
     /**
@@ -198,8 +198,8 @@ class AnswerServiceTest {
             }
         };
         return new AnswerService(query -> List.of(SHELF),
-                (query, documents) -> List.of(query.contains("货架") ? 0.9 : originalScore), chat, 30, 8, 0.3, enabled,
-                0.03, Duration.ofMillis(300));
+                (query, documents) -> List.of(query.contains("货架") ? 0.9 : originalScore), chat,
+                new AnsweringProperties(30, 8, 0.3, enabled, 0.03, Duration.ofMillis(300)));
     }
 
     @Test
