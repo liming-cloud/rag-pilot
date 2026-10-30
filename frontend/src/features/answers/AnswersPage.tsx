@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Can } from "@/lib/permissions";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -53,15 +54,17 @@ export function AnswersPage() {
           <Checkbox checked={includeResolved} onCheckedChange={(checked) => setIncludeResolved(checked === true)} />
           包含已处理
         </Label>
-        <Button
-          size="sm"
-          variant="ghost"
-          className="ml-auto"
-          disabled={!reviews.data?.length}
-          onClick={() => download(`eval-drafts-${filter}.json`, toEvalDrafts(reviews.data ?? []))}
-        >
-          导出为评测题草稿
-        </Button>
+        <Can permission="answer:export">
+          <Button
+            size="sm"
+            variant="ghost"
+            className="ml-auto"
+            disabled={!reviews.data?.length}
+            onClick={() => download(`eval-drafts-${filter}.json`, toEvalDrafts(reviews.data ?? []))}
+          >
+            导出为评测题草稿
+          </Button>
+        </Can>
       </div>
       <p className="text-sm text-muted-foreground">
         导出的题要人工标注预期文档和答案关键词，放进仓库外的私有评测集（EVAL_DATA_DIR），不要提交到代码仓库。
@@ -107,7 +110,13 @@ function ReviewItem({ review, asker }: { review: AnswerReview; asker: string }) 
       <div className="flex items-start justify-between gap-3">
         <p className="font-medium">{review.question}</p>
         <span className="shrink-0 text-sm text-muted-foreground">
-          {review.refused ? "答不上来" : review.rating === "DOWN" ? "没帮助" : review.rating === "UP" ? "有帮助" : "未评价"}
+          {review.refused
+            ? "答不上来"
+            : review.rating === "DOWN"
+              ? "没帮助"
+              : review.rating === "UP"
+                ? "有帮助"
+                : "未评价"}
         </span>
       </div>
       <p className="text-sm text-muted-foreground">
@@ -117,7 +126,9 @@ function ReviewItem({ review, asker }: { review: AnswerReview; asker: string }) 
         <p className="text-sm text-muted-foreground">系统改写为：{review.rewrittenQuestion}</p>
       )}
       {!review.refused && <p className="text-sm leading-relaxed">{review.answerText}</p>}
-      {review.comment && <p className="rounded-md bg-accent px-3 py-2 text-sm text-accent-foreground">{review.comment}</p>}
+      {review.comment && (
+        <p className="rounded-md bg-accent px-3 py-2 text-sm text-accent-foreground">{review.comment}</p>
+      )}
       {review.citedDocuments.length > 0 && (
         <p className="text-sm text-muted-foreground">引用：{review.citedDocuments.join("、")}</p>
       )}
@@ -134,44 +145,48 @@ function ReviewItem({ review, asker }: { review: AnswerReview; asker: string }) 
         <p className="text-sm text-destructive">{(recheck.error ?? review_.error)?.message}</p>
       )}
       <div className="flex flex-wrap items-center justify-end gap-2">
-        <Button size="sm" variant="ghost" disabled={recheck.isPending} onClick={() => recheck.mutate()}>
-          重新回答
-        </Button>
-        {resolved ? (
-          <Button size="sm" variant="outline" onClick={() => review_.mutate({ status: "OPEN" })}>
-            重新打开
+        <Can permission="answer:recheck">
+          <Button size="sm" variant="ghost" disabled={recheck.isPending} onClick={() => recheck.mutate()}>
+            重新回答
           </Button>
-        ) : resolving ? (
-          <form
-            className="flex items-center gap-2"
-            onSubmit={(event) => {
-              event.preventDefault();
-              review_.mutate({ status: "RESOLVED", text: note.trim() || undefined });
-            }}
-          >
-            <Label className="sr-only" htmlFor={`note-${review.id}`}>
-              处理说明（选填）
-            </Label>
-            <Input
-              id={`note-${review.id}`}
-              value={note}
-              maxLength={500}
-              onChange={(event) => setNote(event.target.value)}
-              placeholder="处理说明（选填），如：已上传 2026 版"
-              className="w-56"
-            />
-            <Button type="submit" size="sm" disabled={review_.isPending}>
-              确认
+        </Can>
+        <Can permission="answer:review">
+          {resolved ? (
+            <Button size="sm" variant="outline" onClick={() => review_.mutate({ status: "OPEN" })}>
+              重新打开
             </Button>
-            <Button type="button" size="sm" variant="ghost" onClick={() => setResolving(false)}>
-              取消
+          ) : resolving ? (
+            <form
+              className="flex items-center gap-2"
+              onSubmit={(event) => {
+                event.preventDefault();
+                review_.mutate({ status: "RESOLVED", text: note.trim() || undefined });
+              }}
+            >
+              <Label className="sr-only" htmlFor={`note-${review.id}`}>
+                处理说明（选填）
+              </Label>
+              <Input
+                id={`note-${review.id}`}
+                value={note}
+                maxLength={500}
+                onChange={(event) => setNote(event.target.value)}
+                placeholder="处理说明（选填），如：已上传 2026 版"
+                className="w-56"
+              />
+              <Button type="submit" size="sm" disabled={review_.isPending}>
+                确认
+              </Button>
+              <Button type="button" size="sm" variant="ghost" onClick={() => setResolving(false)}>
+                取消
+              </Button>
+            </form>
+          ) : (
+            <Button size="sm" variant="outline" onClick={() => setResolving(true)}>
+              标记已处理
             </Button>
-          </form>
-        ) : (
-          <Button size="sm" variant="outline" onClick={() => setResolving(true)}>
-            标记已处理
-          </Button>
-        )}
+          )}
+        </Can>
       </div>
     </li>
   );

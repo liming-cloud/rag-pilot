@@ -3,6 +3,7 @@ import { useNavigate } from "react-router";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { ApiError } from "@/lib/api";
 import { BadCredentialsError, login } from "./api";
 
 /** 登录页，手机优先。账号由管理员创建，这里不提供注册和找回密码。 */
@@ -18,10 +19,14 @@ export function LoginPage() {
     setSubmitting(true);
     setError(null);
     try {
-      await login(username.trim(), password);
-      navigate("/chat", { replace: true });
+      const me = await login(username.trim(), password);
+      navigate(me.mustChangePassword ? "/change-password" : "/chat", { replace: true });
     } catch (e) {
-      setError(e instanceof BadCredentialsError ? e.message : "暂时无法登录，请稍后重试。");
+      setError(
+        e instanceof BadCredentialsError || (e instanceof ApiError && e.code === "IDENTITY_LOCKED")
+          ? e.message
+          : "暂时无法登录，请稍后重试。",
+      );
     } finally {
       setSubmitting(false);
     }

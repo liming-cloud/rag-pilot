@@ -4,6 +4,7 @@ import { type DragEvent, type FormEvent, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Can } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
 import {
   createKnowledgeBase,
@@ -14,7 +15,7 @@ import {
   type KnowledgeDocument,
   uploadDocument,
 } from "./api";
-import { MembersPanel } from "./MembersPanel";
+import { GrantsPanel } from "./GrantsPanel";
 
 /**
  * 知识库管理页，按画布方案 B（上传优先）：左边选库，右边先是上传区，再是文档列表和处理结果。
@@ -64,22 +65,24 @@ export function KnowledgePage() {
             </button>
           ))}
         </nav>
-        <form onSubmit={submit} className="flex gap-2">
-          <Label htmlFor="new-knowledge-base" className="sr-only">
-            新知识库名称
-          </Label>
-          <Input
-            id="new-knowledge-base"
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            placeholder="新知识库名称"
-            className="flex-1"
-          />
-          <Button type="submit" size="sm" variant="outline" disabled={create.isPending}>
-            <Plus aria-hidden="true" className="size-4" />
-            新建
-          </Button>
-        </form>
+        <Can permission="kb:create">
+          <form onSubmit={submit} className="flex gap-2">
+            <Label htmlFor="new-knowledge-base" className="sr-only">
+              新知识库名称
+            </Label>
+            <Input
+              id="new-knowledge-base"
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              placeholder="新知识库名称"
+              className="flex-1"
+            />
+            <Button type="submit" size="sm" variant="outline" disabled={create.isPending}>
+              <Plus aria-hidden="true" className="size-4" />
+              新建
+            </Button>
+          </form>
+        </Can>
         {create.isError && <p className="text-sm text-destructive">{create.error.message}</p>}
       </aside>
       {selected && <KnowledgeBaseDetail key={selected.id} knowledgeBase={selected} />}
@@ -128,39 +131,41 @@ function KnowledgeBaseDetail({ knowledgeBase }: { knowledgeBase: KnowledgeBase }
   return (
     <section className="flex flex-col gap-4">
       <h2 className="text-lg font-medium">{knowledgeBase.name}</h2>
-      <div
-        onDragOver={(event) => {
-          event.preventDefault();
-          setDragging(true);
-        }}
-        onDragLeave={() => setDragging(false)}
-        onDrop={drop}
-        className={cn(
-          "flex flex-col items-center gap-2 rounded-lg border-2 border-dashed border-input bg-card p-8 text-center",
-          dragging && "border-primary bg-accent",
-        )}
-      >
-        <Upload aria-hidden="true" className="size-6 text-muted-foreground" />
-        <p>把文件拖到这里，或</p>
-        <Button asChild variant="outline" size="sm">
-          <Label>
-            选择文件
-            <Input
-              type="file"
-              multiple
-              accept=".pdf,.docx,.xlsx,.xls,.txt,.md,.markdown"
-              className="sr-only"
-              onChange={(event) => {
-                void uploadAll([...(event.target.files ?? [])]);
-                event.target.value = "";
-              }}
-            />
-          </Label>
-        </Button>
-        <p className="text-sm text-muted-foreground">
-          支持 PDF、Word（.docx）、Excel、TXT 和 Markdown，单个文件不超过 50 MB；扫描件 PDF 暂不支持。
-        </p>
-      </div>
+      <Can permission="doc:upload">
+        <div
+          onDragOver={(event) => {
+            event.preventDefault();
+            setDragging(true);
+          }}
+          onDragLeave={() => setDragging(false)}
+          onDrop={drop}
+          className={cn(
+            "flex flex-col items-center gap-2 rounded-lg border-2 border-dashed border-input bg-card p-8 text-center",
+            dragging && "border-primary bg-accent",
+          )}
+        >
+          <Upload aria-hidden="true" className="size-6 text-muted-foreground" />
+          <p>把文件拖到这里，或</p>
+          <Button asChild variant="outline" size="sm">
+            <Label>
+              选择文件
+              <Input
+                type="file"
+                multiple
+                accept=".pdf,.docx,.xlsx,.xls,.txt,.md,.markdown"
+                className="sr-only"
+                onChange={(event) => {
+                  void uploadAll([...(event.target.files ?? [])]);
+                  event.target.value = "";
+                }}
+              />
+            </Label>
+          </Button>
+          <p className="text-sm text-muted-foreground">
+            支持 PDF、Word（.docx）、Excel、TXT 和 Markdown，单个文件不超过 50 MB；扫描件 PDF 暂不支持。
+          </p>
+        </div>
+      </Can>
       {uploads.length > 0 && (
         <ul aria-label="上传中" className="flex flex-col gap-1 text-sm">
           {uploads.map((upload) =>
@@ -194,7 +199,9 @@ function KnowledgeBaseDetail({ knowledgeBase }: { knowledgeBase: KnowledgeBase }
           ))}
         </ul>
       )}
-      <MembersPanel knowledgeBaseId={knowledgeBase.id} />
+      <Can permission="kb:grant">
+        <GrantsPanel knowledgeBaseId={knowledgeBase.id} />
+      </Can>
     </section>
   );
 }
@@ -258,32 +265,36 @@ function DocumentRow({ document, replacedName, onReplace, onDelete }: DocumentRo
           </div>
         ) : (
           <div className="flex items-center gap-1">
-            <Button asChild size="sm" variant="ghost">
-              <Label>
-                上传新版本
-                <Input
-                  type="file"
-                  accept=".pdf,.docx,.xlsx,.xls,.txt,.md,.markdown"
-                  aria-label={`上传新版本 ${document.filename}`}
-                  className="sr-only"
-                  onChange={(event) => {
-                    const file = event.target.files?.[0];
-                    if (file) {
-                      onReplace(file);
-                    }
-                    event.target.value = "";
-                  }}
-                />
-              </Label>
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              aria-label={`删除 ${document.filename}`}
-              onClick={() => setConfirming(true)}
-            >
-              删除
-            </Button>
+            <Can permission="doc:replace">
+              <Button asChild size="sm" variant="ghost">
+                <Label>
+                  上传新版本
+                  <Input
+                    type="file"
+                    accept=".pdf,.docx,.xlsx,.xls,.txt,.md,.markdown"
+                    aria-label={`上传新版本 ${document.filename}`}
+                    className="sr-only"
+                    onChange={(event) => {
+                      const file = event.target.files?.[0];
+                      if (file) {
+                        onReplace(file);
+                      }
+                      event.target.value = "";
+                    }}
+                  />
+                </Label>
+              </Button>
+            </Can>
+            <Can permission="doc:delete">
+              <Button
+                size="sm"
+                variant="ghost"
+                aria-label={`删除 ${document.filename}`}
+                onClick={() => setConfirming(true)}
+              >
+                删除
+              </Button>
+            </Can>
           </div>
         )}
       </div>

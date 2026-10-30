@@ -1,10 +1,10 @@
 import { http, HttpResponse } from "msw";
 import type { AnswerReview } from "@/features/answers/api";
-import type { User } from "@/features/auth/api";
 import type { Answer } from "@/features/chat/api";
 import type { KnowledgeBase, KnowledgeDocument } from "@/features/knowledge/api";
 import type { UsageStats } from "@/features/stats/api";
 import { conversationHandlers, resetConversations } from "./conversations";
+import { currentIdentity, identityHandlers, resetIdentity } from "./identity";
 
 /** 假接口与后端契约保持一致；示例数据只用于原型和测试。 */
 export const sampleKnowledgeBases: KnowledgeBase[] = [
@@ -37,19 +37,12 @@ const sampleDocuments: Record<number, KnowledgeDocument[]> = {
   ],
 };
 
-const sampleUsers: User[] = [
-  { id: 1, username: "admin", displayName: "管理员", role: "ADMIN", enabled: true },
-  { id: 2, username: "staff01", displayName: "店员小王", role: "STAFF", enabled: true },
-  { id: 3, username: "staff02", displayName: "店员小李", role: "STAFF", enabled: true },
-];
-
 /** 假接口的可变数据；测试之间用 resetMockData 还原。 */
 let knowledgeBases: KnowledgeBase[] = [];
 let documents: Record<number, KnowledgeDocument[]> = {};
 let members: Record<number, number[]> = {};
-let users: User[] = [];
-/** 当前登录的账号，默认是店员。 */
-let currentUser: User = sampleUsers[1]!;
+/** 知识库授权给了哪些角色（D-038）。 */
+let roleGrants: Record<number, number[]> = {};
 const pendingChunks = new Map<number, number>();
 let nextId = 100;
 
@@ -57,9 +50,9 @@ export function resetMockData() {
   knowledgeBases = sampleKnowledgeBases.map((knowledgeBase) => ({ ...knowledgeBase }));
   documents = Object.fromEntries(Object.entries(sampleDocuments).map(([id, list]) => [id, [...list]]));
   members = { 1: [1, 2], 2: [1] };
-  users = sampleUsers.map((user) => ({ ...user }));
   reviews = sampleReviews.map((review) => ({ ...review }));
-  currentUser = sampleUsers[1]!;
+  roleGrants = { 1: [4] };
+  resetIdentity();
   resetConversations();
 }
 
@@ -147,7 +140,14 @@ export const sampleAnswer: Answer = {
   topRelevance: 0.97,
 };
 
-const sampleUser = sampleUsers[1]!;
+/** 当前账号能不能访问这个知识库：直接授权，或所属角色被授权（D-038）。 */
+function canAccess(knowledgeBaseId: number) {
+  const { id, roleIds } = currentIdentity();
+  return (
+    (members[knowledgeBaseId]?.includes(id) ?? false) ||
+    (roleGrants[knowledgeBaseId] ?? []).some((roleId) => roleIds.includes(roleId))
+  );
+}
 
 /** 按天数生成确定的示例统计：工作日问得多，周末少。 */
 function sampleStats(days: number): UsageStats {
@@ -201,17 +201,7 @@ function sampleStats(days: number): UsageStats {
 }
 
 export const handlers = [
-  // 密码填 wrong-password 时模拟登录失败，其他任意账号密码都能登录；用户名填 admin 时以管理员登录，用来看管理页原型。
-  http.post("/api/auth/login", async ({ request }) => {
-    const { username, password } = (await request.json()) as { username: string; password: string };
-    if (password === "wrong-password") {
-      return problem(401, "IDENTITY_BAD_CREDENTIALS", "用户名或密码错误");
-    }
-    currentUser = username === "admin" ? sampleUsers[0]! : sampleUser;
-    return HttpResponse.json({ token: "mock-token", user: currentUser });
-  }),
-  http.get("/api/auth/me", () => HttpResponse.json(currentUser)),
-  http.post("/api/auth/logout", () => new HttpResponse(null, { status: 204 })),
+  ...identityHandlers,
   http.get("/api/answers", ({ request }) => {
     const params = new URL(request.url).searchParams;
     const filter = params.get("filter");
@@ -247,7 +237,7 @@ export const handlers = [
   http.delete("/api/answers/:id/feedback", () => new HttpResponse(null, { status: 204 })),
   // 与后端一致：只返回当前账号是成员的知识库，管理员也一样（D-017）。
   http.get("/api/knowledge-bases", () =>
-    HttpResponse.json(knowledgeBases.filter((knowledgeBase) => members[knowledgeBase.id]?.includes(currentUser.id))),
+    HttpResponse.json(knowledgeBases.filter((knowledgeBase) => canAccess(knowledgeBase.id))),
   ),
   http.post("/api/knowledge-bases", async ({ request }) => {
     const { name } = (await request.json()) as { name: string };
@@ -257,37 +247,8 @@ export const handlers = [
     const created = { id: nextId++, name };
     knowledgeBases.push(created);
     // 建库的人自动成为成员（D-017）。
-    members[created.id] = [currentUser.id];
+    members[created.id] = [currentIdentity().id];
     return HttpResponse.json(created, { status: 201 });
-  }),
-  http.get("/api/users", () => HttpResponse.json(users)),
-  http.post("/api/users", async ({ request }) => {
-    const input = (await request.json()) as Omit<User, "id" | "enabled">;
-    if (users.some((user) => user.username === input.username)) {
-      return problem(409, "IDENTITY_CONFLICT", `用户名已被使用：${input.username}`);
-    }
-    const created: User = {
-      id: nextId++,
-      username: input.username,
-      displayName: input.displayName,
-      role: input.role,
-      enabled: true,
-    };
-    users.push(created);
-    return HttpResponse.json(created, { status: 201 });
-  }),
-  // 假定当前登录的是 1 号管理员，与后端一样不能停用自己。
-  http.patch("/api/users/:id", async ({ params, request }) => {
-    const { enabled } = (await request.json()) as { enabled: boolean };
-    const user = users.find((candidate) => candidate.id === Number(params.id));
-    if (!user) {
-      return problem(404, "IDENTITY_NOT_FOUND", "账号不存在");
-    }
-    if (!enabled && user.id === 1) {
-      return problem(400, "IDENTITY_INVALID", "不能停用自己的账号");
-    }
-    user.enabled = enabled;
-    return HttpResponse.json(user);
   }),
   http.get("/api/knowledge-bases/:id/members", ({ params }) =>
     HttpResponse.json((members[Number(params.id)] ?? []).map((userId) => ({ userId }))),
@@ -301,6 +262,18 @@ export const handlers = [
   }),
   http.delete("/api/knowledge-bases/:id/members/:userId", ({ params }) => {
     members[Number(params.id)] = (members[Number(params.id)] ?? []).filter((id) => id !== Number(params.userId));
+    return new HttpResponse(null, { status: 204 });
+  }),
+  http.get("/api/knowledge-bases/:id/role-grants", ({ params }) =>
+    HttpResponse.json((roleGrants[Number(params.id)] ?? []).map((roleId) => ({ roleId }))),
+  ),
+  http.put("/api/knowledge-bases/:id/role-grants/:roleId", ({ params }) => {
+    const list = (roleGrants[Number(params.id)] ??= []);
+    if (!list.includes(Number(params.roleId))) list.push(Number(params.roleId));
+    return new HttpResponse(null, { status: 204 });
+  }),
+  http.delete("/api/knowledge-bases/:id/role-grants/:roleId", ({ params }) => {
+    roleGrants[Number(params.id)] = (roleGrants[Number(params.id)] ?? []).filter((id) => id !== Number(params.roleId));
     return new HttpResponse(null, { status: 204 });
   }),
   // 模拟后台入库：解析中的文档被查询一次之后变成可用；它若是新版本，旧版本随之删除。
@@ -354,12 +327,10 @@ export const handlers = [
     return HttpResponse.json(created, { status: 201 });
   }),
   ...conversationHandlers({
-    currentUserId: () => currentUser.id,
+    currentUserId: () => currentIdentity().id,
     knowledgeBaseName: (id) => knowledgeBases.find((knowledgeBase) => knowledgeBase.id === id)?.name ?? `知识库 ${id}`,
-    canAccess: (id) => members[id]?.includes(currentUser.id) ?? false,
+    canAccess,
     accessibleKnowledgeBaseIds: () =>
-      knowledgeBases
-        .filter((knowledgeBase) => members[knowledgeBase.id]?.includes(currentUser.id))
-        .map((knowledgeBase) => knowledgeBase.id),
+      knowledgeBases.filter((knowledgeBase) => canAccess(knowledgeBase.id)).map((knowledgeBase) => knowledgeBase.id),
   }),
 ];

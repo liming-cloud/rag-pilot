@@ -1,12 +1,9 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, within } from "@testing-library/react";
-import { http, HttpResponse } from "msw";
 import { createMemoryRouter, RouterProvider } from "react-router";
 import { getToken, saveToken } from "@/lib/auth";
-import { server } from "@/mocks/server";
+import { signInAs } from "@/mocks/identity";
 import { routes } from "./router";
-
-const ADMIN = { id: 1, username: "admin", displayName: "管理员", role: "ADMIN", enabled: true };
 
 function renderAt(path: string) {
   saveToken("mock-token");
@@ -20,44 +17,56 @@ function renderAt(path: string) {
   return router;
 }
 
-describe("页面外壳", () => {
+describe("页面外壳与管理端菜单", () => {
   afterEach(() => localStorage.clear());
 
-  it("管理员看到全部入口和自己的名字", async () => {
-    server.use(http.get("/api/auth/me", () => HttpResponse.json(ADMIN)));
+  it("超级管理员有“管理后台”入口，管理端菜单全部显示", async () => {
+    signInAs("admin");
     renderAt("/chat");
 
-    const nav = await screen.findByRole("navigation", { name: "主导航" });
-    for (const name of ["问答", "知识库", "账号", "回答记录", "使用统计"]) {
-      expect(await within(nav).findByRole("link", { name })).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole("link", { name: "管理后台" }));
+    const menu = await screen.findByRole("navigation", { name: "管理菜单" });
+    for (const name of ["知识库", "用户", "角色与权限", "回答记录", "使用统计"]) {
+      expect(within(menu).getByRole("link", { name })).toBeInTheDocument();
     }
-    expect(screen.getByText("管理员")).toBeInTheDocument();
   });
 
-  it("店员只看到问答；打开管理页会跳回问答页", async () => {
+  it("员工没有管理入口；直接打开管理页回到问答页", async () => {
     const router = renderAt("/admin/users");
 
     expect(await screen.findByLabelText("输入问题")).toBeInTheDocument();
     expect(router.state.location.pathname).toBe("/chat");
-    const nav = screen.getByRole("navigation", { name: "主导航" });
-    expect(within(nav).getByRole("link", { name: "问答" })).toBeInTheDocument();
-    expect(within(nav).queryByRole("link", { name: "知识库" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "管理后台" })).not.toBeInTheDocument();
+  });
+
+  it("自定义角色只看到有权限的菜单；打开没有权限的页面跳到第一个有权限的菜单", async () => {
+    signInAs("zhang");
+    const router = renderAt("/admin/users");
+
+    const menu = await screen.findByRole("navigation", { name: "管理菜单" });
+    await vi.waitFor(() => expect(router.state.location.pathname).toBe("/admin/answers"));
+    expect(
+      within(menu)
+        .getAllByRole("link")
+        .map((link) => link.textContent),
+    ).toEqual(["回答记录", "使用统计"]);
+  });
+
+  it("管理员重置过密码时，登录后只能先改密码", async () => {
+    signInAs("reset01");
+    const router = renderAt("/chat");
+
+    expect(await screen.findByRole("heading", { name: "修改密码" })).toBeInTheDocument();
+    expect(router.state.location.pathname).toBe("/change-password");
+    expect(screen.getByText(/管理员重置了你的密码/)).toBeInTheDocument();
   });
 
   it("退出后清掉令牌回到登录页", async () => {
-    let loggedOut = false;
-    server.use(
-      http.post("/api/auth/logout", () => {
-        loggedOut = true;
-        return new HttpResponse(null, { status: 204 });
-      }),
-    );
-    renderAt("/chat");
+    const router = renderAt("/chat");
 
     fireEvent.click(await screen.findByRole("button", { name: "退出" }));
 
-    expect(await screen.findByRole("button", { name: "登录" })).toBeInTheDocument();
-    expect(loggedOut).toBe(true);
+    await vi.waitFor(() => expect(router.state.location.pathname).toBe("/login"));
     expect(getToken()).toBeNull();
   });
 });

@@ -47,6 +47,21 @@ export async function setMember(knowledgeBaseId: number, userId: number, granted
   }
 }
 
+/** 授权给了哪些角色。属于这些角色的账号都能检索这个库（D-038）。 */
+export async function fetchRoleGrants(knowledgeBaseId: number): Promise<{ roleId: number }[]> {
+  return json(await authFetch(`/api/knowledge-bases/${knowledgeBaseId}/role-grants`), "读取角色授权失败");
+}
+
+/** 授权给角色或收回；收回后属于该角色、又没有直接授权的账号立即检索不到。 */
+export async function setRoleGrant(knowledgeBaseId: number, roleId: number, granted: boolean): Promise<void> {
+  const response = await authFetch(`/api/knowledge-bases/${knowledgeBaseId}/role-grants/${roleId}`, {
+    method: granted ? "PUT" : "DELETE",
+  });
+  if (!response.ok) {
+    await json(response, granted ? "授权失败" : "收回失败");
+  }
+}
+
 /** 后端同步完成解析和入库，返回的文档状态是 READY 或 FAILED（附原因）。 */
 export async function uploadDocument(
   knowledgeBaseId: number,

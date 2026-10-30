@@ -3,6 +3,7 @@ import { fireEvent, render, screen, within } from "@testing-library/react";
 import { http, HttpResponse } from "msw";
 import { server } from "@/mocks/server";
 import { AnswersPage } from "./AnswersPage";
+import { signInAs } from "@/mocks/identity";
 
 function renderPage() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -14,6 +15,9 @@ function renderPage() {
 }
 
 describe("回答记录页", () => {
+  // 管理页按权限显示按钮，以有全部管理权限的超级管理员测试页面本身的行为。
+  beforeEach(() => signInAs("admin"));
+
   it("默认看差评：问题、提问人、留言和引用的文档", async () => {
     renderPage();
 

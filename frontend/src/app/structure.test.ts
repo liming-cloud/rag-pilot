@@ -3,7 +3,18 @@ import path from "node:path";
 
 // 前端目录规范见 AGENTS.md“目录结构”：feature 之间只能引用对方的 api.ts，feature 不引用 app。
 const src = path.resolve(import.meta.dirname, "..");
-const ALLOWED_TOP = ["app", "components", "features", "lib", "mocks", "styles", "test", "index.css", "main.tsx", "vite-env.d.ts"];
+const ALLOWED_TOP = [
+  "app",
+  "components",
+  "features",
+  "lib",
+  "mocks",
+  "styles",
+  "test",
+  "index.css",
+  "main.tsx",
+  "vite-env.d.ts",
+];
 
 function walk(dir: string): string[] {
   return readdirSync(dir).flatMap((name) => {
@@ -51,7 +62,9 @@ describe("前端目录结构", () => {
   it("feature 之间只引用对方的 api.ts，不引用 app", () => {
     const problems = walk(path.join(src, "features"))
       .filter((file) => /\.tsx?$/.test(file))
-      .flatMap((file) => importProblems(path.relative(src, file).split(path.sep).join("/"), readFileSync(file, "utf8")));
+      .flatMap((file) =>
+        importProblems(path.relative(src, file).split(path.sep).join("/"), readFileSync(file, "utf8")),
+      );
     expect(problems).toEqual([]);
   });
 
@@ -72,9 +85,15 @@ describe("前端目录结构", () => {
   });
 
   it("违规的引用会被指出", () => {
-    expect(importProblems("features/answers/AnswersPage.tsx", 'import { fetchUsers } from "@/features/users/api";')).toEqual([]);
-    expect(importProblems("features/answers/AnswersPage.tsx", 'import { UsersPage } from "@/features/users/UsersPage";')).toHaveLength(1);
-    expect(importProblems("features/answers/AnswersPage.tsx", 'import { FeedbackBar } from "../chat/FeedbackBar";')).toHaveLength(1);
+    expect(
+      importProblems("features/answers/AnswersPage.tsx", 'import { fetchUsers } from "@/features/users/api";'),
+    ).toEqual([]);
+    expect(
+      importProblems("features/answers/AnswersPage.tsx", 'import { UsersPage } from "@/features/users/UsersPage";'),
+    ).toHaveLength(1);
+    expect(
+      importProblems("features/answers/AnswersPage.tsx", 'import { FeedbackBar } from "../chat/FeedbackBar";'),
+    ).toHaveLength(1);
     expect(importProblems("features/chat/ChatPage.tsx", 'import { AnswerCard } from "./AnswerCard";')).toEqual([]);
     expect(importProblems("features/chat/ChatPage.tsx", 'import { AppShell } from "@/app/AppShell";')).toHaveLength(1);
   });

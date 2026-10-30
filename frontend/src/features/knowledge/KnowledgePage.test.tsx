@@ -3,6 +3,7 @@ import { fireEvent, render, screen, within } from "@testing-library/react";
 import { http, HttpResponse } from "msw";
 import { server } from "@/mocks/server";
 import { KnowledgePage } from "./KnowledgePage";
+import { signInAs } from "@/mocks/identity";
 
 function renderPage() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
@@ -18,6 +19,9 @@ function choose(...files: File[]) {
 }
 
 describe("知识库页", () => {
+  // 管理页按权限显示按钮，以有全部管理权限的超级管理员测试页面本身的行为。
+  beforeEach(() => signInAs("admin"));
+
   it("列出知识库，默认显示第一个库的文档和失败原因", async () => {
     renderPage();
 
