@@ -1,12 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { type FormEvent, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import type { User } from "@/features/auth/api";
 import { cn } from "@/lib/utils";
 import { createUser, fetchUsers, type NewUser, setUserEnabled } from "./api";
 
 const ROLE_LABEL = { ADMIN: "管理员账号", STAFF: "店员账号" } as const;
-const inputClass = "h-9 rounded-md border border-input bg-card px-3 text-sm outline-none focus:ring-2 focus:ring-ring";
 const EMPTY: NewUser = { username: "", displayName: "", password: "", role: "STAFF" };
 
 /**
@@ -44,25 +46,25 @@ export function UsersPage() {
     <main className="mx-auto flex max-w-3xl flex-col gap-6 p-6 md:p-8">
       <h1 className="font-serif text-2xl font-semibold">账号</h1>
       <form onSubmit={submit} className="grid gap-3 rounded-lg border bg-card p-4 sm:grid-cols-2">
-        <label className="flex flex-col gap-1 text-sm">
+        <Label className="flex flex-col gap-1">
           用户名
-          <input className={inputClass} autoComplete="off" required {...field("username")} />
-        </label>
-        <label className="flex flex-col gap-1 text-sm">
+          <Input autoComplete="off" required {...field("username")} />
+        </Label>
+        <Label className="flex flex-col gap-1">
           显示名
-          <input className={inputClass} required {...field("displayName")} />
-        </label>
-        <label className="flex flex-col gap-1 text-sm">
+          <Input required {...field("displayName")} />
+        </Label>
+        <Label className="flex flex-col gap-1">
           初始密码
-          <input className={inputClass} type="password" autoComplete="new-password" required {...field("password")} />
-        </label>
-        <label className="flex flex-col gap-1 text-sm">
+          <Input type="password" autoComplete="new-password" required {...field("password")} />
+        </Label>
+        <Label className="flex flex-col gap-1">
           角色
-          <select className={inputClass} {...field("role")}>
-            <option value="STAFF">店员（只能问答）</option>
-            <option value="ADMIN">管理员（管理知识库和账号）</option>
-          </select>
-        </label>
+          <NativeSelect {...field("role")}>
+            <NativeSelectOption value="STAFF">店员（只能问答）</NativeSelectOption>
+            <NativeSelectOption value="ADMIN">管理员（管理知识库和账号）</NativeSelectOption>
+          </NativeSelect>
+        </Label>
         <div className="flex items-center gap-3 sm:col-span-2">
           <Button type="submit" size="sm" disabled={create.isPending}>
             新建账号

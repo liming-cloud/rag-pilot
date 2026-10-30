@@ -1,6 +1,8 @@
 import { ArrowUp } from "lucide-react";
 import { type FormEvent, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { type Answer, askStream } from "./api";
 import { AnswerCard } from "./AnswerCard";
 
@@ -80,14 +82,14 @@ export function ChatPage() {
           onSubmit={submit}
           className="flex items-center gap-2 rounded-full border border-input bg-card py-1 pr-1 pl-4"
         >
-          <label htmlFor="question" className="sr-only">
+          <Label htmlFor="question" className="sr-only">
             输入问题
-          </label>
-          <input
+          </Label>
+          <Input
             id="question"
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
-            className="h-11 min-w-0 flex-1 bg-transparent text-base outline-none"
+            className="h-11 flex-1 rounded-none border-0 bg-transparent px-0 text-base focus:ring-0"
             placeholder="问问门店规范、商品、促销…"
           />
           <Button type="submit" size="icon" className="rounded-full" aria-label="发送" disabled={asking}>

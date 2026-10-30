@@ -1,9 +1,9 @@
 import { type FormEvent, useState } from "react";
 import { useNavigate } from "react-router";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { BadCredentialsError, login } from "./api";
-
-const inputClass = "h-11 rounded-md border border-input bg-card px-3 text-base outline-none focus:ring-2 focus:ring-ring";
 
 /** 登录页，手机优先。账号由管理员创建，这里不提供注册和找回密码。 */
 export function LoginPage() {
@@ -31,27 +31,27 @@ export function LoginPage() {
     <main className="mx-auto flex h-dvh max-w-sm flex-col justify-center gap-6 p-6">
       <h1 className="text-center font-serif text-2xl font-semibold">门店运营知识库</h1>
       <form onSubmit={submit} className="flex flex-col gap-4">
-        <label className="flex flex-col gap-1 text-sm">
+        <Label className="flex flex-col gap-1">
           用户名
-          <input
-            className={inputClass}
+          <Input
+            className="h-11 text-base"
             autoComplete="username"
             value={username}
             onChange={(event) => setUsername(event.target.value)}
             required
           />
-        </label>
-        <label className="flex flex-col gap-1 text-sm">
+        </Label>
+        <Label className="flex flex-col gap-1">
           密码
-          <input
-            className={inputClass}
+          <Input
+            className="h-11 text-base"
             type="password"
             autoComplete="current-password"
             value={password}
             onChange={(event) => setPassword(event.target.value)}
             required
           />
-        </label>
+        </Label>
         {error && (
           <p role="alert" className="text-sm text-destructive">
             {error}

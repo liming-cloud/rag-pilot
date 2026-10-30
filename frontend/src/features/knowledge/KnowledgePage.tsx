@@ -2,6 +2,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { FileText, Plus, Upload } from "lucide-react";
 import { type DragEvent, type FormEvent, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import {
   createKnowledgeBase,
@@ -63,15 +65,15 @@ export function KnowledgePage() {
           ))}
         </nav>
         <form onSubmit={submit} className="flex gap-2">
-          <label htmlFor="new-knowledge-base" className="sr-only">
+          <Label htmlFor="new-knowledge-base" className="sr-only">
             新知识库名称
-          </label>
-          <input
+          </Label>
+          <Input
             id="new-knowledge-base"
             value={name}
             onChange={(event) => setName(event.target.value)}
             placeholder="新知识库名称"
-            className="h-9 min-w-0 flex-1 rounded-md border border-input bg-card px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+            className="flex-1"
           />
           <Button type="submit" size="sm" variant="outline" disabled={create.isPending}>
             <Plus aria-hidden="true" className="size-4" />
@@ -141,9 +143,9 @@ function KnowledgeBaseDetail({ knowledgeBase }: { knowledgeBase: KnowledgeBase }
         <Upload aria-hidden="true" className="size-6 text-muted-foreground" />
         <p>把文件拖到这里，或</p>
         <Button asChild variant="outline" size="sm">
-          <label>
+          <Label>
             选择文件
-            <input
+            <Input
               type="file"
               multiple
               accept=".pdf,.docx,.xlsx,.xls,.txt,.md,.markdown"
@@ -153,7 +155,7 @@ function KnowledgeBaseDetail({ knowledgeBase }: { knowledgeBase: KnowledgeBase }
                 event.target.value = "";
               }}
             />
-          </label>
+          </Label>
         </Button>
         <p className="text-sm text-muted-foreground">
           支持 PDF、Word（.docx）、Excel、TXT 和 Markdown，单个文件不超过 50 MB；扫描件 PDF 暂不支持。
@@ -257,9 +259,9 @@ function DocumentRow({ document, replacedName, onReplace, onDelete }: DocumentRo
         ) : (
           <div className="flex items-center gap-1">
             <Button asChild size="sm" variant="ghost">
-              <label>
+              <Label>
                 上传新版本
-                <input
+                <Input
                   type="file"
                   accept=".pdf,.docx,.xlsx,.xls,.txt,.md,.markdown"
                   aria-label={`上传新版本 ${document.filename}`}
@@ -272,7 +274,7 @@ function DocumentRow({ document, replacedName, onReplace, onDelete }: DocumentRo
                     event.target.value = "";
                   }}
                 />
-              </label>
+              </Label>
             </Button>
             <Button
               size="sm"

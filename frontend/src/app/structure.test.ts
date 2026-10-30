@@ -34,6 +34,14 @@ export function importProblems(file: string, source: string): string[] {
   return problems;
 }
 
+/** feature 里直接写的原生表单、表格元素；这些要用 components/ui 里的 shadcn 组件（AGENTS.md：界面只用 shadcn/ui）。 */
+export function nativeElementProblems(file: string, source: string): string[] {
+  if (!file.startsWith("features/") || /\.test\.tsx?$/.test(file)) return [];
+  return [...source.matchAll(/<(input|select|textarea|table|label|option)[\s>]/g)].map(
+    (match) => `${file} 直接用了 <${match[1]}>：改用 components/ui 里的组件`,
+  );
+}
+
 describe("前端目录结构", () => {
   it("src 下只有约定的目录，components 下只放 shadcn 的 ui", () => {
     expect(readdirSync(src).filter((name) => !ALLOWED_TOP.includes(name))).toEqual([]);
@@ -45,6 +53,22 @@ describe("前端目录结构", () => {
       .filter((file) => /\.tsx?$/.test(file))
       .flatMap((file) => importProblems(path.relative(src, file).split(path.sep).join("/"), readFileSync(file, "utf8")));
     expect(problems).toEqual([]);
+  });
+
+  it("feature 里不直接写原生的表单和表格元素", () => {
+    const problems = walk(path.join(src, "features"))
+      .filter((file) => /\.tsx$/.test(file))
+      .flatMap((file) =>
+        nativeElementProblems(path.relative(src, file).split(path.sep).join("/"), readFileSync(file, "utf8")),
+      );
+    expect(problems).toEqual([]);
+  });
+
+  it("直接写原生元素会被指出，用组件不会", () => {
+    expect(nativeElementProblems("features/users/UsersPage.tsx", '<input className="h-9" />')).toHaveLength(1);
+    expect(nativeElementProblems("features/stats/StatsPage.tsx", "<table>\n<label>")).toHaveLength(2);
+    expect(nativeElementProblems("features/users/UsersPage.tsx", "<Input required />")).toEqual([]);
+    expect(nativeElementProblems("features/users/UsersPage.test.tsx", "<input />")).toEqual([]);
   });
 
   it("违规的引用会被指出", () => {

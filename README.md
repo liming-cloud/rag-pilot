@@ -58,7 +58,7 @@ cd frontend
 npm ci
 npm run dev:mock   # 用 MSW 假接口启动，不需要后端，做可点击原型时用
 npm run dev        # 接口转发到本机 8080 端口的后端
-npm test && npm run build
+npm run lint && npm test && npm run build
 ```
 
 协作流程见 [AGENTS.md](AGENTS.md)：每项工作先开 Issue，再建分支、开 PR，CI 通过后 squash 合并，不直接推送 main。

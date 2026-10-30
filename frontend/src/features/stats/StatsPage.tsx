@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { fetchUsageStats, RANGES, type Range, type UsageStats } from "./api";
 
 const REASONS: Record<string, string> = {
@@ -98,33 +99,33 @@ function DailyTable({ daily }: { daily: UsageStats["daily"] }) {
     <section className="flex flex-col gap-2">
       <h2 className="text-lg font-medium">每日趋势</h2>
       <div className="max-h-96 overflow-y-auto rounded-lg border bg-card">
-        <table aria-label="每日趋势" className="w-full text-sm">
-          <thead className="sticky top-0 bg-card text-left text-muted-foreground">
-            <tr>
-              <th className="px-3 py-2 font-normal">日期</th>
-              <th className="w-1/2 px-3 py-2 font-normal">提问</th>
-              <th className="px-3 py-2 text-right font-normal">拒答</th>
-              <th className="px-3 py-2 text-right font-normal">差评</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y">
+        <Table aria-label="每日趋势">
+          <TableHeader className="sticky top-0 bg-card">
+            <TableRow>
+              <TableHead>日期</TableHead>
+              <TableHead className="w-1/2">提问</TableHead>
+              <TableHead className="text-right">拒答</TableHead>
+              <TableHead className="text-right">差评</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {daily.map((day) => (
-              <tr key={day.date}>
-                <td className="px-3 py-1.5 tabular-nums">{day.date.slice(5)}</td>
-                <td className="px-3 py-1.5">
+              <TableRow key={day.date}>
+                <TableCell className="tabular-nums">{day.date.slice(5)}</TableCell>
+                <TableCell>
                   <div className="flex items-center gap-2">
                     <div className="h-2 flex-1 overflow-hidden rounded-sm bg-secondary">
                       <div className="h-full bg-primary" style={{ width: `${(day.questions / max) * 100}%` }} />
                     </div>
                     <span className="w-8 text-right tabular-nums">{day.questions}</span>
                   </div>
-                </td>
-                <td className="px-3 py-1.5 text-right tabular-nums">{day.refused}</td>
-                <td className="px-3 py-1.5 text-right tabular-nums">{day.disliked}</td>
-              </tr>
+                </TableCell>
+                <TableCell className="text-right tabular-nums">{day.refused}</TableCell>
+                <TableCell className="text-right tabular-nums">{day.disliked}</TableCell>
+              </TableRow>
             ))}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       </div>
     </section>
   );
