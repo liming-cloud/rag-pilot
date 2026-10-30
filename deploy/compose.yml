@@ -32,6 +32,9 @@ services:
       RAG_ADMIN_USERNAME: ${RAG_ADMIN_USERNAME:-admin}
       RAG_ADMIN_PASSWORD: ${RAG_ADMIN_PASSWORD:-}
       RAG_ADMIN_RESET_PASSWORD: ${RAG_ADMIN_RESET_PASSWORD:-}
+      RAG_BRAND_NAME: ${RAG_BRAND_NAME:-}
+      RAG_BRAND_TAGLINE: ${RAG_BRAND_TAGLINE:-}
+      RAG_BRAND_LOGIN_HINT: ${RAG_BRAND_LOGIN_HINT:-}
     volumes:
       - app-files:/data/files
     depends_on:

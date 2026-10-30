@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { Link, Navigate, Outlet, useLocation, useNavigate } from "react-router";
 import { Button } from "@/components/ui/button";
 import { logout } from "@/features/auth/api";
+import { useBranding } from "@/lib/branding";
 import { type Me, useMe } from "@/lib/permissions";
 
 /** 管理端的菜单，按菜单权限显示（D-038）。模型管理、系统设置在 M4、M5 加入。 */
@@ -30,17 +31,18 @@ export function useSignOut() {
 }
 
 /**
- * 员工端外壳：顶部一行放标题、当前用户、“管理后台”入口（有任一管理菜单权限时）、修改密码和退出，下面是问答页。
+ * 员工端外壳：顶部一行放产品名称（部署配置，D-042）、当前用户、“管理后台”入口（有任一管理菜单权限时）、修改密码和退出，下面是问答页。
  */
 export function AppShell() {
   const me = useMe();
+  const branding = useBranding();
   const signOut = useSignOut();
   const adminMenus = adminMenusFor(me.data);
 
   return (
     <div className="flex h-dvh flex-col">
       <header className="flex h-12 shrink-0 items-center gap-3 border-b bg-card px-3">
-        <span className="flex-1 font-medium">门店运营知识库</span>
+        <span className="flex-1 font-medium">{branding.name}</span>
         {adminMenus.length > 0 && (
           <Button asChild variant="ghost" size="sm">
             <Link to={adminMenus[0]!.to}>

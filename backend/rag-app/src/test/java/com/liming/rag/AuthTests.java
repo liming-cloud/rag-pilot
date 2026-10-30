@@ -2,6 +2,7 @@ package com.liming.rag;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.liming.rag.identity.application.IdentityProperties;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
@@ -43,6 +44,16 @@ class AuthTests {
                 .isEqualTo(HttpStatus.UNAUTHORIZED);
         assertThat(call(HttpMethod.POST, "/api/ask", null, Map.of("question", "货架", "knowledgeBaseIds", 1))
                 .getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+    }
+
+    @Test
+    @DisplayName("产品名称和登录页提示不用登录就能读，只有展示用的三项；没配置时是内核默认值（D-042）")
+    void brandingIsPublicAndMinimal() {
+        var response = call(HttpMethod.GET, "/api/auth/branding", null, null);
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).containsOnlyKeys("name", "tagline", "loginHint")
+                .containsEntry("name", IdentityProperties.Branding.DEFAULT_NAME)
+                .containsEntry("loginHint", IdentityProperties.Branding.DEFAULT_LOGIN_HINT);
     }
 
     @Test
