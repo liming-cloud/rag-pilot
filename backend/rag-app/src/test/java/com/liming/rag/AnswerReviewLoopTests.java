@@ -4,8 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.liming.rag.answering.api.Answer;
 import com.liming.rag.answering.application.AnswerLogService;
-import com.liming.rag.common.TenantId;
-import com.liming.rag.common.UserId;
+import com.liming.rag.shared.TenantId;
+import com.liming.rag.shared.UserId;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;

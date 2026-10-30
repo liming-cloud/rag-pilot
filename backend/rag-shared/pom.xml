@@ -11,8 +11,8 @@
         <relativePath>../../pom.xml</relativePath>
     </parent>
 
-    <artifactId>rag-common</artifactId>
-    <!-- 共享内核：所有模块共用的值对象、错误码和任务表执行器。 -->
+    <artifactId>rag-shared</artifactId>
+    <!-- 共享内核：多个上下文共同依赖的纯 Java 模型概念（标识、错误分类、聚合根标记），只依赖 JDK。定义见 AGENTS.md。 -->
 
     <dependencies>
         <dependency>

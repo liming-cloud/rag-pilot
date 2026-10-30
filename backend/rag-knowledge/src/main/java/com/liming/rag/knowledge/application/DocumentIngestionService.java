@@ -1,6 +1,6 @@
 package com.liming.rag.knowledge.application;
 
-import com.liming.rag.common.TenantId;
+import com.liming.rag.shared.TenantId;
 import com.liming.rag.knowledge.domain.Document;
 import com.liming.rag.knowledge.domain.DocumentRepository;
 import java.security.MessageDigest;

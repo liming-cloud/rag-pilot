@@ -24,7 +24,7 @@ import org.junit.jupiter.api.Test;
  * 目录结构与分层依赖，规范见 AGENTS.md“目录结构”。
  *
  * <p>上下文模块（identity、knowledge、answering、evaluation）的类放在 api、web、application、domain、infrastructure 五个子包；
- * 技术模块（common、ai）扁平，对外只公开接口、record、枚举和异常。
+ * 技术模块（shared、ai）扁平，对外只公开接口、record、枚举和异常。
  */
 class PackageLayoutTest {
 
@@ -41,7 +41,7 @@ class PackageLayoutTest {
             .should().dependOnClassesThat(nameMatching("(org\\.springframework|com\\.baomidou|org\\.apache\\.ibatis"
                     + "|cn\\.dev33\\.satoken|com\\.liming\\.rag\\.ai)\\..*"
                     + "|.*\\.(application|infrastructure|web)\\..*"))
-            .as("domain 只依赖 JDK、rag-common 和本模块的 domain、api，不依赖框架和其他层");
+            .as("domain 只依赖 JDK、rag-shared 和本模块的 domain、api，不依赖框架和其他层");
 
     static final ArchRule APPLICATION_NOT_ON_ADAPTERS = noClasses()
             .that().resideInAPackage("..application..")
@@ -60,13 +60,13 @@ class PackageLayoutTest {
             .as("api 是对外合同，不暴露模块内部的类型");
 
     static final ArchRule TECH_MODULES_EXPOSE_CONTRACTS_ONLY = classes()
-            .that().resideInAnyPackage("com.liming.rag.ai..", "com.liming.rag.common..")
+            .that().resideInAnyPackage("com.liming.rag.ai..", "com.liming.rag.shared..")
             .and().arePublic()
             .and().areNotInterfaces()
             .and().areNotEnums()
             .and().areNotAssignableTo(Throwable.class)
             .should().beAssignableTo(Record.class)
-            .as("技术模块（common、ai）对外只公开接口、record、枚举和异常，实现类包内可见");
+            .as("技术模块（shared、ai）对外只公开接口、record、枚举和异常，实现类包内可见");
 
     static final List<ArchRule> RULES = List.of(CONTEXT_CLASSES_IN_LAYERS, DOMAIN_IS_PURE,
             APPLICATION_NOT_ON_ADAPTERS, WEB_NOT_ON_INFRASTRUCTURE, API_SELF_CONTAINED,

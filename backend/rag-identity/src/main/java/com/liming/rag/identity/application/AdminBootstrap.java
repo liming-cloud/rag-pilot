@@ -1,6 +1,6 @@
 package com.liming.rag.identity.application;
 
-import com.liming.rag.common.TenantId;
+import com.liming.rag.shared.TenantId;
 import com.liming.rag.identity.api.Roles;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

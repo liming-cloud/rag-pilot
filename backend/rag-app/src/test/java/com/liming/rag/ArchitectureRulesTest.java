@@ -13,6 +13,7 @@ import com.liming.rag.archfixture.application.UsesQueryWrapper;
 import com.liming.rag.archfixture.infrastructure.AnnotatedSqlMapper;
 import com.liming.rag.archfixture.infrastructure.RawSqlWrapper;
 import com.liming.rag.archfixture.web.ChecksRoleByHand;
+import com.liming.rag.archfixture.web.ModuleExceptionAdvice;
 import com.liming.rag.knowledge.infrastructure.persistence.BypassesSearchFilter;
 import com.tngtech.archunit.core.domain.JavaClasses;
 import com.tngtech.archunit.core.domain.JavaMethodCall;
@@ -81,9 +82,15 @@ class ArchitectureRulesTest {
                             && call.getName().matches("apply|last|inSql|notInSql|exists|notExists|having")))
             .as("条件构造器只用类型安全的条件，不拼原始 SQL（apply、last、inSql 等）");
 
+    static final ArchRule ONE_EXCEPTION_HANDLER = classes()
+            .that().areAnnotatedWith("org.springframework.web.bind.annotation.RestControllerAdvice")
+            .or().areAnnotatedWith("org.springframework.web.bind.annotation.ControllerAdvice")
+            .should().haveFullyQualifiedName("com.liming.rag.ApiExceptionHandler")
+            .as("只有 rag-app 的 ApiExceptionHandler 一个异常出口；模块抛继承 BusinessException 的业务异常，不自己写处理器");
+
     static final List<ArchRule> RULES = List.of(MYBATIS_ONLY_IN_INFRASTRUCTURE, DO_ONLY_IN_INFRASTRUCTURE,
             MODEL_CALLS_ONLY_IN_RAG_AI, SEARCH_FILTER_IN_ONE_PLACE, LOGIN_AND_ROLE_ONLY_BY_ANNOTATION,
-            NO_SQL_ANNOTATIONS, NO_RAW_SQL_IN_WRAPPER);
+            NO_SQL_ANNOTATIONS, NO_RAW_SQL_IN_WRAPPER, ONE_EXCEPTION_HANDLER);
 
     @Test
     @DisplayName("生产代码遵守全部架构规则")
@@ -105,10 +112,14 @@ class ArchitectureRulesTest {
         assertViolates(LOGIN_AND_ROLE_ONLY_BY_ANNOTATION, ChecksRoleByHand.class);
         assertViolates(NO_SQL_ANNOTATIONS, AnnotatedSqlMapper.class);
         assertViolates(NO_RAW_SQL_IN_WRAPPER, RawSqlWrapper.class);
+        assertViolates(ONE_EXCEPTION_HANDLER, ModuleExceptionAdvice.class);
     }
 
-    static void assertViolates(ArchRule rule, Class<?> sample) {
-        JavaClasses classes = new ClassFileImporter().importClasses(sample);
+    /** 只导入违规样例（以及它需要的类），规则应报出违规。 */
+    static void assertViolates(ArchRule rule, Class<?> sample, Class<?>... context) {
+        var all = new java.util.ArrayList<Class<?>>(List.of(context));
+        all.add(sample);
+        JavaClasses classes = new ClassFileImporter().importClasses(all);
         assertThat(rule.evaluate(classes).hasViolation())
                 .as("%s 应被规则“%s”拦下", sample.getSimpleName(), rule.getDescription())
                 .isTrue();

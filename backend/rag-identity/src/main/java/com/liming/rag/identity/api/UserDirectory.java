@@ -1,7 +1,7 @@
 package com.liming.rag.identity.api;
 
-import com.liming.rag.common.TenantId;
-import com.liming.rag.common.UserId;
+import com.liming.rag.shared.TenantId;
+import com.liming.rag.shared.UserId;
 
 /** 账号查询，供其他模块在授权前确认账号存在。 */
 public interface UserDirectory {

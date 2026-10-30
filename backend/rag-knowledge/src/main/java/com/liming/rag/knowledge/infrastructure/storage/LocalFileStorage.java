@@ -1,6 +1,6 @@
 package com.liming.rag.knowledge.infrastructure.storage;
 
-import com.liming.rag.common.TenantId;
+import com.liming.rag.shared.TenantId;
 import com.liming.rag.knowledge.application.FileStorage;
 import java.io.IOException;
 import java.io.UncheckedIOException;

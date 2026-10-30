@@ -1,6 +1,6 @@
 package com.liming.rag.answering.application;
 
-import com.liming.rag.common.TenantId;
+import com.liming.rag.shared.TenantId;
 import java.time.LocalDate;
 
 /** 回答记录的统计端口。 */

@@ -2,7 +2,7 @@ package com.liming.rag.answering.infrastructure.persistence;
 
 import com.liming.rag.answering.application.AnswerReview;
 import com.liming.rag.answering.application.AnswerReviews;
-import com.liming.rag.common.TenantId;
+import com.liming.rag.shared.TenantId;
 import java.sql.Timestamp;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;

@@ -1,6 +1,6 @@
 package com.liming.rag.identity.application;
 
-import com.liming.rag.common.TenantId;
+import com.liming.rag.shared.TenantId;
 import java.util.List;
 import java.util.Optional;
 

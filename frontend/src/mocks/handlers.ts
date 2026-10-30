@@ -112,7 +112,8 @@ const sampleReviews: AnswerReview[] = [
 let reviews: AnswerReview[] = [];
 resetMockData();
 
-const problem = (status: number, detail: string) => HttpResponse.json({ status, detail }, { status });
+// 与后端一致：RFC 9457 问题详情，带稳定的错误码 code（见 AGENTS.md、D-034）。
+const problem = (status: number, code: string, detail: string) => HttpResponse.json({ status, code, detail }, { status });
 
 export const sampleAnswer: Answer = {
   id: 501,
@@ -198,7 +199,7 @@ export const handlers = [
   http.post("/api/auth/login", async ({ request }) => {
     const { username, password } = (await request.json()) as { username: string; password: string };
     if (password === "wrong-password") {
-      return HttpResponse.json({ detail: "用户名或密码错误" }, { status: 401 });
+      return problem(401, "IDENTITY_BAD_CREDENTIALS", "用户名或密码错误");
     }
     currentUser = username === "admin" ? sampleUsers[0]! : sampleUser;
     return HttpResponse.json({ token: "mock-token", user: currentUser });
@@ -224,7 +225,7 @@ export const handlers = [
     const { status, note } = (await request.json()) as { status: "OPEN" | "RESOLVED"; note?: string };
     const review = reviews.find((candidate) => candidate.id === Number(params.id));
     if (!review) {
-      return problem(404, "回答不存在");
+      return problem(404, "ANSWERING_NOT_FOUND", "回答不存在");
     }
     Object.assign(review, {
       reviewStatus: status,
@@ -242,7 +243,7 @@ export const handlers = [
   http.post("/api/knowledge-bases", async ({ request }) => {
     const { name } = (await request.json()) as { name: string };
     if (knowledgeBases.some((knowledgeBase) => knowledgeBase.name === name)) {
-      return problem(409, `已有同名知识库：${name}`);
+      return problem(409, "KNOWLEDGE_CONFLICT", `已有同名知识库：${name}`);
     }
     const created = { id: nextId++, name };
     knowledgeBases.push(created);
@@ -252,7 +253,7 @@ export const handlers = [
   http.post("/api/users", async ({ request }) => {
     const input = (await request.json()) as Omit<User, "id" | "enabled">;
     if (users.some((user) => user.username === input.username)) {
-      return problem(409, `用户名已被使用：${input.username}`);
+      return problem(409, "IDENTITY_CONFLICT", `用户名已被使用：${input.username}`);
     }
     const created: User = { id: nextId++, username: input.username, displayName: input.displayName, role: input.role, enabled: true };
     users.push(created);
@@ -263,10 +264,10 @@ export const handlers = [
     const { enabled } = (await request.json()) as { enabled: boolean };
     const user = users.find((candidate) => candidate.id === Number(params.id));
     if (!user) {
-      return problem(404, "账号不存在");
+      return problem(404, "IDENTITY_NOT_FOUND", "账号不存在");
     }
     if (!enabled && user.id === 1) {
-      return problem(400, "不能停用自己的账号");
+      return problem(400, "IDENTITY_INVALID", "不能停用自己的账号");
     }
     user.enabled = enabled;
     return HttpResponse.json(user);
@@ -303,17 +304,17 @@ export const handlers = [
     const id = Number(params.id);
     const before = documents[id]?.length ?? 0;
     documents[id] = (documents[id] ?? []).filter((document) => document.id !== Number(params.documentId));
-    return documents[id].length < before ? new HttpResponse(null, { status: 204 }) : problem(404, "文档不存在");
+    return documents[id].length < before ? new HttpResponse(null, { status: 204 }) : problem(404, "KNOWLEDGE_NOT_FOUND", "文档不存在");
   }),
   // 与后端一致：只收 PDF、Word、Excel、TXT、Markdown，同名文件视为重复。
   http.post("/api/knowledge-bases/:id/documents", async ({ params, request }) => {
     const file = await uploadedFile(request);
     if (!/\.(txt|md|markdown|pdf|docx|xlsx|xls)$/i.test(file.name)) {
-      return problem(415, "目前支持 PDF、Word（.docx）、Excel（.xlsx / .xls）、TXT 和 Markdown；旧版 .doc 请先另存为 .docx");
+      return problem(415, "KNOWLEDGE_UNSUPPORTED_TYPE", "目前支持 PDF、Word（.docx）、Excel（.xlsx / .xls）、TXT 和 Markdown；旧版 .doc 请先另存为 .docx");
     }
     const list = (documents[Number(params.id)] ??= []);
     if (list.some((document) => document.filename === file.name)) {
-      return problem(409, `这份文件已经在知识库里了：${file.name}`);
+      return problem(409, "KNOWLEDGE_CONFLICT", `这份文件已经在知识库里了：${file.name}`);
     }
     const created: KnowledgeDocument = {
       id: nextId++,
