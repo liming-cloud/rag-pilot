@@ -84,4 +84,10 @@ class SearchPlannerTest {
         assertThat(garbled.queries()).containsExactly("那冷冻柜呢？");
         assertThat(garbled.smallTalk()).isFalse();
     }
+
+    @Test
+    @DisplayName("提示词写明：表示知道了、致谢的话即使接在业务问题后面也不检索")
+    void promptCoversAcknowledgements() {
+        assertThat(SearchPlanner.SYSTEM).contains("好的，谢谢", "明白了", "即使前面一直在问业务问题也一样");
+    }
 }

@@ -118,6 +118,18 @@ class SpringAiChatGatewayTest {
     }
 
     @Test
+    @DisplayName("正常生成完时停止信号不会被触发：调用方据此判断这一轮是不是员工停的")
+    void normalCompletionLeavesStopUntouched() throws Exception {
+        start((call, model) -> new Reply(0, 200, "完整回答"));
+        var gateway = gateway(null);
+        var stop = new CompletableFuture<Void>();
+
+        assertThat(gateway.stream("系统", "问题", delta -> {
+        }, stop)).isEqualTo("完整回答");
+        assertThat(stop).isNotDone();
+    }
+
+    @Test
     @DisplayName("轻量任务（如会话标题）用单独配置的模型，其他调用用回答模型")
     void lightTierUsesLightModel() throws Exception {
         start((call, model) -> new Reply(0, 200, "标题"));

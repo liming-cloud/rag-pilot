@@ -350,4 +350,17 @@ class AnswerServiceTest {
 
         assertThat(prompts).isEmpty();
     }
+
+    @Test
+    @DisplayName("送给模型的资料去掉行首的列表序号，免得模型把“2.”写成引用 [2]（#71、#107）；员工看到的引用原文不变")
+    void stripsListNumbersFromEvidence() {
+        var listed = new SearchHit(14, 4, "收银与交接班.md", "交接班", "1. 交班时双方清点钱箱。\n2. 差额超过 20 元须填写《差异说明单》。", 0.02);
+        var answer = new AnswerService(query -> List.of(listed), (query, documents) -> List.of(0.9), (system, user) -> {
+            prompts.add(user);
+            return "差额超过 20 元须填写说明单[1]。";
+        }, new AnsweringProperties(30, 8, 0.3, false, 0.03, Duration.ofSeconds(3))).ask(TENANT, USER, List.of(), "差额多少要写说明");
+
+        assertThat(prompts.getFirst()).contains("交班时双方清点钱箱。\n差额超过 20 元").doesNotContain("2. 差额");
+        assertThat(answer.citations().getFirst().excerpt()).startsWith("1. 交班时");
+    }
 }

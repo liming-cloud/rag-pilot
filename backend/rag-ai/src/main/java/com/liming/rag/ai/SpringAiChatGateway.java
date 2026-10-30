@@ -101,7 +101,9 @@ final class SpringAiChatGateway implements ChatGateway {
                         .thenMany(Flux.defer(() -> deltas(new Prompt(prompt.getInstructions(), hedgeOptions)))));
         var text = new StringBuilder();
         try {
-            deltas.takeUntilOther(Mono.fromCompletionStage(stop)).doOnNext(delta -> {
+            // suppressCancel：流正常结束时 takeUntilOther 会取消这个 Mono，不能连带把停止信号也取消掉，
+            // 否则调用方会把每一轮都当成员工停的。
+            deltas.takeUntilOther(Mono.fromFuture(stop.toCompletableFuture(), true)).doOnNext(delta -> {
                 text.append(delta);
                 onDelta.accept(delta);
             }).blockLast();

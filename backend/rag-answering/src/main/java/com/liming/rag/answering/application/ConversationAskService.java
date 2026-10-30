@@ -108,7 +108,9 @@ public class ConversationAskService {
                 record(pending, ConversationTurn.Status.FAILED, null);
                 throw e;
             }
-            boolean stopped = pending.stop().isDone();
+            // 只有员工点了停止（信号正常完成）才算停止。
+            var stop = pending.stop();
+            boolean stopped = stop.isDone() && !stop.isCompletedExceptionally();
             var status = stopped ? ConversationTurn.Status.STOPPED : ConversationTurn.Status.ANSWERED;
             // 停止后已生成的部分照样做引用校验：没有有效引用时不留回答（D-036）。
             var kept = stopped && answer.refused() ? null : answer;
