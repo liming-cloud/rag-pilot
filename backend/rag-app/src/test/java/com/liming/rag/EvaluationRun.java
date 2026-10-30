@@ -357,13 +357,13 @@ class EvaluationRun {
                 // 嵌入模型偶尔整段不可用，入库内部的重试也躲不过；隔一会儿删掉重传一次。
                 System.out.println("::warning title=入库失败::" + failed.size() + " 篇，30 秒后重传：" + failed.values());
                 sleep(Duration.ofSeconds(30));
-                failed.forEach((id, filename) -> {
+                failed.forEach((id, failure) -> {
                     http.delete("/api/knowledge-bases/{id}/documents/{documentId}", knowledgeBaseId, id);
-                    upload(knowledgeBaseId, filename, files.get(filename));
+                    upload(knowledgeBaseId, failure.filename(), files.get(failure.filename()));
                 });
                 failed = awaitAllProcessed(knowledgeBaseId, files.size());
             }
-            var messages = failed.values().stream().toList();
+            var messages = failed.values().stream().map(FailedDocument::toString).toList();
             assertThat((double) failed.size() / files.size()).as("重传后仍入库失败的文档超过 1%：" + messages)
                     .isLessThanOrEqualTo(MAX_CORPUS_FAILURE_SHARE);
             corpusFailures.addAll(messages);
@@ -394,16 +394,16 @@ class EvaluationRun {
     /**
      * 每篇给 3 秒、至少 90 秒，等全部文档离开“解析中”。
      *
-     * @return 入库失败的文档：文档 id → “文件名：原因”
+     * @return 入库失败的文档：文档 id → 文件名和原因
      */
-    private Map<Long, String> awaitAllProcessed(long knowledgeBaseId, int count) {
+    private Map<Long, FailedDocument> awaitAllProcessed(long knowledgeBaseId, int count) {
         var timeout = Duration.ofSeconds(Math.max(90, 3L * count));
         long deadline = System.nanoTime() + timeout.toNanos();
         long started = System.nanoTime();
         while (System.nanoTime() < deadline) {
             var documents = TestDocuments.all(http, knowledgeBaseId, new HttpHeaders());
             if (documents.stream().noneMatch(document -> "PARSING".equals(document.get("status")))) {
-                var failed = new LinkedHashMap<Long, String>();
+                var failed = new LinkedHashMap<Long, FailedDocument>();
                 documents.stream().filter(document -> !"READY".equals(document.get("status")))
                         .forEach(document -> failed.put(((Number) document.get("id")).longValue(),
                                 document.get("filename") + "：" + document.get("error")));
