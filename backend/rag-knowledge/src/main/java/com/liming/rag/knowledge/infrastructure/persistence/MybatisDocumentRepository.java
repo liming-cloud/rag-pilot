@@ -1,11 +1,11 @@
 package com.liming.rag.knowledge.infrastructure.persistence;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.liming.rag.shared.TenantId;
 import com.liming.rag.knowledge.domain.Chunk;
 import com.liming.rag.knowledge.domain.Document;
 import com.liming.rag.knowledge.domain.DocumentRepository;
 import com.liming.rag.knowledge.domain.DocumentStatus;
+import com.liming.rag.shared.TenantId;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.stereotype.Repository;

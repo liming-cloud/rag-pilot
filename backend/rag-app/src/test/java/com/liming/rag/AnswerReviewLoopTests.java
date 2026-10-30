@@ -35,7 +35,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
  * 差评处理闭环：管理员看到系统怎么改写的问题、补文档后重新回答确认、把处理过的记录标记为已处理。
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-        properties = "rag.storage.root=${java.io.tmpdir}/rag-review-loop-test-files")
+        properties = "rag.knowledge.storage.root=${java.io.tmpdir}/rag-review-loop-test-files")
 @AutoConfigureTestRestTemplate
 @Testcontainers
 class AnswerReviewLoopTests {

@@ -1,10 +1,9 @@
 package com.liming.rag.identity.application;
 
-import com.liming.rag.shared.TenantId;
 import com.liming.rag.identity.api.Roles;
+import com.liming.rag.shared.TenantId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.stereotype.Component;
@@ -24,15 +23,12 @@ class AdminBootstrap implements ApplicationRunner {
     private final String username;
     private final String password;
 
-    AdminBootstrap(Accounts accounts, AccountService service,
-            @Value("${rag.pilot.tenant-id:1}") long tenantId,
-            @Value("${rag.identity.admin.username:}") String username,
-            @Value("${rag.identity.admin.password:}") String password) {
+    AdminBootstrap(Accounts accounts, AccountService service, IdentityProperties properties) {
         this.accounts = accounts;
         this.service = service;
-        this.tenant = new TenantId(tenantId);
-        this.username = username;
-        this.password = password;
+        this.tenant = new TenantId(properties.admin().tenantId());
+        this.username = properties.admin().username();
+        this.password = properties.admin().password();
     }
 
     @Override

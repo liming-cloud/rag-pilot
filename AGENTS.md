@@ -22,7 +22,7 @@
 ## 本地验证
 
 - 后端：`./mvnw verify`（含 Testcontainers 和 Spring Modulith 边界测试，需要 Docker）。
-- 前端：在 `frontend/` 下运行 `npm run typecheck && npm test && npm run build`。
+- 前端：在 `frontend/` 下运行 `npm run typecheck && npm run lint && npm test && npm run build`（Node 24）。
 - 改了检索或生成：加跑评测。PR 改到检索、问答、模型或评测集时 CI 的 `eval` 任务会自动用真实模型跑；本地运行：
   `MODEL_API_KEY=… ./mvnw verify -pl backend/rag-app -am -Dtest.groups=eval -Dtest.excludedGroups=none -Dtest=EvaluationRun -Dsurefire.failIfNoSpecifiedTests=false`，报告在 `backend/rag-app/target/eval-report.md`。
 - 评测集是合成数据（`backend/rag-app/src/test/resources/eval/`）；客户真实评测集只放在客户环境。
@@ -43,10 +43,11 @@
 - DDD：聚合只在 knowledge、answering；上下文模块之间只用对方的 `api` 包或监听事件。
 - MyBatis-Plus 的 DO、Wrapper、Page 只出现在 infrastructure 包；不引入 MapStruct，不做多层 DTO 转换。
 - SQL 只写在 Mapper XML（`src/main/resources/mapper/<模块名>/<Mapper 名>.xml`）里；不用 `@Select` 等 SQL 注解，条件构造器不拼原始 SQL（`apply`、`last`、`inSql` 等）。简单的单表条件用 `LambdaQueryWrapper`。
+- 配置只通过各模块的 `@ConfigurationProperties` record 读取（如 `AnsweringProperties`），取值在构造时校验，非法配置启动失败；不用 `@Value`。
 - 登录和角色校验只用 Sa-Token 注解。
 - 不新增 Maven 模块、外部服务、依赖或抽象层，除非 DECISIONS.md 已记录理由。
 - Flyway 迁移放在所属模块的 `db/migration/<模块名>/`，版本号用 `V<yyyyMMddNNNN>__说明.sql`。
-- 界面只用 shadcn/ui 组件和 tokens.css 变量；新页面先做 MSW 假数据原型，确认后再接接口；不做像素级调整。
+- 界面只用 shadcn/ui 组件（`components/ui`：Button、Input、Label、NativeSelect、Checkbox、Table，缺的先按 shadcn 加进来）和 tokens.css 变量，feature 里不直接写 `<input>`、`<select>`、`<table>` 等原生元素；新页面先做 MSW 假数据原型，确认后再接接口；不做像素级调整。
 - 客户数据、密钥、截图不进仓库（本仓库当前为公开仓库）。
 
 能明确判定的约束和下面的目录结构由 `ArchitectureRulesTest`、`PackageLayoutTest`、`MigrationLayoutTest`、`MapperXmlLayoutTest`、`ModularityTests` 和前端的 `src/app/structure.test.ts` 自动检查。规则误判或漏判时，修改规则并补违规样例（`archfixture` 包），不绕过、不加例外。
@@ -107,6 +108,7 @@
 | 范围 | 是否对应一个 `status/ready` 的 Issue，验收标准是否真的验证了；有没有顺带做没要求的事 |
 | 设计 | 业务规则归哪个聚合或服务；有没有只转发的层；是否触及“先停下来问人”的事项 |
 | 正确性 | 边界输入、并发、事务范围、模型调用失败和超时时的行为 |
+| 可读性 | 方法只做一件事，超过约 30 条语句或分支嵌套过深就拆（参考 `AnswerService` 的编排加步骤） |
 | 测试与评测 | 正常和关键失败路径都有测试；断言的是结果；评测数据是否支持结论（看多轮，不看单次） |
 | 文档 | 决定已写进 DECISIONS.md；文档写的是当前结论 |
 

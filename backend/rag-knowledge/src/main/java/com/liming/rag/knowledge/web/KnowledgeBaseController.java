@@ -2,7 +2,6 @@ package com.liming.rag.knowledge.web;
 
 import cn.dev33.satoken.annotation.SaCheckLogin;
 import cn.dev33.satoken.annotation.SaCheckRole;
-import com.liming.rag.shared.UserId;
 import com.liming.rag.identity.api.CurrentUser;
 import com.liming.rag.identity.api.Roles;
 import com.liming.rag.knowledge.api.KnowledgeSearch;
@@ -12,6 +11,7 @@ import com.liming.rag.knowledge.application.DocumentIngestionService;
 import com.liming.rag.knowledge.application.KnowledgeBaseService;
 import com.liming.rag.knowledge.domain.Document;
 import com.liming.rag.knowledge.domain.KnowledgeBase;
+import com.liming.rag.shared.UserId;
 import java.io.IOException;
 import java.time.OffsetDateTime;
 import java.util.List;

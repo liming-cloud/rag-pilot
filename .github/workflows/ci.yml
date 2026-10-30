@@ -92,6 +92,8 @@ jobs:
         run: npm ci
       - name: 类型检查
         run: npm run typecheck
+      - name: 静态检查
+        run: npm run lint
       - name: 单元测试
         run: npm test
       - name: 生产构建

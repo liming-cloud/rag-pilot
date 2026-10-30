@@ -1,6 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { type FormEvent, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { fetchUsers } from "@/features/users/api";
 import { fetchMembers, setMember } from "./api";
 
@@ -61,22 +63,22 @@ export function MembersPanel({ knowledgeBaseId }: { knowledgeBaseId: number }) {
         ))}
       </ul>
       <form onSubmit={grant} className="flex gap-2">
-        <label htmlFor={`grant-${knowledgeBaseId}`} className="sr-only">
+        <Label htmlFor={`grant-${knowledgeBaseId}`} className="sr-only">
           选择账号
-        </label>
-        <select
+        </Label>
+        <NativeSelect
           id={`grant-${knowledgeBaseId}`}
           value={choice}
           onChange={(event) => setChoice(event.target.value)}
-          className="h-9 min-w-0 flex-1 rounded-md border border-input bg-card px-2 text-sm"
+          className="flex-1 px-2"
         >
-          <option value="">选择要授权的账号</option>
+          <NativeSelectOption value="">选择要授权的账号</NativeSelectOption>
           {candidates.map((user) => (
-            <option key={user.id} value={user.id}>
+            <NativeSelectOption key={user.id} value={user.id}>
               {user.displayName}（{user.username}）
-            </option>
+            </NativeSelectOption>
           ))}
-        </select>
+        </NativeSelect>
         <Button type="submit" size="sm" variant="outline" disabled={!choice || change.isPending}>
           授权
         </Button>

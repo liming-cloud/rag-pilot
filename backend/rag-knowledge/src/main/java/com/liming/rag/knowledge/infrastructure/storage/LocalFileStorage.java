@@ -1,13 +1,13 @@
 package com.liming.rag.knowledge.infrastructure.storage;
 
-import com.liming.rag.shared.TenantId;
 import com.liming.rag.knowledge.application.FileStorage;
+import com.liming.rag.knowledge.application.KnowledgeProperties;
+import com.liming.rag.shared.TenantId;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 /**
@@ -21,8 +21,8 @@ class LocalFileStorage implements FileStorage {
 
     private final Path root;
 
-    LocalFileStorage(@Value("${rag.storage.root:./data/files}") String root) {
-        this.root = Path.of(root).toAbsolutePath().normalize();
+    LocalFileStorage(KnowledgeProperties properties) {
+        this.root = Path.of(properties.storage().root()).toAbsolutePath().normalize();
     }
 
     @Override

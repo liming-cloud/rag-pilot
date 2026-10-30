@@ -1,6 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { fetchUsers } from "@/features/users/api";
 import {
   type AnswerReview,
@@ -46,14 +49,10 @@ export function AnswersPage() {
             {option.label}
           </Button>
         ))}
-        <label className="flex items-center gap-1 text-sm">
-          <input
-            type="checkbox"
-            checked={includeResolved}
-            onChange={(event) => setIncludeResolved(event.target.checked)}
-          />
+        <Label className="flex items-center gap-1">
+          <Checkbox checked={includeResolved} onCheckedChange={(checked) => setIncludeResolved(checked === true)} />
           包含已处理
-        </label>
+        </Label>
         <Button
           size="sm"
           variant="ghost"
@@ -150,16 +149,16 @@ function ReviewItem({ review, asker }: { review: AnswerReview; asker: string }) 
               review_.mutate({ status: "RESOLVED", text: note.trim() || undefined });
             }}
           >
-            <label className="sr-only" htmlFor={`note-${review.id}`}>
+            <Label className="sr-only" htmlFor={`note-${review.id}`}>
               处理说明（选填）
-            </label>
-            <input
+            </Label>
+            <Input
               id={`note-${review.id}`}
               value={note}
               maxLength={500}
               onChange={(event) => setNote(event.target.value)}
               placeholder="处理说明（选填），如：已上传 2026 版"
-              className="h-9 w-56 rounded-md border border-input bg-card px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+              className="w-56"
             />
             <Button type="submit" size="sm" disabled={review_.isPending}>
               确认

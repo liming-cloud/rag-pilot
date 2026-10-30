@@ -29,7 +29,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
  * 知识库成员授权：员工只能看到、问到自己是成员的知识库；请求里点名无权限的库也查不到。
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-        properties = "rag.storage.root=${java.io.tmpdir}/rag-access-test-files")
+        properties = "rag.knowledge.storage.root=${java.io.tmpdir}/rag-access-test-files")
 @AutoConfigureTestRestTemplate
 @Testcontainers
 class KnowledgeAccessTests {

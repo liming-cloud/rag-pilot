@@ -60,13 +60,13 @@ import tools.jackson.databind.json.JsonMapper;
 @Tag("eval")
 @EnabledIfEnvironmentVariable(named = "MODEL_API_KEY", matches = ".+")
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {
-        "rag.storage.root=${java.io.tmpdir}/rag-eval-files",
+        "rag.knowledge.storage.root=${java.io.tmpdir}/rag-eval-files",
         "rag.ai.embedding.provider=${EVAL_EMBEDDING_PROVIDER:openai}",
         "rag.ai.rerank.provider=${EVAL_RERANK_PROVIDER:openai}",
         "rag.ai.chat.provider=${EVAL_CHAT_PROVIDER:openai}",
         "rag.answering.min-relevance=${EVAL_MIN_RELEVANCE:0.2}",
         "rag.answering.rewrite-on-low-relevance=${EVAL_REWRITE:true}",
-        "rag.ingestion.concurrency=${EVAL_INGESTION_CONCURRENCY:4}"})
+        "rag.knowledge.ingestion.concurrency=${EVAL_INGESTION_CONCURRENCY:4}"})
 @AutoConfigureTestRestTemplate
 @Testcontainers
 class EvaluationRun {

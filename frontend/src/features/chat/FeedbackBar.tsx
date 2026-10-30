@@ -1,6 +1,8 @@
 import { ThumbsDown, ThumbsUp } from "lucide-react";
 import { type FormEvent, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { rateAnswer } from "./api";
 
 type Rating = "UP" | "DOWN" | null;
@@ -67,16 +69,16 @@ export function FeedbackBar({ answerId, allowUp = true }: { answerId: number | n
       </div>
       {rating === "DOWN" && state !== "thanked" && (
         <form onSubmit={submitComment} className="flex gap-2">
-          <label className="sr-only" htmlFor={`feedback-${id}`}>
+          <Label className="sr-only" htmlFor={`feedback-${id}`}>
             哪里不对？（选填）
-          </label>
-          <input
+          </Label>
+          <Input
             id={`feedback-${id}`}
             value={comment}
             maxLength={500}
             onChange={(event) => setComment(event.target.value)}
             placeholder="哪里不对？（选填）"
-            className="h-9 min-w-0 flex-1 rounded-md border border-input bg-card px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+            className="flex-1"
           />
           <Button type="submit" size="sm" variant="outline" disabled={!comment.trim()}>
             提交

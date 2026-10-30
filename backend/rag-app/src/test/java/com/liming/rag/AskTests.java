@@ -27,7 +27,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
  * 问答端到端：上传 → 检索 → 重排 → 生成 → 引用。模型用本地确定性实现（见 test 下的 config/application.yml）。
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-        properties = "rag.storage.root=${java.io.tmpdir}/rag-ask-test-files")
+        properties = "rag.knowledge.storage.root=${java.io.tmpdir}/rag-ask-test-files")
 @AutoConfigureTestRestTemplate
 @Testcontainers
 class AskTests {

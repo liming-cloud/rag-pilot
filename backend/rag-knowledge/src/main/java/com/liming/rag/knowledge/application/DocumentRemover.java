@@ -1,7 +1,7 @@
 package com.liming.rag.knowledge.application;
 
-import com.liming.rag.shared.TenantId;
 import com.liming.rag.knowledge.domain.DocumentRepository;
+import com.liming.rag.shared.TenantId;
 import org.springframework.stereotype.Component;
 
 /**

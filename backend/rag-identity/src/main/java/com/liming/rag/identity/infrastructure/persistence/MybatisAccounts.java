@@ -1,9 +1,9 @@
 package com.liming.rag.identity.infrastructure.persistence;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.liming.rag.shared.TenantId;
 import com.liming.rag.identity.application.Account;
 import com.liming.rag.identity.application.Accounts;
+import com.liming.rag.shared.TenantId;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.stereotype.Repository;
