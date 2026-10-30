@@ -28,6 +28,7 @@ export const routes: RouteObject[] = [
     ),
     children: [
       { path: "/chat", element: <ChatPage /> },
+      { path: "/chat/:conversationId", element: <ChatPage /> },
       { path: "/admin/knowledge", element: admin(<KnowledgePage />) },
       { path: "/admin/users", element: admin(<UsersPage />) },
       { path: "/admin/answers", element: admin(<AnswersPage />) },
