@@ -214,7 +214,30 @@ function roleView(role: Omit<Role, "userCount">): Role {
   return { ...role, userCount: state.accounts.filter((account) => account.roleIds.includes(role.id)).length };
 }
 
+/**
+ * 产品名称和登录页文案的两套示例（D-042）：默认是内核的“知枢”；地址后加 ?brand=retail 换成新零售试点的配置，
+ * 加 ?brand=default 换回来。选择记在 sessionStorage，刷新后不丢。
+ */
+const BRANDINGS = {
+  default: { name: "知枢", tagline: "每个回答，都有出处", loginHint: "账号由管理员开通；忘记密码请联系管理员。" },
+  retail: {
+    name: "门店运营知识库",
+    tagline: "门店规范、商品、促销，问了就有出处",
+    loginHint: "账号由店长或总部管理员开通；忘记密码请联系店长。",
+  },
+} as const;
+
+function brandingKey(): keyof typeof BRANDINGS {
+  const asked = new URLSearchParams(globalThis.location?.search).get("brand");
+  if (asked === "retail" || asked === "default") {
+    globalThis.sessionStorage?.setItem("mock.brand", asked);
+    return asked;
+  }
+  return globalThis.sessionStorage?.getItem("mock.brand") === "retail" ? "retail" : "default";
+}
+
 export const identityHandlers = [
+  http.get("/api/auth/branding", () => HttpResponse.json(BRANDINGS[brandingKey()])),
   http.post("/api/auth/login", async ({ request }) => {
     const { username, password } = (await request.json()) as { username: string; password: string };
     const account = state.accounts.find((candidate) => candidate.username === username) ?? state.accounts[1]!;

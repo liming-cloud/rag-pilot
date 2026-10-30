@@ -53,6 +53,16 @@ export function nativeElementProblems(file: string, source: string): string[] {
   );
 }
 
+/** 写死的产品名称（D-042）：名称由部署配置，默认值只在 lib/branding.ts。测试和假接口里可以出现。 */
+const PRODUCT_NAMES = ["知枢", "门店运营知识库", "门店助手"];
+
+export function productNameProblems(file: string, source: string): string[] {
+  if (file === "lib/branding.ts" || file.startsWith("mocks/") || /\.test\.tsx?$/.test(file)) return [];
+  return PRODUCT_NAMES.filter((name) => source.includes(name)).map(
+    (name) => `${file} 写死了产品名称“${name}”：改用 useBranding()`,
+  );
+}
+
 describe("前端目录结构", () => {
   it("src 下只有约定的目录，components 下只放 shadcn 的 ui", () => {
     expect(readdirSync(src).filter((name) => !ALLOWED_TOP.includes(name))).toEqual([]);
@@ -75,6 +85,23 @@ describe("前端目录结构", () => {
         nativeElementProblems(path.relative(src, file).split(path.sep).join("/"), readFileSync(file, "utf8")),
       );
     expect(problems).toEqual([]);
+  });
+
+  it("源码里不写死产品名称，名称从部署配置读取", () => {
+    const problems = walk(src)
+      .filter((file) => /\.tsx?$/.test(file))
+      .flatMap((file) =>
+        productNameProblems(path.relative(src, file).split(path.sep).join("/"), readFileSync(file, "utf8")),
+      );
+    expect(problems).toEqual([]);
+  });
+
+  it("写死产品名称会被指出；默认值、测试和假接口不算", () => {
+    expect(productNameProblems("app/AppShell.tsx", "<span>门店运营知识库</span>")).toHaveLength(1);
+    expect(productNameProblems("features/auth/LoginPage.tsx", "<h1>知枢</h1>")).toHaveLength(1);
+    expect(productNameProblems("lib/branding.ts", 'name: "知枢"')).toEqual([]);
+    expect(productNameProblems("features/auth/LoginPage.test.tsx", "知枢")).toEqual([]);
+    expect(productNameProblems("mocks/identity.ts", "门店运营知识库")).toEqual([]);
   });
 
   it("直接写原生元素会被指出，用组件不会", () => {
