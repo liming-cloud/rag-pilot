@@ -22,6 +22,21 @@
         WHERE tenant_id = #{tenantId} AND id = #{id}
     </select>
 
+    <select id="answers" resultType="map">
+        SELECT id, answer_text, refused, refusal_reason, top_relevance
+        FROM answer_record
+        WHERE tenant_id = #{tenantId}
+          AND id IN <foreach collection="ids" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </select>
+
+    <select id="citations" resultType="map">
+        SELECT c.answer_id, c.citation_index, c.chunk_id, c.document_id, c.document_name, c.heading_path
+        FROM answer_citation c JOIN answer_record r ON r.id = c.answer_id
+        WHERE r.tenant_id = #{tenantId}
+          AND c.answer_id IN <foreach collection="ids" item="id" open="(" separator="," close=")">#{id}</foreach>
+        ORDER BY c.answer_id, c.citation_index
+    </select>
+
     <select id="list" resultType="map">
         SELECT r.id, r.user_id, r.question, r.answer_text, r.refused, r.refusal_reason, r.top_relevance,
                r.rating, r.feedback_comment, r.created_at, r.rewritten_question, r.review_status,

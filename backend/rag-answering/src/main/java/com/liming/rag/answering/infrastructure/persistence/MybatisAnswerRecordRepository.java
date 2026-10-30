@@ -1,10 +1,16 @@
 package com.liming.rag.answering.infrastructure.persistence;
 
 import com.liming.rag.answering.api.Answer;
+import com.liming.rag.answering.api.Citation;
 import com.liming.rag.answering.domain.AnswerRecord;
 import com.liming.rag.answering.domain.AnswerRecordRepository;
 import com.liming.rag.shared.TenantId;
 import com.liming.rag.shared.UserId;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import org.springframework.stereotype.Repository;
 
@@ -27,6 +33,30 @@ class MybatisAnswerRecordRepository implements AnswerRecordRepository {
                     citation.documentName(), citation.headingPath() == null ? "" : citation.headingPath());
         }
         return id;
+    }
+
+    @Override
+    public Map<Long, Answer> answers(TenantId tenantId, Collection<Long> ids) {
+        if (ids.isEmpty()) {
+            return Map.of();
+        }
+        var citations = new HashMap<Long, List<Citation>>();
+        for (var row : mapper.citations(tenantId.value(), ids)) {
+            citations.computeIfAbsent(((Number) row.get("answer_id")).longValue(), key -> new ArrayList<>())
+                    .add(new Citation(((Number) row.get("citation_index")).intValue(),
+                            ((Number) row.get("chunk_id")).longValue(), ((Number) row.get("document_id")).longValue(),
+                            (String) row.get("document_name"), (String) row.get("heading_path"), null));
+        }
+        var answers = new HashMap<Long, Answer>();
+        for (var row : mapper.answers(tenantId.value(), ids)) {
+            long id = ((Number) row.get("id")).longValue();
+            var reason = (String) row.get("refusal_reason");
+            var relevance = (Number) row.get("top_relevance");
+            answers.put(id, new Answer(id, (String) row.get("answer_text"), Boolean.TRUE.equals(row.get("refused")),
+                    reason == null ? null : Answer.RefusalReason.valueOf(reason), citations.getOrDefault(id, List.of()),
+                    relevance == null ? null : relevance.doubleValue(), null, null));
+        }
+        return answers;
     }
 
     @Override

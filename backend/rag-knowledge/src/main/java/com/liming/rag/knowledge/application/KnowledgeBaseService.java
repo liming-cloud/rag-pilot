@@ -1,11 +1,16 @@
 package com.liming.rag.knowledge.application;
 
 import com.liming.rag.identity.api.UserDirectory;
+import com.liming.rag.knowledge.api.KnowledgeAccess;
+import com.liming.rag.knowledge.api.KnowledgeBaseRef;
 import com.liming.rag.knowledge.domain.KnowledgeBase;
 import com.liming.rag.knowledge.domain.KnowledgeBaseRepository;
 import com.liming.rag.shared.TenantId;
 import com.liming.rag.shared.UserId;
+import java.util.Collection;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -14,7 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
  * 检索时的成员过滤不在这里，在检索 SQL 里，见 {@code ChunkSearchMapper}。
  */
 @Service
-public class KnowledgeBaseService {
+public class KnowledgeBaseService implements KnowledgeAccess {
 
     private final KnowledgeBaseRepository knowledgeBases;
     private final UserDirectory users;
@@ -43,6 +48,21 @@ public class KnowledgeBaseService {
     @Transactional(readOnly = true)
     public List<KnowledgeBase> listAccessible(TenantId tenantId, UserId userId) {
         return knowledgeBases.listAccessible(tenantId, userId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<KnowledgeBaseRef> accessible(TenantId tenantId, UserId userId) {
+        return listAccessible(tenantId, userId).stream()
+                .map(knowledgeBase -> new KnowledgeBaseRef(knowledgeBase.id(), knowledgeBase.name()))
+                .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Map<Long, String> names(TenantId tenantId, Collection<Long> knowledgeBaseIds) {
+        return knowledgeBases.findAll(tenantId, knowledgeBaseIds).stream()
+                .collect(Collectors.toMap(KnowledgeBase::id, KnowledgeBase::name));
     }
 
     /** 管理操作用：只要求知识库属于该租户。 */

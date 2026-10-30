@@ -2,6 +2,7 @@ package com.liming.rag.knowledge.domain;
 
 import com.liming.rag.shared.TenantId;
 import com.liming.rag.shared.UserId;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -14,6 +15,9 @@ public interface KnowledgeBaseRepository {
 
     /** 用户是成员的知识库，按创建顺序。 */
     List<KnowledgeBase> listAccessible(TenantId tenantId, UserId userId);
+
+    /** 按 id 取本租户的知识库，不检查成员关系；不存在的 id 不返回。 */
+    List<KnowledgeBase> findAll(TenantId tenantId, Collection<Long> ids);
 
     void addMember(TenantId tenantId, long knowledgeBaseId, UserId userId);
 

@@ -5,6 +5,7 @@ import com.liming.rag.knowledge.domain.KnowledgeBase;
 import com.liming.rag.knowledge.domain.KnowledgeBaseRepository;
 import com.liming.rag.shared.TenantId;
 import com.liming.rag.shared.UserId;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.stereotype.Repository;
@@ -46,6 +47,17 @@ class MybatisKnowledgeBaseRepository implements KnowledgeBaseRepository {
     public List<KnowledgeBase> listAccessible(TenantId tenantId, UserId userId) {
         return members.accessible(tenantId.value(), userId.value()).stream()
                 .map(MybatisKnowledgeBaseRepository::toDomain).toList();
+    }
+
+    @Override
+    public List<KnowledgeBase> findAll(TenantId tenantId, Collection<Long> ids) {
+        if (ids.isEmpty()) {
+            return List.of();
+        }
+        return mapper.selectList(new LambdaQueryWrapper<KnowledgeBaseDO>()
+                        .eq(KnowledgeBaseDO::getTenantId, tenantId.value())
+                        .in(KnowledgeBaseDO::getId, ids))
+                .stream().map(MybatisKnowledgeBaseRepository::toDomain).toList();
     }
 
     @Override
