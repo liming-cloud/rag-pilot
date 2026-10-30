@@ -4,7 +4,7 @@ import type { User } from "@/features/auth/api";
 import type { Answer } from "@/features/chat/api";
 import type { KnowledgeBase, KnowledgeDocument } from "@/features/knowledge/api";
 import type { UsageStats } from "@/features/stats/api";
-import { sseResponse } from "./sse";
+import { conversationHandlers, resetConversations } from "./conversations";
 
 /** 假接口与后端契约保持一致；示例数据只用于原型和测试。 */
 export const sampleKnowledgeBases: KnowledgeBase[] = [
@@ -60,6 +60,7 @@ export function resetMockData() {
   users = sampleUsers.map((user) => ({ ...user }));
   reviews = sampleReviews.map((review) => ({ ...review }));
   currentUser = sampleUsers[1]!;
+  resetConversations();
 }
 
 /**
@@ -69,7 +70,11 @@ export function resetMockData() {
 async function uploadedFile(request: Request) {
   const body = await request.text();
   const name = /filename="([^"]*)"/.exec(body)?.[1] ?? "";
-  const content = body.split("\r\n\r\n").slice(1).join("\r\n\r\n").replace(/\r\n--[^\r\n]*--\r\n$/, "");
+  const content = body
+    .split("\r\n\r\n")
+    .slice(1)
+    .join("\r\n\r\n")
+    .replace(/\r\n--[^\r\n]*--\r\n$/, "");
   return { name, size: new TextEncoder().encode(content).length };
 }
 
@@ -113,7 +118,8 @@ let reviews: AnswerReview[] = [];
 resetMockData();
 
 // 与后端一致：RFC 9457 问题详情，带稳定的错误码 code（见 AGENTS.md、D-034）。
-const problem = (status: number, code: string, detail: string) => HttpResponse.json({ status, code, detail }, { status });
+const problem = (status: number, code: string, detail: string) =>
+  HttpResponse.json({ status, code, detail }, { status });
 
 export const sampleAnswer: Answer = {
   id: 501,
@@ -239,7 +245,10 @@ export const handlers = [
   ),
   http.put("/api/answers/:id/feedback", () => new HttpResponse(null, { status: 204 })),
   http.delete("/api/answers/:id/feedback", () => new HttpResponse(null, { status: 204 })),
-  http.get("/api/knowledge-bases", () => HttpResponse.json(knowledgeBases)),
+  // 与后端一致：只返回当前账号是成员的知识库，管理员也一样（D-017）。
+  http.get("/api/knowledge-bases", () =>
+    HttpResponse.json(knowledgeBases.filter((knowledgeBase) => members[knowledgeBase.id]?.includes(currentUser.id))),
+  ),
   http.post("/api/knowledge-bases", async ({ request }) => {
     const { name } = (await request.json()) as { name: string };
     if (knowledgeBases.some((knowledgeBase) => knowledgeBase.name === name)) {
@@ -247,6 +256,8 @@ export const handlers = [
     }
     const created = { id: nextId++, name };
     knowledgeBases.push(created);
+    // 建库的人自动成为成员（D-017）。
+    members[created.id] = [currentUser.id];
     return HttpResponse.json(created, { status: 201 });
   }),
   http.get("/api/users", () => HttpResponse.json(users)),
@@ -255,7 +266,13 @@ export const handlers = [
     if (users.some((user) => user.username === input.username)) {
       return problem(409, "IDENTITY_CONFLICT", `用户名已被使用：${input.username}`);
     }
-    const created: User = { id: nextId++, username: input.username, displayName: input.displayName, role: input.role, enabled: true };
+    const created: User = {
+      id: nextId++,
+      username: input.username,
+      displayName: input.displayName,
+      role: input.role,
+      enabled: true,
+    };
     users.push(created);
     return HttpResponse.json(created, { status: 201 });
   }),
@@ -304,13 +321,19 @@ export const handlers = [
     const id = Number(params.id);
     const before = documents[id]?.length ?? 0;
     documents[id] = (documents[id] ?? []).filter((document) => document.id !== Number(params.documentId));
-    return documents[id].length < before ? new HttpResponse(null, { status: 204 }) : problem(404, "KNOWLEDGE_NOT_FOUND", "文档不存在");
+    return documents[id].length < before
+      ? new HttpResponse(null, { status: 204 })
+      : problem(404, "KNOWLEDGE_NOT_FOUND", "文档不存在");
   }),
   // 与后端一致：只收 PDF、Word、Excel、TXT、Markdown，同名文件视为重复。
   http.post("/api/knowledge-bases/:id/documents", async ({ params, request }) => {
     const file = await uploadedFile(request);
     if (!/\.(txt|md|markdown|pdf|docx|xlsx|xls)$/i.test(file.name)) {
-      return problem(415, "KNOWLEDGE_UNSUPPORTED_TYPE", "目前支持 PDF、Word（.docx）、Excel（.xlsx / .xls）、TXT 和 Markdown；旧版 .doc 请先另存为 .docx");
+      return problem(
+        415,
+        "KNOWLEDGE_UNSUPPORTED_TYPE",
+        "目前支持 PDF、Word（.docx）、Excel（.xlsx / .xls）、TXT 和 Markdown；旧版 .doc 请先另存为 .docx",
+      );
     }
     const list = (documents[Number(params.id)] ??= []);
     if (list.some((document) => document.filename === file.name)) {
@@ -330,10 +353,13 @@ export const handlers = [
     pendingChunks.set(created.id, Math.max(1, Math.ceil(file.size / 1_500)));
     return HttpResponse.json(created, { status: 201 });
   }),
-  http.post("/api/ask/stream", () =>
-    sseResponse([
-      ...(sampleAnswer.text.match(/.{1,12}/gu) ?? []).map((text): [string, unknown] => ["delta", { text }]),
-      ["done", sampleAnswer],
-    ]),
-  ),
+  ...conversationHandlers({
+    currentUserId: () => currentUser.id,
+    knowledgeBaseName: (id) => knowledgeBases.find((knowledgeBase) => knowledgeBase.id === id)?.name ?? `知识库 ${id}`,
+    canAccess: (id) => members[id]?.includes(currentUser.id) ?? false,
+    accessibleKnowledgeBaseIds: () =>
+      knowledgeBases
+        .filter((knowledgeBase) => members[knowledgeBase.id]?.includes(currentUser.id))
+        .map((knowledgeBase) => knowledgeBase.id),
+  }),
 ];

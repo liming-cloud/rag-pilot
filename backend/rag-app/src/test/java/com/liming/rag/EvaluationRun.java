@@ -21,6 +21,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Supplier;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
@@ -137,10 +138,13 @@ class EvaluationRun {
     private EvalOutcome run(long knowledgeBaseId, long restricted, String staff, EvalCase evalCase) {
         long start = System.nanoTime();
         var hits = http.exchange("/api/knowledge-bases/{id}/search?q={q}&limit=10", HttpMethod.GET, null, HITS,
-                knowledgeBaseId, evalCase.question()).getBody();
+                knowledgeBaseId, evalCase.searchText()).getBody();
         long searchMillis = (System.nanoTime() - start) / 1_000_000;
 
-        var events = askWithRetry(knowledgeBaseId, restricted, staff, evalCase);
+        boolean inConversation = !evalCase.history().isEmpty() || evalCase.kind() == EvalCase.Kind.SMALL_TALK;
+        var events = inConversation ? askInConversation(knowledgeBaseId, restricted, staff, evalCase)
+                : askWithRetry(evalCase, () -> SseEvents.post(http, "/api/ask/stream", Map.of("question",
+                        evalCase.question(), "knowledgeBaseIds", List.of(knowledgeBaseId, restricted)), staff));
         if (events == null) {
             return null;
         }
@@ -149,6 +153,13 @@ class EvaluationRun {
         var json = JsonMapper.builder().build();
         Map<String, Object> answer = json.readValue(done.data(), new TypeReference<>() {
         });
+        if (inConversation) {
+            // 会话提问的 done 是这一轮；停止或出错时没有回答，按拒答计。
+            @SuppressWarnings("unchecked")
+            var turnAnswer = (Map<String, Object>) answer.get("answer");
+            answer = turnAnswer != null ? turnAnswer : Map.of("refused", true, "refusalReason",
+                    String.valueOf(answer.get("status")), "text", "", "citations", List.of());
+        }
         @SuppressWarnings("unchecked")
         var citations = (List<Map<String, Object>>) answer.get("citations");
         // 引用校验不通过时，已流出的文字会被拒答替换；记下原文，才看得出模型为什么没带引用。
@@ -169,7 +180,8 @@ class EvaluationRun {
                 (String) answer.get("text"),
                 citations.stream().map(citation -> (String) citation.get("documentName")).toList(),
                 answer.get("topRelevance") == null ? null : ((Number) answer.get("topRelevance")).doubleValue(),
-                searchMillis, events.getFirst().atMillis(), done.atMillis(), stages(answer), rewrite(answer))
+                searchMillis, firstContentMillis(events, inConversation), done.atMillis(), stages(answer),
+                rewrite(answer))
                 .withDiscardedReply(refused && !streamed.isEmpty() ? streamed.toString() : null);
     }
 
@@ -177,13 +189,13 @@ class EvaluationRun {
     private static final List<Duration> RETRY_DELAYS = List.of(Duration.ofSeconds(10), Duration.ofSeconds(30));
 
     /** 流式问答；模型服务不可用时退避重试，仍不可用返回 null，这道题不计入指标。 */
-    private List<SseEvents.Event> askWithRetry(long knowledgeBaseId, long restricted, String staff, EvalCase evalCase) {
+    private List<SseEvents.Event> askWithRetry(EvalCase evalCase, Supplier<List<SseEvents.Event>> ask) {
         for (int attempt = 0; ; attempt++) {
-            var events = SseEvents.post(http, "/api/ask/stream",
-                    Map.of("question", evalCase.question(), "knowledgeBaseIds", List.of(knowledgeBaseId, restricted)), staff);
+            var events = ask.get();
             assertThat(events).as(evalCase.id() + " 流式问答").isNotEmpty();
             var last = events.getLast();
-            if (!"error".equals(last.name()) || !last.data().contains("\"status\":503")) {
+            if (!"error".equals(last.name()) || !last.data().contains("\"status\":503")
+                    && !last.data().contains("MODEL_UNAVAILABLE")) {
                 return events;
             }
             if (attempt == RETRY_DELAYS.size()) {
@@ -192,6 +204,38 @@ class EvaluationRun {
             }
             sleep(RETRY_DELAYS.get(attempt));
         }
+    }
+
+    /**
+     * 多轮题和寒暄题按会话提问（D-036）：新建会话（点名店长专用库，会被忽略），依次问完前面的问题（不计分），
+     * 再问这一题。前面的问题碰上模型不可用时同样重试。
+     */
+    private List<SseEvents.Event> askInConversation(long store, long restricted, String staff, EvalCase evalCase) {
+        var headers = new HttpHeaders();
+        headers.setBearerAuth(staff);
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        var created = http.exchange("/api/conversations", HttpMethod.POST,
+                new HttpEntity<>(Map.of("knowledgeBaseIds", List.of(store, restricted)), headers), Map.class);
+        assertThat(created.getStatusCode()).as(evalCase.id() + " 新建会话").isEqualTo(HttpStatus.CREATED);
+        var path = "/api/conversations/" + ((Number) created.getBody().get("id")).longValue() + "/turns/stream";
+        for (var earlier : evalCase.history()) {
+            if (askWithRetry(evalCase, () -> SseEvents.post(http, path, Map.of("question", earlier), staff)) == null) {
+                return null;
+            }
+        }
+        return askWithRetry(evalCase, () -> SseEvents.post(http, path, Map.of("question", evalCase.question()), staff));
+    }
+
+    /**
+     * 首字延迟：旧接口按第一个事件计（D-021 的口径）；会话提问先发 turn 和处理阶段的 status，按第一段文字或最终结果计，
+     * 两种口径都是员工看到第一段内容的时间。
+     */
+    private static long firstContentMillis(List<SseEvents.Event> events, boolean inConversation) {
+        if (!inConversation) {
+            return events.getFirst().atMillis();
+        }
+        return events.stream().filter(event -> "delta".equals(event.name()) || "done".equals(event.name()))
+                .findFirst().orElse(events.getLast()).atMillis();
     }
 
     /**
@@ -259,10 +303,13 @@ class EvaluationRun {
             @SuppressWarnings("unchecked")
             var documents = item.get("expectedDocuments") instanceof List<?> list ? (List<String>) list
                     : item.get("expectedDocument") instanceof String one ? List.of(one) : List.<String>of();
+            @SuppressWarnings("unchecked")
+            var history = (List<String>) item.get("history");
             var evalCase = new EvalCase((String) item.get("id"), (String) item.get("question"),
                     EvalCase.Kind.valueOf(((String) item.get("kind")).toUpperCase(Locale.ROOT)),
                     documents, keywords, Boolean.TRUE.equals(item.get("restricted")),
-                    (String) item.get("style"), (String) item.get("referenceAnswer"));
+                    (String) item.get("style"), (String) item.get("referenceAnswer"), history,
+                    (String) item.get("searchAs"));
             // 从回答记录导出的草稿题要先人工标注，没标完就跑会让指标失真。
             if (evalCase.kind() == EvalCase.Kind.ANSWERABLE && (evalCase.expectedDocuments().isEmpty()
                     || evalCase.keywords().isEmpty() && evalCase.referenceAnswer() == null)) {

@@ -2,6 +2,8 @@ package com.liming.rag.ai;
 
 import java.time.Duration;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 import java.util.function.Consumer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -23,6 +25,7 @@ final class SpringAiChatGateway implements ChatGateway {
     private final OpenAiChatOptions options;
     private final Duration hedgeAfter;
     private final OpenAiChatOptions hedgeOptions;
+    private final String lightModel;
 
     SpringAiChatGateway(AiProperties properties) {
         var options = OpenAiChatOptions.builder()
@@ -39,6 +42,8 @@ final class SpringAiChatGateway implements ChatGateway {
         var hedgeModel = properties.chat().hedgeModel();
         this.hedgeOptions = hedgeModel == null || hedgeModel.isBlank() ? options
                 : options.mutate().model(hedgeModel).build();
+        var light = properties.chat().lightModel();
+        this.lightModel = light == null || light.isBlank() ? null : light;
         this.model = OpenAiChatModel.builder().options(options).build();
     }
 
@@ -58,7 +63,11 @@ final class SpringAiChatGateway implements ChatGateway {
      */
     @Override
     public String complete(String systemPrompt, String userMessage, Limits limits) {
-        var limited = options.mutate().maxTokens(limits.maxTokens()).stop(limits.stop()).build();
+        var builder = options.mutate().maxTokens(limits.maxTokens()).stop(limits.stop());
+        if (limits.tier() == Tier.LIGHT && lightModel != null) {
+            builder.model(lightModel);
+        }
+        var limited = builder.build();
         try {
             var response = model.call(new Prompt(List.of(new SystemMessage(systemPrompt), new UserMessage(userMessage)),
                     limited));
@@ -78,6 +87,12 @@ final class SpringAiChatGateway implements ChatGateway {
      */
     @Override
     public String stream(String systemPrompt, String userMessage, Consumer<String> onDelta) {
+        return stream(systemPrompt, userMessage, onDelta, new CompletableFuture<Void>());
+    }
+
+    /** {@code stop} 完成时截断流（主请求和备用请求一起取消），返回已生成的部分。 */
+    @Override
+    public String stream(String systemPrompt, String userMessage, Consumer<String> onDelta, CompletionStage<?> stop) {
         var prompt = prompt(systemPrompt, userMessage);
         var deltas = hedgeAfter == null ? deltas(prompt)
                 : Flux.firstWithValue(deltas(prompt), Mono.delay(hedgeAfter)
@@ -86,7 +101,9 @@ final class SpringAiChatGateway implements ChatGateway {
                         .thenMany(Flux.defer(() -> deltas(new Prompt(prompt.getInstructions(), hedgeOptions)))));
         var text = new StringBuilder();
         try {
-            deltas.doOnNext(delta -> {
+            // suppressCancel：流正常结束时 takeUntilOther 会取消这个 Mono，不能连带把停止信号也取消掉，
+            // 否则调用方会把每一轮都当成员工停的。
+            deltas.takeUntilOther(Mono.fromFuture(stop.toCompletableFuture(), true)).doOnNext(delta -> {
                 text.append(delta);
                 onDelta.accept(delta);
             }).blockLast();

@@ -5,7 +5,11 @@ import com.liming.rag.knowledge.api.KnowledgeSearch;
 import com.liming.rag.knowledge.api.SearchHit;
 import com.liming.rag.knowledge.api.SearchQuery;
 import com.liming.rag.knowledge.domain.RrfFusion;
+import com.liming.rag.shared.TenantId;
+import com.liming.rag.shared.UserId;
+import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
@@ -51,5 +55,14 @@ class HybridSearchService implements KnowledgeSearch {
                             hit.content(), scored.score());
                 })
                 .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Map<Long, String> excerpts(TenantId tenantId, UserId userId, Collection<Long> chunkIds) {
+        if (chunkIds.isEmpty()) {
+            return Map.of();
+        }
+        return index.accessibleContents(tenantId, userId, List.copyOf(chunkIds));
     }
 }

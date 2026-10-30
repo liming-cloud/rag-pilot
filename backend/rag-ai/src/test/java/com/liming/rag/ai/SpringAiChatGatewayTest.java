@@ -11,6 +11,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Pattern;
@@ -91,6 +92,55 @@ class SpringAiChatGatewayTest {
         assertThat(calls).hasValue(1);
     }
 
+    @Test
+    @DisplayName("停止信号一到就结束生成，首字还没来也不再等（D-036 停止生成）")
+    void stopsWhenSignalled() throws Exception {
+        start((call, model) -> new Reply(3000, 200, "慢的回答"));
+        var gateway = gateway(null);
+        var stop = new CompletableFuture<Void>();
+        var deltas = Collections.synchronizedList(new ArrayList<String>());
+        Executors.newVirtualThreadPerTaskExecutor().execute(() -> {
+            try {
+                Thread.sleep(200);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+            stop.complete(null);
+        });
+
+        long t0 = System.nanoTime();
+        var text = gateway.stream("系统", "问题", deltas::add, stop);
+        long millis = (System.nanoTime() - t0) / 1_000_000;
+
+        assertThat(text).isEmpty();
+        assertThat(deltas).isEmpty();
+        assertThat(millis).isLessThan(2000);
+    }
+
+    @Test
+    @DisplayName("正常生成完时停止信号不会被触发：调用方据此判断这一轮是不是员工停的")
+    void normalCompletionLeavesStopUntouched() throws Exception {
+        start((call, model) -> new Reply(0, 200, "完整回答"));
+        var gateway = gateway(null);
+        var stop = new CompletableFuture<Void>();
+
+        assertThat(gateway.stream("系统", "问题", delta -> {
+        }, stop)).isEqualTo("完整回答");
+        assertThat(stop).isNotDone();
+    }
+
+    @Test
+    @DisplayName("轻量任务（如会话标题）用单独配置的模型，其他调用用回答模型")
+    void lightTierUsesLightModel() throws Exception {
+        start((call, model) -> new Reply(0, 200, "标题"));
+        var gateway = gateway(null, null, "light-m");
+
+        assertThat(gateway.complete("系统", "问题", new ChatGateway.Limits(32, List.of("\n"), ChatGateway.Tier.LIGHT)))
+                .isEqualTo("标题");
+        assertThat(gateway.complete("系统", "问题", new ChatGateway.Limits(32, List.of("\n")))).isEqualTo("标题");
+        assertThat(awaitModels(2)).containsExactly("light-m", "m");
+    }
+
     private static final Pattern MODEL = Pattern.compile("\"model\"\\s*:\\s*\"([^\"]+)\"");
 
     private record Reply(long delayMillis, int status, String text) {
@@ -105,7 +155,12 @@ class SpringAiChatGatewayTest {
             var matcher = MODEL.matcher(request);
             var model = matcher.find() ? matcher.group(1) : "";
             models.add(model);
-            respond(exchange, replies.apply(calls.incrementAndGet(), model));
+            var reply = replies.apply(calls.incrementAndGet(), model);
+            if (request.matches("(?s).*\"stream\"\\s*:\\s*true.*")) {
+                respond(exchange, reply);
+            } else {
+                respondWhole(exchange, reply);
+            }
         });
         server.start();
     }
@@ -117,6 +172,18 @@ class SpringAiChatGatewayTest {
             Thread.sleep(20);
         }
         return List.copyOf(models);
+    }
+
+    /** 非流式调用（complete）：一次返回完整的 JSON。 */
+    private static void respondWhole(HttpExchange exchange, Reply reply) throws IOException {
+        try (exchange) {
+            var body = ("{\"id\":\"c\",\"object\":\"chat.completion\",\"created\":1,\"model\":\"m\",\"choices\":[{\"index\":0,"
+                    + "\"message\":{\"role\":\"assistant\",\"content\":\"" + reply.text() + "\"},\"finish_reason\":\"stop\"}]}")
+                    .getBytes(StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().add("Content-Type", "application/json");
+            exchange.sendResponseHeaders(200, body.length);
+            exchange.getResponseBody().write(body);
+        }
     }
 
     private static void respond(HttpExchange exchange, Reply reply) throws IOException {
@@ -153,9 +220,13 @@ class SpringAiChatGatewayTest {
     }
 
     private SpringAiChatGateway gateway(Duration hedgeAfter, String hedgeModel) {
+        return gateway(hedgeAfter, hedgeModel, null);
+    }
+
+    private SpringAiChatGateway gateway(Duration hedgeAfter, String hedgeModel, String lightModel) {
         var properties = new AiProperties("http://127.0.0.1:" + server.getAddress().getPort() + "/v1", "test-key",
                 Duration.ofSeconds(10), null, null,
-                new AiProperties.Chat("openai", "m", 0.1, 256, hedgeAfter, hedgeModel));
+                new AiProperties.Chat("openai", "m", 0.1, 256, hedgeAfter, hedgeModel, lightModel));
         return new SpringAiChatGateway(properties);
     }
 }

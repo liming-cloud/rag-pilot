@@ -177,4 +177,23 @@ class EvalReportTest {
         assertThat(report.toMarkdown()).contains("模型服务不可用、未计入指标的题 1 道：备用金");
         assertThat(EvalReport.of(List.of(answered), Set.of()).credible()).isTrue();
     }
+
+    @Test
+    @DisplayName("寒暄题单独统计：回复不能带引用、不能有数字；不计入可回答和应拒答的指标")
+    void reportsSmallTalk() {
+        var thanks = new EvalCase("寒暄-谢谢", "好的，谢谢！", Kind.SMALL_TALK, List.of(), List.of(), false, "寒暄", null,
+                List.of("冷柜温度要多少？"), null);
+        var chatty = new EvalCase("寒暄-辛苦", "辛苦了", Kind.SMALL_TALK, List.of(), List.of(), false, "寒暄", null,
+                List.of("积分怎么抵扣？"), null);
+        var outcomes = List.of(
+                new EvalOutcome(thanks, List.of(), false, null, "不客气，随时问我。", List.of(), null, 0, 300, 300),
+                new EvalOutcome(chatty, List.of(), false, null, "不辛苦，顺便提醒 100 分可抵 1 元[1]。",
+                        List.of("会员与促销.md"), null, 0, 300, 300));
+
+        var report = EvalReport.of(outcomes, Set.of());
+
+        assertThat(report.falseRefusalRate()).isNaN();
+        assertThat(report.failures()).containsExactly("寒暄-辛苦：寒暄回复带了引用或数字");
+        assertThat(report.toMarkdown()).contains("寒暄题 2 道：回复不带引用、不含数字的 1 道");
+    }
 }

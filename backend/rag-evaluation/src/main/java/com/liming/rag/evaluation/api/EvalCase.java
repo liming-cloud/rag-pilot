@@ -10,14 +10,17 @@ import java.util.List;
  * @param restricted 应拒答题的答案是否只存在于无权访问的知识库（越权检查）
  * @param style 问法：原话、改写、口语、错字、真实等，报告按它分别统计；不填时是“原话”
  * @param referenceAnswer 参考答案，有它时由评判模型判断回答对不对；没有时为 null
+ * @param history 同一个会话里先问的问题（不计分）；有它时这道题按会话提问，测持续对话（D-036）
+ * @param searchAs 追问题补全后的独立问法，只用来检查召回（检索规划给出的检索词不对外）；没有时用 question
  */
 public record EvalCase(String id, String question, Kind kind, List<String> expectedDocuments, List<String> keywords,
-        boolean restricted, String style, String referenceAnswer) {
+        boolean restricted, String style, String referenceAnswer, List<String> history, String searchAs) {
 
     public static final String DEFAULT_STYLE = "原话";
 
+    /** SMALL_TALK：寒暄，回复不能带引用、不能有事实（D-036），不计入可回答和应拒答的指标。 */
     public enum Kind {
-        ANSWERABLE, UNANSWERABLE
+        ANSWERABLE, UNANSWERABLE, SMALL_TALK
     }
 
     public EvalCase {
@@ -25,6 +28,18 @@ public record EvalCase(String id, String question, Kind kind, List<String> expec
         keywords = keywords == null ? List.of() : List.copyOf(keywords);
         style = style == null || style.isBlank() ? DEFAULT_STYLE : style;
         referenceAnswer = referenceAnswer == null || referenceAnswer.isBlank() ? null : referenceAnswer;
+        history = history == null ? List.of() : List.copyOf(history);
+        searchAs = searchAs == null || searchAs.isBlank() ? null : searchAs;
+    }
+
+    public EvalCase(String id, String question, Kind kind, List<String> expectedDocuments, List<String> keywords,
+            boolean restricted, String style, String referenceAnswer) {
+        this(id, question, kind, expectedDocuments, keywords, restricted, style, referenceAnswer, List.of(), null);
+    }
+
+    /** 检查召回时用的问法。 */
+    public String searchText() {
+        return searchAs == null ? question : searchAs;
     }
 
     public EvalCase(String id, String question, Kind kind, String expectedDocument, List<String> keywords,

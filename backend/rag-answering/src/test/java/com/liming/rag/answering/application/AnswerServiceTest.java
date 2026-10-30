@@ -281,4 +281,86 @@ class AnswerServiceTest {
         assertThat(disabled.refusalReason()).isEqualTo(RefusalReason.LOW_RELEVANCE);
         assertThat(prompts).isEmpty();
     }
+
+    private static final SearchHit FROZEN = new SearchHit(13, 3, "冷链规范.txt", "冷冻柜", "冷冻柜保持零下十八度以下。", 0.02);
+
+    /** 追问场景：检索词含“冷冻”时检索到冷冻柜的资料，含“冷柜”时检索到货架资料；重排只给和检索词对得上的资料高分。 */
+    private AnswerService followUp(List<String> retrieved) {
+        ChatGateway chat = new ChatGateway() {
+            @Override
+            public String complete(String systemPrompt, String userMessage) {
+                throw new AssertionError("生成应当走流式");
+            }
+
+            @Override
+            public String stream(String systemPrompt, String userMessage, Consumer<String> onDelta) {
+                prompts.add(userMessage);
+                onDelta.accept("零下十八度[1]，货架[2]。");
+                return "零下十八度[1]，货架[2]。";
+            }
+        };
+        return new AnswerService(query -> {
+            retrieved.add(query.text());
+            return query.text().contains("冷冻") ? List.of(FROZEN) : List.of(SHELF);
+        }, (query, documents) -> documents.stream()
+                .map(document -> (query.contains("冷冻") == document.contains("冷冻")) ? 0.9 : 0.05).toList(),
+                chat, new AnsweringProperties(30, 8, 0.3, false, 0.03, Duration.ofSeconds(3)));
+    }
+
+    @Test
+    @DisplayName("追问：每个检索词各检索一次，合并后按对各自检索词的重排分数取高；提示词带历史和员工原来的问题")
+    void answersFollowUpWithPlannedQueries() {
+        var retrieved = new ArrayList<String>();
+        var request = new AnswerService.AskRequest(TENANT, USER, List.of(1L), "那冷冻柜呢？跟冷柜比呢",
+                List.of("冷冻柜温度要求", "冷柜货架位置"), "员工：冷柜在哪？\n助手：03 号货架。");
+
+        var answer = followUp(retrieved).ask(request, delta -> {
+        }, status -> {
+        }, new java.util.concurrent.CompletableFuture<Void>());
+
+        assertThat(retrieved).containsExactly("冷冻柜温度要求", "冷柜货架位置");
+        assertThat(answer.refused()).isFalse();
+        assertThat(answer.citations()).extracting(citation -> citation.documentName())
+                .containsExactly("冷链规范.txt", "商品陈列.txt");
+        assertThat(prompts.getFirst()).contains("前面的对话", "员工：冷柜在哪？").endsWith("问题：那冷冻柜呢？跟冷柜比呢");
+    }
+
+    @Test
+    @DisplayName("首字前按阶段推状态：检索资料、整理答案")
+    void announcesStages() {
+        var statuses = new ArrayList<String>();
+
+        followUp(new ArrayList<>()).ask(new AnswerService.AskRequest(TENANT, USER, List.of(), "冷冻柜温度",
+                List.of("冷冻柜温度"), ""), delta -> {
+        }, statuses::add, new java.util.concurrent.CompletableFuture<Void>());
+
+        assertThat(statuses).containsExactly("正在检索资料…", "正在整理答案…");
+        assertThat(prompts.getFirst()).doesNotContain("前面的对话");
+    }
+
+    @Test
+    @DisplayName("生成前已经停止时不调用模型")
+    void skipsGenerationWhenStopped() {
+        var stop = java.util.concurrent.CompletableFuture.<Void>completedFuture(null);
+
+        followUp(new ArrayList<>()).ask(new AnswerService.AskRequest(TENANT, USER, List.of(), "冷冻柜温度",
+                List.of("冷冻柜温度"), ""), delta -> {
+        }, status -> {
+        }, stop);
+
+        assertThat(prompts).isEmpty();
+    }
+
+    @Test
+    @DisplayName("送给模型的资料去掉行首的列表序号，免得模型把“2.”写成引用 [2]（#71、#107）；员工看到的引用原文不变")
+    void stripsListNumbersFromEvidence() {
+        var listed = new SearchHit(14, 4, "收银与交接班.md", "交接班", "1. 交班时双方清点钱箱。\n2. 差额超过 20 元须填写《差异说明单》。", 0.02);
+        var answer = new AnswerService(query -> List.of(listed), (query, documents) -> List.of(0.9), (system, user) -> {
+            prompts.add(user);
+            return "差额超过 20 元须填写说明单[1]。";
+        }, new AnsweringProperties(30, 8, 0.3, false, 0.03, Duration.ofSeconds(3))).ask(TENANT, USER, List.of(), "差额多少要写说明");
+
+        assertThat(prompts.getFirst()).contains("交班时双方清点钱箱。\n差额超过 20 元").doesNotContain("2. 差额");
+        assertThat(answer.citations().getFirst().excerpt()).startsWith("1. 交班时");
+    }
 }

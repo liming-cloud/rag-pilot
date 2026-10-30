@@ -1,6 +1,7 @@
 package com.liming.rag.answering.infrastructure.persistence;
 
 import java.time.OffsetDateTime;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import org.apache.ibatis.annotations.Mapper;
@@ -20,6 +21,10 @@ interface AnswerRecordMapper {
             @Param("headingPath") String headingPath);
 
     Map<String, Object> find(@Param("tenantId") long tenantId, @Param("id") long id);
+
+    List<Map<String, Object>> answers(@Param("tenantId") long tenantId, @Param("ids") Collection<Long> ids);
+
+    List<Map<String, Object>> citations(@Param("tenantId") long tenantId, @Param("ids") Collection<Long> ids);
 
     /** filter 为 DISLIKED、REFUSED 或 ALL；引用的文档名用 \u001F 连接，由调用方拆开。 */
     List<Map<String, Object>> list(@Param("tenantId") long tenantId, @Param("filter") String filter,

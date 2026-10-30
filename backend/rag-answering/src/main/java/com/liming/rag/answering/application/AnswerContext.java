@@ -15,15 +15,22 @@ final class AnswerContext {
     static final String TENANT_ID = "tenantId";
     static final String USER_ID = "userId";
     static final String KNOWLEDGE_BASE_IDS = "knowledgeBaseIds";
+    /** 会话里前几轮的对话（D-036），拼证据时放在问题前面；没有时不放。 */
+    static final String HISTORY = "history";
 
     private AnswerContext() {
     }
 
     static Query query(String question, TenantId tenantId, UserId userId, List<Long> knowledgeBaseIds) {
+        return query(question, tenantId, userId, knowledgeBaseIds, "");
+    }
+
+    static Query query(String question, TenantId tenantId, UserId userId, List<Long> knowledgeBaseIds, String history) {
         return Query.builder()
                 .text(question)
                 .context(Map.of(TENANT_ID, tenantId, USER_ID, userId,
-                        KNOWLEDGE_BASE_IDS, knowledgeBaseIds == null ? List.of() : List.copyOf(knowledgeBaseIds)))
+                        KNOWLEDGE_BASE_IDS, knowledgeBaseIds == null ? List.of() : List.copyOf(knowledgeBaseIds),
+                        HISTORY, history == null ? "" : history))
                 .build();
     }
 }

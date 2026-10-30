@@ -4,7 +4,9 @@ import com.liming.rag.knowledge.api.SearchHit;
 import com.liming.rag.knowledge.application.ChunkIndex;
 import com.liming.rag.shared.TenantId;
 import com.liming.rag.shared.UserId;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import org.springframework.stereotype.Repository;
 
 @Repository
@@ -39,5 +41,14 @@ class MybatisChunkIndex implements ChunkIndex {
                         (String) row.get("content"),
                         0))
                 .toList();
+    }
+
+    @Override
+    public Map<Long, String> accessibleContents(TenantId tenantId, UserId userId, List<Long> chunkIds) {
+        var contents = new HashMap<Long, String>();
+        for (var row : mapper.accessibleContents(tenantId.value(), userId.value(), chunkIds)) {
+            contents.put(((Number) row.get("chunk_id")).longValue(), (String) row.get("content"));
+        }
+        return contents;
     }
 }

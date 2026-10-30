@@ -46,6 +46,31 @@ class AnsweringPropertiesTest {
         assertThatThrownBy(() -> bind(Map.of("rag.answering.rewrite-timeout", "0s"))).isInstanceOf(BindException.class);
     }
 
+    @Test
+    @DisplayName("会话配置（D-036）：保留 30 天，检索规划看 6 轮、生成带 3 轮，规划 3 秒超时")
+    void conversationDefaults() {
+        var conversation = bind(Map.of()).conversation();
+
+        assertThat(conversation.retention()).isEqualTo(Duration.ofDays(30));
+        assertThat(conversation.planningTurns()).isEqualTo(6);
+        assertThat(conversation.generationTurns()).isEqualTo(3);
+        assertThat(conversation.historyMaxChars()).isEqualTo(3000);
+        assertThat(conversation.planningTimeout()).isEqualTo(Duration.ofSeconds(3));
+        assertThat(bind(Map.of("rag.answering.conversation.retention", "7d")).conversation().retention())
+                .isEqualTo(Duration.ofDays(7));
+    }
+
+    @Test
+    @DisplayName("会话配置非法时启动失败")
+    void rejectsInvalidConversationValues() {
+        assertThatThrownBy(() -> bind(Map.of("rag.answering.conversation.retention", "0d")))
+                .isInstanceOf(BindException.class);
+        assertThatThrownBy(() -> bind(Map.of("rag.answering.conversation.generation-turns", "7")))
+                .as("生成带的轮数不多于检索规划看的轮数").isInstanceOf(BindException.class);
+        assertThatThrownBy(() -> bind(Map.of("rag.answering.conversation.history-max-chars", "100")))
+                .isInstanceOf(BindException.class);
+    }
+
     private static AnsweringProperties bind(Map<String, String> values) {
         return new Binder(new MapConfigurationPropertySource(values))
                 .bindOrCreate("rag.answering", AnsweringProperties.class);

@@ -61,22 +61,28 @@ export function AnswerCard({ answer }: { answer: Answer }) {
               <X aria-hidden="true" className="size-4" />
             </Button>
           </div>
-          <p className="font-serif leading-relaxed">{opened.excerpt}</p>
+          {opened.excerpt === null ? (
+            <p className="text-muted-foreground">已无权查看原文：所在的知识库已不再授权给你，或原文已被删除。</p>
+          ) : (
+            <p className="font-serif leading-relaxed">{opened.excerpt}</p>
+          )}
         </section>
       )}
-      <ol aria-label="来源" className="flex flex-col gap-1 border-t pt-3 text-sm">
-        {answer.citations.map((citation) => (
-          <li key={citation.index}>
-            <button
-              type="button"
-              onClick={() => setOpened(citation)}
-              className="text-left text-muted-foreground hover:text-foreground"
-            >
-              [{citation.index}] {citation.documentName} · {citation.headingPath}
-            </button>
-          </li>
-        ))}
-      </ol>
+      {answer.citations.length > 0 && (
+        <ol aria-label="来源" className="flex flex-col gap-1 border-t pt-3 text-sm">
+          {answer.citations.map((citation) => (
+            <li key={citation.index}>
+              <button
+                type="button"
+                onClick={() => setOpened(citation)}
+                className="text-left text-muted-foreground hover:text-foreground"
+              >
+                [{citation.index}] {citation.documentName} · {citation.headingPath}
+              </button>
+            </li>
+          ))}
+        </ol>
+      )}
       <FeedbackBar answerId={answer.id} />
     </article>
   );
