@@ -4,12 +4,15 @@ import type { Answer } from "@/features/chat/api";
 import type { KnowledgeBase, KnowledgeDocument } from "@/features/knowledge/api";
 import type { UsageStats } from "@/features/stats/api";
 import { conversationHandlers, resetConversations } from "./conversations";
-import { currentIdentity, identityHandlers, resetIdentity } from "./identity";
+import { accountName, currentIdentity, identityHandlers, resetIdentity } from "./identity";
+import { matches, paginate } from "./page";
 
 /** 假接口与后端契约保持一致；示例数据只用于原型和测试。 */
 export const sampleKnowledgeBases: KnowledgeBase[] = [
   { id: 1, name: "门店运营知识库" },
   { id: 2, name: "商品知识库" },
+  // 多生成一些知识库，原型里能看到分页和筛选；只有管理员是成员。
+  ...Array.from({ length: 22 }, (_, index) => ({ id: 3 + index, name: `区域 ${index + 1} 门店规范` })),
 ];
 
 const sampleDocuments: Record<number, KnowledgeDocument[]> = {
@@ -23,6 +26,7 @@ const sampleDocuments: Record<number, KnowledgeDocument[]> = {
       sizeBytes: 18_432,
       createdAt: "2026-10-26T09:00:00+08:00",
       replacesDocumentId: null,
+      replacesFilename: null,
     },
     {
       id: 12,
@@ -33,7 +37,20 @@ const sampleDocuments: Record<number, KnowledgeDocument[]> = {
       sizeBytes: 40_960,
       createdAt: "2026-10-26T09:05:00+08:00",
       replacesDocumentId: null,
+      replacesFilename: null,
     },
+    // 多生成一些文档，原型里能看到分页。
+    ...Array.from({ length: 30 }, (_, index): KnowledgeDocument => ({
+      id: 300 + index,
+      filename: `门店操作手册-第${index + 1}章.pdf`,
+      status: "READY",
+      error: null,
+      chunkCount: 8 + (index % 7),
+      sizeBytes: 120_000 + index * 9_000,
+      createdAt: "2026-10-27T10:00:00+08:00",
+      replacesDocumentId: null,
+      replacesFilename: null,
+    })),
   ],
 };
 
@@ -49,8 +66,30 @@ let nextId = 100;
 export function resetMockData() {
   knowledgeBases = sampleKnowledgeBases.map((knowledgeBase) => ({ ...knowledgeBase }));
   documents = Object.fromEntries(Object.entries(sampleDocuments).map(([id, list]) => [id, [...list]]));
-  members = { 1: [1, 2], 2: [1] };
-  reviews = sampleReviews.map((review) => ({ ...review }));
+  members = Object.fromEntries(sampleKnowledgeBases.map((knowledgeBase) => [knowledgeBase.id, [1]]));
+  members[1] = [1, 2];
+  reviews = [
+    ...sampleReviews.map((review) => ({ ...review })),
+    // 多生成一些记录（时间相对现在），原型里能看到分页和筛选。
+    ...Array.from({ length: 40 }, (_, index): AnswerReview => ({
+      id: 700 + index,
+      userId: 100 + (index % 10),
+      askerName: `门店店员 ${(index % 10) + 1}`,
+      question: `第 ${index + 1} 个员工提问：${["临期商品怎么处理", "交班差额怎么写说明", "会员积分怎么抵扣", "停电怎么办"][index % 4]}？`,
+      answerText: index % 3 === 0 ? "知识库里没有找到能回答这个问题的可靠依据。" : "按规定处理 [1]。",
+      refused: index % 3 === 0,
+      refusalReason: index % 3 === 0 ? "LOW_RELEVANCE" : null,
+      topRelevance: index % 3 === 0 ? 0.05 : 0.9,
+      rating: index % 3 === 0 ? null : index % 2 === 0 ? "DOWN" : "UP",
+      comment: index % 6 === 2 ? "和门店实际做法不一样" : null,
+      createdAt: new Date(Date.now() - (index + 1) * 36 * 3_600_000).toISOString(),
+      citedDocuments: index % 3 === 0 ? [] : ["临期与报损管理.md"],
+      rewrittenQuestion: null,
+      reviewStatus: index % 5 === 0 ? "RESOLVED" : "OPEN",
+      resolutionNote: index % 5 === 0 ? "已补充文档" : null,
+      resolvedAt: null,
+    })),
+  ];
   roleGrants = { 1: [4] };
   resetIdentity();
   resetConversations();
@@ -75,6 +114,7 @@ const sampleReviews: AnswerReview[] = [
   {
     id: 601,
     userId: 2,
+    askerName: "店员小王",
     question: "临期商品打几折？",
     answerText: "保质期剩余不足三分之一的商品按原价七折销售 [1]。",
     refused: false,
@@ -82,7 +122,7 @@ const sampleReviews: AnswerReview[] = [
     topRelevance: 0.93,
     rating: "DOWN",
     comment: "门店规定是五折",
-    createdAt: "2026-10-27T10:20:00+08:00",
+    createdAt: new Date(Date.now() - 3 * 3_600_000).toISOString(),
     citedDocuments: ["临期与报损管理.md"],
     rewrittenQuestion: null,
     reviewStatus: "OPEN",
@@ -92,6 +132,7 @@ const sampleReviews: AnswerReview[] = [
   {
     id: 602,
     userId: 3,
+    askerName: "店员小李",
     question: "门店几点打烊？",
     answerText: "知识库里没有找到能回答这个问题的可靠依据，建议换个问法，或联系店长确认。",
     refused: true,
@@ -99,7 +140,7 @@ const sampleReviews: AnswerReview[] = [
     topRelevance: 0.02,
     rating: null,
     comment: null,
-    createdAt: "2026-10-27T09:05:00+08:00",
+    createdAt: new Date(Date.now() - 4 * 3_600_000).toISOString(),
     citedDocuments: [],
     rewrittenQuestion: "门店的营业结束时间是几点？",
     reviewStatus: "OPEN",
@@ -203,15 +244,30 @@ function sampleStats(days: number): UsageStats {
 export const handlers = [
   ...identityHandlers,
   http.get("/api/answers", ({ request }) => {
-    const params = new URL(request.url).searchParams;
-    const filter = params.get("filter");
-    const includeResolved = params.get("includeResolved") === "true";
+    const url = new URL(request.url);
+    const filter = url.searchParams.get("filter");
+    const status = url.searchParams.get("status") ?? "open";
+    const days = Number(url.searchParams.get("days")) || null;
+    const keyword = url.searchParams.get("keyword");
+    const since = days ? Date.now() - days * 86_400_000 : null;
     return HttpResponse.json(
-      reviews
-        .filter((review) => includeResolved || review.reviewStatus === "OPEN")
-        .filter((review) =>
-          filter === "refused" ? review.refused : filter === "all" ? true : review.rating === "DOWN",
-        ),
+      paginate(
+        reviews
+          .filter((review) =>
+            status === "all"
+              ? true
+              : status === "resolved"
+                ? review.reviewStatus === "RESOLVED"
+                : review.reviewStatus === "OPEN",
+          )
+          .filter((review) =>
+            filter === "refused" ? review.refused : filter === "all" ? true : review.rating === "DOWN",
+          )
+          .filter((review) => since === null || new Date(review.createdAt).getTime() >= since)
+          .filter((review) => matches(keyword, review.question))
+          .sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+        url,
+      ),
     );
   }),
   http.get("/api/answers/stats", ({ request }) =>
@@ -236,6 +292,31 @@ export const handlers = [
   http.put("/api/answers/:id/feedback", () => new HttpResponse(null, { status: 204 })),
   http.delete("/api/answers/:id/feedback", () => new HttpResponse(null, { status: 204 })),
   // 与后端一致：只返回当前账号是成员的知识库，管理员也一样（D-017）。
+  // 管理端列表：要放在 /:id 之前，免得 page 被当成 id。
+  http.get("/api/knowledge-bases/page", ({ request }) => {
+    const url = new URL(request.url);
+    const keyword = url.searchParams.get("keyword");
+    return HttpResponse.json(
+      paginate(
+        knowledgeBases
+          .filter((knowledgeBase) => canAccess(knowledgeBase.id) && matches(keyword, knowledgeBase.name))
+          .map((knowledgeBase) => ({
+            ...knowledgeBase,
+            documentCount: (documents[knowledgeBase.id] ?? []).length,
+            failedCount: (documents[knowledgeBase.id] ?? []).filter((document) => document.status === "FAILED").length,
+            roleGrantCount: (roleGrants[knowledgeBase.id] ?? []).length,
+            memberCount: (members[knowledgeBase.id] ?? []).length,
+          })),
+        url,
+      ),
+    );
+  }),
+  http.get("/api/knowledge-bases/:id", ({ params }) => {
+    const knowledgeBase = knowledgeBases.find((candidate) => candidate.id === Number(params.id));
+    return knowledgeBase && canAccess(knowledgeBase.id)
+      ? HttpResponse.json(knowledgeBase)
+      : problem(404, "KNOWLEDGE_NOT_FOUND", "知识库不存在");
+  }),
   http.get("/api/knowledge-bases", () =>
     HttpResponse.json(knowledgeBases.filter((knowledgeBase) => canAccess(knowledgeBase.id))),
   ),
@@ -251,7 +332,7 @@ export const handlers = [
     return HttpResponse.json(created, { status: 201 });
   }),
   http.get("/api/knowledge-bases/:id/members", ({ params }) =>
-    HttpResponse.json((members[Number(params.id)] ?? []).map((userId) => ({ userId }))),
+    HttpResponse.json((members[Number(params.id)] ?? []).map((userId) => ({ userId, ...accountName(userId) }))),
   ),
   http.put("/api/knowledge-bases/:id/members/:userId", ({ params }) => {
     const list = (members[Number(params.id)] ??= []);
@@ -277,10 +358,22 @@ export const handlers = [
     return new HttpResponse(null, { status: 204 });
   }),
   // 模拟后台入库：解析中的文档被查询一次之后变成可用；它若是新版本，旧版本随之删除。
-  http.get("/api/knowledge-bases/:id/documents", ({ params }) => {
+  http.get("/api/knowledge-bases/:id/documents", ({ params, request }) => {
     const id = Number(params.id);
     const list = documents[id] ?? [];
-    const snapshot = list.map((document) => ({ ...document }));
+    const url = new URL(request.url);
+    const keyword = url.searchParams.get("keyword");
+    const status = url.searchParams.get("status");
+    const snapshot = paginate(
+      list
+        .filter((document) => matches(keyword, document.filename))
+        .filter((document) => !status || document.status === status)
+        .map((document) => ({
+          ...document,
+          replacesFilename: list.find((other) => other.id === document.replacesDocumentId)?.filename ?? null,
+        })),
+      url,
+    );
     for (const document of list.filter((candidate) => candidate.status === "PARSING")) {
       Object.assign(document, { status: "READY", chunkCount: pendingChunks.get(document.id) ?? 1 });
       if (document.replacesDocumentId) {
@@ -321,6 +414,7 @@ export const handlers = [
       sizeBytes: file.size,
       createdAt: new Date().toISOString(),
       replacesDocumentId: Number(new URL(request.url).searchParams.get("replaces")) || null,
+      replacesFilename: null,
     };
     list.unshift(created);
     pendingChunks.set(created.id, Math.max(1, Math.ceil(file.size / 1_500)));

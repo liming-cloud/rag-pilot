@@ -1,4 +1,4 @@
-import { json } from "@/lib/api";
+import { json, type Page, query } from "@/lib/api";
 import { authFetch } from "@/lib/auth";
 import type { RoleRef } from "@/lib/permissions";
 
@@ -15,9 +15,18 @@ export type Account = {
   lockedUntil: string | null;
 };
 
-/** 本租户全部账号。 */
-export async function fetchUsers(): Promise<Account[]> {
-  return json(await authFetch("/api/users"), "读取账号失败");
+/** 账号列表的筛选：关键词匹配用户名和显示名；状态里的“已锁定”指连续输错被锁、还没到期的账号。 */
+export type UserFilter = {
+  keyword?: string;
+  roleId?: number | null;
+  status?: "enabled" | "disabled" | "locked" | null;
+  page?: number;
+  size?: number;
+};
+
+/** 按筛选条件分页读取本租户的账号（D-039）。 */
+export async function fetchUsers(filter: UserFilter = {}): Promise<Page<Account>> {
+  return json(await authFetch(`/api/users${query(filter)}`), "读取账号失败");
 }
 
 export type NewAccount = { username: string; displayName: string; password: string; roleIds: number[] };

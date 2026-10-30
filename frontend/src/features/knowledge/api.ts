@@ -1,4 +1,4 @@
-import { json } from "@/lib/api";
+import { json, type Page, query } from "@/lib/api";
 import { authFetch } from "@/lib/auth";
 
 /** 与后端 KnowledgeBaseController 的响应一致。 */
@@ -14,6 +14,41 @@ export type KnowledgeDocument = {
   createdAt: string | null;
   /** 这份文档是哪份文档的新版本；替换完成后旧版本被删，这里变回 null。 */
   replacesDocumentId: number | null;
+  /** 被替换的旧版本的文件名；分页后旧版本不一定在同一页，所以由后端直接给出。 */
+  replacesFilename: string | null;
+};
+
+/** 管理端知识库列表的一行（D-039）。 */
+export type KnowledgeBaseSummary = {
+  id: number;
+  name: string;
+  documentCount: number;
+  failedCount: number;
+  roleGrantCount: number;
+  memberCount: number;
+};
+
+/** 直接授权的账号，带上名字，不用为了显示名字再读全部账号。 */
+export type Member = { userId: number; username: string; displayName: string };
+
+/** 管理端：按名称筛选、分页列出自己能访问的知识库。 */
+export async function fetchKnowledgeBasePage(filter: {
+  keyword?: string;
+  page?: number;
+  size?: number;
+}): Promise<Page<KnowledgeBaseSummary>> {
+  return json(await authFetch(`/api/knowledge-bases/page${query(filter)}`), "读取知识库失败");
+}
+
+export async function fetchKnowledgeBase(id: number): Promise<KnowledgeBase> {
+  return json(await authFetch(`/api/knowledge-bases/${id}`), "读取知识库失败");
+}
+
+export type DocumentFilter = {
+  keyword?: string;
+  status?: KnowledgeDocument["status"] | null;
+  page?: number;
+  size?: number;
 };
 
 export async function fetchKnowledgeBases(): Promise<KnowledgeBase[]> {
@@ -29,11 +64,15 @@ export async function createKnowledgeBase(name: string): Promise<KnowledgeBase> 
   return json(response, "新建知识库失败");
 }
 
-export async function fetchDocuments(knowledgeBaseId: number): Promise<KnowledgeDocument[]> {
-  return json(await authFetch(`/api/knowledge-bases/${knowledgeBaseId}/documents`), "读取文档失败");
+/** 按文件名、状态筛选，分页列出文档（D-039）。 */
+export async function fetchDocuments(
+  knowledgeBaseId: number,
+  filter: DocumentFilter = {},
+): Promise<Page<KnowledgeDocument>> {
+  return json(await authFetch(`/api/knowledge-bases/${knowledgeBaseId}/documents${query(filter)}`), "读取文档失败");
 }
 
-export async function fetchMembers(knowledgeBaseId: number): Promise<{ userId: number }[]> {
+export async function fetchMembers(knowledgeBaseId: number): Promise<Member[]> {
   return json(await authFetch(`/api/knowledge-bases/${knowledgeBaseId}/members`), "读取成员失败");
 }
 

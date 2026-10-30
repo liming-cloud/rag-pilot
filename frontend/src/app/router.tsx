@@ -4,6 +4,7 @@ import { AnswersPage } from "@/features/answers/AnswersPage";
 import { ChangePasswordPage } from "@/features/auth/ChangePasswordPage";
 import { LoginPage } from "@/features/auth/LoginPage";
 import { ChatPage } from "@/features/chat/ChatPage";
+import { KnowledgeDetailPage } from "@/features/knowledge/KnowledgeDetailPage";
 import { KnowledgePage } from "@/features/knowledge/KnowledgePage";
 import { RolesPage } from "@/features/roles/RolesPage";
 import { StatsPage } from "@/features/stats/StatsPage";
@@ -47,6 +48,7 @@ export const routes: RouteObject[] = [
     children: [
       { index: true, element: guarded("kb:view", <KnowledgePage />) },
       { path: "knowledge", element: guarded("kb:view", <KnowledgePage />) },
+      { path: "knowledge/:knowledgeBaseId", element: guarded("kb:view", <KnowledgeDetailPage />) },
       { path: "users", element: guarded("user:view", <UsersPage />) },
       { path: "roles", element: guarded("role:view", <RolesPage />) },
       { path: "answers", element: guarded("answer:view", <AnswersPage />) },

@@ -2,6 +2,7 @@ import { http, HttpResponse } from "msw";
 import type { PermissionGroup, Role } from "@/features/roles/api";
 import type { Account } from "@/features/users/api";
 import type { Me } from "@/lib/permissions";
+import { matches, paginate } from "./page";
 
 /**
  * 账号、角色与权限的假接口（#115、D-038）。契约与后端一致：按钮级权限点；超级管理员内置且固定；
@@ -122,6 +123,12 @@ export function resetIdentity() {
     account(3, "staff02", "店员小李", [3], { lockedUntil: minutesFromNow(12), failures: 5 }),
     account(4, "zhang", "店长老张", [4]),
     account(5, "reset01", "店员小陈", [3], { mustChangePassword: true }),
+    // 多生成一些店员，原型里能看到分页和筛选。
+    ...Array.from({ length: 40 }, (_, index) =>
+      account(100 + index, `store${String(index + 1).padStart(2, "0")}`, `门店店员 ${index + 1}`, [3], {
+        enabled: index % 9 !== 0,
+      }),
+    ),
   ];
   state.currentId = 2;
   state.nextId = 200;
@@ -167,6 +174,12 @@ function remember(id: number) {
 function current() {
   const remembered = Number(globalThis.sessionStorage?.getItem(SESSION_KEY));
   return state.accounts.find((account) => account.id === (remembered || state.currentId))!;
+}
+
+/** 账号的用户名和显示名，供知识库授权列表显示。 */
+export function accountName(id: number): { username: string; displayName: string } {
+  const account = state.accounts.find((candidate) => candidate.id === id);
+  return { username: account?.username ?? `user${id}`, displayName: account?.displayName ?? `账号 ${id}` };
 }
 
 /** 测试用：以示例账号的身份登录（admin、staff01、staff02、zhang、reset01）。 */
@@ -268,7 +281,29 @@ export const identityHandlers = [
     return new HttpResponse(null, { status: 204 });
   }),
 
-  http.get("/api/users", () => forbidden("user:view") ?? HttpResponse.json(state.accounts.map(view))),
+  http.get("/api/users", ({ request }) => {
+    const denied = forbidden("user:view");
+    if (denied) return denied;
+    const url = new URL(request.url);
+    const keyword = url.searchParams.get("keyword");
+    const roleId = Number(url.searchParams.get("roleId")) || null;
+    const status = url.searchParams.get("status");
+    const now = new Date();
+    const locked = (account: StoredAccount) => account.lockedUntil !== null && new Date(account.lockedUntil) > now;
+    const found = state.accounts
+      .filter((account) => matches(keyword, account.username, account.displayName))
+      .filter((account) => roleId === null || account.roleIds.includes(roleId))
+      .filter((account) =>
+        status === "locked"
+          ? locked(account)
+          : status === "enabled"
+            ? account.enabled
+            : status === "disabled"
+              ? !account.enabled
+              : true,
+      );
+    return HttpResponse.json(paginate(found.map(view), url));
+  }),
   http.post("/api/users", async ({ request }) => {
     const denied = forbidden("user:create");
     if (denied) return denied;
