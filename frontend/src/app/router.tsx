@@ -8,6 +8,7 @@ import { KnowledgeDetailPage } from "@/features/knowledge/KnowledgeDetailPage";
 import { KnowledgePage } from "@/features/knowledge/KnowledgePage";
 import { RolesPage } from "@/features/roles/RolesPage";
 import { ModelsPage } from "@/features/models/ModelsPage";
+import { SettingsPage } from "@/features/settings/SettingsPage";
 import { StatsPage } from "@/features/stats/StatsPage";
 import { UsersPage } from "@/features/users/UsersPage";
 import { getToken } from "@/lib/auth";
@@ -55,6 +56,7 @@ export const routes: RouteObject[] = [
       { path: "answers", element: guarded("answer:view", <AnswersPage />) },
       { path: "stats", element: guarded("stats:view", <StatsPage />) },
       { path: "models", element: guarded("model:view", <ModelsPage />) },
+      { path: "settings", element: guarded("setting:view", <SettingsPage />) },
     ],
   },
 ];

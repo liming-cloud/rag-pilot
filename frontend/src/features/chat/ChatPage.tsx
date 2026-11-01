@@ -11,6 +11,8 @@ import {
   type Conversation,
   type ConversationKnowledgeBase,
   createConversation,
+  DEFAULT_CHAT_TEXTS,
+  fetchChatTexts,
   fetchConversation,
   stopTurn,
   type Turn,
@@ -51,6 +53,9 @@ function ConversationView({ conversationId }: { conversationId: number | null })
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const knowledgeBases = useQuery({ queryKey: ["knowledge-bases"], queryFn: fetchKnowledgeBases });
+  const texts =
+    useQuery({ queryKey: ["chat-texts"], queryFn: fetchChatTexts, staleTime: 5 * 60 * 1000 }).data ??
+    DEFAULT_CHAT_TEXTS;
   const conversation = useQuery({
     queryKey: ["conversation", conversationId],
     queryFn: () => fetchConversation(conversationId!),
@@ -186,9 +191,25 @@ function ConversationView({ conversationId }: { conversationId: number | null })
             </p>
           )}
           {empty && !conversation.isError && (
-            <p className="mt-24 text-center text-muted-foreground">
-              问问门店规范、商品、促销，回答会标出原文出处，可以接着追问。
-            </p>
+            <div className="mt-24 flex flex-col items-center gap-4">
+              <p className="text-center text-muted-foreground">{texts.emptyHint}</p>
+              {texts.suggestedQuestions.length > 0 && (
+                <ul aria-label="推荐问题" className="grid w-full max-w-xl gap-2 sm:grid-cols-2">
+                  {texts.suggestedQuestions.map((question) => (
+                    <li key={question} className="flex">
+                      <Button
+                        variant="outline"
+                        className="h-auto flex-1 justify-start py-2 text-left whitespace-normal"
+                        disabled={asking}
+                        onClick={() => void ask(question)}
+                      >
+                        {question}
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
           )}
           {turns.map((turn) => (
             <TurnView
@@ -245,7 +266,7 @@ function ConversationView({ conversationId }: { conversationId: number | null })
               value={draft}
               onChange={(event) => setDraft(event.target.value)}
               className="h-11 flex-1 rounded-none border-0 bg-transparent px-0 text-base focus:ring-0"
-              placeholder={turns.length > 0 ? "接着问…" : "问问门店规范、商品、促销…"}
+              placeholder={turns.length > 0 ? "接着问…" : texts.placeholder}
             />
             {asking ? (
               <Button

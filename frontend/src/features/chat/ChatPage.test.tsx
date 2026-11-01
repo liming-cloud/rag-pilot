@@ -149,6 +149,43 @@ describe("知识库选择", () => {
 });
 
 describe("提问", () => {
+  it("新对话显示系统设置里的说明、占位和推荐问题，点推荐问题直接提问", async () => {
+    server.use(
+      http.get("/api/settings/chat", () =>
+        HttpResponse.json({
+          placeholder: "问问门店规范…",
+          emptyHint: "回答会标出原文出处。",
+          suggestedQuestions: ["临期商品怎么处理？", "收银长短款怎么上报？"],
+        }),
+      ),
+    );
+    const router = renderPage();
+    await screen.findByRole("button", { name: /门店运营知识库/ });
+
+    expect(await screen.findByText("回答会标出原文出处。")).toBeInTheDocument();
+    expect(screen.getByLabelText("输入问题")).toHaveAttribute("placeholder", "问问门店规范…");
+    const suggestions = screen.getByRole("list", { name: "推荐问题" });
+    expect(
+      within(suggestions)
+        .getAllByRole("button")
+        .map((button) => button.textContent),
+    ).toEqual(["临期商品怎么处理？", "收银长短款怎么上报？"]);
+
+    fireEvent.click(within(suggestions).getByRole("button", { name: "临期商品怎么处理？" }));
+    expect(await finishedTurn("问答：临期商品怎么处理？")).toBeInTheDocument();
+    expect(router.state.location.pathname).toMatch(/^\/chat\/\d+$/);
+    expect(screen.queryByRole("list", { name: "推荐问题" })).not.toBeInTheDocument();
+  });
+
+  it("没有推荐问题、或读不到文案时，只显示不带行业内容的默认说明", async () => {
+    server.use(http.get("/api/settings/chat", () => HttpResponse.json({}, { status: 500 })));
+    renderPage();
+
+    expect(await screen.findByText("问问知识库里的内容，回答会标出原文出处，可以接着追问。")).toBeInTheDocument();
+    expect(screen.getByLabelText("输入问题")).toHaveAttribute("placeholder", "输入问题…");
+    expect(screen.queryByRole("list", { name: "推荐问题" })).not.toBeInTheDocument();
+  });
+
   it("新对话第一次提问时建会话，回答后侧栏出现生成的标题", async () => {
     const router = renderPage();
     await screen.findByRole("button", { name: /门店运营知识库/ });

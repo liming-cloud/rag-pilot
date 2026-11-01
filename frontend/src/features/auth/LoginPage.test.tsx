@@ -32,7 +32,7 @@ describe("登录页", () => {
 
   it("显示部署配置的产品名称、slogan、按钮下方提示和核心价值，浏览器标题也是产品名称", async () => {
     server.use(
-      http.get("/api/auth/branding", () =>
+      http.get("/api/settings/branding", () =>
         HttpResponse.json({ name: "门店运营知识库", tagline: "问了就有出处", loginHint: "账号由店长开通。" }),
       ),
     );
@@ -49,7 +49,7 @@ describe("登录页", () => {
   });
 
   it("读不到配置时用内核默认名称和提示，照常能登录", async () => {
-    server.use(http.get("/api/auth/branding", () => new HttpResponse(null, { status: 500 })));
+    server.use(http.get("/api/settings/branding", () => new HttpResponse(null, { status: 500 })));
     renderLogin();
 
     expect(await screen.findByRole("heading", { name: "登录明答" })).toBeInTheDocument();

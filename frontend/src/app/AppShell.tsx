@@ -7,7 +7,7 @@ import { logout } from "@/features/auth/api";
 import { useBranding } from "@/lib/branding";
 import { type Me, useMe } from "@/lib/permissions";
 
-/** 管理端的菜单，按菜单权限显示（D-038）。模型管理、系统设置在 M4、M5 加入。 */
+/** 管理端的菜单，按菜单权限显示（D-038）。 */
 export const ADMIN_MENUS = [
   { to: "/admin/knowledge", label: "知识库", permission: "kb:view" },
   { to: "/admin/users", label: "用户", permission: "user:view" },
@@ -15,6 +15,7 @@ export const ADMIN_MENUS = [
   { to: "/admin/models", label: "模型管理", permission: "model:view" },
   { to: "/admin/answers", label: "回答记录", permission: "answer:view" },
   { to: "/admin/stats", label: "使用统计", permission: "stats:view" },
+  { to: "/admin/settings", label: "系统设置", permission: "setting:view" },
 ] as const;
 
 export function adminMenusFor(me: Me | undefined) {
