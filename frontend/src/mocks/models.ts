@@ -141,7 +141,38 @@ function apply(usage: Usage, providerId: number | null, model: string, restoredF
   return current;
 }
 
+/** 各服务商的模型列表；门店机房 vLLM 模拟“不提供列表”，地址含 unreachable 的模拟连不上。 */
+const AVAILABLE: Record<string, string[]> = {
+  env: [
+    "deepseek-ai/DeepSeek-V3",
+    "deepseek-ai/DeepSeek-V4.1-Flash",
+    "deepseek-ai/DeepSeek-R1",
+    "Qwen/Qwen2.5-7B-Instruct",
+    "Qwen/Qwen3-32B",
+    "Qwen/Qwen3-235B-A22B",
+    "THUDM/GLM-4-9B-0414",
+    "BAAI/bge-m3",
+    "BAAI/bge-reranker-v2-m3",
+    "netease-youdao/bce-reranker-base_v1",
+  ],
+  "1": ["deepseek-chat", "deepseek-reasoner"],
+};
+
 export const modelHandlers = [
+  http.get("/api/models/available", ({ request }) => {
+    const denied = forbidden("model:update");
+    if (denied) return denied;
+    const providerId = new URL(request.url).searchParams.get("providerId");
+    const provider = state.providers.find((candidate) => String(candidate.id) === providerId);
+    if (providerId && !provider) return problem(404, "AI_NOT_FOUND", "服务商不存在");
+    if (provider?.baseUrl.includes("unreachable")) {
+      return problem(502, "AI_UNREACHABLE", "连不上这个服务商，请检查地址和网络");
+    }
+    const models = AVAILABLE[providerId ?? "env"];
+    return models
+      ? HttpResponse.json(models)
+      : problem(502, "AI_NO_MODEL_LIST", "这个服务商没有提供模型列表，请手动填写模型名称");
+  }),
   http.get("/api/models", () => forbidden("model:view") ?? HttpResponse.json(settings())),
   http.post("/api/models/test", async ({ request }) => {
     const denied = forbidden("model:test");

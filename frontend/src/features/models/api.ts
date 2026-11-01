@@ -55,13 +55,21 @@ export type ModelChange = {
 
 export const USAGE_LABELS: Record<Usage, { name: string; description: string }> = {
   ANSWER: { name: "回答", description: "生成回答；低分改写和追问检索词也用它" },
-  HEDGE: { name: "备用", description: "首字太慢时另发的备用请求" },
+  HEDGE: { name: "备用回答", description: "回答迟迟不出第一个字时，另发一个请求，用先出字的那个" },
   LIGHT: { name: "轻量任务", description: "会话标题等不影响回答的小任务" },
   RERANK: { name: "重排", description: "给检索到的资料打相关度分" },
 };
 
 export async function fetchModelSettings(): Promise<ModelSettings> {
   return json(await authFetch("/api/models"), "读取模型配置失败");
+}
+
+/**
+ * 服务商提供的模型（OpenAI 兼容接口的 /models），用来在弹窗里选，不用手填；providerId 为 null 是环境变量里的服务商。
+ * 服务商不提供列表时返回错误，界面提示手动填写。
+ */
+export async function fetchAvailableModels(providerId: number | null): Promise<string[]> {
+  return json(await authFetch(`/api/models/available${query({ providerId })}`), "这个服务商没有提供模型列表");
 }
 
 /** 保存前先测：对该用途发一句极短的请求，10 秒超时（D-043）。 */
