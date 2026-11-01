@@ -2,8 +2,10 @@ package com.liming.rag.ai;
 
 import java.time.Duration;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -21,36 +23,45 @@ final class SpringAiChatGateway implements ChatGateway {
 
     private static final Logger log = LoggerFactory.getLogger(SpringAiChatGateway.class);
 
-    private final ChatModel model;
-    private final OpenAiChatOptions options;
-    private final Duration hedgeAfter;
-    private final OpenAiChatOptions hedgeOptions;
-    private final String lightModel;
+    /** 不需要密钥的服务（如内网自建的 vLLM）也要给 OpenAI 客户端一个值。 */
+    private static final String NO_KEY = "EMPTY";
 
-    SpringAiChatGateway(AiProperties properties) {
-        var options = OpenAiChatOptions.builder()
-                .baseUrl(properties.baseUrl())
-                .apiKey(properties.requireApiKey())
-                .model(properties.chat().model())
+    private final AiProperties properties;
+    private final ModelRoutes routes;
+    private final Duration hedgeAfter;
+    /** 按地址和密钥缓存客户端：换模型只换调用选项，换服务商才新建客户端。 */
+    private final Map<String, ChatModel> models = new ConcurrentHashMap<>();
+
+    SpringAiChatGateway(AiProperties properties, ModelRoutes routes) {
+        properties.requireApiKey();
+        this.properties = properties;
+        this.routes = routes;
+        this.hedgeAfter = properties.chat().hedgeAfter();
+    }
+
+    /** 每次调用都按当前配置取服务商和模型，管理端保存后下一次请求就生效（D-043）。 */
+    private OpenAiChatOptions options(ModelRoute route) {
+        return OpenAiChatOptions.builder()
+                .baseUrl(route.baseUrl())
+                .apiKey(route.apiKey() == null ? NO_KEY : route.apiKey())
+                .model(route.model())
                 .temperature(properties.chat().temperature())
                 .maxTokens(properties.chat().maxTokens())
                 .timeout(properties.timeout())
                 .maxRetries(0)
                 .build();
-        this.options = options;
-        this.hedgeAfter = properties.chat().hedgeAfter();
-        var hedgeModel = properties.chat().hedgeModel();
-        this.hedgeOptions = hedgeModel == null || hedgeModel.isBlank() ? options
-                : options.mutate().model(hedgeModel).build();
-        var light = properties.chat().lightModel();
-        this.lightModel = light == null || light.isBlank() ? null : light;
-        this.model = OpenAiChatModel.builder().options(options).build();
+    }
+
+    private ChatModel model(ModelRoute route) {
+        return models.computeIfAbsent(route.baseUrl() + "\n" + route.apiKey(),
+                key -> OpenAiChatModel.builder().options(options(route)).build());
     }
 
     @Override
     public String complete(String systemPrompt, String userMessage) {
+        var route = routes.resolve(ModelUsage.ANSWER);
         try {
-            var response = model.call(prompt(systemPrompt, userMessage));
+            var response = model(route).call(prompt(systemPrompt, userMessage, options(route)));
             var text = response.getResult().getOutput().getText();
             return text == null ? "" : text;
         } catch (RuntimeException e) {
@@ -63,14 +74,10 @@ final class SpringAiChatGateway implements ChatGateway {
      */
     @Override
     public String complete(String systemPrompt, String userMessage, Limits limits) {
-        var builder = options.mutate().maxTokens(limits.maxTokens()).stop(limits.stop());
-        if (limits.tier() == Tier.LIGHT && lightModel != null) {
-            builder.model(lightModel);
-        }
-        var limited = builder.build();
+        var route = routes.resolve(limits.tier() == Tier.LIGHT ? ModelUsage.LIGHT : ModelUsage.ANSWER);
+        var limited = options(route).mutate().maxTokens(limits.maxTokens()).stop(limits.stop()).build();
         try {
-            var response = model.call(new Prompt(List.of(new SystemMessage(systemPrompt), new UserMessage(userMessage)),
-                    limited));
+            var response = model(route).call(prompt(systemPrompt, userMessage, limited));
             var text = response.getResult().getOutput().getText();
             return text == null ? "" : text;
         } catch (RuntimeException e) {
@@ -83,7 +90,7 @@ final class SpringAiChatGateway implements ChatGateway {
      *
      * <p>配置了 {@code hedgeAfter} 时，过了这么久还没出首字就再发一个备用请求，哪个先出字用哪个，另一个取消；
      * 第一个请求在此之前失败时，备用请求也起到一次重试的作用。服务商的同一个模型常常整体卡住（D-028），
-     * 所以备用请求可以用另一个模型（{@code hedgeModel}）。
+     * 所以备用请求可以用另一个模型，甚至另一个服务商（“备用回答”用途，D-043）。
      */
     @Override
     public String stream(String systemPrompt, String userMessage, Consumer<String> onDelta) {
@@ -93,12 +100,14 @@ final class SpringAiChatGateway implements ChatGateway {
     /** {@code stop} 完成时截断流（主请求和备用请求一起取消），返回已生成的部分。 */
     @Override
     public String stream(String systemPrompt, String userMessage, Consumer<String> onDelta, CompletionStage<?> stop) {
-        var prompt = prompt(systemPrompt, userMessage);
-        var deltas = hedgeAfter == null ? deltas(prompt)
-                : Flux.firstWithValue(deltas(prompt), Mono.delay(hedgeAfter)
-                        .doOnNext(tick -> log.info("对话模型 {} 内没出首字，发出备用请求（{}）", hedgeAfter,
-                                hedgeOptions.getModel()))
-                        .thenMany(Flux.defer(() -> deltas(new Prompt(prompt.getInstructions(), hedgeOptions)))));
+        var answer = routes.resolve(ModelUsage.ANSWER);
+        var main = deltas(model(answer), prompt(systemPrompt, userMessage, options(answer)));
+        var deltas = hedgeAfter == null ? main
+                : Flux.firstWithValue(main, Mono.delay(hedgeAfter)
+                        .map(tick -> routes.resolve(ModelUsage.HEDGE))
+                        .doOnNext(hedge -> log.info("对话模型 {} 内没出首字，发出备用请求（{}）", hedgeAfter, hedge.model()))
+                        .flatMapMany(hedge -> deltas(model(hedge),
+                                prompt(systemPrompt, userMessage, options(hedge)))));
         var text = new StringBuilder();
         try {
             // suppressCancel：流正常结束时 takeUntilOther 会取消这个 Mono，不能连带把停止信号也取消掉，
@@ -114,14 +123,14 @@ final class SpringAiChatGateway implements ChatGateway {
     }
 
     /** 只保留有文字的片段，这样“先出字”指的是真正的首字，而不是只带角色的空片段。 */
-    private Flux<String> deltas(Prompt prompt) {
+    private static Flux<String> deltas(ChatModel model, Prompt prompt) {
         return model.stream(prompt)
                 .mapNotNull(response -> response.getResult() == null ? null : response.getResult().getOutput().getText())
                 .filter(delta -> !delta.isEmpty());
     }
 
-    private static Prompt prompt(String systemPrompt, String userMessage) {
-        return new Prompt(List.of(new SystemMessage(systemPrompt), new UserMessage(userMessage)));
+    private static Prompt prompt(String systemPrompt, String userMessage, OpenAiChatOptions options) {
+        return new Prompt(List.of(new SystemMessage(systemPrompt), new UserMessage(userMessage)), options);
     }
 
     private static ModelCallException unavailable(RuntimeException e) {

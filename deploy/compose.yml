@@ -35,6 +35,7 @@ services:
       RAG_BRAND_NAME: ${RAG_BRAND_NAME:-}
       RAG_BRAND_TAGLINE: ${RAG_BRAND_TAGLINE:-}
       RAG_BRAND_LOGIN_HINT: ${RAG_BRAND_LOGIN_HINT:-}
+      RAG_MASTER_KEY: ${RAG_MASTER_KEY:-}
     volumes:
       - app-files:/data/files
     depends_on:

@@ -20,6 +20,7 @@ spring:
       - classpath:db/migration/knowledge
       - classpath:db/migration/answering
       - classpath:db/migration/evaluation
+      - classpath:db/migration/settings
 
 mybatis-plus:
   # SQL 只写在各模块的 mapper/<模块名>/*.xml 里，不用注解（AGENTS.md“约束”）。
@@ -92,6 +93,9 @@ rag:
     rewrite-timeout: ${RAG_REWRITE_TIMEOUT:3s}
   # 各模块的配置由对应的 @ConfigurationProperties record 读取并校验（AnsweringProperties、IdentityProperties、
   # KnowledgeProperties、AiProperties），取值说明见这些类。
+  settings:
+    # 加密服务商密钥的主密钥：32 字节随机值的 Base64（openssl rand -base64 32）；为空时不能在界面保存密钥（D-043）。
+    master-key: ${RAG_MASTER_KEY:}
   identity:
     # 账号表为空时用它创建超级管理员（全系统只有一个）；已有账号时不生效。
     admin:

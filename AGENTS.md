@@ -39,7 +39,7 @@
 ## 约束
 
 - 权限过滤只在 rag-knowledge 的检索服务里写一处，禁止绕过。
-- 模型调用只经 rag-ai 模块（Spring AI 的 ChatClient / EmbeddingModel 和 RerankClient）；密钥只从环境变量读，不进日志。
+- 模型调用只经 rag-ai 模块（Spring AI 的 ChatClient / EmbeddingModel 和 RerankClient）；各用途用哪个服务商和模型由 rag-settings 经 `ModelRouting` 提供（D-043、D-044）。服务商密钥用 AES-GCM 加密存库，主密钥只从环境变量 `RAG_MASTER_KEY` 读；环境变量里的密钥同样只从环境变量读；接口、日志都不返回密钥明文，界面只显示后 4 位。
 - DDD：聚合只在 knowledge、answering；上下文模块之间只用对方的 `api` 包或监听事件。
 - MyBatis-Plus 的 DO、Wrapper、Page 只出现在 infrastructure 包；不引入 MapStruct，不做多层 DTO 转换。
 - SQL 只写在 Mapper XML（`src/main/resources/mapper/<模块名>/<Mapper 名>.xml`）里；不用 `@Select` 等 SQL 注解，条件构造器不拼原始 SQL（`apply`、`last`、`inSql` 等）。简单的单表条件用 `LambdaQueryWrapper`。
@@ -56,7 +56,7 @@
 
 后端每个 Maven 模块 `rag-<名>` 对应根包 `com.liming.rag.<名>`：
 
-- **上下文模块**（identity、knowledge、answering、evaluation）：根包只放 `package-info.java`，类只能在五个子包里：
+- **上下文模块**（identity、knowledge、answering、evaluation、settings）：根包只放 `package-info.java`，类只能在五个子包里：
   - `api`：对其他模块公开的合同（接口、record、枚举、事件），不暴露模块内部类型；
   - `web`：Controller、请求响应 record；
   - `application`：用例服务，以及它需要的端口接口（如 `ChunkIndex`、`FileStorage`）；

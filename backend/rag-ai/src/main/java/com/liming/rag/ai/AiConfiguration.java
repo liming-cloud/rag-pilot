@@ -1,5 +1,6 @@
 package com.liming.rag.ai;
 
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -16,18 +17,28 @@ class AiConfiguration {
     }
 
     @Bean
-    RerankClient rerankClient(AiProperties properties) {
+    ModelRoutes modelRoutes(AiProperties properties, ObjectProvider<ModelRouting> routing) {
+        return new ModelRoutes(properties, routing);
+    }
+
+    @Bean
+    ModelProbe modelProbe(AiProperties properties, ModelRoutes routes) {
+        return new OpenAiCompatibleProbe(properties, routes);
+    }
+
+    @Bean
+    RerankClient rerankClient(AiProperties properties, ModelRoutes routes) {
         return switch (properties.rerank().provider()) {
-            case "openai" -> new HttpRerankClient(properties);
+            case "openai" -> new HttpRerankClient(properties, routes);
             case "lexical" -> new LexicalRerankClient();
             default -> throw unknown("rerank", properties.rerank().provider(), "openai 或 lexical");
         };
     }
 
     @Bean
-    ChatGateway chatGateway(AiProperties properties) {
+    ChatGateway chatGateway(AiProperties properties, ModelRoutes routes) {
         return switch (properties.chat().provider()) {
-            case "openai" -> new SpringAiChatGateway(properties);
+            case "openai" -> new SpringAiChatGateway(properties, routes);
             case "extractive" -> new ExtractiveChatGateway();
             default -> throw unknown("chat", properties.chat().provider(), "openai 或 extractive");
         };

@@ -101,6 +101,18 @@ class RbacTests {
                         Map.of("status", "RESOLVED")),
                 new Endpoint(Permissions.ANSWER_RECHECK, HttpMethod.POST, "/api/answers/999999/recheck", null),
                 new Endpoint(Permissions.STATS_VIEW, HttpMethod.GET, "/api/answers/stats", null),
+                // 模型管理：用不存在的服务商，权限通过后也不会真的去连外部模型服务。
+                new Endpoint(Permissions.MODEL_VIEW, HttpMethod.GET, "/api/models", null),
+                new Endpoint(Permissions.MODEL_VIEW, HttpMethod.GET, "/api/models/changes", null),
+                new Endpoint(Permissions.MODEL_TEST, HttpMethod.POST, "/api/models/test",
+                        Map.of("usage", "RERANK", "providerId", 999999, "model", "m")),
+                new Endpoint(Permissions.MODEL_UPDATE, HttpMethod.GET, "/api/models/available?providerId=999999", null),
+                new Endpoint(Permissions.MODEL_UPDATE, HttpMethod.PUT, "/api/models/RERANK",
+                        Map.of("providerId", 999999, "model", "m")),
+                new Endpoint(Permissions.MODEL_UPDATE, HttpMethod.POST, "/api/models/changes/999999/restore", null),
+                new Endpoint(Permissions.MODEL_UPDATE, HttpMethod.POST, "/api/model-providers",
+                        Map.of("name", "权限测试服务商", "baseUrl", "http://127.0.0.1:9/v1")),
+                new Endpoint(Permissions.MODEL_UPDATE, HttpMethod.DELETE, "/api/model-providers/999999", null),
                 new Endpoint(Permissions.ROLE_DELETE, HttpMethod.DELETE, "/api/roles/{role}", null));
 
         var allowed = new HashMap<String, String>();
