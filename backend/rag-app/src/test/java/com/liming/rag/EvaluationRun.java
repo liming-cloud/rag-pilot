@@ -32,7 +32,6 @@ import org.springframework.boot.resttestclient.TestRestTemplate;
 import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureTestRestTemplate;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
-import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 import org.springframework.http.HttpEntity;
@@ -76,10 +75,6 @@ class EvaluationRun {
     private static final String DEFAULT_JUDGE_MODEL = "THUDM/GLM-4-9B-0414";
 
     private static final PathMatchingResourcePatternResolver RESOURCES = new PathMatchingResourcePatternResolver();
-
-    private static final ParameterizedTypeReference<List<Map<String, Object>>> HITS =
-            new ParameterizedTypeReference<>() {
-            };
 
     @Container
     @ServiceConnection
@@ -133,8 +128,10 @@ class EvaluationRun {
 
     private EvalOutcome run(long knowledgeBaseId, long restricted, String staff, EvalCase evalCase) {
         long start = System.nanoTime();
-        var hits = http.exchange("/api/knowledge-bases/{id}/search?q={q}&limit=10", HttpMethod.GET, null, HITS,
-                knowledgeBaseId, evalCase.searchText()).getBody();
+        var hits = searchWithRetry(knowledgeBaseId, evalCase);
+        if (hits == null) {
+            return null;
+        }
         long searchMillis = (System.nanoTime() - start) / 1_000_000;
 
         boolean inConversation = !evalCase.history().isEmpty() || evalCase.kind() == EvalCase.Kind.SMALL_TALK;
@@ -185,6 +182,28 @@ class EvaluationRun {
     private static final List<Duration> RETRY_DELAYS = List.of(Duration.ofSeconds(10), Duration.ofSeconds(30));
 
     /** 流式问答；模型服务不可用时退避重试，仍不可用返回 null，这道题不计入指标。 */
+    /**
+     * 检索调试接口也要向量化问题，模型服务暂时不可用（503）时和提问一样重试，仍失败就不计入指标；
+     * 其他失败直接报出状态码和响应，便于定位。
+     */
+    private List<Map<String, Object>> searchWithRetry(long knowledgeBaseId, EvalCase evalCase) {
+        for (int attempt = 0; ; attempt++) {
+            var response = http.exchange("/api/knowledge-bases/{id}/search?q={q}&limit=10", HttpMethod.GET, null,
+                    String.class, knowledgeBaseId, evalCase.searchText());
+            if (response.getStatusCode().is2xxSuccessful()) {
+                return JsonMapper.builder().build().readValue(response.getBody(), new TypeReference<>() {
+                });
+            }
+            assertThat(response.getStatusCode().value()).as(evalCase.id() + " 检索：" + response.getBody())
+                    .isEqualTo(503);
+            if (attempt == RETRY_DELAYS.size()) {
+                System.out.println("::warning title=模型服务不可用::" + evalCase.id() + " 检索重试 " + attempt + " 次仍失败，不计入指标");
+                return null;
+            }
+            sleep(RETRY_DELAYS.get(attempt));
+        }
+    }
+
     private List<SseEvents.Event> askWithRetry(EvalCase evalCase, Supplier<List<SseEvents.Event>> ask) {
         for (int attempt = 0; ; attempt++) {
             var events = ask.get();
@@ -319,6 +338,14 @@ class EvaluationRun {
     /** 入库重试后仍失败的文档；不超过 1% 时照常评测，在报告开头列出（#81）。 */
     private final List<String> corpusFailures = new ArrayList<>();
 
+    /** 入库失败的文档。重传时按文件名取原文件，所以文件名和原因分开存。 */
+    private record FailedDocument(String filename, String error) {
+        @Override
+        public String toString() {
+            return filename + "：" + error;
+        }
+    }
+
     /** 入库失败（多是嵌入模型偶发不可用）的文档最多占这个比例，超过就停止评测。 */
     private static final double MAX_CORPUS_FAILURE_SHARE = 0.01;
 
@@ -338,13 +365,13 @@ class EvaluationRun {
                 // 嵌入模型偶尔整段不可用，入库内部的重试也躲不过；隔一会儿删掉重传一次。
                 System.out.println("::warning title=入库失败::" + failed.size() + " 篇，30 秒后重传：" + failed.values());
                 sleep(Duration.ofSeconds(30));
-                failed.forEach((id, filename) -> {
+                failed.forEach((id, failure) -> {
                     http.delete("/api/knowledge-bases/{id}/documents/{documentId}", knowledgeBaseId, id);
-                    upload(knowledgeBaseId, filename, files.get(filename));
+                    upload(knowledgeBaseId, failure.filename(), files.get(failure.filename()));
                 });
                 failed = awaitAllProcessed(knowledgeBaseId, files.size());
             }
-            var messages = failed.values().stream().toList();
+            var messages = failed.values().stream().map(FailedDocument::toString).toList();
             assertThat((double) failed.size() / files.size()).as("重传后仍入库失败的文档超过 1%：" + messages)
                     .isLessThanOrEqualTo(MAX_CORPUS_FAILURE_SHARE);
             corpusFailures.addAll(messages);
@@ -375,19 +402,20 @@ class EvaluationRun {
     /**
      * 每篇给 3 秒、至少 90 秒，等全部文档离开“解析中”。
      *
-     * @return 入库失败的文档：文档 id → “文件名：原因”
+     * @return 入库失败的文档：文档 id → 文件名和原因
      */
-    private Map<Long, String> awaitAllProcessed(long knowledgeBaseId, int count) {
+    private Map<Long, FailedDocument> awaitAllProcessed(long knowledgeBaseId, int count) {
         var timeout = Duration.ofSeconds(Math.max(90, 3L * count));
         long deadline = System.nanoTime() + timeout.toNanos();
         long started = System.nanoTime();
         while (System.nanoTime() < deadline) {
             var documents = TestDocuments.all(http, knowledgeBaseId, new HttpHeaders());
             if (documents.stream().noneMatch(document -> "PARSING".equals(document.get("status")))) {
-                var failed = new LinkedHashMap<Long, String>();
+                var failed = new LinkedHashMap<Long, FailedDocument>();
                 documents.stream().filter(document -> !"READY".equals(document.get("status")))
                         .forEach(document -> failed.put(((Number) document.get("id")).longValue(),
-                                document.get("filename") + "：" + document.get("error")));
+                                new FailedDocument((String) document.get("filename"),
+                                        (String) document.get("error"))));
                 System.out.printf(Locale.ROOT, "%d 篇文档入库用时 %d 秒%n", documents.size(),
                         (System.nanoTime() - started) / 1_000_000_000);
                 return failed;
