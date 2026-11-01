@@ -98,6 +98,7 @@ class EvaluationRun {
 
         // 以只被授权门店库的店员身份提问，并在请求里主动带上店长专用库，检验越权是否真的被挡住。
         String staff = createStaffWithAccessTo(store, restricted);
+        configureAnswerModelThroughSettings();
 
         var cases = loadCases();
         var judge = cases.stream().anyMatch(evalCase -> evalCase.referenceAnswer() != null) ? judge() : null;
@@ -450,6 +451,22 @@ class EvaluationRun {
         http.put("/api/knowledge-bases/{id}/role-grants/{roleId}", null, restricted, roleId);
         http.delete("/api/knowledge-bases/{id}/role-grants/{roleId}", restricted, roleId);
         return TestLogin.token(http, "eval-staff", "eval-staff-password");
+    }
+
+    /**
+     * 通过模型管理接口把回答模型配成与环境变量相同的模型（D-043 的验收口径）：之后每次回答都走“界面配置 → 数据库 →
+     * 路由”这条路，评测结果与 M3 持平才说明这条路没有改变回答。保存前会真的测一次连通（1 个 token）。
+     */
+    @SuppressWarnings("unchecked")
+    private void configureAnswerModelThroughSettings() {
+        var settings = http.getForEntity("/api/models", Map.class).getBody();
+        var answer = ((List<Map<String, Object>>) settings.get("usages")).stream()
+                .filter(usage -> "ANSWER".equals(usage.get("usage"))).findFirst().orElseThrow();
+        var saved = http.exchange("/api/models/ANSWER", HttpMethod.PUT,
+                new HttpEntity<>(Map.of("model", answer.get("model"))), Map.class);
+        assertThat(saved.getStatusCode()).as("通过模型管理保存回答模型：" + saved.getBody()).isEqualTo(HttpStatus.OK);
+        assertThat(saved.getBody()).containsEntry("source", "DATABASE");
+        System.out.println("::notice title=回答模型::经模型管理配置为 " + answer.get("model") + "（与环境变量相同）");
     }
 
     private long createKnowledgeBase(String name) {

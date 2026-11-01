@@ -18,6 +18,7 @@
         <module>backend/rag-knowledge</module>
         <module>backend/rag-answering</module>
         <module>backend/rag-evaluation</module>
+        <module>backend/rag-settings</module>
         <module>backend/rag-app</module>
     </modules>
 
@@ -117,6 +118,11 @@
             <dependency>
                 <groupId>${project.groupId}</groupId>
                 <artifactId>rag-evaluation</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>${project.groupId}</groupId>
+                <artifactId>rag-settings</artifactId>
                 <version>${project.version}</version>
             </dependency>
         </dependencies>

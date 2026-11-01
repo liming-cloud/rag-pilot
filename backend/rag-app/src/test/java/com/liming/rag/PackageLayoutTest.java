@@ -23,12 +23,12 @@ import org.junit.jupiter.api.Test;
 /**
  * 目录结构与分层依赖，规范见 AGENTS.md“目录结构”。
  *
- * <p>上下文模块（identity、knowledge、answering、evaluation）的类放在 api、web、application、domain、infrastructure 五个子包；
+ * <p>上下文模块（identity、knowledge、answering、evaluation、settings）的类放在 api、web、application、domain、infrastructure 五个子包；
  * 技术模块（shared、ai）扁平，对外只公开接口、record、枚举和异常。
  */
 class PackageLayoutTest {
 
-    private static final String CONTEXT = "com\\.liming\\.rag\\.(identity|knowledge|answering|evaluation)";
+    private static final String CONTEXT = "com\\.liming\\.rag\\.(identity|knowledge|answering|evaluation|settings)";
 
     static final ArchRule CONTEXT_CLASSES_IN_LAYERS = classes()
             .that().haveNameMatching(CONTEXT + "\\..+")

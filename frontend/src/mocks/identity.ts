@@ -196,7 +196,7 @@ export function currentIdentity(): { id: number; roleIds: number[] } {
 const problem = (status: number, code: string, detail: string) =>
   HttpResponse.json({ status, code, detail }, { status, headers: { "Content-Type": "application/problem+json" } });
 
-function forbidden(permission: string) {
+export function forbidden(permission: string) {
   return permissionsOf(current()).includes(permission) ? null : problem(403, "FORBIDDEN", "没有权限执行此操作");
 }
 

@@ -19,14 +19,13 @@ final class HttpRerankClient implements RerankClient {
 
     private final HttpClient http;
     private final JsonMapper json = JsonMapper.builder().build();
-    private final URI endpoint;
-    private final String apiKey;
     private final AiProperties properties;
+    private final ModelRoutes routes;
 
-    HttpRerankClient(AiProperties properties) {
+    HttpRerankClient(AiProperties properties, ModelRoutes routes) {
+        properties.requireApiKey();
         this.properties = properties;
-        this.apiKey = properties.requireApiKey();
-        this.endpoint = URI.create(properties.baseUrl().replaceAll("/+$", "") + "/rerank");
+        this.routes = routes;
         this.http = HttpClient.newBuilder()
                 .connectTimeout(properties.timeout())
                 .proxy(ProxySelector.getDefault())
@@ -38,18 +37,21 @@ final class HttpRerankClient implements RerankClient {
         if (documents.isEmpty()) {
             return List.of();
         }
+        // 每次按当前配置取服务商和模型，管理端保存后下一次请求就生效（D-043）。
+        var route = routes.resolve(ModelUsage.RERANK);
         var body = new LinkedHashMap<String, Object>();
-        body.put("model", properties.rerank().model());
+        body.put("model", route.model());
         body.put("query", query);
         body.put("documents", documents);
         body.put("top_n", documents.size());
         body.put("return_documents", false);
-        var request = HttpRequest.newBuilder(endpoint)
+        var builder = HttpRequest.newBuilder(URI.create(route.baseUrl() + "/rerank"))
                 .timeout(properties.timeout())
-                .header("Authorization", "Bearer " + apiKey)
-                .header("Content-Type", "application/json")
-                .POST(HttpRequest.BodyPublishers.ofString(json.writeValueAsString(body)))
-                .build();
+                .header("Content-Type", "application/json");
+        if (route.apiKey() != null) {
+            builder.header("Authorization", "Bearer " + route.apiKey());
+        }
+        var request = builder.POST(HttpRequest.BodyPublishers.ofString(json.writeValueAsString(body))).build();
         HttpResponse<String> response;
         try {
             response = http.send(request, HttpResponse.BodyHandlers.ofString());

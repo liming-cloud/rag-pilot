@@ -23,11 +23,44 @@ class SpringAiChatGatewayTest {
 
     private final AtomicInteger calls = new AtomicInteger();
     private final List<String> models = Collections.synchronizedList(new ArrayList<>());
+    private final List<String> paths = Collections.synchronizedList(new ArrayList<>());
+    private final java.util.Map<ModelUsage, ModelRoute> overrides = new java.util.concurrent.ConcurrentHashMap<>();
     private HttpServer server;
 
     @AfterEach
     void stop() {
         server.stop(0);
+    }
+
+    @Test
+    @DisplayName("管理端配置了回答和轻量任务的服务商和模型后，下一次请求就打到新地址、用新模型（D-043）")
+    void followsConfiguredRoutes() throws Exception {
+        start((call, model) -> new Reply(0, 200, "回答"));
+        var gateway = gateway(null);
+
+        gateway.complete("系统", "问题");
+        overrides.put(ModelUsage.ANSWER, databaseRoute("db-answer"));
+        overrides.put(ModelUsage.LIGHT, databaseRoute("db-light"));
+        gateway.stream("系统", "问题", delta -> {
+        });
+        gateway.complete("系统", "标题", new ChatGateway.Limits(16, List.of(), ChatGateway.Tier.LIGHT));
+
+        assertThat(awaitModels(3)).containsExactly("m", "db-answer", "db-light");
+        assertThat(paths).containsExactly("/v1/chat/completions", "/db/v1/chat/completions",
+                "/db/v1/chat/completions");
+    }
+
+    @Test
+    @DisplayName("备用回答可以配到另一个服务商")
+    void hedgesToConfiguredProvider() throws Exception {
+        start((call, model) -> "m".equals(model) ? new Reply(3000, 200, "慢的回答") : new Reply(0, 200, "备用回答"));
+        overrides.put(ModelUsage.HEDGE, databaseRoute("db-hedge"));
+        var gateway = gateway(Duration.ofMillis(300));
+
+        assertThat(gateway.stream("系统", "问题", delta -> {
+        })).isEqualTo("备用回答");
+        assertThat(awaitModels(2)).containsExactlyInAnyOrder("m", "db-hedge");
+        assertThat(paths).contains("/db/v1/chat/completions");
     }
 
     @Test
@@ -150,7 +183,8 @@ class SpringAiChatGatewayTest {
     private void start(java.util.function.BiFunction<Integer, String, Reply> replies) throws IOException {
         server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.setExecutor(Executors.newVirtualThreadPerTaskExecutor());
-        server.createContext("/v1/chat/completions", exchange -> {
+        com.sun.net.httpserver.HttpHandler handler = exchange -> {
+            paths.add(exchange.getRequestURI().getPath());
             var request = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
             var matcher = MODEL.matcher(request);
             var model = matcher.find() ? matcher.group(1) : "";
@@ -161,7 +195,10 @@ class SpringAiChatGatewayTest {
             } else {
                 respondWhole(exchange, reply);
             }
-        });
+        };
+        // 环境变量里的服务商在 /v1，界面上配的另一个服务商在 /db/v1。
+        server.createContext("/v1/chat/completions", handler);
+        server.createContext("/db/v1/chat/completions", handler);
         server.start();
     }
 
@@ -227,6 +264,10 @@ class SpringAiChatGatewayTest {
         var properties = new AiProperties("http://127.0.0.1:" + server.getAddress().getPort() + "/v1", "test-key",
                 Duration.ofSeconds(10), null, null,
                 new AiProperties.Chat("openai", "m", 0.1, 256, hedgeAfter, hedgeModel, lightModel));
-        return new SpringAiChatGateway(properties);
+        return new SpringAiChatGateway(properties, TestRoutes.of(properties, overrides));
+    }
+
+    private ModelRoute databaseRoute(String model) {
+        return new ModelRoute("http://127.0.0.1:" + server.getAddress().getPort() + "/db/v1", null, model);
     }
 }

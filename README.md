@@ -29,6 +29,7 @@ JDK 25、Spring Boot 4.1、Spring AI 2.0、Spring Modulith 2.1、MyBatis-Plus、
 | `rag-knowledge` | 核心：知识库、文档、分块、授权、混合检索 |
 | `rag-answering` | 核心：会话、回答、引用校验、拒答、反馈 |
 | `rag-evaluation` | 评测集、评测运行、指标 |
+| `rag-settings` | 系统设置：模型管理（服务商、各用途的模型、变更记录） |
 | `rag-app` | 唯一的启动模块，只负责组装和配置 |
 
 ## 本地运行

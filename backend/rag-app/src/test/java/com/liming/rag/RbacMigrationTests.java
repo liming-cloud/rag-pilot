@@ -67,7 +67,7 @@ class RbacMigrationTests {
     private static Flyway flyway(DriverManagerDataSource dataSource, String target) {
         var configuration = Flyway.configure().dataSource(dataSource).locations("classpath:db/migration/identity",
                 "classpath:db/migration/knowledge", "classpath:db/migration/answering",
-                "classpath:db/migration/evaluation");
+                "classpath:db/migration/evaluation", "classpath:db/migration/settings");
         if (target != null) {
             configuration.target(target);
         }
