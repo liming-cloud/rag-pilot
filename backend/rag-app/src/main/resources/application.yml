@@ -101,6 +101,11 @@ rag:
       password: ${RAG_ADMIN_PASSWORD:}
       # 超级管理员密码丢失时由运维设置，启动时重置为它并解锁；重置后删掉这个变量再重启（D-038）。
       reset-password: ${RAG_ADMIN_RESET_PASSWORD:}
+    # 登录页、顶栏显示的产品名称和提示（D-042）；留空时用内核默认值，见 IdentityProperties.Branding。
+    branding:
+      name: ${RAG_BRAND_NAME:}
+      tagline: ${RAG_BRAND_TAGLINE:}
+      login-hint: ${RAG_BRAND_LOGIN_HINT:}
   knowledge:
     ingestion:
       # 后台同时处理的文档数，限制对嵌入模型的并发调用。
