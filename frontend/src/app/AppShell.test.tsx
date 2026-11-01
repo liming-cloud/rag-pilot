@@ -26,7 +26,7 @@ describe("页面外壳与管理端菜单", () => {
 
     fireEvent.click(await screen.findByRole("link", { name: "管理后台" }));
     const menu = await screen.findByRole("navigation", { name: "管理菜单" });
-    for (const name of ["知识库", "用户", "角色与权限", "回答记录", "使用统计"]) {
+    for (const name of ["知识库", "用户", "角色与权限", "模型管理", "回答记录", "使用统计"]) {
       expect(within(menu).getByRole("link", { name })).toBeInTheDocument();
     }
   });

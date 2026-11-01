@@ -12,6 +12,7 @@ export const ADMIN_MENUS = [
   { to: "/admin/knowledge", label: "知识库", permission: "kb:view" },
   { to: "/admin/users", label: "用户", permission: "user:view" },
   { to: "/admin/roles", label: "角色与权限", permission: "role:view" },
+  { to: "/admin/models", label: "模型管理", permission: "model:view" },
   { to: "/admin/answers", label: "回答记录", permission: "answer:view" },
   { to: "/admin/stats", label: "使用统计", permission: "stats:view" },
 ] as const;
