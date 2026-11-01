@@ -1,8 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
+import { ChevronRight } from "lucide-react";
 import { useState } from "react";
+import { Link } from "react-router";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { fetchUsageStats, RANGES, type Range, type UsageStats } from "./api";
+import { useCan } from "@/lib/permissions";
+import { fetchUsageStats, RANGES, type Range, type UsageStats, zoneLabel } from "./api";
 
 const REASONS: Record<string, string> = {
   NO_EVIDENCE: "知识库里没有内容",
@@ -12,7 +15,8 @@ const REASONS: Record<string, string> = {
 };
 
 /**
- * 使用统计：试点期间员工用得怎么样、答不上来的是什么、哪些文档最常被引用，供试点汇报和补文档参考。
+ * 使用统计（管理端首页）：试点期间员工用得怎么样、答不上来的是什么、哪些文档最常被引用，供试点汇报和补文档参考；
+ * 有回答记录权限时，“待处理”直接链到待处理的差评和答不上来的问题。
  * 比例在前端算：拒答率的分母是提问数，评价率和差评率的分母是给出了回答的题数。
  */
 export function StatsPage() {
@@ -44,6 +48,7 @@ export function StatsPage() {
 
 function StatsView({ stats }: { stats: UsageStats }) {
   const { totals } = stats;
+  const canReview = useCan("answer:view");
   const answered = totals.questions - totals.refused;
   const cards = [
     { label: "提问", value: String(totals.questions), note: `${totals.askers} 位员工` },
@@ -54,22 +59,47 @@ function StatsView({ stats }: { stats: UsageStats }) {
       value: percent(totals.disliked, answered),
       note: `${totals.disliked} 个差评，${totals.liked} 个好评`,
     },
-    { label: "待处理", value: String(totals.openReviews), note: "差评和答不上来，未标记已处理" },
+    {
+      label: "待处理",
+      value: String(totals.openReviews),
+      note: "差评和答不上来，未标记已处理",
+      to: canReview ? "/admin/answers?filter=all" : undefined,
+    },
   ];
 
   return (
     <>
       <p className="text-sm text-muted-foreground">
-        {stats.from} 至 {stats.to}（北京时间）
+        {stats.from} 至 {stats.to}（{zoneLabel(stats.zone)}）
       </p>
       <ul aria-label="汇总" className="grid grid-cols-2 gap-3 md:grid-cols-5">
-        {cards.map((card) => (
-          <li key={card.label} className="flex flex-col gap-1 rounded-lg border bg-card p-3">
-            <span className="text-sm text-muted-foreground">{card.label}</span>
-            <span className="text-2xl font-semibold">{card.value}</span>
-            <span className="text-xs text-muted-foreground">{card.note}</span>
-          </li>
-        ))}
+        {cards.map((card) => {
+          const body = (
+            <>
+              <span className="flex items-center text-sm text-muted-foreground">
+                {card.label}
+                {"to" in card && card.to && <ChevronRight aria-hidden="true" className="ml-auto size-4" />}
+              </span>
+              <span className="text-2xl font-semibold">{card.value}</span>
+              <span className="text-xs text-muted-foreground">{card.note}</span>
+            </>
+          );
+          return (
+            <li key={card.label} className="flex rounded-lg border bg-card">
+              {"to" in card && card.to ? (
+                <Link
+                  to={card.to}
+                  aria-label={`${card.label} ${card.value}，去处理`}
+                  className="flex flex-1 flex-col gap-1 rounded-lg p-3 hover:bg-secondary"
+                >
+                  {body}
+                </Link>
+              ) : (
+                <div className="flex flex-1 flex-col gap-1 p-3">{body}</div>
+              )}
+            </li>
+          );
+        })}
       </ul>
       {totals.questions === 0 ? (
         <p className="text-muted-foreground">这段时间还没有提问。</p>

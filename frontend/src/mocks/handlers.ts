@@ -215,6 +215,7 @@ function sampleStats(days: number): UsageStats {
   return {
     from: daily[0]!.date,
     to: daily.at(-1)!.date,
+    zone: "Asia/Shanghai",
     totals: {
       questions,
       askers: Math.min(23, 8 + days),
