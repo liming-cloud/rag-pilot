@@ -30,7 +30,7 @@ describe("回答记录页", () => {
     return screen.findByRole("dialog", { name: question });
   }
 
-  it("地址带 ?filter=all 时看全部待处理（从使用统计的“待处理”进来）", async () => {
+  it("地址带 ?filter=all 时看全部待处理（从运营概览的“待处理”进来）", async () => {
     renderPage("/?filter=all");
     expect(await screen.findByLabelText("类型")).toHaveValue("all");
     await row("门店几点打烊？");

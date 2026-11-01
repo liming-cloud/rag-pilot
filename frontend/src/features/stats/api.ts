@@ -28,7 +28,7 @@ export const RANGES = [7, 30, 90] as const;
 export type Range = (typeof RANGES)[number];
 
 export async function fetchUsageStats(days: Range): Promise<UsageStats> {
-  return json(await authFetch(`/api/answers/stats?days=${days}`), "读取使用统计失败");
+  return json(await authFetch(`/api/answers/stats?days=${days}`), "读取运营概览失败");
 }
 
 /** 常见时区给个好懂的名字，其余直接显示时区名。 */

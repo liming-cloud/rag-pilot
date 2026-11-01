@@ -36,6 +36,11 @@
             <groupId>${project.groupId}</groupId>
             <artifactId>rag-knowledge</artifactId>
         </dependency>
+        <!-- 行业包、拒答话术和统计时区（D-045），只用它的 api 包。 -->
+        <dependency>
+            <groupId>${project.groupId}</groupId>
+            <artifactId>rag-settings</artifactId>
+        </dependency>
         <dependency>
             <groupId>org.springframework.modulith</groupId>
             <artifactId>spring-modulith-api</artifactId>

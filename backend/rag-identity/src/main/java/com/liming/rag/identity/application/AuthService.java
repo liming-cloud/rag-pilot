@@ -12,7 +12,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 /**
  * 登录、退出、当前用户和改自己的密码。会话由 Sa-Token 管理（试点存内存，见 D-005）；租户在登录时写进会话。
- * 同一账号连续输错 5 次密码锁 15 分钟，按账号锁、不按 IP 锁（门店常共用网络，D-038）。
+ * 同一账号连续输错 5 次密码锁 15 分钟，按账号锁、不按 IP 锁（网点常共用网络，D-038）。
  */
 @Service
 public class AuthService {

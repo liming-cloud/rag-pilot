@@ -65,7 +65,7 @@ export const permissionCatalog: PermissionGroup[] = [
     ],
   },
   {
-    menu: "使用统计",
+    menu: "运营概览",
     view: { code: "stats:view", label: "进入页面" },
     buttons: [{ code: "stats:export", label: "导出" }],
   },

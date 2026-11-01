@@ -36,6 +36,8 @@ services:
       RAG_BRAND_TAGLINE: ${RAG_BRAND_TAGLINE:-}
       RAG_BRAND_LOGIN_HINT: ${RAG_BRAND_LOGIN_HINT:-}
       RAG_MASTER_KEY: ${RAG_MASTER_KEY:-}
+      RAG_INDUSTRY_PACK: ${RAG_INDUSTRY_PACK:-retail}
+      RAG_STATS_ZONE: ${RAG_STATS_ZONE:-Asia/Shanghai}
     volumes:
       - app-files:/data/files
     depends_on:

@@ -31,9 +31,9 @@ export type SettingItem =
   | (Common & { kind: "list"; value: string[]; defaultValue: string[] });
 
 export type VocabularyEntry = {
-  /** 上位词，检索时追加到问题里，如“鲜食”。 */
+  /** 上位词，检索时追加到问题里。 */
   term: string;
-  /** 下位词和同义词，问题里出现其中之一就追加上位词，如“便当、饭团”。 */
+  /** 下位词和同义词，问题里出现其中之一就追加上位词。 */
   members: string[];
 };
 

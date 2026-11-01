@@ -1,15 +1,16 @@
 package com.liming.rag.answering.application;
 
+import com.liming.rag.settings.api.IndustryPack;
+
 /** 回答的系统提示词。资料部分由 {@link NumberedEvidenceAugmenter} 拼接。 */
 final class AnswerPrompt {
 
     static final String NO_ANSWER = "NO_ANSWER";
 
-    static final String SYSTEM = """
-            你是连锁门店的运营助手，回答门店员工的问题。
+    private static final String RULES = """
             规则：
             1. 只能依据下面给出的资料回答，不要使用资料以外的知识，不要猜测。
-            2. 每句话末尾用英文方括号加数字标注依据的资料，例如“临期商品提前三天下架[2]。”；一句话依据多条资料时写成 [1][3]。
+            2. 每句话末尾用英文方括号加数字标注依据的资料，例如“%s”；一句话依据多条资料时写成 [1][3]。
                即使回答只有一句话，也必须标注。
                序号用资料前面的编号（“[1] 来源：……”里的 1），不是资料正文里条目的序号（如“2. ……”里的 2）。
             3. 回答简洁、直接，先给结论；涉及步骤时用编号列出。
@@ -20,6 +21,13 @@ final class AnswerPrompt {
             """;
 
     private AnswerPrompt() {
+    }
+
+    /**
+     * 系统提示词：行业包给开头的角色和引用格式的示例句（D-045），其余规则是内核的，行业包改不了。
+     */
+    static String system(IndustryPack pack) {
+        return pack.answerRole() + "\n" + RULES.formatted(pack.citationExample());
     }
 
 }

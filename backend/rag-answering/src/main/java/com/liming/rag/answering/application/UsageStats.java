@@ -4,13 +4,14 @@ import java.time.LocalDate;
 import java.util.List;
 
 /**
- * 一段时间内的使用统计，日期按北京时间。评价相关的数只算给出了回答的记录。
+ * 一段时间内的使用统计，日期按部署配置的统计时区划分（D-045）。评价相关的数只算给出了回答的记录。
  *
  * @param from 第一天（含）
  * @param to 最后一天（含）
+ * @param zone 统计时区，如 Asia/Shanghai
  * @param daily 每天一条，没有提问的日子也有，数都是 0
  */
-public record UsageStats(LocalDate from, LocalDate to, Totals totals, List<Day> daily,
+public record UsageStats(LocalDate from, LocalDate to, String zone, Totals totals, List<Day> daily,
         List<ReasonCount> refusalReasons, List<QuestionCount> topRefusedQuestions,
         List<DocumentCount> topCitedDocuments) {
 

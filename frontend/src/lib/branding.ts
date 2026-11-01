@@ -3,7 +3,7 @@ import { useEffect } from "react";
 import { json } from "./api";
 
 /**
- * 产品名称和登录页文案（D-042），由部署方配置，后端 GET /api/settings/branding 给出（D-045 移到系统设置，管理员可在界面改），不需要登录。
+ * 产品名称和登录页文案（D-042），由部署方配置，后端 GET /api/auth/branding 给出（D-045 起由系统设置提供，管理员可在界面改），不需要登录。
  * 内核不写死行业名称：界面上出现产品名称的地方都从这里取。
  */
 export type Branding = {
@@ -23,7 +23,7 @@ export const DEFAULT_BRANDING: Branding = {
 };
 
 export async function fetchBranding(): Promise<Branding> {
-  return json(await fetch("/api/settings/branding"), "读取产品名称失败");
+  return json(await fetch("/api/auth/branding"), "读取产品名称失败");
 }
 
 /** 读不到时用默认值，不让名称影响登录。顺便把浏览器标题设成产品名称。 */

@@ -6,6 +6,7 @@ import com.liming.rag.answering.api.Answer.RefusalReason;
 import com.liming.rag.answering.api.Answer;
 import com.liming.rag.answering.domain.CitationParser;
 import com.liming.rag.knowledge.api.KnowledgeSearch;
+import com.liming.rag.settings.api.AnsweringSettings;
 import com.liming.rag.shared.TenantId;
 import com.liming.rag.shared.UserId;
 import java.util.ArrayList;
@@ -35,6 +36,9 @@ import org.springframework.stereotype.Service;
  * <p>流式问答时，生成中的文字先流给用户，最终以返回的 {@link Answer} 为准：引用校验不通过时它是拒答，
  * 调用方要用它替换已流出的文字。模型回复 NO_ANSWER 时一个字也不流出。
  *
+ * <p>提示词开头的角色、引用示例和拒答话术来自行业包和系统设置（D-045）；检索前用行业词表扩展检索用的问题
+ * （{@link QueryExpansion}），低分改写和生成仍针对没扩展的问题。
+ *
  * <p>会话里追问时（D-036），检索规划给出的 1–2 个检索词各检索一次、合并候选，每条资料取对各检索词重排分数的最高值；
  * 生成时把前几轮对话放在资料之后，回答的依据仍只能是这一轮的资料。首字前按阶段推状态，可以中途停止。
  */
@@ -63,16 +67,24 @@ public class AnswerService {
     private final QueryAugmenter augmenter = new NumberedEvidenceAugmenter();
     private final LowRelevanceRecovery recovery;
     private final ChatGateway chat;
+    private final AnsweringSettings settings;
+    private final String system;
+    private final QueryExpansion expansion;
     private final int evidenceLimit;
     private final double minRelevance;
     private final boolean rewriteOnLowRelevance;
 
-    AnswerService(KnowledgeSearch search, RerankClient rerank, ChatGateway chat, AnsweringProperties properties) {
+    AnswerService(KnowledgeSearch search, RerankClient rerank, ChatGateway chat, AnsweringProperties properties,
+            AnsweringSettings settings) {
+        var pack = settings.pack();
         this.retriever = new KnowledgeDocumentRetriever(search, properties.candidates());
         this.reranker = new RerankPostProcessor(rerank);
         this.recovery = new LowRelevanceRecovery(retriever, reranker,
-                new LowRelevanceRewriter(chat, properties.rewriteTimeout()), properties.rewriteMinRelevance());
+                new LowRelevanceRewriter(chat, properties.rewriteTimeout(), pack), properties.rewriteMinRelevance());
         this.chat = chat;
+        this.settings = settings;
+        this.system = AnswerPrompt.system(pack);
+        this.expansion = new QueryExpansion(pack.vocabulary());
         this.evidenceLimit = properties.evidenceLimit();
         this.minRelevance = properties.minRelevance();
         this.rewriteOnLowRelevance = properties.rewriteOnLowRelevance();
@@ -126,15 +138,17 @@ public class AnswerService {
         var searchTexts = request.searchQueries() == null || request.searchQueries().isEmpty() ? List.of(text)
                 : request.searchQueries();
         var queries = searchTexts.stream()
-                .map(searchText -> AnswerContext.query(searchText, request.tenantId(), request.userId(),
-                        request.knowledgeBaseIds()))
+                .map(searchText -> AnswerContext.query(expansion.expand(searchText), request.tenantId(),
+                        request.userId(), request.knowledgeBaseIds()))
                 .toList();
         var candidates = union(queries.stream().map(retriever::retrieve).toList());
         clock.retrieved();
         if (candidates.isEmpty()) {
-            return finish(Answer.refused(RefusalReason.NO_EVIDENCE, null), clock, null);
+            return finish(refusal(RefusalReason.NO_EVIDENCE, null), clock, null);
         }
-        var query = queries.getFirst();
+        // 低分改写针对没扩展的问题：改写本身会补类别，扩展词混在问题里反而干扰改写。
+        var query = AnswerContext.query(searchTexts.getFirst(), request.tenantId(), request.userId(),
+                request.knowledgeBaseIds());
         var ranked = rerank(queries, candidates);
         clock.reranked();
         Answer.Rewrite rewrite = null;
@@ -146,10 +160,10 @@ public class AnswerService {
         double topRelevance = ranked.getFirst().getScore();
         var evidence = evidence(ranked);
         if (evidence.isEmpty()) {
-            return finish(Answer.refused(RefusalReason.LOW_RELEVANCE, topRelevance), clock, rewrite);
+            return finish(refusal(RefusalReason.LOW_RELEVANCE, topRelevance), clock, rewrite);
         }
         if (stop.toCompletableFuture().isDone()) {
-            return finish(Answer.refused(RefusalReason.MODEL_DECLINED, topRelevance), clock, rewrite);
+            return finish(refusal(RefusalReason.MODEL_DECLINED, topRelevance), clock, rewrite);
         }
         onStatus.accept(GENERATING_STATUS);
         // 证据可能来自规划或改写后的检索，但回答针对员工原来的问题。
@@ -189,22 +203,27 @@ public class AnswerService {
             Consumer<String> onDelta, CompletionStage<?> stop) {
         var prompt = augmenter.augment(query, evidence).text();
         var gate = new NoAnswerGate(onDelta, clock::firstToken);
-        var raw = chat.stream(AnswerPrompt.SYSTEM, prompt, gate, stop).strip();
+        var raw = chat.stream(system, prompt, gate, stop).strip();
         gate.flush();
         clock.generated();
         // 模型有时先答一部分，再在中间或末尾补一个 NO_ANSWER：去掉标记，剩下的照常校验引用。
         var reply = raw.replace(AnswerPrompt.NO_ANSWER, "").strip();
         if (reply.isEmpty() || raw.startsWith(AnswerPrompt.NO_ANSWER)) {
-            return Answer.refused(RefusalReason.MODEL_DECLINED, topRelevance);
+            return refusal(RefusalReason.MODEL_DECLINED, topRelevance);
         }
         var parsed = CitationParser.parse(reply, evidence.size());
         if (parsed.cited().isEmpty()) {
-            return Answer.refused(RefusalReason.UNCITED, topRelevance);
+            return refusal(RefusalReason.UNCITED, topRelevance);
         }
         var citations = parsed.cited().stream()
                 .map(index -> Evidence.citation(index, evidence.get(index - 1)))
                 .toList();
         return Answer.answered(parsed.text(), citations, topRelevance);
+    }
+
+    /** 拒答，话术用系统设置里当前的（D-045）。 */
+    public Answer refusal(RefusalReason reason, Double topRelevance) {
+        return Answer.refused(reason, topRelevance, settings.refusalMessage());
     }
 
     /** 重排后达到门槛的前几条。 */

@@ -15,7 +15,7 @@ const REASONS: Record<string, string> = {
 };
 
 /**
- * 使用统计（管理端首页）：试点期间员工用得怎么样、答不上来的是什么、哪些文档最常被引用，供试点汇报和补文档参考；
+ * 运营概览（管理端首页）：试点期间员工用得怎么样、答不上来的是什么、哪些文档最常被引用，供试点汇报和补文档参考；
  * 有回答记录权限时，“待处理”直接链到待处理的差评和答不上来的问题。
  * 比例在前端算：拒答率的分母是提问数，评价率和差评率的分母是给出了回答的题数。
  */
@@ -26,7 +26,7 @@ export function StatsPage() {
   return (
     <main className="mx-auto flex max-w-4xl flex-col gap-6 p-6 md:p-8">
       <div className="flex flex-wrap items-center gap-2">
-        <h1 className="mr-auto font-serif text-2xl font-semibold">使用统计</h1>
+        <h1 className="mr-auto font-serif text-2xl font-semibold">运营概览</h1>
         {RANGES.map((range) => (
           <Button
             key={range}

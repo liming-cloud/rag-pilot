@@ -469,6 +469,8 @@ function Vocabulary({ entries }: { entries: IndustryPack["vocabulary"] }) {
     (entry) => !word || entry.term.includes(word) || entry.members.some((member) => member.includes(word)),
   );
   const shown = matched.slice((paging.page - 1) * paging.size, paging.page * paging.size);
+  // 说明里的例子取自当前行业包的词表，界面代码不写死行业词（D-045）。
+  const example = entries.find((entry) => entry.members.length > 0);
 
   return (
     <div className="flex flex-col gap-2">
@@ -476,7 +478,8 @@ function Vocabulary({ entries }: { entries: IndustryPack["vocabulary"] }) {
         <div>
           <h2 className="font-medium">行业词表</h2>
           <p className="text-xs text-muted-foreground">
-            问题里出现右边的词时，检索前把左边的词加进去，例如问“便当”也能找到写着“鲜食”的资料。共 {entries.length} 组。
+            问题里出现右边的词时，检索前把左边的词加进去
+            {example && `，例如问“${example.members[0]}”也能找到写着“${example.term}”的资料`}。共 {entries.length} 组。
           </p>
         </div>
         <div className="flex items-center gap-2">

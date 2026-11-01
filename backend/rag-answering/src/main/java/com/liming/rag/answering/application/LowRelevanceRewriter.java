@@ -1,8 +1,10 @@
 package com.liming.rag.answering.application;
 
 import com.liming.rag.ai.ChatGateway;
+import com.liming.rag.settings.api.IndustryPack;
 import com.liming.rag.answering.api.Answer.Rewrite.Outcome;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -21,15 +23,10 @@ import org.springframework.ai.rag.preretrieval.query.transformation.QueryTransfo
  */
 final class LowRelevanceRewriter implements QueryTransformer {
 
-    static final String SYSTEM = """
-            你负责把连锁门店员工的提问改写成便于检索门店制度文件的规范问题。
-            规则：
-            1. 纠正错别字和同音字。
-            2. 把口语、方言、简称改成书面说法。
-            3. 提到具体商品时，在后面补上它所属的商品类别。
-            4. 不要回答问题，不要添加原问题里没有的条件。
-            5. 只输出改写后的一句问题，不要解释。
-            """;
+    /** 内核的改写规则；行业包的提示排在“改成书面说法”之后（D-045）。 */
+    private static final List<String> LEADING_RULES = List.of("纠正错别字和同音字。", "把口语、方言、简称改成书面说法。");
+    private static final List<String> TRAILING_RULES = List.of("不要回答问题，不要添加原问题里没有的条件。",
+            "只输出改写后的一句问题，不要解释。");
 
     /** 一句问题用不了这么多 token；遇换行就停，模型多写的解释不会被生成。 */
     static final ChatGateway.Limits LIMITS = new ChatGateway.Limits(64, List.of("\n"));
@@ -43,10 +40,24 @@ final class LowRelevanceRewriter implements QueryTransformer {
 
     private final ChatGateway chat;
     private final Duration timeout;
+    private final String system;
 
-    LowRelevanceRewriter(ChatGateway chat, Duration timeout) {
+    LowRelevanceRewriter(ChatGateway chat, Duration timeout, IndustryPack pack) {
         this.chat = chat;
         this.timeout = timeout;
+        this.system = system(pack);
+    }
+
+    /** 改写的系统提示词：行业包给开头的角色和行业提示，其余规则是内核的。 */
+    static String system(IndustryPack pack) {
+        var rules = new ArrayList<String>(LEADING_RULES);
+        rules.addAll(pack.rewriteHints());
+        rules.addAll(TRAILING_RULES);
+        var text = new StringBuilder(pack.rewriteRole()).append("\n规则：\n");
+        for (int i = 0; i < rules.size(); i++) {
+            text.append(i + 1).append(". ").append(rules.get(i)).append('\n');
+        }
+        return text.toString();
     }
 
     @Override
@@ -56,7 +67,7 @@ final class LowRelevanceRewriter implements QueryTransformer {
 
     Result rewrite(Query query) {
         long start = System.nanoTime();
-        var call = CALLS.submit(() -> chat.complete(SYSTEM, query.text(), LIMITS));
+        var call = CALLS.submit(() -> chat.complete(system, query.text(), LIMITS));
         String reply;
         try {
             reply = call.get(timeout.toMillis(), TimeUnit.MILLISECONDS);

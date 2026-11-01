@@ -297,12 +297,13 @@ class EvaluationRun {
 
     /**
      * 评测数据的位置：设置了 {@code EVAL_DATA_DIR} 时用仓库外的私有评测集（客户真实资料和问题），
-     * 否则用仓库里的合成集。目录结构相同：{@code corpus/store/}、{@code corpus/restricted/}（可选）、{@code cases.json}。
+     * 否则用仓库里当前行业包的合成集 {@code eval/<RAG_INDUSTRY_PACK>/}（默认 retail，D-045）。目录结构相同：
+     * {@code corpus/store/}、{@code corpus/restricted/}（可选）、{@code cases.json}。
      */
     private static String dataLocation() {
         var dir = System.getenv("EVAL_DATA_DIR");
         if (dir == null || dir.isBlank()) {
-            return "classpath:eval/";
+            return "classpath:eval/" + env("RAG_INDUSTRY_PACK", "retail") + "/";
         }
         var uri = Path.of(dir).toAbsolutePath().toUri().toString();
         return uri.endsWith("/") ? uri : uri + "/";

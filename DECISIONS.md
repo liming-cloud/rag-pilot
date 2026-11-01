@@ -238,7 +238,7 @@ Compose 增加 web 服务（`deploy/web.Dockerfile`）：Node 24 构建前端，
 
 - **行业包**：随代码打包的资源目录（rag-settings 的 `industry-packs/<名字>/`），含提示词角色和引用示例、改写提示里的行业提示、拒答话术、界面文案、推荐问题、行业词表、行业标志词；部署用 `RAG_INDUSTRY_PACK` 选择，默认 `retail`，名字不存在则启动失败。只放角色、示例和行业提示，“只依据资料、引用格式、部分回答、NO_ANSWER”等规则留在内核；没有行业包内容时内核用中性默认值；新零售包与配置化之前的文字逐字一致。
 - **系统设置**：品牌（名称、slogan、登录提示）、问答页占位和空状态、推荐问题、拒答话术可以在界面改，改过的存库、覆盖行业包或环境变量的值，界面标出来源；提示词角色、改写提示、行业词表只读（影响质量，改了要评测；界面编辑词表放 1.x）。部署级，表不带租户。权限 `setting:view`、`setting:update`（D-041 已在权限清单里）默认只有超级管理员；登录页读的品牌信息公开。
-- **品牌迁移**：D-042 的品牌配置从 identity 迁到 rag-settings，`RAG_BRAND_*` 变量名不变、作默认值；登录页的品牌接口随之移到 rag-settings（调用方只有本仓库前端，人确认不算不兼容变更）。
+- **品牌迁移**：D-042 的品牌配置从 identity 迁到 rag-settings（`rag.settings.branding`），`RAG_BRAND_*` 变量名不变、作默认值；登录页的品牌接口随之由 rag-settings 提供，路径仍是 `/api/auth/branding`（架构规则只允许 `/api/auth` 下的接口不标权限点，保持路径就不用放宽规则）。
 - **行业词表**：格式“上位词 → 下位词/同义词”；answering 在第一次检索前把命中词的上位词追加到检索用的问题里，给模型看的仍是原问题；不放进低分改写（“鲜食下架-口语”相关度 0.002，走不到改写）。权限过滤仍只在 rag-knowledge 检索服务一处。
-- **时区与评测集**：时区是部署所在地区的属性，不进行业包，改为部署配置 `rag.answering.stats-zone`（默认 `Asia/Shanghai`），设置页只读显示。评测集移到 `eval/retail/`，内容不改，`EvaluationRun` 按行业包名选择。
+- **时区与评测集**：时区是部署所在地区的属性，不进行业包，改为部署配置 `rag.settings.stats-zone`（`RAG_STATS_ZONE`，默认 `Asia/Shanghai`），设置页只读显示；放在 rag-settings 而不是 rag-answering，是因为设置页要显示它，而 answering 依赖 settings（经 api 包的 `AnsweringSettings` 读行业包、拒答话术和时区），反过来会成环。评测集移到 `eval/retail/`，内容不改，`EvaluationRun` 按行业包名选择。
 - **内核检查**：后端 `src/main/java` 和前端 `src` 的非测试、非 `mocks/` 文件（含注释）不得出现任何行业包的行业标志词和词表里的词；行业包目录、测试、mocks、评测集不扫。

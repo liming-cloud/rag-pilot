@@ -20,7 +20,7 @@ function renderAt(path: string) {
 describe("页面外壳与管理端菜单", () => {
   afterEach(() => localStorage.clear());
 
-  it("超级管理员从“管理后台”进入使用统计；菜单是树：使用统计在最上面，其余按分组排列", async () => {
+  it("超级管理员从“管理后台”进入运营概览；菜单是树：运营概览在最上面，其余按分组排列", async () => {
     signInAs("admin");
     const router = renderAt("/chat");
 
@@ -31,7 +31,7 @@ describe("页面外壳与管理端菜单", () => {
       within(menu)
         .getAllByRole("link")
         .map((link) => link.textContent),
-    ).toEqual(["使用统计", "知识库", "回答记录", "用户", "角色与权限", "模型管理", "系统设置"]);
+    ).toEqual(["运营概览", "知识库", "回答记录", "用户", "角色与权限", "模型管理", "系统设置"]);
     const groups = within(menu).getAllByRole("group");
     expect(groups.map((group) => group.getAttribute("aria-label"))).toEqual(["知识运营", "账号与权限", "系统配置"]);
     expect(
@@ -91,7 +91,7 @@ describe("页面外壳与管理端菜单", () => {
       within(menu)
         .getAllByRole("link")
         .map((link) => link.textContent),
-    ).toEqual(["使用统计", "回答记录"]);
+    ).toEqual(["运营概览", "回答记录"]);
     expect(
       within(menu)
         .getAllByRole("group")

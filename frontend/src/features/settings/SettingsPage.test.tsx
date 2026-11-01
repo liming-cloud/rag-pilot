@@ -1,7 +1,10 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { createMemoryRouter, RouterProvider } from "react-router";
+import { http, HttpResponse } from "msw";
 import { signInAs } from "@/mocks/identity";
+import { server } from "@/mocks/server";
+import { RETAIL } from "@/mocks/settings";
 import { SettingsPage } from "./SettingsPage";
 
 function renderPage(path = "/admin/settings") {
@@ -25,7 +28,7 @@ async function edit(label: string) {
   return screen.findByRole("dialog", { name: `修改${label}` });
 }
 
-const branding = async () => (await (await fetch("/api/settings/branding")).json()) as { name: string };
+const branding = async () => (await (await fetch("/api/auth/branding")).json()) as { name: string };
 const chatTexts = async () => (await (await fetch("/api/settings/chat")).json()) as { suggestedQuestions: string[] };
 
 describe("系统设置页", () => {
@@ -129,25 +132,41 @@ describe("系统设置页", () => {
     expect(within(questions).getAllByRole("listitem")).toHaveLength(4);
   });
 
-  it("行业包只读：显示提示词角色、改写提示、时区，词表可以搜索和分页", async () => {
+  it("行业包只读：显示提示词角色、改写提示、时区，词表可以搜索；说明里的例子取自词表", async () => {
     renderPage("/admin/settings?tab=pack");
 
     const pack = await screen.findByRole("region", { name: "行业包" });
     expect(within(pack).getByRole("note")).toHaveTextContent("当前行业包：新零售（retail）");
     expect(pack).toHaveTextContent("你是连锁门店的运营助手，回答门店员工的问题。");
     expect(pack).toHaveTextContent("Asia/Shanghai");
+    expect(pack).toHaveTextContent("例如问“便当”也能找到写着“鲜食”的资料");
     expect(within(pack).queryByRole("button", { name: /修改/ })).not.toBeInTheDocument();
 
     const table = within(pack).getByRole("table", { name: "行业词表" });
     expect(within(table).getAllByRole("row")).toHaveLength(11);
-    expect(within(pack).getByText("共 14 条")).toBeInTheDocument();
-
     fireEvent.change(within(pack).getByLabelText("搜索词表"), { target: { value: "便当" } });
     const rows = within(table).getAllByRole("row").slice(1);
     expect(rows).toHaveLength(1);
     expect(rows[0]).toHaveTextContent("鲜食");
     fireEvent.change(within(pack).getByLabelText("搜索词表"), { target: { value: "不存在的词" } });
     expect(table).toHaveTextContent("没有找到包含“不存在的词”的词");
+  });
+
+  it("词表超过一页时分页", async () => {
+    const vocabulary = Array.from({ length: 25 }, (_, index) => ({
+      term: `类别${index + 1}`,
+      members: [`词${index + 1}`],
+    }));
+    server.use(
+      http.get("/api/settings", () =>
+        HttpResponse.json({ industryPack: { ...RETAIL, vocabulary }, statsZone: "Asia/Shanghai", items: [] }),
+      ),
+    );
+    renderPage("/admin/settings?tab=pack");
+
+    const table = await screen.findByRole("table", { name: "行业词表" });
+    expect(within(table).getAllByRole("row")).toHaveLength(11);
+    expect(screen.getByText("共 25 条")).toBeInTheDocument();
   });
 
   it("没有查看权限时不显示设置内容", async () => {

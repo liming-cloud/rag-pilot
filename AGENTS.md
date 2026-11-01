@@ -25,13 +25,13 @@
 - 前端：在 `frontend/` 下运行 `npm run typecheck && npm run lint && npm test && npm run build`（Node 24）。
 - 改了检索或生成：加跑评测。PR 改到检索、问答、模型或评测集时 CI 的 `eval` 任务会自动用真实模型跑；本地运行：
   `MODEL_API_KEY=… ./mvnw verify -pl backend/rag-app -am -Dtest.groups=eval -Dtest.excludedGroups=none -Dtest=EvaluationRun -Dsurefire.failIfNoSpecifiedTests=false`，报告在 `backend/rag-app/target/eval-report.md`。
-- 评测集是合成数据（`backend/rag-app/src/test/resources/eval/`）；客户真实评测集只放在客户环境。
+- 评测集是合成数据，按行业包分目录（`backend/rag-app/src/test/resources/eval/<行业包>/`）；客户真实评测集只放在客户环境。
 
 ## 设计原则
 
 完整说明见 ROADMAP.md 第二节。
 
-- 通用内核 + 行业包：内核不写死行业内容，提示词角色、话术、文案、推荐问题、评测集放在行业包配置里。
+- 通用内核 + 行业包：内核不写死行业内容，提示词角色、话术、文案、推荐问题、行业词表放在行业包（`rag-settings/src/main/resources/industry-packs/<名字>/pack.yml`），评测集按行业包分目录（D-045）。
 - 权限由系统判定，不交给模型；功能权限（RBAC，细到按钮）和资源权限（知识库授权）分开，管理员也不绕过资源授权。
 - 每个结论都能追溯；依据不足时明说。预测交给专门的模型；写操作先经人确认。
 - 能评测才算完成：改动以多轮评测结果为准。

@@ -17,7 +17,7 @@ function renderPage(path = "/") {
   return router;
 }
 
-describe("使用统计页", () => {
+describe("运营概览页", () => {
   it("默认看近 30 天：汇总、拒答原因、答不上来的问题、引用最多的文档", async () => {
     renderPage();
 

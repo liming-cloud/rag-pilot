@@ -70,9 +70,9 @@ public record Answer(Long id, String text, boolean refused, RefusalReason refusa
         return new Answer(null, text, false, null, List.of(), null, null, null);
     }
 
-    public static Answer refused(RefusalReason reason, Double topRelevance) {
-        return new Answer(null, "知识库里没有找到能回答这个问题的可靠依据，建议换个问法，或联系店长确认。", true, reason, List.of(),
-                topRelevance, null, null);
+    /** 拒答：{@code text} 是给员工看的拒答话术，由系统设置提供（D-045）。 */
+    public static Answer refused(RefusalReason reason, Double topRelevance, String text) {
+        return new Answer(null, text, true, reason, List.of(), topRelevance, null, null);
     }
 
     public Answer withId(long newId) {

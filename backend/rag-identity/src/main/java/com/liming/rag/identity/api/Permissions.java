@@ -72,7 +72,7 @@ public final class Permissions {
                     p(MODEL_TEST, "测试连通"))),
             new Group("回答记录", p(ANSWER_VIEW, "进入页面"), List.of(p(ANSWER_REVIEW, "标记处理"),
                     p(ANSWER_RECHECK, "重新回答"), p(ANSWER_EXPORT, "导出评测题"))),
-            new Group("使用统计", p(STATS_VIEW, "进入页面"), List.of(p(STATS_EXPORT, "导出"))),
+            new Group("运营概览", p(STATS_VIEW, "进入页面"), List.of(p(STATS_EXPORT, "导出"))),
             new Group("系统设置", p(SETTING_VIEW, "进入页面"), List.of(p(SETTING_UPDATE, "修改设置"))));
 
     /** 全部权限点，按清单顺序。 */

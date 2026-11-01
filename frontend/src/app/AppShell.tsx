@@ -8,11 +8,11 @@ import { useBranding } from "@/lib/branding";
 import { type Me, useMe } from "@/lib/permissions";
 
 /**
- * 管理端的菜单，按菜单权限显示（D-038）。顺序就是左侧菜单的顺序：使用统计是管理端首页、不分组，其余按分组排列；
+ * 管理端的菜单，按菜单权限显示（D-038）。顺序就是左侧菜单的顺序：运营概览是管理端首页、不分组，其余按分组排列；
  * 打开没有权限的页面或管理端首页时，跳到第一个有权限的菜单。
  */
 export const ADMIN_MENUS = [
-  { to: "/admin/stats", label: "使用统计", permission: "stats:view", group: null },
+  { to: "/admin/stats", label: "运营概览", permission: "stats:view", group: null },
   { to: "/admin/knowledge", label: "知识库", permission: "kb:view", group: "知识运营" },
   { to: "/admin/answers", label: "回答记录", permission: "answer:view", group: "知识运营" },
   { to: "/admin/users", label: "用户", permission: "user:view", group: "账号与权限" },
@@ -102,7 +102,7 @@ export function RequirePermission({ permission, children }: { permission: string
   return <Navigate to={first?.to ?? "/chat"} replace />;
 }
 
-/** 管理端首页：第一个有权限的菜单，通常是使用统计。 */
+/** 管理端首页：第一个有权限的菜单，通常是运营概览。 */
 export function AdminHome() {
   const me = useMe();
   if (me.isPending) {

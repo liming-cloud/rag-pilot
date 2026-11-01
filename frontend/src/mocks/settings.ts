@@ -11,13 +11,13 @@ import { DEFAULT_BRANDING } from "@/lib/branding";
 import { accountName, currentIdentity, forbidden } from "./identity";
 
 /**
- * 系统设置的假接口（#122、D-045）。契约与后端一致：界面保存过的以数据库为准，没保存过时品牌用环境变量
+ * 系统设置的假接口（#122、D-045）。示例数据与 backend/rag-settings 的 industry-packs/retail/pack.yml 一致；契约与后端一致：界面保存过的以数据库为准，没保存过时品牌用环境变量
  * （没设时用内核默认值），问答页文案、推荐问题、拒答话术用行业包；提示词角色、改写提示、行业词表只读。
  *
  * 地址后加 ?brand=retail 模拟部署时用环境变量设了新零售的品牌，加 ?brand=default 换回内核默认；选择记在
  * sessionStorage，刷新后不丢。
  */
-const RETAIL: IndustryPack = {
+export const RETAIL: IndustryPack = {
   code: "retail",
   name: "新零售",
   answerRole: "你是连锁门店的运营助手，回答门店员工的问题。",
@@ -25,27 +25,23 @@ const RETAIL: IndustryPack = {
   rewriteRole: "你负责把连锁门店员工的提问改写成便于检索门店制度文件的规范问题。",
   rewriteHints: ["提到具体商品时，在后面补上它所属的商品类别。"],
   vocabulary: [
-    { term: "鲜食", members: ["便当", "饭团", "三明治", "寿司", "凉面", "关东煮", "鲜食盒饭"] },
-    { term: "日配", members: ["牛奶", "酸奶", "面包", "鸡蛋", "豆腐", "鲜奶"] },
-    { term: "冻品", members: ["冰淇淋", "雪糕", "速冻水饺", "冷冻食品"] },
-    { term: "临期商品", members: ["临期品", "快过期", "快到期", "近效期"] },
-    { term: "报损", members: ["损耗", "报废", "坏货", "破损"] },
-    { term: "收银", members: ["结账", "买单", "收款", "找零"] },
-    { term: "收银差异", members: ["长短款", "钱对不上", "差钱"] },
-    { term: "盘点", members: ["清点库存", "点货", "对库存"] },
-    { term: "陈列", members: ["摆货", "上架", "排面", "货架摆放"] },
-    { term: "价签", members: ["标价签", "价格牌", "价格标签", "吊牌"] },
-    { term: "促销", members: ["活动", "打折", "特价", "满减", "买一送一"] },
-    { term: "排班", members: ["班表", "排班表", "调班"] },
-    { term: "交接班", members: ["交班", "接班", "换班"] },
-    { term: "店长", members: ["店经理", "门店负责人"] },
+    { term: "鲜食", members: ["便当", "饭团", "三明治", "寿司", "关东煮", "凉面"] },
+    { term: "日配", members: ["牛奶", "鲜奶", "酸奶", "面包"] },
+    { term: "冻品", members: ["冰淇淋", "雪糕", "速冻水饺"] },
+    { term: "临期商品", members: ["临期品", "快过期", "快到期"] },
+    { term: "报损", members: ["报废", "坏货"] },
+    { term: "收银差异", members: ["长短款"] },
+    { term: "价签", members: ["标价签", "价格牌", "价格标签"] },
+    { term: "交接班", members: ["交班", "接班"] },
+    { term: "陈列", members: ["摆货", "排面"] },
+    { term: "促销", members: ["打折", "特价", "满减"] },
   ],
 };
 
 const RETAIL_DEFAULTS = {
   CHAT_PLACEHOLDER: "问问门店规范、商品、促销…",
   CHAT_EMPTY_HINT: "问问门店规范、商品、促销，回答会标出原文出处，可以接着追问。",
-  SUGGESTED_QUESTIONS: ["临期商品怎么处理？", "鲜食晚上几点下架？", "收银长短款怎么上报？", "促销价签多久检查一次？"],
+  SUGGESTED_QUESTIONS: ["临期商品怎么处理？", "鲜食晚上几点下架？", "收银长短款怎么处理？", "促销价签多久检查一次？"],
   REFUSAL_MESSAGE: "知识库里没有找到能回答这个问题的可靠依据，建议换个问法，或联系店长确认。",
 };
 
@@ -131,8 +127,8 @@ const problem = (status: number, code: string, detail: string) =>
 const settingKey = (raw: unknown) => (KEYS.includes(raw as SettingKey) ? (raw as SettingKey) : null);
 
 export const settingHandlers = [
-  // 登录页要用，不需要登录。
-  http.get("/api/settings/branding", () =>
+  // 登录页要用，不需要登录；和登录接口一样在 /api/auth 下。
+  http.get("/api/auth/branding", () =>
     HttpResponse.json({
       name: valueOf<string>("BRAND_NAME"),
       tagline: valueOf<string>("BRAND_TAGLINE"),
