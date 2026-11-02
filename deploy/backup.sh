@@ -28,8 +28,9 @@ compose exec -T db pg_dump -U rag -d rag -Fc > "$target/db.dump"
 [ -s "$target/db.dump" ] || die "数据库导出为空"
 
 info "打包上传文件"
-compose run --rm --no-deps --user 0 -v "$target:/backup" --entrypoint tar app \
-  -czf /backup/files.tar.gz -C /data/files .
+# 容器里以 root 打包（上传文件属于运行用户 10001），打完把文件交给执行脚本的账号，后面才能改权限、算校验和。
+compose run --rm --no-deps --user 0 -v "$target:/backup" --entrypoint sh app -c \
+  "tar -czf /backup/files.tar.gz -C /data/files . && chown $(id -u):$(id -g) /backup/files.tar.gz"
 
 echo "$version" > "$target/VERSION"
 (cd "$target" && checksum db.dump files.tar.gz VERSION > SHA256SUMS)
