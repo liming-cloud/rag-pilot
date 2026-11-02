@@ -4,10 +4,10 @@ import com.liming.rag.answering.api.Answer;
 import com.liming.rag.answering.domain.AnswerRecord;
 import com.liming.rag.answering.domain.AnswerRecordRepository;
 import com.liming.rag.identity.api.UserDirectory;
+import com.liming.rag.settings.api.AnsweringSettings;
 import com.liming.rag.shared.TenantId;
 import com.liming.rag.shared.UserId;
 import java.time.LocalDate;
-import java.time.ZoneId;
 import java.util.List;
 import java.util.Locale;
 import org.springframework.stereotype.Service;
@@ -22,24 +22,23 @@ public class AnswerLogService {
     /** 使用统计最多看多少天。 */
     static final int MAX_STATS_DAYS = 90;
 
-    /** 门店在国内，统计的“一天”按北京时间划分。 */
-    public static final ZoneId STATS_ZONE = ZoneId.of("Asia/Shanghai");
-
     private final AnswerRecordRepository records;
     private final AnswerReviews reviews;
     private final AnswerStatistics statistics;
     private final UserDirectory users;
+    private final AnsweringSettings settings;
 
     AnswerLogService(AnswerRecordRepository records, AnswerReviews reviews, AnswerStatistics statistics,
-            UserDirectory users) {
+            UserDirectory users, AnsweringSettings settings) {
         this.records = records;
         this.reviews = reviews;
         this.statistics = statistics;
         this.users = users;
+        this.settings = settings;
     }
 
     /**
-     * 最近 {@code days} 天（含今天）的使用统计。
+     * 最近 {@code days} 天（含今天）的使用统计，“一天”按部署配置的统计时区划分（D-045）。
      *
      * @throws AnsweringException 天数不在 1 到 {@value #MAX_STATS_DAYS} 之间
      */
@@ -48,8 +47,9 @@ public class AnswerLogService {
         if (days < 1 || days > MAX_STATS_DAYS) {
             throw invalid("统计天数只能是 1 到 " + MAX_STATS_DAYS + " 天");
         }
-        var today = LocalDate.now(STATS_ZONE);
-        return statistics.usage(tenantId, today.minusDays(days - 1L), today);
+        var zone = settings.statsZone();
+        var today = LocalDate.now(zone);
+        return statistics.usage(tenantId, today.minusDays(days - 1L), today, zone);
     }
 
     /**
@@ -69,8 +69,9 @@ public class AnswerLogService {
         if (days != null && (days < 1 || days > MAX_STATS_DAYS)) {
             throw invalid("天数只能是 1 到 " + MAX_STATS_DAYS + " 天");
         }
+        var zone = settings.statsZone();
         var since = days == null ? null
-                : LocalDate.now(STATS_ZONE).minusDays(days - 1L).atStartOfDay(STATS_ZONE).toOffsetDateTime();
+                : LocalDate.now(zone).minusDays(days - 1L).atStartOfDay(zone).toOffsetDateTime();
         var trimmed = keyword == null || keyword.isBlank() ? null : keyword.strip();
         var found = reviews.page(tenantId, new AnswerReview.Query(parsedFilter, parsedStatus, since, trimmed,
                 new Paged.Request(page, size)));

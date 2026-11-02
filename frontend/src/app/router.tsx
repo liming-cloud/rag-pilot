@@ -8,11 +8,12 @@ import { KnowledgeDetailPage } from "@/features/knowledge/KnowledgeDetailPage";
 import { KnowledgePage } from "@/features/knowledge/KnowledgePage";
 import { RolesPage } from "@/features/roles/RolesPage";
 import { ModelsPage } from "@/features/models/ModelsPage";
+import { SettingsPage } from "@/features/settings/SettingsPage";
 import { StatsPage } from "@/features/stats/StatsPage";
 import { UsersPage } from "@/features/users/UsersPage";
 import { getToken } from "@/lib/auth";
 import { AdminLayout } from "./AdminLayout";
-import { AppShell, RequirePasswordChanged, RequirePermission } from "./AppShell";
+import { AdminHome, AppShell, RequirePasswordChanged, RequirePermission } from "./AppShell";
 
 /** 没有令牌时先去登录；令牌过期由 authFetch 收到 401 时处理。管理员重置过密码时先去改密码。 */
 function RequireAuth({ children }: { children: ReactNode }) {
@@ -47,7 +48,7 @@ export const routes: RouteObject[] = [
       </RequireAuth>
     ),
     children: [
-      { index: true, element: guarded("kb:view", <KnowledgePage />) },
+      { index: true, element: <AdminHome /> },
       { path: "knowledge", element: guarded("kb:view", <KnowledgePage />) },
       { path: "knowledge/:knowledgeBaseId", element: guarded("kb:view", <KnowledgeDetailPage />) },
       { path: "users", element: guarded("user:view", <UsersPage />) },
@@ -55,6 +56,7 @@ export const routes: RouteObject[] = [
       { path: "answers", element: guarded("answer:view", <AnswersPage />) },
       { path: "stats", element: guarded("stats:view", <StatsPage />) },
       { path: "models", element: guarded("model:view", <ModelsPage />) },
+      { path: "settings", element: guarded("setting:view", <SettingsPage />) },
     ],
   },
 ];

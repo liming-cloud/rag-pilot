@@ -133,7 +133,7 @@ public class ConversationAskService {
     private Answer answer(Pending pending, Events events) {
         var context = pending.context();
         if (context.knowledgeBaseIds().isEmpty()) {
-            return Answer.refused(Answer.RefusalReason.NO_EVIDENCE, null);
+            return answers.refusal(Answer.RefusalReason.NO_EVIDENCE, null);
         }
         var plan = SearchPlanner.direct(pending.question());
         String generationHistory = "";

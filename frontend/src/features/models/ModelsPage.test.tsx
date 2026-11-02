@@ -4,7 +4,7 @@ import { createMemoryRouter, RouterProvider } from "react-router";
 import { signInAs } from "@/mocks/identity";
 import { ModelsPage } from "./ModelsPage";
 
-function renderPage(path = "/admin/models") {
+function renderPage(path = "/admin/models?tab=usages") {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
   const router = createMemoryRouter([{ path: "/admin/models", element: <ModelsPage /> }], { initialEntries: [path] });
   render(
@@ -29,9 +29,19 @@ describe("模型管理页", () => {
   beforeEach(() => signInAs("admin"));
   afterEach(() => window.history.pushState({}, "", "/"));
 
-  it("分三个标签，标签记在地址里；默认看各用途的模型，嵌入只读", async () => {
-    const router = renderPage();
+  it("分三个标签，服务商在前、默认打开；标签记在地址里；嵌入只读", async () => {
+    const router = renderPage("/admin/models");
 
+    expect((await screen.findAllByRole("tab")).map((tab) => tab.textContent)).toEqual([
+      "服务商",
+      "用途与模型",
+      "变更记录",
+    ]);
+    expect(screen.getByRole("tab", { name: "服务商" })).toHaveAttribute("aria-selected", "true");
+    expect(await within(screen.getByRole("table", { name: "服务商" })).findByText("••••8f2a")).toBeInTheDocument();
+
+    await openTab("用途与模型");
+    expect(router.state.location.search).toBe("?tab=usages");
     const answer = await usageRow("回答");
     expect(within(answer).getByText("DeepSeek 官方")).toBeInTheDocument();
     expect(within(answer).getByText("界面配置")).toBeInTheDocument();
@@ -41,8 +51,7 @@ describe("模型管理页", () => {
     expect(within(embedding).queryByRole("button")).not.toBeInTheDocument();
 
     await openTab("服务商");
-    expect(router.state.location.search).toBe("?tab=providers");
-    expect(await within(screen.getByRole("table", { name: "服务商" })).findByText("••••8f2a")).toBeInTheDocument();
+    expect(router.state.location.search).toBe("");
   });
 
   it("带组织前缀的模型名：名称和前缀分两行，悬停看全名", async () => {
@@ -102,7 +111,7 @@ describe("模型管理页", () => {
     expect(await within(dialog).findByText(/没有提供模型列表，请手动填写/)).toBeInTheDocument();
   });
 
-  it("添加服务商后密钥只显示后 4 位；在用的服务商不能删除，不在用的可以", async () => {
+  it("添加服务商后密钥只显示后 4 位；在用的服务商不能删除，不在用的确认后可以删", async () => {
     renderPage("/admin/models?tab=providers");
     fireEvent.click(await screen.findByRole("button", { name: "添加服务商" }));
     const form = await screen.findByRole("form", { name: "添加服务商" });
@@ -117,6 +126,17 @@ describe("模型管理页", () => {
     expect(providers).not.toHaveTextContent("sk-test");
     expect(within(providers).getByRole("button", { name: "删除 DeepSeek 官方" })).toBeDisabled();
     fireEvent.click(within(providers).getByRole("button", { name: "删除 门店机房 vLLM" }));
+    const confirm = await screen.findByRole("dialog", { name: "删除服务商“门店机房 vLLM”？" });
+    fireEvent.click(within(confirm).getByRole("button", { name: "取消" }));
+    await vi.waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(within(providers).getByText("门店机房 vLLM")).toBeInTheDocument();
+
+    fireEvent.click(within(providers).getByRole("button", { name: "删除 门店机房 vLLM" }));
+    fireEvent.click(
+      within(await screen.findByRole("dialog", { name: "删除服务商“门店机房 vLLM”？" })).getByRole("button", {
+        name: "删除",
+      }),
+    );
     await vi.waitFor(() => expect(within(providers).queryByText("门店机房 vLLM")).not.toBeInTheDocument());
   });
 

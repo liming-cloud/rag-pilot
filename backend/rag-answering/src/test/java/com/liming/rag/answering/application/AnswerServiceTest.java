@@ -30,7 +30,7 @@ class AnswerServiceTest {
         return new AnswerService(query -> hits, (query, documents) -> scores, (system, user) -> {
             prompts.add(user);
             return reply;
-        }, new AnsweringProperties(30, 8, 0.3, false, 0.03, Duration.ofSeconds(3)));
+        }, new AnsweringProperties(30, 8, 0.3, false, 0.03, Duration.ofSeconds(3)), TestSettings.RETAIL);
     }
 
     @Test
@@ -44,6 +44,39 @@ class AnswerServiceTest {
         assertThat(answer.citations()).singleElement()
                 .satisfies(citation -> assertThat(citation.documentName()).isEqualTo("商品陈列.txt"));
         assertThat(prompts.getFirst()).contains("[1] 来源：商品陈列.txt / 饮料").doesNotContain("收银规范");
+    }
+
+    @Test
+    @DisplayName("检索用词表扩展后的问题，给模型的仍是原问题；系统提示词用行业包的角色（D-045）")
+    void expandsSearchButNotPrompt() {
+        var searched = new ArrayList<String>();
+        var systems = new ArrayList<String>();
+        var answer = new AnswerService(query -> {
+            searched.add(query.text());
+            return List.of(SHELF);
+        }, (query, documents) -> List.of(0.9), (system, user) -> {
+            systems.add(system);
+            prompts.add(user);
+            return "在 03 号货架[1]。";
+        }, new AnsweringProperties(30, 8, 0.3, false, 0.03, Duration.ofSeconds(3)), TestSettings.RETAIL)
+                .ask(TENANT, USER, List.of(1L), "便当饭团晚上几点得撤下来啊");
+
+        assertThat(answer.refused()).isFalse();
+        assertThat(searched).containsExactly("便当饭团晚上几点得撤下来啊 鲜食");
+        assertThat(prompts.getFirst()).contains("便当饭团晚上几点得撤下来啊").doesNotContain("撤下来啊 鲜食");
+        assertThat(systems.getFirst()).startsWith("你是连锁门店的运营助手");
+    }
+
+    @Test
+    @DisplayName("拒答话术用系统设置里当前的")
+    void refusesWithConfiguredMessage() {
+        var settings = new TestSettings(TestSettings.RETAIL_PACK, "资料里没有依据，请联系总部。");
+        var answer = new AnswerService(query -> List.of(), (query, documents) -> List.of(), (system, user) -> "x",
+                new AnsweringProperties(30, 8, 0.3, false, 0.03, Duration.ofSeconds(3)), settings)
+                .ask(TENANT, USER, List.of(1L), "问");
+
+        assertThat(answer.refused()).isTrue();
+        assertThat(answer.text()).isEqualTo("资料里没有依据，请联系总部。");
     }
 
     @Test
@@ -153,7 +186,7 @@ class AnswerServiceTest {
             }
         };
         return new AnswerService(query -> List.of(SHELF), (query, documents) -> List.of(score), chat,
-                new AnsweringProperties(30, 8, 0.3, false, 0.03, Duration.ofSeconds(3)));
+                new AnsweringProperties(30, 8, 0.3, false, 0.03, Duration.ofSeconds(3)), TestSettings.RETAIL);
     }
 
     /**
@@ -199,7 +232,7 @@ class AnswerServiceTest {
         };
         return new AnswerService(query -> List.of(SHELF),
                 (query, documents) -> List.of(query.contains("货架") ? 0.9 : originalScore), chat,
-                new AnsweringProperties(30, 8, 0.3, enabled, 0.03, Duration.ofMillis(300)));
+                new AnsweringProperties(30, 8, 0.3, enabled, 0.03, Duration.ofMillis(300)), TestSettings.RETAIL);
     }
 
     @Test
@@ -304,7 +337,7 @@ class AnswerServiceTest {
             return query.text().contains("冷冻") ? List.of(FROZEN) : List.of(SHELF);
         }, (query, documents) -> documents.stream()
                 .map(document -> (query.contains("冷冻") == document.contains("冷冻")) ? 0.9 : 0.05).toList(),
-                chat, new AnsweringProperties(30, 8, 0.3, false, 0.03, Duration.ofSeconds(3)));
+                chat, new AnsweringProperties(30, 8, 0.3, false, 0.03, Duration.ofSeconds(3)), TestSettings.RETAIL);
     }
 
     @Test
@@ -358,7 +391,7 @@ class AnswerServiceTest {
         var answer = new AnswerService(query -> List.of(listed), (query, documents) -> List.of(0.9), (system, user) -> {
             prompts.add(user);
             return "差额超过 20 元须填写说明单[1]。";
-        }, new AnsweringProperties(30, 8, 0.3, false, 0.03, Duration.ofSeconds(3))).ask(TENANT, USER, List.of(), "差额多少要写说明");
+        }, new AnsweringProperties(30, 8, 0.3, false, 0.03, Duration.ofSeconds(3)), TestSettings.RETAIL).ask(TENANT, USER, List.of(), "差额多少要写说明");
 
         assertThat(prompts.getFirst()).contains("交班时双方清点钱箱。\n差额超过 20 元").doesNotContain("2. 差额");
         assertThat(answer.citations().getFirst().excerpt()).startsWith("1. 交班时");

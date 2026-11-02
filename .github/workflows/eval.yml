@@ -38,6 +38,7 @@ on:
       - backend/rag-knowledge/**
       - backend/rag-answering/**
       - backend/rag-evaluation/**
+      - backend/rag-settings/**
       - backend/rag-app/src/test/resources/eval/**
       - backend/rag-app/src/main/resources/application.yml
       - .github/workflows/eval.yml

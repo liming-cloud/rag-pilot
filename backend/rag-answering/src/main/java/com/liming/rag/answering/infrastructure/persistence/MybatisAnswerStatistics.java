@@ -1,11 +1,11 @@
 package com.liming.rag.answering.infrastructure.persistence;
 
-import com.liming.rag.answering.application.AnswerLogService;
 import com.liming.rag.answering.application.AnswerStatistics;
 import com.liming.rag.answering.application.UsageStats;
 import com.liming.rag.shared.TenantId;
 import java.sql.Date;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -25,14 +25,14 @@ class MybatisAnswerStatistics implements AnswerStatistics {
     }
 
     @Override
-    public UsageStats usage(TenantId tenantId, LocalDate from, LocalDate to) {
+    public UsageStats usage(TenantId tenantId, LocalDate from, LocalDate to, ZoneId zone) {
         long tenant = tenantId.value();
-        var start = from.atStartOfDay(AnswerLogService.STATS_ZONE).toOffsetDateTime();
-        var end = to.plusDays(1).atStartOfDay(AnswerLogService.STATS_ZONE).toOffsetDateTime();
+        var start = from.atStartOfDay(zone).toOffsetDateTime();
+        var end = to.plusDays(1).atStartOfDay(zone).toOffsetDateTime();
 
         var totals = mapper.totals(tenant, start, end);
         var byDay = new HashMap<LocalDate, Map<String, Object>>();
-        for (var row : mapper.daily(tenant, start, end, AnswerLogService.STATS_ZONE.getId())) {
+        for (var row : mapper.daily(tenant, start, end, zone.getId())) {
             byDay.put(date(row.get("day")), row);
         }
         var daily = from.datesUntil(to.plusDays(1)).map(day -> {
@@ -40,7 +40,7 @@ class MybatisAnswerStatistics implements AnswerStatistics {
             return new UsageStats.Day(day, count(row, "questions"), count(row, "refused"), count(row, "disliked"));
         }).toList();
 
-        return new UsageStats(from, to,
+        return new UsageStats(from, to, zone.getId(),
                 new UsageStats.Totals(count(totals, "questions"), count(totals, "askers"), count(totals, "refused"),
                         count(totals, "rated"), count(totals, "liked"), count(totals, "disliked"),
                         count(totals, "open_reviews")),

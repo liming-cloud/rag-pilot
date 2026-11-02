@@ -33,7 +33,7 @@ describe("角色与权限页", () => {
     const answers = await menuRow("回答记录");
     expect(within(answers).getByText("可以")).toBeInTheDocument();
     expect(within(answers).getByText("无")).toBeInTheDocument();
-    expect(within(await menuRow("使用统计")).getByText("导出")).toBeInTheDocument();
+    expect(within(await menuRow("运营概览")).getByText("导出")).toBeInTheDocument();
     expect(within(await menuRow("用户管理")).getByText("不可以")).toBeInTheDocument();
   });
 
@@ -61,7 +61,7 @@ describe("角色与权限页", () => {
     renderPage();
     fireEvent.click(await screen.findByRole("button", { name: "新建角色" }));
     fireEvent.change(await screen.findByLabelText("角色名称"), { target: { value: "区域经理" } });
-    fireEvent.click(within(await menuRow("使用统计")).getByRole("button", { name: "导出" }));
+    fireEvent.click(within(await menuRow("运营概览")).getByRole("button", { name: "导出" }));
     fireEvent.click(screen.getAllByRole("button", { name: "新建角色" }).at(-1)!);
 
     expect(await within(screen.getByRole("navigation", { name: "角色" })).findByText("区域经理")).toBeInTheDocument();

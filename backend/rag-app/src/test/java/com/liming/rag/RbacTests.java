@@ -113,6 +113,11 @@ class RbacTests {
                 new Endpoint(Permissions.MODEL_UPDATE, HttpMethod.POST, "/api/model-providers",
                         Map.of("name", "权限测试服务商", "baseUrl", "http://127.0.0.1:9/v1")),
                 new Endpoint(Permissions.MODEL_UPDATE, HttpMethod.DELETE, "/api/model-providers/999999", null),
+                new Endpoint(Permissions.CHAT_USE, HttpMethod.GET, "/api/settings/chat", null),
+                new Endpoint(Permissions.SETTING_VIEW, HttpMethod.GET, "/api/settings", null),
+                new Endpoint(Permissions.SETTING_UPDATE, HttpMethod.PUT, "/api/settings/CHAT_PLACEHOLDER",
+                        Map.of("value", "权限测试")),
+                new Endpoint(Permissions.SETTING_UPDATE, HttpMethod.DELETE, "/api/settings/CHAT_PLACEHOLDER", null),
                 new Endpoint(Permissions.ROLE_DELETE, HttpMethod.DELETE, "/api/roles/{role}", null));
 
         var allowed = new HashMap<String, String>();

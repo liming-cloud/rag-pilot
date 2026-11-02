@@ -66,6 +66,34 @@ export function productNameProblems(file: string, source: string): string[] {
   );
 }
 
+/**
+ * 通用内核 + 行业包（D-045）：行业内容只写在后端的行业包里，前端非测试、非 mocks/ 的代码（含注释）里不出现任何行业包的
+ * 行业标志词和词表里的词。后端主代码由 KernelNeutralityTest 用同一份行业包检查。
+ */
+const PACKS = path.resolve(src, "../../backend/rag-settings/src/main/resources/industry-packs");
+
+/** 从 pack.yml 里取出行业标志词和词表；这些列表在行业包里用 [a, b] 的写法。 */
+export function industryWordsOf(yaml: string): string[] {
+  const words: string[] = [];
+  for (const [, list] of yaml.matchAll(/^\s*(?:markers|members):\s*\[([^\]]*)\]/gm)) {
+    words.push(...(list ?? "").split(",").map((word) => word.trim()));
+  }
+  for (const [, term] of yaml.matchAll(/^\s*-\s*term:\s*(\S+)/gm)) {
+    words.push(term ?? "");
+  }
+  return words.filter(Boolean);
+}
+
+export function industryWordProblems(file: string, source: string, words: string[]): string[] {
+  if (file.startsWith("mocks/") || /\.test\.tsx?$/.test(file)) return [];
+  return words
+    .filter((word) => source.includes(word))
+    .map((word) => `${file} 出现了行业词“${word}”：行业内容放进行业包，界面从接口读取`);
+}
+
+const industryWords = () =>
+  readdirSync(PACKS).flatMap((pack) => industryWordsOf(readFileSync(path.join(PACKS, pack, "pack.yml"), "utf8")));
+
 describe("前端目录结构", () => {
   it("src 下只有约定的目录，components 下只放 shadcn 的 ui", () => {
     expect(readdirSync(src).filter((name) => !ALLOWED_TOP.includes(name))).toEqual([]);
@@ -106,6 +134,31 @@ describe("前端目录结构", () => {
     expect(productNameProblems("features/chat/ChatPage.tsx", "<p>请说明答案的出处</p>")).toEqual([]);
     expect(productNameProblems("features/auth/LoginPage.test.tsx", "明答")).toEqual([]);
     expect(productNameProblems("mocks/identity.ts", "门店运营知识库")).toEqual([]);
+  });
+
+  it("非测试、非假接口的代码里没有行业词（D-045）", () => {
+    const words = industryWords();
+    expect(words).toEqual(expect.arrayContaining(["门店", "鲜食", "便当"]));
+    const problems = walk(src)
+      .filter((file) => /\.tsx?$/.test(file))
+      .flatMap((file) =>
+        industryWordProblems(path.relative(src, file).split(path.sep).join("/"), readFileSync(file, "utf8"), words),
+      );
+    expect(problems).toEqual([]);
+  });
+
+  it("写了行业词会被指出；测试和假接口不算；行业包里的标志词、上位词、下位词都会读到", () => {
+    expect(industryWordProblems("features/chat/ChatPage.tsx", "问问门店规范…", ["门店"])).toHaveLength(1);
+    expect(industryWordProblems("features/chat/ChatPage.tsx", "输入问题…", ["门店"])).toEqual([]);
+    expect(industryWordProblems("features/chat/ChatPage.test.tsx", "门店", ["门店"])).toEqual([]);
+    expect(industryWordProblems("mocks/settings.ts", "门店", ["门店"])).toEqual([]);
+    expect(industryWordsOf("markers: [甲, 乙]\nvocabulary:\n  - term: 丙\n    members: [丁, 戊]\n")).toEqual([
+      "甲",
+      "乙",
+      "丁",
+      "戊",
+      "丙",
+    ]);
   });
 
   it("直接写原生元素会被指出，用组件不会", () => {

@@ -6,6 +6,7 @@ import type { UsageStats } from "@/features/stats/api";
 import { conversationHandlers, resetConversations } from "./conversations";
 import { accountName, currentIdentity, identityHandlers, resetIdentity } from "./identity";
 import { modelHandlers, resetModels } from "./models";
+import { resetSettings, settingHandlers } from "./settings";
 import { matches, paginate } from "./page";
 
 /** 假接口与后端契约保持一致；示例数据只用于原型和测试。 */
@@ -94,6 +95,7 @@ export function resetMockData() {
   roleGrants = { 1: [4] };
   resetIdentity();
   resetModels();
+  resetSettings();
   resetConversations();
 }
 
@@ -213,6 +215,7 @@ function sampleStats(days: number): UsageStats {
   return {
     from: daily[0]!.date,
     to: daily.at(-1)!.date,
+    zone: "Asia/Shanghai",
     totals: {
       questions,
       askers: Math.min(23, 8 + days),
@@ -275,6 +278,7 @@ async function upload(knowledgeBaseId: number, request: Request, replacesDocumen
 export const handlers = [
   ...identityHandlers,
   ...modelHandlers,
+  ...settingHandlers,
   http.get("/api/answers", ({ request }) => {
     const url = new URL(request.url);
     const filter = url.searchParams.get("filter");

@@ -1,6 +1,7 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Download, Search } from "lucide-react";
 import { type FormEvent, useState } from "react";
+import { useSearchParams } from "react-router";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -28,14 +29,17 @@ import {
 } from "./api";
 
 const PAGE_SIZE = 20;
+const FILTERS: AnswerFilter["filter"][] = ["disliked", "refused", "all"];
 
 /**
  * 回答记录（D-039）：按类型、处理状态、时间范围和问题关键词筛选，分页表格只显示一行摘要；点一行在弹窗里看完整的
- * 问答、留言和引用，并在弹窗里重新回答、标记已处理。默认看待处理的差评。
+ * 问答、留言和引用，并在弹窗里重新回答、标记已处理。默认看待处理的差评；从运营概览的“待处理”进来时
+ * 地址带 ?filter=all，看全部待处理。
  */
 export function AnswersPage() {
+  const [params] = useSearchParams();
   const [filter, setFilter] = useState<AnswerFilter>({
-    filter: "disliked",
+    filter: FILTERS.find((value) => value === params.get("filter")) ?? "disliked",
     status: "open",
     days: 30,
     page: 1,

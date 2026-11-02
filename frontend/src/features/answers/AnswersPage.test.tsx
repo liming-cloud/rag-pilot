@@ -1,17 +1,20 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { http, HttpResponse } from "msw";
+import { createMemoryRouter, RouterProvider } from "react-router";
 import { server } from "@/mocks/server";
 import { AnswersPage } from "./AnswersPage";
 import { signInAs } from "@/mocks/identity";
 
-function renderPage() {
+function renderPage(path = "/") {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const router = createMemoryRouter([{ path: "/", element: <AnswersPage /> }], { initialEntries: [path] });
   render(
     <QueryClientProvider client={client}>
-      <AnswersPage />
+      <RouterProvider router={router} />
     </QueryClientProvider>,
   );
+  return router;
 }
 
 describe("回答记录页", () => {
@@ -26,6 +29,12 @@ describe("回答记录页", () => {
     fireEvent.click(await row(question));
     return screen.findByRole("dialog", { name: question });
   }
+
+  it("地址带 ?filter=all 时看全部待处理（从运营概览的“待处理”进来）", async () => {
+    renderPage("/?filter=all");
+    expect(await screen.findByLabelText("类型")).toHaveValue("all");
+    await row("门店几点打烊？");
+  });
 
   it("默认看最近 30 天待处理的差评，分页显示一行摘要", async () => {
     renderPage();

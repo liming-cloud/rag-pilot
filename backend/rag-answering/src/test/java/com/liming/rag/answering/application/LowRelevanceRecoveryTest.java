@@ -50,7 +50,8 @@ class LowRelevanceRecoveryTest {
 
     /** 改写模型固定回 {@code rewritten}；改写后的问题重新检索、重排后得到 {@code rewrittenScore}。 */
     private static LowRelevanceRecovery recovery(String rewritten, double rewrittenScore) {
-        var rewriter = new LowRelevanceRewriter((system, user) -> rewritten, Duration.ofSeconds(1));
+        var rewriter = new LowRelevanceRewriter((system, user) -> rewritten, Duration.ofSeconds(1),
+                TestSettings.RETAIL_PACK);
         return new LowRelevanceRecovery(query -> List.of(document(0)),
                 (query, documents) -> query.text().equals(ORIGINAL.text()) ? documents : ranked(rewrittenScore),
                 rewriter, 0.03);

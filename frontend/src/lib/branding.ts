@@ -3,7 +3,7 @@ import { useEffect } from "react";
 import { json } from "./api";
 
 /**
- * 产品名称和登录页文案（D-042），由部署方配置，后端 GET /api/auth/branding 给出，不需要登录。
+ * 产品名称和登录页文案（D-042），由部署方配置，后端 GET /api/auth/branding 给出（D-045 起由系统设置提供，管理员可在界面改），不需要登录。
  * 内核不写死行业名称：界面上出现产品名称的地方都从这里取。
  */
 export type Branding = {

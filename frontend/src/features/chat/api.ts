@@ -186,3 +186,17 @@ async function readEvents<T>(
     }
   }
 }
+
+/** 问答页的文案和推荐问题（D-045）：默认来自行业包，管理员可在系统设置里改。 */
+export type ChatTexts = { placeholder: string; emptyHint: string; suggestedQuestions: string[] };
+
+/** 读取失败或还没读到时用的内核默认值，不带行业内容。 */
+export const DEFAULT_CHAT_TEXTS: ChatTexts = {
+  placeholder: "输入问题…",
+  emptyHint: "问问知识库里的内容，回答会标出原文出处，可以接着追问。",
+  suggestedQuestions: [],
+};
+
+export async function fetchChatTexts(): Promise<ChatTexts> {
+  return json(await authFetch("/api/settings/chat"), "读取问答页文案失败");
+}

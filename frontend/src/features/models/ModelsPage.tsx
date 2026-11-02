@@ -39,22 +39,22 @@ import {
 } from "./api";
 
 const TABS = [
-  { key: "usages", label: "用途与模型" },
   { key: "providers", label: "服务商" },
+  { key: "usages", label: "用途与模型" },
   { key: "changes", label: "变更记录" },
 ] as const;
 
 type Tab = (typeof TABS)[number]["key"];
 
 /**
- * 模型管理（#120、D-043）：分“用途与模型”“服务商”“变更记录”三个标签，标签记在地址里，刷新后不丢。
+ * 模型管理（#120、D-043）：分“服务商”“用途与模型”“变更记录”三个标签（先有服务商，才能给用途选模型），标签记在地址里，刷新后不丢。
  * 换模型在弹窗里做：从服务商的模型列表里选（不提供列表时手填），“测试并保存”一步完成，测不通不保存；
  * 恢复变更前先确认。嵌入模型只显示。
  */
 export function ModelsPage() {
   const settings = useQuery({ queryKey: ["model-settings"], queryFn: fetchModelSettings });
   const [params, setParams] = useSearchParams();
-  const tab: Tab = TABS.some((item) => item.key === params.get("tab")) ? (params.get("tab") as Tab) : "usages";
+  const tab: Tab = TABS.some((item) => item.key === params.get("tab")) ? (params.get("tab") as Tab) : "providers";
 
   return (
     <main className="mx-auto flex max-w-6xl flex-col gap-4 p-6 md:p-8">
@@ -84,7 +84,7 @@ export function ModelsPage() {
                 type="button"
                 role="tab"
                 aria-selected={tab === item.key}
-                onClick={() => setParams(item.key === "usages" ? {} : { tab: item.key })}
+                onClick={() => setParams(item.key === "providers" ? {} : { tab: item.key })}
                 className={cn(
                   "-mb-px border-b-2 px-4 py-2 text-sm",
                   tab === item.key ? "border-primary font-medium" : "border-transparent text-muted-foreground",
@@ -335,9 +335,13 @@ function UsageDialog({ usage, providers, onDone }: { usage: UsageConfig; provide
 function ProvidersTab({ settings }: { settings: ModelSettings }) {
   const queryClient = useQueryClient();
   const [dialog, setDialog] = useState<Provider | "new" | null>(null);
+  const [removing, setRemoving] = useState<Provider | null>(null);
   const remove = useMutation({
     mutationFn: (id: number) => deleteProvider(id),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["model-settings"] }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["model-settings"] });
+      setRemoving(null);
+    },
   });
 
   return (
@@ -353,27 +357,29 @@ function ProvidersTab({ settings }: { settings: ModelSettings }) {
           </Button>
         </Can>
       </div>
-      {remove.isError && <p className="text-sm text-destructive">{remove.error.message}</p>}
       <div className="rounded-lg border bg-card">
         <Table aria-label="服务商" className="table-fixed">
           <TableHeader>
             <TableRow>
-              <TableHead className="w-56">名称</TableHead>
-              <TableHead>地址</TableHead>
-              <TableHead className="w-28">密钥</TableHead>
-              <TableHead className="w-48">在用的用途</TableHead>
-              <TableHead className="w-36 text-right">操作</TableHead>
+              <TableHead>服务商</TableHead>
+              <TableHead className="w-24">密钥</TableHead>
+              <TableHead className="w-36">在用的用途</TableHead>
+              <TableHead className="w-32 text-right">操作</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {settings.providers.map((provider) => (
               <TableRow key={provider.id ?? ENV}>
                 <TableCell className="py-3">
-                  <div className="truncate">{provider.name}</div>
-                  {provider.source === "ENVIRONMENT" && <SourceBadge source="ENVIRONMENT" />}
-                </TableCell>
-                <TableCell className="truncate font-mono text-sm text-muted-foreground" title={provider.baseUrl}>
-                  {provider.baseUrl}
+                  <div className="flex min-w-0 items-center gap-2">
+                    <span className="truncate" title={provider.name}>
+                      {provider.name}
+                    </span>
+                    {provider.source === "ENVIRONMENT" && <SourceBadge source="ENVIRONMENT" />}
+                  </div>
+                  <div className="truncate font-mono text-xs text-muted-foreground" title={provider.baseUrl}>
+                    {provider.baseUrl}
+                  </div>
                 </TableCell>
                 <TableCell className="font-mono text-sm">
                   {provider.apiKeyLast4 ? `••••${provider.apiKeyLast4}` : "无"}
@@ -398,9 +404,12 @@ function ProvidersTab({ settings }: { settings: ModelSettings }) {
                         variant="ghost"
                         size="sm"
                         aria-label={`删除 ${provider.name}`}
-                        disabled={provider.usedBy.length > 0 || remove.isPending}
+                        disabled={provider.usedBy.length > 0}
                         title={provider.usedBy.length > 0 ? "还有用途在用，先换掉才能删除" : undefined}
-                        onClick={() => remove.mutate(provider.id!)}
+                        onClick={() => {
+                          remove.reset();
+                          setRemoving(provider);
+                        }}
                       >
                         删除
                       </Button>
@@ -421,6 +430,29 @@ function ProvidersTab({ settings }: { settings: ModelSettings }) {
             masterKeyConfigured={settings.masterKeyConfigured}
             onDone={() => setDialog(null)}
           />
+        )}
+      </Dialog>
+      <Dialog open={removing !== null} onOpenChange={(open) => !open && setRemoving(null)}>
+        {removing && (
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>删除服务商“{removing.name}”？</DialogTitle>
+              <DialogDescription>保存的地址和密钥会一并删除，删除后要用得重新添加并录入密钥。</DialogDescription>
+            </DialogHeader>
+            {remove.isError && (
+              <p role="alert" className="text-sm text-destructive">
+                {remove.error.message}
+              </p>
+            )}
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setRemoving(null)}>
+                取消
+              </Button>
+              <Button onClick={() => remove.mutate(removing.id!)} disabled={remove.isPending}>
+                删除
+              </Button>
+            </DialogFooter>
+          </DialogContent>
         )}
       </Dialog>
     </section>
