@@ -16,7 +16,26 @@ export type KnowledgeDocument = {
   replacesDocumentId: number | null;
   /** 被替换的旧版本的文件名；分页后旧版本不一定在同一页，所以由后端直接给出。 */
   replacesFilename: string | null;
+  /** 生效日期（含当天），null 表示不限；日期按统计时区解释（#124）。 */
+  effectiveFrom: string | null;
+  /** 失效日期，当天仍有效，次日 0 点起不参与检索；null 表示长期有效。 */
+  expiresOn: string | null;
+  /** 后端按今天和提前提醒天数算好的状态，前端不自己比较日期（时区以后端为准）。 */
+  validity: Validity;
 };
+
+/** 有效期状态：有效、即将到期（提醒天数内）、已失效、未生效；后两种不参与检索和回答。 */
+export type Validity = "ACTIVE" | "EXPIRING" | "EXPIRED" | "PENDING";
+
+export const VALIDITY = {
+  ACTIVE: { label: "有效", variant: "success" },
+  EXPIRING: { label: "即将到期", variant: "default" },
+  EXPIRED: { label: "已失效", variant: "destructive" },
+  PENDING: { label: "未生效", variant: "outline" },
+} as const;
+
+/** 生效、失效日期，格式 yyyy-MM-dd，空表示不限。 */
+export type ValidityRange = { effectiveFrom: string | null; expiresOn: string | null };
 
 /** 管理端知识库列表的一行（D-039）。 */
 export type KnowledgeBaseSummary = {
@@ -26,6 +45,10 @@ export type KnowledgeBaseSummary = {
   failedCount: number;
   roleGrantCount: number;
   memberCount: number;
+  /** 提醒天数内到期的文档数。 */
+  expiringCount: number;
+  /** 已失效的文档数。 */
+  expiredCount: number;
 };
 
 /** 直接授权的账号，带上名字，不用为了显示名字再读全部账号。 */
@@ -34,6 +57,8 @@ export type Member = { userId: number; username: string; displayName: string };
 /** 管理端：按名称筛选、分页列出自己能访问的知识库。 */
 export async function fetchKnowledgeBasePage(filter: {
   keyword?: string;
+  /** 只看有即将到期或已失效文档的库。 */
+  validity?: "EXPIRING" | "EXPIRED" | null;
   page?: number;
   size?: number;
 }): Promise<Page<KnowledgeBaseSummary>> {
@@ -47,6 +72,7 @@ export async function fetchKnowledgeBase(id: number): Promise<KnowledgeBase> {
 export type DocumentFilter = {
   keyword?: string;
   status?: KnowledgeDocument["status"] | null;
+  validity?: Validity | null;
   page?: number;
   size?: number;
 };
@@ -101,14 +127,22 @@ export async function setRoleGrant(knowledgeBaseId: number, roleId: number, gran
   }
 }
 
-/** 后端同步完成解析和入库，返回的文档状态是 READY 或 FAILED（附原因）。 */
+/**
+ * 上传文档或新版本，返回的文档先是解析中，后台处理完变成可用或失败（附原因）。
+ * 可以顺带设有效期（doc:upload）；上传新版本时不传有效期则继承旧版本的失效日期。
+ */
 export async function uploadDocument(
   knowledgeBaseId: number,
   file: File,
   replacesDocumentId?: number,
+  validity?: ValidityRange,
 ): Promise<KnowledgeDocument> {
   const body = new FormData();
   body.append("file", file);
+  if (validity) {
+    body.append("effectiveFrom", validity.effectiveFrom ?? "");
+    body.append("expiresOn", validity.expiresOn ?? "");
+  }
   // 上传新版本是单独的接口（doc:replace），新版本处理成功后旧版本自动删除。
   const path = replacesDocumentId ? `/documents/${replacesDocumentId}/versions` : "/documents";
   const response = await authFetch(`/api/knowledge-bases/${knowledgeBaseId}${path}`, {
@@ -116,6 +150,27 @@ export async function uploadDocument(
     body,
   });
   return json(response, "上传失败");
+}
+
+/** 修改有效期（doc:update），保存后立即按新日期参与或退出检索。 */
+export async function updateValidity(
+  knowledgeBaseId: number,
+  documentId: number,
+  validity: ValidityRange,
+): Promise<KnowledgeDocument> {
+  const response = await authFetch(`/api/knowledge-bases/${knowledgeBaseId}/documents/${documentId}/validity`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(validity),
+  });
+  return json(response, "保存有效期失败");
+}
+
+/** 自己能访问的知识库里即将到期和已失效的文档数，供运营概览提醒。 */
+export type ExpirySummary = { expiring: number; expired: number; warningDays: number };
+
+export async function fetchExpirySummary(): Promise<ExpirySummary> {
+  return json(await authFetch("/api/knowledge-bases/expiry-summary"), "读取资料有效期失败");
 }
 
 /** 删除文档及其分块，之后不会再被检索到。 */

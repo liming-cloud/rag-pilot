@@ -27,6 +27,11 @@
             <groupId>${project.groupId}</groupId>
             <artifactId>rag-ai</artifactId>
         </dependency>
+        <!-- 只用 api 包：有效期按部署的统计时区算“今天”（D-046）。 -->
+        <dependency>
+            <groupId>${project.groupId}</groupId>
+            <artifactId>rag-settings</artifactId>
+        </dependency>
         <dependency>
             <groupId>org.springframework.modulith</groupId>
             <artifactId>spring-modulith-api</artifactId>

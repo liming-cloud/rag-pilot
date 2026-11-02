@@ -246,6 +246,38 @@
     ]
   },
   {
+    "id": "有效期-临期折扣",
+    "question": "现在临期商品打几折卖？",
+    "kind": "answerable",
+    "style": "有效期",
+    "expectedDocument": "临期与报损管理.md",
+    "keywords": [
+      "七折",
+      "7折",
+      "7 折"
+    ]
+  },
+  {
+    "id": "有效期-报损签字",
+    "question": "单日报损超过多少钱要店长签字？",
+    "kind": "answerable",
+    "style": "有效期",
+    "expectedDocument": "临期与报损管理.md",
+    "keywords": [
+      "500"
+    ]
+  },
+  {
+    "id": "有效期-积分规则",
+    "question": "现在消费一块钱积几分？多少分抵一元？",
+    "kind": "answerable",
+    "style": "有效期",
+    "expectedDocument": "会员与促销.md",
+    "keywords": [
+      "100"
+    ]
+  },
+  {
     "id": "年假",
     "question": "员工年假怎么申请？",
     "kind": "unanswerable",

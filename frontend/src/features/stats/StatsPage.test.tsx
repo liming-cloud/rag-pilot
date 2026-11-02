@@ -93,4 +93,22 @@ describe("运营概览页", () => {
     expect(await screen.findByText("这段时间还没有提问。")).toBeInTheDocument();
     expect(screen.getAllByText("-")).toHaveLength(3);
   });
+
+  it("有知识库权限时提醒即将到期和已失效的资料，链到知识库", async () => {
+    signInAs("admin");
+    renderPage();
+
+    const notice = await screen.findByRole("status");
+    expect(notice).toHaveTextContent("2 份将在 30 天内到期");
+    expect(notice).toHaveTextContent("1 份已失效，不再参与回答");
+    expect(within(notice).getByRole("link", { name: /去知识库处理/ })).toHaveAttribute("href", "/admin/knowledge");
+  });
+
+  it("没有知识库权限时不显示资料到期提醒", async () => {
+    signInAs("zhang");
+    renderPage();
+
+    await screen.findByRole("list", { name: "汇总" });
+    expect(screen.queryByText("资料有效期")).not.toBeInTheDocument();
+  });
 });

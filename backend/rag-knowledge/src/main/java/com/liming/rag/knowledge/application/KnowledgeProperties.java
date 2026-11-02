@@ -8,9 +8,17 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  *
  * @param ingestion 后台入库
  * @param storage   原始文件存储
+ * @param expiryWarningDays 失效日期在今天起多少天内算“即将到期”，管理端据此提醒（#124）
  */
 @ConfigurationProperties("rag.knowledge")
-public record KnowledgeProperties(@DefaultValue Ingestion ingestion, @DefaultValue Storage storage) {
+public record KnowledgeProperties(@DefaultValue Ingestion ingestion, @DefaultValue Storage storage,
+        @DefaultValue("30") int expiryWarningDays) {
+
+    public KnowledgeProperties {
+        if (expiryWarningDays < 1 || expiryWarningDays > 365) {
+            throw new IllegalArgumentException("rag.knowledge.expiry-warning-days 必须在 1 到 365 之间");
+        }
+    }
 
     /** @param concurrency 后台同时处理的文档数，限制对嵌入模型的并发调用 */
     public record Ingestion(@DefaultValue("2") int concurrency) {

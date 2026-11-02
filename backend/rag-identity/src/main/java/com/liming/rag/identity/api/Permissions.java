@@ -19,6 +19,7 @@ public final class Permissions {
     public static final String KB_DELETE = "kb:delete";
     public static final String DOC_UPLOAD = "doc:upload";
     public static final String DOC_REPLACE = "doc:replace";
+    public static final String DOC_UPDATE = "doc:update";
     public static final String DOC_DELETE = "doc:delete";
     public static final String KB_GRANT = "kb:grant";
 
@@ -62,7 +63,7 @@ public final class Permissions {
             new Group("对话", p(CHAT_USE, "使用问答"), List.of()),
             new Group("知识库管理", p(KB_VIEW, "进入页面"), List.of(p(KB_CREATE, "新建知识库"), p(KB_UPDATE, "改名"),
                     p(KB_DELETE, "删除知识库"), p(DOC_UPLOAD, "上传文档"), p(DOC_REPLACE, "上传新版本"),
-                    p(DOC_DELETE, "删除文档"), p(KB_GRANT, "授权"))),
+                    p(DOC_UPDATE, "修改资料信息"), p(DOC_DELETE, "删除文档"), p(KB_GRANT, "授权"))),
             new Group("用户管理", p(USER_VIEW, "进入页面"), List.of(p(USER_CREATE, "新建账号"),
                     p(USER_UPDATE, "修改与解锁"), p(USER_DISABLE, "停用与启用"), p(USER_RESET_PASSWORD, "重置密码"),
                     p(USER_ASSIGN_ROLE, "分配角色"), p(USER_IMPORT, "批量导入"))),

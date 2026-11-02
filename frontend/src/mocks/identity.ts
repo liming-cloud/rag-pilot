@@ -1,6 +1,6 @@
 import { http, HttpResponse } from "msw";
 import type { PermissionGroup, Role } from "@/features/roles/api";
-import type { Account } from "@/features/users/api";
+import type { Account, ImportProblem, ImportRow } from "@/features/users/api";
 import type { Me } from "@/lib/permissions";
 import { matches, paginate } from "./page";
 
@@ -22,6 +22,7 @@ export const permissionCatalog: PermissionGroup[] = [
       { code: "kb:delete", label: "删除知识库" },
       { code: "doc:upload", label: "上传文档" },
       { code: "doc:replace", label: "上传新版本" },
+      { code: "doc:update", label: "修改资料信息" },
       { code: "doc:delete", label: "删除文档" },
       { code: "kb:grant", label: "授权" },
     ],
@@ -210,6 +211,29 @@ function escalation(roleIds: number[]) {
   return null;
 }
 
+/** 与后端一致的逐行检查：用户名格式、文件内重复、已存在，显示名，角色存在且不超出自己的权限。 */
+function importProblems(rows: ImportRow[]): ImportProblem[] {
+  const problems: ImportProblem[] = [];
+  const mine = new Set(permissionsOf(current()));
+  const seen = new Map<string, number>();
+  for (const row of rows) {
+    const add = (message: string) => problems.push({ line: row.line, message });
+    if (!/^[A-Za-z0-9_.-]{3,50}$/.test(row.username)) add("用户名必须是 3 到 50 个字母、数字或 _ . -");
+    else if (seen.has(row.username)) add(`与第 ${seen.get(row.username)} 行的用户名重复`);
+    else if (state.accounts.some((account) => account.username === row.username)) add("用户名已存在");
+    seen.set(row.username, seen.get(row.username) ?? row.line);
+    if (row.displayName.length === 0 || row.displayName.length > 50) add("显示名必须是 1 到 50 个字符");
+    if (row.roleNames.length === 0) add("至少要有一个角色");
+    for (const name of row.roleNames) {
+      const role = state.roles.find((candidate) => candidate.name === name);
+      if (!role) add(`没有叫“${name}”的角色`);
+      else if (role.builtIn === "SUPER_ADMIN") add("超级管理员角色不能分配");
+      else if (role.permissions.some((code) => !mine.has(code))) add(`不能分配超出自己权限的角色：${name}`);
+    }
+  }
+  return problems;
+}
+
 function roleView(role: Omit<Role, "userCount">): Role {
   return { ...role, userCount: state.accounts.filter((account) => account.roleIds.includes(role.id)).length };
 }
@@ -331,6 +355,37 @@ export const identityHandlers = [
     };
     state.accounts.push(created);
     return HttpResponse.json(view(created), { status: 201 });
+  }),
+  // 批量导入（#124）：预检逐行报错、不写入；导入时重新预检，有一行有问题就一条都不写。
+  http.post("/api/users/import/check", async ({ request }) => {
+    const denied = forbidden("user:import");
+    if (denied) return denied;
+    const { rows } = (await request.json()) as { rows: ImportRow[] };
+    return HttpResponse.json({ problems: importProblems(rows) });
+  }),
+  http.post("/api/users/import", async ({ request }) => {
+    const denied = forbidden("user:import");
+    if (denied) return denied;
+    const { rows, password } = (await request.json()) as { rows: ImportRow[]; password: string };
+    if (password.length < 8 || password.length > 64) {
+      return problem(400, "IDENTITY_INVALID", "初始密码必须是 8 到 64 个字符");
+    }
+    const lines = new Set(importProblems(rows).map((found) => found.line)).size;
+    if (lines > 0) return problem(400, "IDENTITY_INVALID", `导入文件有 ${lines} 行有问题，请重新检查后再导入`);
+    for (const row of rows) {
+      state.accounts.push({
+        id: state.nextId++,
+        username: row.username,
+        displayName: row.displayName,
+        enabled: true,
+        roleIds: state.roles.filter((role) => row.roleNames.includes(role.name)).map((role) => role.id),
+        superAdmin: false,
+        lockedUntil: null,
+        mustChangePassword: true,
+        failures: 0,
+      });
+    }
+    return HttpResponse.json({ imported: rows.length });
   }),
   http.put("/api/users/:id/enabled", async ({ params, request }) => {
     const denied = forbidden("user:disable");

@@ -2,15 +2,19 @@ package com.liming.rag.knowledge.application;
 
 import com.liming.rag.knowledge.api.SearchHit;
 import com.liming.rag.shared.TenantId;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 
-/** 分块检索端口，实现里的每条召回 SQL 都必须带租户和授权过滤；knowledgeBaseIds 为空表示不再缩小范围。 */
+/**
+ * 分块检索端口，实现里的每条召回 SQL 都必须带租户和授权过滤，并只查 {@code today} 当天有效的文档；
+ * knowledgeBaseIds 为空表示不再缩小范围。
+ */
 public interface ChunkIndex {
 
-    List<Long> nearest(Grantee grantee, List<Long> knowledgeBaseIds, float[] vector, int limit);
+    List<Long> nearest(Grantee grantee, List<Long> knowledgeBaseIds, LocalDate today, float[] vector, int limit);
 
-    List<Long> keyword(Grantee grantee, List<Long> knowledgeBaseIds, String text, int limit);
+    List<Long> keyword(Grantee grantee, List<Long> knowledgeBaseIds, LocalDate today, String text, int limit);
 
     /** 按给定顺序返回分块详情，分数先填 0，由调用方补上。 */
     List<SearchHit> load(TenantId tenantId, List<Long> chunkIds);

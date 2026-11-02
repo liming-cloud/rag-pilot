@@ -22,6 +22,7 @@ import java.util.stream.Collectors;
  *   <li>答案评判：有参考答案的题由评判模型判为正确、部分正确或错误；只统计给出了回答的可回答题。</li>
  *   <li>拒答正确率：应拒答题中实际拒答的比例；误拒率：可回答题中被拒答的比例。</li>
  *   <li>越权泄漏：检索结果或引用里出现无权访问文档的题数，必须为 0。</li>
+ *   <li>过期资料：检索结果或引用里出现已失效、未生效文档的题数，必须为 0（D-046）。</li>
  *   <li>首字延迟：流式问答从发出请求到收到第一个事件（第一段文字，或拒答结果）的时间。</li>
  * </ul>
  *
@@ -29,20 +30,26 @@ import java.util.stream.Collectors;
  * @param unavailable 重试后模型服务仍不可用、没有结果的题（id），不计入任何指标
  */
 public record EvalReport(int cases, double recallAt10, double citationAccuracy, double refusalAccuracy,
-        double falseRefusalRate, int leaks, long searchP95Millis, long firstTokenP95Millis, long askP95Millis, List<String> failures,
+        double falseRefusalRate, int leaks, int staleHits, long searchP95Millis, long firstTokenP95Millis, long askP95Millis, List<String> failures,
         List<EvalOutcome> outcomes, List<String> failedCases, List<String> unavailable) {
 
     /** 服务不可用的题超过这个比例时，这次结果不可信。 */
     static final double MAX_UNAVAILABLE_SHARE = 0.05;
 
     public static EvalReport of(List<EvalOutcome> outcomes, Set<String> restrictedDocuments) {
-        return of(outcomes, restrictedDocuments, List.of());
+        return of(outcomes, restrictedDocuments, Set.of(), List.of());
+    }
+
+    public static EvalReport of(List<EvalOutcome> outcomes, Set<String> restrictedDocuments, List<String> unavailable) {
+        return of(outcomes, restrictedDocuments, Set.of(), unavailable);
     }
 
     /**
+     * @param staleDocuments 评测时已失效或未生效的文档，不应被检索或引用（D-046）
      * @param unavailable 模型服务不可用、重试后仍没有结果的题；一道题碰上 503 不该让整次评测作废（#81）
      */
-    public static EvalReport of(List<EvalOutcome> outcomes, Set<String> restrictedDocuments, List<String> unavailable) {
+    public static EvalReport of(List<EvalOutcome> outcomes, Set<String> restrictedDocuments,
+            Set<String> staleDocuments, List<String> unavailable) {
         var answerable = outcomes.stream().filter(o -> o.evalCase().kind() == Kind.ANSWERABLE).toList();
         var unanswerable = outcomes.stream().filter(o -> o.evalCase().kind() == Kind.UNANSWERABLE).toList();
         var answered = answerable.stream().filter(o -> !o.refused()).toList();
@@ -51,8 +58,8 @@ public record EvalReport(int cases, double recallAt10, double citationAccuracy, 
 
         Predicate<EvalOutcome> recalled = EvalReport::recalled;
         Predicate<EvalOutcome> citedCorrectly = EvalReport::citedCorrectly;
-        Predicate<EvalOutcome> leaked = o -> o.retrieved().stream().anyMatch(r -> restrictedDocuments.contains(r.document()))
-                || o.citedDocuments().stream().anyMatch(restrictedDocuments::contains);
+        Predicate<EvalOutcome> leaked = touches(restrictedDocuments);
+        Predicate<EvalOutcome> stale = touches(staleDocuments);
 
         for (var o : answerable) {
             if (!recalled.test(o)) {
@@ -93,12 +100,21 @@ public record EvalReport(int cases, double recallAt10, double citationAccuracy, 
                 failedCases.add(o.evalCase().id());
             }
         }
+        int staleHits = 0;
+        for (var o : outcomes) {
+            if (stale.test(o)) {
+                staleHits++;
+                failures.add(o.evalCase().id() + "：检索或引用了已失效、未生效的资料");
+                failedCases.add(o.evalCase().id());
+            }
+        }
         return new EvalReport(outcomes.size(),
                 ratio(answerable, recalled),
                 ratio(answered, citedCorrectly),
                 ratio(unanswerable, EvalOutcome::refused),
                 ratio(answerable, EvalOutcome::refused),
                 leaks,
+                staleHits,
                 p95(outcomes.stream().map(EvalOutcome::searchMillis).toList()),
                 p95(outcomes.stream().map(EvalOutcome::firstEventMillis).toList()),
                 p95(outcomes.stream().map(EvalOutcome::askMillis).toList()),
@@ -109,6 +125,12 @@ public record EvalReport(int cases, double recallAt10, double citationAccuracy, 
     }
 
     private static final String CORRECT = "CORRECT";
+
+    /** 检索结果或引用里出现了这些文档。 */
+    private static Predicate<EvalOutcome> touches(Set<String> documents) {
+        return o -> o.retrieved().stream().anyMatch(r -> documents.contains(r.document()))
+                || o.citedDocuments().stream().anyMatch(documents::contains);
+    }
 
     /** 服务不可用的题不超过 5% 时，结果才可信。 */
     public boolean credible() {
@@ -188,6 +210,7 @@ public record EvalReport(int cases, double recallAt10, double citationAccuracy, 
             row(text, "多篇原文全部召回", percent(ratio(multiDocument, EvalReport::recalledAll)), "—");
         }
         row(text, "越权泄漏", String.valueOf(leaks), "0");
+        row(text, "检索或引用过期资料", String.valueOf(staleHits), "0");
         row(text, "检索延迟 p95", searchP95Millis + " ms", "< 800 ms");
         row(text, "首字延迟 p95（流式）", firstTokenP95Millis + " ms", "参考（D-030）");
         row(text, "整段回答 p95（流式）", askP95Millis + " ms", "—");

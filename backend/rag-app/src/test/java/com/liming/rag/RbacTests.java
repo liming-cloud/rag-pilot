@@ -69,11 +69,14 @@ class RbacTests {
                 new Endpoint(Permissions.KB_VIEW, HttpMethod.GET, "/api/knowledge-bases/{kb}", null),
                 new Endpoint(Permissions.KB_VIEW, HttpMethod.GET, "/api/knowledge-bases/{kb}/documents", null),
                 new Endpoint(Permissions.KB_VIEW, HttpMethod.GET, "/api/knowledge-bases/{kb}/search?q=货架", null),
+                new Endpoint(Permissions.KB_VIEW, HttpMethod.GET, "/api/knowledge-bases/expiry-summary", null),
                 new Endpoint(Permissions.KB_CREATE, HttpMethod.POST, "/api/knowledge-bases", Map.of("name", "新库")),
                 new Endpoint(Permissions.DOC_UPLOAD, HttpMethod.POST, "/api/knowledge-bases/{kb}/documents",
                         file("上传.txt")),
                 new Endpoint(Permissions.DOC_REPLACE, HttpMethod.POST,
                         "/api/knowledge-bases/{kb}/documents/999999/versions", file("新版.txt")),
+                new Endpoint(Permissions.DOC_UPDATE, HttpMethod.PUT,
+                        "/api/knowledge-bases/{kb}/documents/999999/validity", Map.of("expiresOn", "")),
                 new Endpoint(Permissions.DOC_DELETE, HttpMethod.DELETE, "/api/knowledge-bases/{kb}/documents/999999",
                         null),
                 new Endpoint(Permissions.KB_GRANT, HttpMethod.GET, "/api/knowledge-bases/{kb}/members", null),
@@ -91,6 +94,10 @@ class RbacTests {
                         Map.of("password", "temp-password")),
                 new Endpoint(Permissions.USER_ASSIGN_ROLE, HttpMethod.PUT, "/api/users/{user}/roles",
                         Map.of("roleIds", List.of(staffRole))),
+                new Endpoint(Permissions.USER_IMPORT, HttpMethod.POST, "/api/users/import/check",
+                        Map.of("rows", List.of(importRow(2, "check01", staffRole)))),
+                new Endpoint(Permissions.USER_IMPORT, HttpMethod.POST, "/api/users/import",
+                        Map.of("rows", List.of(), "password", "import-password")),
                 new Endpoint(Permissions.ROLE_VIEW, HttpMethod.GET, "/api/permissions", null),
                 new Endpoint(Permissions.ROLE_CREATE, HttpMethod.POST, "/api/roles",
                         Map.of("name", "临时角色", "permissions", List.of())),
@@ -274,6 +281,70 @@ class RbacTests {
         assertThat(call(root, HttpMethod.GET, "/api/users?size=1000", null).getBody()).containsEntry("size", 100);
         assertThat(call(root, HttpMethod.GET, "/api/users?status=gone", null).getStatusCode())
                 .isEqualTo(HttpStatus.BAD_REQUEST);
+    }
+
+    @Test
+    @DisplayName("批量导入：全部通过时导入且都必须先改密码；任一行有问题、越权或没有权限时一条都不写入")
+    @SuppressWarnings("unchecked")
+    void importsAccounts() {
+        String root = rootToken();
+        long staffRole = TestLogin.staffRoleId(http);
+        String staffName = roleName(root, staffRole);
+        createRole(root, "导入测试模型员", List.of(Permissions.MODEL_VIEW));
+        createUser(root, "importer01", TestLogin.builtInRoleId(http, "ADMIN"));
+        String admin = login("importer01", "member-password");
+
+        var good = List.of(row(2, "import01", "导入员工一", staffName), row(3, "import02", "导入员工二", staffName));
+        assertThat(call(admin, HttpMethod.POST, "/api/users/import/check", Map.of("rows", good)).getBody())
+                .containsEntry("problems", List.of());
+        assertThat(call(admin, HttpMethod.POST, "/api/users/import", Map.of("rows", good,
+                "password", "Welcome-2026")).getBody()).containsEntry("imported", 2);
+        String first = login("import01", "Welcome-2026");
+        assertThat(call(first, HttpMethod.GET, "/api/auth/me", null).getBody())
+                .containsEntry("mustChangePassword", true).containsEntry("permissions", List.of());
+
+        var bad = List.of(row(2, "import03", "好的一行", staffName), row(3, "import01", "已存在", staffName),
+                row(4, "import04", "越权", "导入测试模型员"));
+        var problems = (List<Map<String, Object>>) call(admin, HttpMethod.POST, "/api/users/import/check",
+                Map.of("rows", bad)).getBody().get("problems");
+        assertThat(problems).extracting(problem -> problem.get("line") + " " + problem.get("message"))
+                .containsExactly("3 用户名已存在", "4 不能分配超出自己权限的角色：导入测试模型员");
+        var refused = call(admin, HttpMethod.POST, "/api/users/import", Map.of("rows", bad,
+                "password", "Welcome-2026"));
+        assertThat(refused.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(login("import03", "Welcome-2026")).isNull();
+        assertThat(login("import04", "Welcome-2026")).isNull();
+
+        createUser(root, "importer02", createRole(root, "导入测试无导入权限",
+                List.of(Permissions.USER_VIEW, Permissions.USER_CREATE)));
+        String staff = login("importer02", "member-password");
+        assertThat(isPermissionDenied(call(staff, HttpMethod.POST, "/api/users/import",
+                Map.of("rows", List.of(row(2, "import05", "无权导入", staffName)), "password", "Welcome-2026"))))
+                .isTrue();
+        assertThat(login("import05", "Welcome-2026")).isNull();
+    }
+
+    private static Map<String, Object> row(int line, String username, String displayName, String roleName) {
+        return Map.of("line", line, "username", username, "displayName", displayName, "roleNames", List.of(roleName));
+    }
+
+    private Map<String, Object> importRow(int line, String username, long roleId) {
+        return Map.of("line", line, "username", username, "displayName", username, "roleNames",
+                List.of(roleName(rootToken(), roleId)));
+    }
+
+    @SuppressWarnings("unchecked")
+    private String roleName(String root, long roleId) {
+        var raw = http.exchange("/api/roles", HttpMethod.GET, new HttpEntity<>(bearer(root)), String.class);
+        List<Map<String, Object>> roles = JSON.readValue(raw.getBody(), List.class);
+        return roles.stream().filter(role -> ((Number) role.get("id")).longValue() == roleId)
+                .map(role -> (String) role.get("name")).findFirst().orElseThrow();
+    }
+
+    private static HttpHeaders bearer(String token) {
+        var headers = new HttpHeaders();
+        headers.setBearerAuth(token);
+        return headers;
     }
 
     /** Sa-Token 判定没有权限点时返回 403 且 code 为 FORBIDDEN；业务上的越权（IDENTITY_ESCALATION）不算。 */

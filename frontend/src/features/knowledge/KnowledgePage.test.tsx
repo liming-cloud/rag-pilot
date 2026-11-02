@@ -33,7 +33,9 @@ describe("知识库列表", () => {
 
     const table = await screen.findByRole("table", { name: "知识库" });
     const row = (await within(table).findByRole("link", { name: "门店运营知识库" })).closest("tr")!;
-    expect(within(row).getByText("32 份")).toBeInTheDocument();
+    expect(within(row).getByText("36 份")).toBeInTheDocument();
+    expect(within(row).getByText("2 份即将到期")).toBeInTheDocument();
+    expect(within(row).getByText("1 份已失效")).toBeInTheDocument();
     expect(within(row).getByText("1 份失败")).toBeInTheDocument();
     expect(within(row).getByText("1 个角色 · 2 个账号")).toBeInTheDocument();
     expect(screen.getByText("共 24 条")).toBeInTheDocument();
@@ -52,6 +54,19 @@ describe("知识库列表", () => {
 
     expect(await screen.findByText("共 1 条")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "商品知识库" })).toBeInTheDocument();
+  });
+
+  it("按资料有效期筛选；点“已失效”进入详情并按已失效筛选", async () => {
+    const router = renderAt();
+    await screen.findByRole("link", { name: "门店运营知识库" });
+
+    fireEvent.change(screen.getByLabelText("资料有效期"), { target: { value: "EXPIRED" } });
+    expect(await screen.findByText("共 1 条")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText("1 份已失效"));
+    expect(await screen.findByRole("heading", { name: "门店运营知识库" })).toBeInTheDocument();
+    expect(router.state.location.search).toBe("?validity=EXPIRED");
+    expect(await screen.findByLabelText("有效期")).toHaveValue("EXPIRED");
   });
 
   it("新建知识库在弹窗里做，建好后进入它的详情", async () => {

@@ -26,11 +26,13 @@ class HybridSearchService implements KnowledgeSearch {
     private final ChunkIndex index;
     private final EmbeddingClient embeddings;
     private final UserDirectory users;
+    private final DocumentCalendar calendar;
 
-    HybridSearchService(ChunkIndex index, EmbeddingClient embeddings, UserDirectory users) {
+    HybridSearchService(ChunkIndex index, EmbeddingClient embeddings, UserDirectory users, DocumentCalendar calendar) {
         this.index = index;
         this.embeddings = embeddings;
         this.users = users;
+        this.calendar = calendar;
     }
 
     /** 提问人所属的角色由这里向 identity 查，调用方不能指定（D-038）。 */
@@ -48,8 +50,10 @@ class HybridSearchService implements KnowledgeSearch {
         int limit = Math.clamp(query.limit(), 1, MAX_LIMIT);
         var vector = embeddings.embed(List.of(text)).getFirst();
         var grantee = grantee(query.tenantId(), query.userId());
-        var semantic = index.nearest(grantee, query.knowledgeBaseIds(), vector, CANDIDATES_PER_ROUTE);
-        var keyword = index.keyword(grantee, query.knowledgeBaseIds(), text, CANDIDATES_PER_ROUTE);
+        // 未生效、已失效的文档不参与检索（D-046）；问答、追问、重新回答都经过这里。
+        var today = calendar.today();
+        var semantic = index.nearest(grantee, query.knowledgeBaseIds(), today, vector, CANDIDATES_PER_ROUTE);
+        var keyword = index.keyword(grantee, query.knowledgeBaseIds(), today, text, CANDIDATES_PER_ROUTE);
         var fused = RrfFusion.fuse(List.of(semantic, keyword), limit);
         if (fused.isEmpty()) {
             return List.of();

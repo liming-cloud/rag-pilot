@@ -121,3 +121,5 @@ rag:
     storage:
       # 原始文件存放目录；Compose 中挂载为数据卷。
       root: ${RAG_STORAGE_ROOT:./data/files}
+    # 资料失效日期在多少天内算“即将到期”，管理端据此提醒（D-046）；1 到 365。
+    expiry-warning-days: ${RAG_EXPIRY_WARNING_DAYS:30}

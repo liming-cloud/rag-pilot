@@ -7,6 +7,7 @@ import com.liming.rag.identity.api.Permissions;
 import com.liming.rag.knowledge.api.KnowledgeSearch;
 import com.liming.rag.knowledge.api.SearchHit;
 import com.liming.rag.knowledge.api.SearchQuery;
+import com.liming.rag.knowledge.application.DocumentCalendar;
 import com.liming.rag.knowledge.application.DocumentIngestionService;
 import com.liming.rag.knowledge.application.KnowledgeBaseService;
 import com.liming.rag.knowledge.application.KnowledgeBaseService.Member;
@@ -15,8 +16,10 @@ import com.liming.rag.knowledge.application.KnowledgeQueries.KnowledgeBaseSummar
 import com.liming.rag.knowledge.application.Paged;
 import com.liming.rag.knowledge.domain.Document;
 import com.liming.rag.knowledge.domain.KnowledgeBase;
+import com.liming.rag.knowledge.domain.Validity;
 import com.liming.rag.shared.UserId;
 import java.io.IOException;
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.List;
 import org.springframework.http.HttpStatus;
@@ -54,17 +57,14 @@ class KnowledgeBaseController {
         }
     }
 
-    record DocumentView(long id, String filename, String status, String error, int chunkCount, long sizeBytes,
-            OffsetDateTime createdAt, Long replacesDocumentId, String replacesFilename) {
-        static DocumentView of(Document document, String replacesFilename) {
-            return new DocumentView(document.id(), document.filename(), document.status().name(), document.error(),
-                    document.chunkCount(), document.sizeBytes(), document.createdAt(), document.replacesDocumentId(),
-                    replacesFilename);
-        }
+    /** 有效期的请求体：日期为 yyyy-MM-dd，null 或空串表示不限。 */
+    record ValidityRequest(String effectiveFrom, String expiresOn) {
+    }
 
-        static DocumentView of(DocumentRow row) {
-            return of(row.document(), row.replacesFilename());
-        }
+    /** @param validity 按部署的统计时区算好的有效期状态，前端不自己比较日期（D-046） */
+    record DocumentView(long id, String filename, String status, String error, int chunkCount, long sizeBytes,
+            OffsetDateTime createdAt, Long replacesDocumentId, String replacesFilename, LocalDate effectiveFrom,
+            LocalDate expiresOn, Validity.State validity) {
     }
 
     /** 分页响应（D-039）：{@code {items, total, page, size}}。 */
@@ -78,14 +78,27 @@ class KnowledgeBaseController {
     private final KnowledgeBaseService knowledgeBases;
     private final DocumentIngestionService ingestion;
     private final KnowledgeSearch search;
+    private final DocumentCalendar calendar;
     private final CurrentUser currentUser;
 
     KnowledgeBaseController(KnowledgeBaseService knowledgeBases, DocumentIngestionService ingestion,
-            KnowledgeSearch search, CurrentUser currentUser) {
+            KnowledgeSearch search, DocumentCalendar calendar, CurrentUser currentUser) {
         this.knowledgeBases = knowledgeBases;
         this.ingestion = ingestion;
         this.search = search;
+        this.calendar = calendar;
         this.currentUser = currentUser;
+    }
+
+    private DocumentView view(Document document, String replacesFilename) {
+        var validity = document.validity();
+        return new DocumentView(document.id(), document.filename(), document.status().name(), document.error(),
+                document.chunkCount(), document.sizeBytes(), document.createdAt(), document.replacesDocumentId(),
+                replacesFilename, validity.effectiveFrom(), validity.expiresOn(), calendar.state(validity));
+    }
+
+    private DocumentView view(DocumentRow row) {
+        return view(row.document(), row.replacesFilename());
     }
 
     /** 员工端选库：授权给自己或自己角色的库。 */
@@ -96,14 +109,26 @@ class KnowledgeBaseController {
                 .map(KnowledgeBaseView::of).toList();
     }
 
-    /** 管理端列表（D-039）：按名称筛选、分页。 */
+    /** 管理端列表（D-039）：按名称、资料有效期（EXPIRING、EXPIRED）筛选，分页。 */
     @SaCheckPermission(Permissions.KB_VIEW)
     @GetMapping("/page")
     PageView<KnowledgeBaseSummary> page(@RequestParam(name = "keyword", required = false) String keyword,
+            @RequestParam(name = "validity", required = false) String validity,
             @RequestParam(name = "page", defaultValue = "1") int page,
             @RequestParam(name = "size", defaultValue = "20") int size) {
-        return PageView.of(knowledgeBases.page(currentUser.tenantId(), currentUser.userId(), keyword, page, size),
-                summary -> summary);
+        return PageView.of(knowledgeBases.page(currentUser.tenantId(), currentUser.userId(), keyword, validity, page,
+                size), summary -> summary);
+    }
+
+    /** 运营概览的到期提醒（#124）：自己能管理的库里即将到期和已失效的文档数，以及提前提醒的天数。 */
+    @SaCheckPermission(Permissions.KB_VIEW)
+    @GetMapping("/expiry-summary")
+    ExpirySummaryView expirySummary() {
+        var summary = knowledgeBases.expirySummary(currentUser.tenantId(), currentUser.userId());
+        return new ExpirySummaryView(summary.expiring(), summary.expired(), calendar.warningDays());
+    }
+
+    record ExpirySummaryView(long expiring, long expired, int warningDays) {
     }
 
     @SaCheckPermission(Permissions.KB_VIEW)
@@ -119,38 +144,53 @@ class KnowledgeBaseController {
         return KnowledgeBaseView.of(knowledgeBases.create(currentUser.tenantId(), currentUser.userId(), request.name()));
     }
 
-    /** 按文件名、状态筛选，分页（D-039）。 */
+    /** 按文件名、状态、有效期（ACTIVE、EXPIRING、EXPIRED、PENDING）筛选，分页（D-039）。 */
     @SaCheckPermission(Permissions.KB_VIEW)
     @GetMapping("/{knowledgeBaseId}/documents")
     PageView<DocumentView> documents(@PathVariable long knowledgeBaseId,
             @RequestParam(name = "keyword", required = false) String keyword,
             @RequestParam(name = "status", required = false) String status,
+            @RequestParam(name = "validity", required = false) String validity,
             @RequestParam(name = "page", defaultValue = "1") int page,
             @RequestParam(name = "size", defaultValue = "20") int size) {
         return PageView.of(knowledgeBases.documents(currentUser.tenantId(), currentUser.userId(), knowledgeBaseId,
-                keyword, status, page, size), DocumentView::of);
+                keyword, status, validity, page, size), this::view);
     }
 
+    /** 上传时可以顺带设有效期（D-046），不传表示长期有效。 */
     @SaCheckPermission(Permissions.DOC_UPLOAD)
     @PostMapping(path = "/{knowledgeBaseId}/documents", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @ResponseStatus(HttpStatus.CREATED)
-    DocumentView upload(@PathVariable long knowledgeBaseId, @RequestParam("file") MultipartFile file)
-            throws IOException {
+    DocumentView upload(@PathVariable long knowledgeBaseId, @RequestParam("file") MultipartFile file,
+            @RequestParam(name = "effectiveFrom", required = false) String effectiveFrom,
+            @RequestParam(name = "expiresOn", required = false) String expiresOn) throws IOException {
         manageable(knowledgeBaseId);
-        return DocumentView.of(ingestion.ingest(currentUser.tenantId(), knowledgeBaseId, file.getOriginalFilename(),
-                file.getBytes(), null), null);
+        return view(ingestion.ingest(currentUser.tenantId(), knowledgeBaseId, file.getOriginalFilename(),
+                file.getBytes(), null, effectiveFrom, expiresOn), null);
     }
 
-    /** 上传新版本：新版本处理成功后自动删除旧版本（D-026）。 */
+    /** 上传新版本：新版本处理成功后自动删除旧版本（D-026）；不传失效日期时继承旧版本的（D-046）。 */
     @SaCheckPermission(Permissions.DOC_REPLACE)
     @PostMapping(path = "/{knowledgeBaseId}/documents/{documentId}/versions",
             consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @ResponseStatus(HttpStatus.CREATED)
     DocumentView replace(@PathVariable long knowledgeBaseId, @PathVariable long documentId,
-            @RequestParam("file") MultipartFile file) throws IOException {
+            @RequestParam("file") MultipartFile file,
+            @RequestParam(name = "effectiveFrom", required = false) String effectiveFrom,
+            @RequestParam(name = "expiresOn", required = false) String expiresOn) throws IOException {
         manageable(knowledgeBaseId);
-        return DocumentView.of(ingestion.ingest(currentUser.tenantId(), knowledgeBaseId, file.getOriginalFilename(),
-                file.getBytes(), documentId), null);
+        return view(ingestion.ingest(currentUser.tenantId(), knowledgeBaseId, file.getOriginalFilename(),
+                file.getBytes(), documentId, effectiveFrom, expiresOn), null);
+    }
+
+    /** 修改有效期（D-046），保存后立即按新日期参与或退出检索。 */
+    @SaCheckPermission(Permissions.DOC_UPDATE)
+    @PutMapping("/{knowledgeBaseId}/documents/{documentId}/validity")
+    DocumentView changeValidity(@PathVariable long knowledgeBaseId, @PathVariable long documentId,
+            @RequestBody ValidityRequest request) {
+        manageable(knowledgeBaseId);
+        return view(ingestion.changeValidity(currentUser.tenantId(), knowledgeBaseId, documentId,
+                request.effectiveFrom(), request.expiresOn()), null);
     }
 
     @SaCheckPermission(Permissions.DOC_DELETE)

@@ -1,5 +1,5 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, Search } from "lucide-react";
+import { FileUp, Plus, Search } from "lucide-react";
 import { type FormEvent, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -31,12 +31,13 @@ import {
   unlockUser,
   type UserFilter,
 } from "./api";
+import { ImportDialog } from "./ImportDialog";
 
 const PAGE_SIZE = 20;
 
 /**
  * 用户管理（D-038、D-039）：上方筛选（关键词、角色、状态），下方分页表格；新建、改角色、重置密码都在弹窗里做。
- * 超级管理员不能被改动。能看哪些知识库要到知识库详情的“授权”里授权给本人或他的角色。
+ * 上线时可以用 CSV 批量导入（#124）。超级管理员不能被改动。能看哪些知识库要到知识库详情的“授权”里授权给本人或他的角色。
  */
 export function UsersPage() {
   const queryClient = useQueryClient();
@@ -49,9 +50,9 @@ export function UsersPage() {
   });
   const roles = useQuery({ queryKey: ["roles"], queryFn: fetchRoles });
   const assignable = roles.data?.filter((role) => role.builtIn !== "SUPER_ADMIN") ?? [];
-  const [dialog, setDialog] = useState<{ kind: "create" } | { kind: "roles" | "password"; account: Account } | null>(
-    null,
-  );
+  const [dialog, setDialog] = useState<
+    { kind: "create" | "import" } | { kind: "roles" | "password"; account: Account } | null
+  >(null);
   const refresh = () => queryClient.invalidateQueries({ queryKey: ["users"] });
   const toggle = useMutation({
     mutationFn: (account: Account) => setUserEnabled(account.id, !account.enabled),
@@ -70,12 +71,20 @@ export function UsersPage() {
     <main className="mx-auto flex max-w-6xl flex-col gap-4 p-6 md:p-8">
       <div className="flex items-center justify-between">
         <h1 className="font-serif text-2xl font-semibold">用户</h1>
-        <Can permission="user:create">
-          <Button size="sm" onClick={() => setDialog({ kind: "create" })}>
-            <Plus aria-hidden="true" className="size-4" />
-            新建账号
-          </Button>
-        </Can>
+        <div className="flex gap-2">
+          <Can permission="user:import">
+            <Button size="sm" variant="outline" onClick={() => setDialog({ kind: "import" })}>
+              <FileUp aria-hidden="true" className="size-4" />
+              批量导入
+            </Button>
+          </Can>
+          <Can permission="user:create">
+            <Button size="sm" onClick={() => setDialog({ kind: "create" })}>
+              <Plus aria-hidden="true" className="size-4" />
+              新建账号
+            </Button>
+          </Can>
+        </div>
       </div>
       <form role="search" aria-label="筛选账号" onSubmit={search} className="flex flex-wrap items-end gap-2">
         <Label className="flex flex-col gap-1 text-sm">
@@ -159,6 +168,7 @@ export function UsersPage() {
       )}
       <Dialog open={dialog !== null} onOpenChange={(open) => !open && setDialog(null)}>
         {dialog?.kind === "create" && <CreateDialog roles={assignable} onDone={() => setDialog(null)} />}
+        {dialog?.kind === "import" && <ImportDialog roles={assignable} onDone={() => setDialog(null)} />}
         {dialog?.kind === "roles" && (
           <RolesDialog account={dialog.account} roles={assignable} onDone={() => setDialog(null)} />
         )}

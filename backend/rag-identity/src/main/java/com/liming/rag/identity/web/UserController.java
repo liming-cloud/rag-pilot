@@ -5,6 +5,7 @@ import cn.dev33.satoken.annotation.SaCheckPermission;
 import com.liming.rag.identity.api.CurrentUser;
 import com.liming.rag.identity.api.Permissions;
 import com.liming.rag.identity.application.AccountAdminService;
+import com.liming.rag.identity.application.AccountImportService;
 import com.liming.rag.shared.UserId;
 import java.util.List;
 import org.springframework.http.HttpStatus;
@@ -36,11 +37,25 @@ class UserController {
     record ResetPasswordRequest(String password) {
     }
 
+    record ImportCheckRequest(List<AccountImportService.Row> rows) {
+    }
+
+    record ImportCheckResponse(List<AccountImportService.Problem> problems) {
+    }
+
+    record ImportRequest(List<AccountImportService.Row> rows, String password) {
+    }
+
+    record ImportResponse(int imported) {
+    }
+
     private final AccountAdminService accounts;
+    private final AccountImportService imports;
     private final CurrentUser currentUser;
 
-    UserController(AccountAdminService accounts, CurrentUser currentUser) {
+    UserController(AccountAdminService accounts, AccountImportService imports, CurrentUser currentUser) {
         this.accounts = accounts;
+        this.imports = imports;
         this.currentUser = currentUser;
     }
 
@@ -89,5 +104,20 @@ class UserController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     void unlock(@PathVariable long id) {
         accounts.unlock(currentUser.tenantId(), new UserId(id));
+    }
+
+    /** 批量导入的预检：逐行列出问题，不写入（#124）。文件由前端解析成行，后端只收行。 */
+    @SaCheckPermission(Permissions.USER_IMPORT)
+    @PostMapping("/import/check")
+    ImportCheckResponse checkImport(@RequestBody ImportCheckRequest request) {
+        return new ImportCheckResponse(imports.check(currentUser.tenantId(), currentUser.userId(), request.rows()));
+    }
+
+    /** 批量导入：重新预检，有问题时一条都不写入；导入的账号首次登录必须先改密码。 */
+    @SaCheckPermission(Permissions.USER_IMPORT)
+    @PostMapping("/import")
+    ImportResponse importUsers(@RequestBody ImportRequest request) {
+        return new ImportResponse(imports.importAll(currentUser.tenantId(), currentUser.userId(), request.rows(),
+                request.password()));
     }
 }

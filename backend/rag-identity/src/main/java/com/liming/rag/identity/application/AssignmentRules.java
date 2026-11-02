@@ -15,19 +15,28 @@ record AssignmentRules(Set<String> permissions, boolean superAdmin) {
 
     void checkAssignable(Collection<Role> assigned) {
         for (var role : assigned) {
-            if (role.superAdmin()) {
-                throw escalation("超级管理员角色不能分配");
-            }
-            if (superAdmin) {
-                continue;
-            }
-            if (role.permissions().stream().anyMatch(code -> code.startsWith("role:"))) {
-                throw escalation("只有超级管理员能分配含“角色与权限”的角色：" + role.name());
-            }
-            if (!permissions.containsAll(role.permissions())) {
-                throw escalation("不能分配超出自己权限的角色：" + role.name());
+            var problem = assignProblem(role);
+            if (problem != null) {
+                throw escalation(problem);
             }
         }
+    }
+
+    /** 不能分配这个角色的原因；能分配时返回 null。批量导入用它逐行报错，不在第一个问题处中断。 */
+    String assignProblem(Role role) {
+        if (role.superAdmin()) {
+            return "超级管理员角色不能分配";
+        }
+        if (superAdmin) {
+            return null;
+        }
+        if (role.permissions().stream().anyMatch(code -> code.startsWith("role:"))) {
+            return "只有超级管理员能分配含“角色与权限”的角色：" + role.name();
+        }
+        if (!permissions.containsAll(role.permissions())) {
+            return "不能分配超出自己权限的角色：" + role.name();
+        }
+        return null;
     }
 
     /** @param target 被操作账号的角色（不看账号状态） */
