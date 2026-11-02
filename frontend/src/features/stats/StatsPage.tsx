@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Link } from "react-router";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { fetchExpirySummary } from "@/features/knowledge/api";
 import { useCan } from "@/lib/permissions";
 import { fetchUsageStats, RANGES, type Range, type UsageStats, zoneLabel } from "./api";
 
@@ -39,6 +40,7 @@ export function StatsPage() {
           </Button>
         ))}
       </div>
+      <ExpiryNotice />
       {stats.isPending && <p className="text-muted-foreground">正在统计…</p>}
       {stats.isError && <p className="text-destructive">{stats.error.message}</p>}
       {stats.data && <StatsView stats={stats.data} />}
@@ -123,6 +125,36 @@ function StatsView({ stats }: { stats: UsageStats }) {
         </>
       )}
     </>
+  );
+}
+
+/**
+ * 资料到期提醒（#124）：有知识库权限时显示即将到期和已失效的文档数，点过去是按有效期筛选的知识库列表。
+ * 都没有时不占位置。
+ */
+function ExpiryNotice() {
+  const canView = useCan("kb:view");
+  const summary = useQuery({
+    queryKey: ["knowledge-bases", "expiry-summary"],
+    queryFn: fetchExpirySummary,
+    enabled: canView,
+  });
+  if (!summary.data || summary.data.expiring + summary.data.expired === 0) return null;
+  const { expiring, expired, warningDays } = summary.data;
+  return (
+    <p role="status" className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border bg-card p-3 text-sm">
+      <span className="font-medium">资料有效期</span>
+      {expiring > 0 && (
+        <span>
+          {expiring} 份将在 {warningDays} 天内到期
+        </span>
+      )}
+      {expired > 0 && <span className="text-destructive">{expired} 份已失效，不再参与回答</span>}
+      <Link to="/admin/knowledge" className="ml-auto inline-flex items-center hover:underline">
+        去知识库处理
+        <ChevronRight aria-hidden="true" className="size-4" />
+      </Link>
+    </p>
   );
 }
 

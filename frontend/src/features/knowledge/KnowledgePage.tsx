@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Pagination } from "@/components/ui/pagination";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Can } from "@/lib/permissions";
@@ -24,9 +25,15 @@ const PAGE_SIZE = 20;
 /**
  * 知识库列表（D-039）：按名称筛选、分页；每个库显示文档数、失败数和授权情况，点进去是详情（文档、授权）。
  * 新建知识库在弹窗里做。管理员也只看到授权给自己或自己角色的库（D-017）。
+ * 有即将到期或已失效的文档时显示标签，点标签直接进详情并按该有效期筛选（#124）。
  */
 export function KnowledgePage() {
-  const [filter, setFilter] = useState({ keyword: "", page: 1, size: PAGE_SIZE });
+  const [filter, setFilter] = useState<{
+    keyword: string;
+    validity: "EXPIRING" | "EXPIRED" | null;
+    page: number;
+    size: number;
+  }>({ keyword: "", validity: null, page: 1, size: PAGE_SIZE });
   const [keyword, setKeyword] = useState("");
   const [creating, setCreating] = useState(false);
   const knowledgeBases = useQuery({
@@ -61,6 +68,23 @@ export function KnowledgePage() {
             onChange={(event) => setKeyword(event.target.value)}
           />
         </Label>
+        <Label className="flex flex-col gap-1 text-sm">
+          资料有效期
+          <NativeSelect
+            value={filter.validity ?? ""}
+            onChange={(event) =>
+              setFilter({
+                ...filter,
+                validity: (event.target.value || null) as "EXPIRING" | "EXPIRED" | null,
+                page: 1,
+              })
+            }
+          >
+            <NativeSelectOption value="">全部</NativeSelectOption>
+            <NativeSelectOption value="EXPIRING">有即将到期的</NativeSelectOption>
+            <NativeSelectOption value="EXPIRED">有已失效的</NativeSelectOption>
+          </NativeSelect>
+        </Label>
         <Button type="submit" size="sm" variant="outline">
           <Search aria-hidden="true" className="size-4" />
           查询
@@ -93,10 +117,22 @@ export function KnowledgePage() {
                   </Link>
                 </TableCell>
                 <TableCell>
-                  <span className="flex items-center gap-2">
+                  <span className="flex flex-wrap items-center gap-2">
                     {knowledgeBase.documentCount} 份
                     {knowledgeBase.failedCount > 0 && (
                       <Badge variant="destructive">{knowledgeBase.failedCount} 份失败</Badge>
+                    )}
+                    {knowledgeBase.expiringCount > 0 && (
+                      <Link to={`/admin/knowledge/${knowledgeBase.id}?validity=EXPIRING`}>
+                        <Badge className="hover:underline">{knowledgeBase.expiringCount} 份即将到期</Badge>
+                      </Link>
+                    )}
+                    {knowledgeBase.expiredCount > 0 && (
+                      <Link to={`/admin/knowledge/${knowledgeBase.id}?validity=EXPIRED`}>
+                        <Badge variant="destructive" className="hover:underline">
+                          {knowledgeBase.expiredCount} 份已失效
+                        </Badge>
+                      </Link>
                     )}
                   </span>
                 </TableCell>

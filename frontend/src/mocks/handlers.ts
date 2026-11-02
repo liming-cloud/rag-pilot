@@ -1,10 +1,10 @@
 import { http, HttpResponse } from "msw";
 import type { AnswerReview } from "@/features/answers/api";
 import type { Answer } from "@/features/chat/api";
-import type { KnowledgeBase, KnowledgeDocument } from "@/features/knowledge/api";
+import type { KnowledgeBase, KnowledgeDocument, Validity } from "@/features/knowledge/api";
 import type { UsageStats } from "@/features/stats/api";
 import { conversationHandlers, resetConversations } from "./conversations";
-import { accountName, currentIdentity, identityHandlers, resetIdentity } from "./identity";
+import { accountName, currentIdentity, forbidden, identityHandlers, resetIdentity } from "./identity";
 import { modelHandlers, resetModels } from "./models";
 import { resetSettings, settingHandlers } from "./settings";
 import { matches, paginate } from "./page";
@@ -17,7 +17,37 @@ export const sampleKnowledgeBases: KnowledgeBase[] = [
   ...Array.from({ length: 22 }, (_, index) => ({ id: 3 + index, name: `区域 ${index + 1} 门店规范` })),
 ];
 
-const sampleDocuments: Record<number, KnowledgeDocument[]> = {
+/** 存储的文档不带 validity，读取时按今天现算，与后端一致。 */
+type StoredDocument = Omit<KnowledgeDocument, "validity">;
+
+/** 提前多少天提醒到期，对应部署配置 rag.knowledge.expiry-warning-days（默认 30）。 */
+const WARNING_DAYS = 30;
+
+/** 统计时区（默认北京时间）的今天，yyyy-MM-dd。 */
+function today() {
+  return new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Shanghai" }).format(new Date());
+}
+
+function addDays(date: string, days: number) {
+  const next = new Date(`${date}T00:00:00Z`);
+  next.setUTCDate(next.getUTCDate() + days);
+  return next.toISOString().slice(0, 10);
+}
+
+/** 失效日期当天仍有效；未到生效日期的不参与检索。 */
+function validityOf(document: StoredDocument): Validity {
+  const now = today();
+  if (document.effectiveFrom && document.effectiveFrom > now) return "PENDING";
+  if (document.expiresOn && document.expiresOn < now) return "EXPIRED";
+  if (document.expiresOn && document.expiresOn <= addDays(now, WARNING_DAYS)) return "EXPIRING";
+  return "ACTIVE";
+}
+
+const withValidity = (document: StoredDocument): KnowledgeDocument => ({ ...document, validity: validityOf(document) });
+
+const longTerm = { effectiveFrom: null, expiresOn: null };
+
+const sampleDocuments: Record<number, StoredDocument[]> = {
   1: [
     {
       id: 11,
@@ -29,6 +59,61 @@ const sampleDocuments: Record<number, KnowledgeDocument[]> = {
       createdAt: "2026-10-26T09:00:00+08:00",
       replacesDocumentId: null,
       replacesFilename: null,
+      ...longTerm,
+    },
+    // 有效期的几种情况（日期相对今天，原型里随时都能看到）：旧版制度已失效、今天到期（当天仍有效）、
+    // 月底到期的促销规则、下周才生效的新制度。
+    {
+      id: 13,
+      filename: "临期与报损管理（旧版）.md",
+      status: "READY",
+      error: null,
+      chunkCount: 10,
+      sizeBytes: 16_200,
+      createdAt: "2026-03-01T09:00:00+08:00",
+      replacesDocumentId: null,
+      replacesFilename: null,
+      effectiveFrom: "2026-03-01",
+      expiresOn: addDays(today(), -10),
+    },
+    {
+      id: 14,
+      filename: "双十一活动执行方案.pdf",
+      status: "READY",
+      error: null,
+      chunkCount: 6,
+      sizeBytes: 220_000,
+      createdAt: "2026-10-20T09:00:00+08:00",
+      replacesDocumentId: null,
+      replacesFilename: null,
+      effectiveFrom: null,
+      expiresOn: today(),
+    },
+    {
+      id: 15,
+      filename: "会员积分规则（本季度）.docx",
+      status: "READY",
+      error: null,
+      chunkCount: 9,
+      sizeBytes: 64_000,
+      createdAt: "2026-10-01T09:00:00+08:00",
+      replacesDocumentId: null,
+      replacesFilename: null,
+      effectiveFrom: null,
+      expiresOn: addDays(today(), 18),
+    },
+    {
+      id: 16,
+      filename: "收银交接班制度（下周起执行）.md",
+      status: "READY",
+      error: null,
+      chunkCount: 5,
+      sizeBytes: 12_000,
+      createdAt: "2026-10-30T09:00:00+08:00",
+      replacesDocumentId: null,
+      replacesFilename: null,
+      effectiveFrom: addDays(today(), 5),
+      expiresOn: null,
     },
     {
       id: 12,
@@ -40,9 +125,10 @@ const sampleDocuments: Record<number, KnowledgeDocument[]> = {
       createdAt: "2026-10-26T09:05:00+08:00",
       replacesDocumentId: null,
       replacesFilename: null,
+      ...longTerm,
     },
     // 多生成一些文档，原型里能看到分页。
-    ...Array.from({ length: 30 }, (_, index): KnowledgeDocument => ({
+    ...Array.from({ length: 30 }, (_, index): StoredDocument => ({
       id: 300 + index,
       filename: `门店操作手册-第${index + 1}章.pdf`,
       status: "READY",
@@ -52,13 +138,14 @@ const sampleDocuments: Record<number, KnowledgeDocument[]> = {
       createdAt: "2026-10-27T10:00:00+08:00",
       replacesDocumentId: null,
       replacesFilename: null,
+      ...longTerm,
     })),
   ],
 };
 
 /** 假接口的可变数据；测试之间用 resetMockData 还原。 */
 let knowledgeBases: KnowledgeBase[] = [];
-let documents: Record<number, KnowledgeDocument[]> = {};
+let documents: Record<number, StoredDocument[]> = {};
 let members: Record<number, number[]> = {};
 /** 知识库授权给了哪些角色（D-038）。 */
 let roleGrants: Record<number, number[]> = {};
@@ -100,18 +187,28 @@ export function resetMockData() {
 }
 
 /**
- * 从 multipart 请求体里读出文件名和大小。不用 request.formData()：Node 24 在 jsdom 测试环境里解析时，
+ * 从 multipart 请求体里读出文件名、大小和其他表单字段。不用 request.formData()：Node 24 在 jsdom 测试环境里解析时，
  * 会用 jsdom 的 File 构造对象而触发 undici 的断言。
  */
 async function uploadedFile(request: Request) {
   const body = await request.text();
-  const name = /filename="([^"]*)"/.exec(body)?.[1] ?? "";
-  const content = body
-    .split("\r\n\r\n")
-    .slice(1)
-    .join("\r\n\r\n")
-    .replace(/\r\n--[^\r\n]*--\r\n$/, "");
-  return { name, size: new TextEncoder().encode(content).length };
+  const boundary = /boundary=(.+)$/.exec(request.headers.get("Content-Type") ?? "")?.[1] ?? "";
+  const parts = body.split(`--${boundary}`).filter((part) => part.includes("\r\n\r\n"));
+  const fields: Record<string, string> = {};
+  let name = "";
+  let size = 0;
+  for (const part of parts) {
+    const [head, ...rest] = part.split("\r\n\r\n");
+    const content = rest.join("\r\n\r\n").replace(/\r\n$/, "");
+    const filename = /filename="([^"]*)"/.exec(head!)?.[1];
+    if (filename !== undefined) {
+      name = filename;
+      size = new TextEncoder().encode(content).length;
+    } else {
+      fields[/name="([^"]*)"/.exec(head!)?.[1] ?? ""] = content;
+    }
+  }
+  return { name, size, fields };
 }
 
 const sampleReviews: AnswerReview[] = [
@@ -259,7 +356,16 @@ async function upload(knowledgeBaseId: number, request: Request, replacesDocumen
   if (list.some((document) => document.filename === file.name)) {
     return problem(409, "KNOWLEDGE_CONFLICT", `这份文件已经在知识库里了：${file.name}`);
   }
-  const created: KnowledgeDocument = {
+  // 上传新版本时没给有效期，就继承旧版本的失效日期（#124）。
+  const previous = list.find((document) => document.id === replacesDocumentId);
+  const given = "expiresOn" in file.fields;
+  const range = {
+    effectiveFrom: given ? file.fields.effectiveFrom || null : null,
+    expiresOn: given ? file.fields.expiresOn || null : (previous?.expiresOn ?? null),
+  };
+  const invalid = invalidRange(range);
+  if (invalid) return invalid;
+  const created: StoredDocument = {
     id: nextId++,
     filename: file.name,
     status: "PARSING",
@@ -269,10 +375,17 @@ async function upload(knowledgeBaseId: number, request: Request, replacesDocumen
     createdAt: new Date().toISOString(),
     replacesDocumentId,
     replacesFilename: null,
+    ...range,
   };
   list.unshift(created);
   pendingChunks.set(created.id, Math.max(1, Math.ceil(file.size / 1_500)));
-  return HttpResponse.json(created, { status: 201 });
+  return HttpResponse.json(withValidity(created), { status: 201 });
+}
+
+function invalidRange(range: { effectiveFrom: string | null; expiresOn: string | null }) {
+  return range.effectiveFrom && range.expiresOn && range.expiresOn < range.effectiveFrom
+    ? problem(400, "KNOWLEDGE_INVALID", "失效日期不能早于生效日期")
+    : null;
 }
 
 export const handlers = [
@@ -332,6 +445,9 @@ export const handlers = [
   http.get("/api/knowledge-bases/page", ({ request }) => {
     const url = new URL(request.url);
     const keyword = url.searchParams.get("keyword");
+    const validity = url.searchParams.get("validity");
+    const count = (id: number, state: Validity) =>
+      (documents[id] ?? []).filter((document) => validityOf(document) === state).length;
     return HttpResponse.json(
       paginate(
         knowledgeBases
@@ -342,10 +458,26 @@ export const handlers = [
             failedCount: (documents[knowledgeBase.id] ?? []).filter((document) => document.status === "FAILED").length,
             roleGrantCount: (roleGrants[knowledgeBase.id] ?? []).length,
             memberCount: (members[knowledgeBase.id] ?? []).length,
-          })),
+            expiringCount: count(knowledgeBase.id, "EXPIRING"),
+            expiredCount: count(knowledgeBase.id, "EXPIRED"),
+          }))
+          .filter(
+            (summary) => !validity || (validity === "EXPIRING" ? summary.expiringCount > 0 : summary.expiredCount > 0),
+          ),
         url,
       ),
     );
+  }),
+  // 运营概览的到期提醒：只算自己能访问的库，与列表口径一致。
+  http.get("/api/knowledge-bases/expiry-summary", () => {
+    const visible = knowledgeBases
+      .filter((knowledgeBase) => canAccess(knowledgeBase.id))
+      .flatMap((knowledgeBase) => documents[knowledgeBase.id] ?? []);
+    return HttpResponse.json({
+      expiring: visible.filter((document) => validityOf(document) === "EXPIRING").length,
+      expired: visible.filter((document) => validityOf(document) === "EXPIRED").length,
+      warningDays: WARNING_DAYS,
+    });
   }),
   http.get("/api/knowledge-bases/:id", ({ params }) => {
     const knowledgeBase = knowledgeBases.find((candidate) => candidate.id === Number(params.id));
@@ -400,12 +532,14 @@ export const handlers = [
     const url = new URL(request.url);
     const keyword = url.searchParams.get("keyword");
     const status = url.searchParams.get("status");
+    const validity = url.searchParams.get("validity");
     const snapshot = paginate(
       list
         .filter((document) => matches(keyword, document.filename))
         .filter((document) => !status || document.status === status)
+        .filter((document) => !validity || validityOf(document) === validity)
         .map((document) => ({
-          ...document,
+          ...withValidity(document),
           replacesFilename: list.find((other) => other.id === document.replacesDocumentId)?.filename ?? null,
         })),
       url,
@@ -426,6 +560,17 @@ export const handlers = [
     return documents[id].length < before
       ? new HttpResponse(null, { status: 204 })
       : problem(404, "KNOWLEDGE_NOT_FOUND", "文档不存在");
+  }),
+  http.put("/api/knowledge-bases/:id/documents/:documentId/validity", async ({ params, request }) => {
+    const denied = forbidden("doc:update");
+    if (denied) return denied;
+    const document = documents[Number(params.id)]?.find((candidate) => candidate.id === Number(params.documentId));
+    if (!document) return problem(404, "KNOWLEDGE_NOT_FOUND", "文档不存在");
+    const range = (await request.json()) as { effectiveFrom: string | null; expiresOn: string | null };
+    const invalid = invalidRange(range);
+    if (invalid) return invalid;
+    Object.assign(document, { effectiveFrom: range.effectiveFrom || null, expiresOn: range.expiresOn || null });
+    return HttpResponse.json(withValidity(document));
   }),
   // 与后端一致：只收 PDF、Word、Excel、TXT、Markdown，同名文件视为重复。
   http.post("/api/knowledge-bases/:id/documents", ({ params, request }) => upload(Number(params.id), request, null)),

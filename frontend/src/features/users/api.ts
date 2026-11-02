@@ -74,3 +74,33 @@ export async function unlockUser(id: number): Promise<void> {
   const response = await authFetch(`/api/users/${id}/unlock`, { method: "POST" });
   if (!response.ok) await json(response, "解锁失败");
 }
+
+/** 导入文件里的一行；line 是文件里的行号（表头是第 1 行），用于逐行报错。 */
+export type ImportRow = { line: number; username: string; displayName: string; roleNames: string[] };
+export type ImportProblem = { line: number; message: string };
+
+/**
+ * 预检（user:import）：逐行检查用户名格式和重复、是否已存在、角色是否存在、是否超出自己可分配的范围，
+ * 返回全部问题；不写入任何数据。
+ */
+export async function checkImport(rows: ImportRow[]): Promise<ImportProblem[]> {
+  const response = await authFetch("/api/users/import/check", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ rows }),
+  });
+  return (await json<{ problems: ImportProblem[] }>(response, "预检失败")).problems;
+}
+
+/**
+ * 导入（user:import）：后端重新预检，有任何一行有问题就一条都不写入；全部通过时用统一初始密码建号，
+ * 所有导入的账号首次登录必须先改密码（D-038）。
+ */
+export async function importUsers(rows: ImportRow[], password: string): Promise<{ imported: number }> {
+  const response = await authFetch("/api/users/import", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ rows, password }),
+  });
+  return json(response, "导入失败");
+}

@@ -87,11 +87,80 @@ describe("用户管理页", () => {
     expect(await within(await row("staff02")).findByText("已启用")).toBeInTheDocument();
   });
 
+  /** 用 CSV 文件打开导入弹窗并选文件，返回弹窗。 */
+  async function chooseImport(content: string) {
+    fireEvent.click(await screen.findByRole("button", { name: "批量导入" }));
+    const dialog = await screen.findByRole("dialog", { name: "批量导入账号" });
+    fireEvent.change(within(dialog).getByLabelText("选择导入文件"), {
+      target: { files: [new File([content], "账号.csv", { type: "text/csv" })] },
+    });
+    return dialog;
+  }
+
+  it("批量导入：预检全部通过后填统一初始密码导入，导入的账号出现在列表里", async () => {
+    renderPage();
+    await row("staff01");
+
+    const dialog = await chooseImport("用户名,显示名,角色\nnew01,新员工一,员工\nnew02,新员工二,员工;店长\n");
+
+    expect(await within(dialog).findByText("共 2 行，全部通过检查。")).toBeInTheDocument();
+    fireEvent.change(within(dialog).getByLabelText(/统一初始密码/), { target: { value: "Welcome-2026" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "导入 2 个账号" }));
+
+    expect(await within(dialog).findByText(/已导入 2 个账号/)).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole("button", { name: "完成" }));
+    fireEvent.change(screen.getByLabelText("关键词"), { target: { value: "new0" } });
+    fireEvent.click(screen.getByRole("button", { name: "查询" }));
+    expect(await screen.findByText("共 2 条")).toBeInTheDocument();
+    expect(within(await row("new02")).getByText("店长")).toBeInTheDocument();
+  });
+
+  it("批量导入：有一行有问题就不能导入，逐行列出原因，一个都不写入", async () => {
+    renderPage();
+    await row("staff01");
+
+    const dialog = await chooseImport(
+      [
+        "用户名,显示名,角色",
+        "ok01,没问题,员工",
+        "staff01,已存在,员工",
+        "ok01,文件里重复,员工",
+        "boss,越权,超级管理员",
+        "x,名字太短,不存在的角色",
+      ].join("\n"),
+    );
+
+    expect(await within(dialog).findByText(/共 5 行，4 行有问题/)).toBeInTheDocument();
+    const checked = within(dialog).getByRole("table", { name: "导入预检" });
+    expect(within(checked).getByText("用户名已存在")).toBeInTheDocument();
+    expect(within(checked).getByText("与第 2 行的用户名重复")).toBeInTheDocument();
+    expect(within(checked).getByText("不能分配超出自己权限的角色“超级管理员”")).toBeInTheDocument();
+    expect(within(checked).getByText(/用户名必须是 3 到 50 个.*；没有叫“不存在的角色”的角色/)).toBeInTheDocument();
+    // 默认只看有问题的行；没有初始密码和导入按钮。
+    expect(within(checked).queryByText("没问题")).not.toBeInTheDocument();
+    expect(within(dialog).queryByRole("button", { name: /^导入/ })).not.toBeInTheDocument();
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "取消" }));
+    fireEvent.change(screen.getByLabelText("关键词"), { target: { value: "ok01" } });
+    fireEvent.click(screen.getByRole("button", { name: "查询" }));
+    expect(await screen.findByText("没有符合条件的账号")).toBeInTheDocument();
+  });
+
+  it("批量导入：表头不对时提示下载模板", async () => {
+    renderPage();
+    await row("staff01");
+
+    const dialog = await chooseImport("账号,名字\nwang,小王\n");
+
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent("表头必须是“用户名，显示名，角色”");
+  });
+
   it("没有权限时读不到账号、看不到新建按钮", async () => {
     signInAs("zhang");
     renderPage();
 
     expect(await screen.findByText("没有权限执行此操作，请联系管理员")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "新建账号" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "批量导入" })).not.toBeInTheDocument();
   });
 });

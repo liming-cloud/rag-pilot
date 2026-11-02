@@ -1,21 +1,37 @@
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Search, Upload } from "lucide-react";
+import { FolderUp, Pencil, Search, Upload } from "lucide-react";
 import { type DragEvent, type FormEvent, useState } from "react";
+import { useSearchParams } from "react-router";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Pagination } from "@/components/ui/pagination";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Can } from "@/lib/permissions";
+import { Can, useCan } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
-import { deleteDocument, type DocumentFilter, fetchDocuments, type KnowledgeDocument, uploadDocument } from "./api";
+import {
+  deleteDocument,
+  type DocumentFilter,
+  fetchDocuments,
+  type KnowledgeDocument,
+  uploadDocument,
+  VALIDITY,
+  type Validity,
+  type ValidityRange,
+} from "./api";
+import { ACCEPT, type BatchItem, MAX_BATCH, prepare, run } from "./batchUpload";
+import { UploadBatch } from "./UploadBatch";
+import { rangeParts, ReplaceDialog, ValidityDialog } from "./ValidityDialog";
 
 const PAGE_SIZE = 20;
-const ACCEPT = ".pdf,.docx,.xlsx,.xls,.txt,.md,.markdown";
 
-type Uploading = { key: string; filename: string; message: string | null };
+/** 一批上传：普通上传，或某份文档的新版本（带上有效期）。重试时沿用同样的参数。 */
+type Batch = { items: BatchItem[]; replacesDocumentId?: number; validity?: ValidityRange };
+
+const VALIDITY_FILTERS = ["EXPIRING", "EXPIRED", "PENDING"] as const;
 
 const STATUS = {
   READY: { label: "可用", variant: "success" },
@@ -24,12 +40,16 @@ const STATUS = {
 } as const;
 
 /**
- * 知识库的文档（D-039）：顶部上传（按钮或拖到表格上），按文件名、状态筛选，分页表格。
+ * 知识库的文档（D-039）：顶部上传（选文件、选文件夹或拖到表格上），按文件名、状态、有效期筛选，分页表格。
+ * 一批最多 200 个文件、同时传 3 个，结束后汇总成功、重复、不支持、失败，失败的可以只重试这些（#124）。
  * 入库在后台进行：当前页有解析中的文档时每秒刷新一次，全部处理完就停。
+ * 地址里的 validity 参数（如从知识库列表的“即将到期”点进来）作为初始筛选。
  */
 export function DocumentsPanel({ knowledgeBaseId }: { knowledgeBaseId: number }) {
   const queryClient = useQueryClient();
-  const [filter, setFilter] = useState<DocumentFilter>({ page: 1, size: PAGE_SIZE });
+  const [params] = useSearchParams();
+  const initialValidity = VALIDITY_FILTERS.find((value) => value === params.get("validity")) ?? null;
+  const [filter, setFilter] = useState<DocumentFilter>({ page: 1, size: PAGE_SIZE, validity: initialValidity });
   const [keyword, setKeyword] = useState("");
   const documents = useQuery({
     queryKey: ["knowledge-bases", knowledgeBaseId, "documents", filter],
@@ -38,31 +58,56 @@ export function DocumentsPanel({ knowledgeBaseId }: { knowledgeBaseId: number })
     refetchInterval: (query) =>
       query.state.data?.items.some((document) => document.status === "PARSING") ? 1000 : false,
   });
-  const [uploads, setUploads] = useState<Uploading[]>([]);
+  const [batch, setBatch] = useState<Batch | null>(null);
+  const [tooMany, setTooMany] = useState<number | null>(null);
   const [dragging, setDragging] = useState(false);
+  const [dialog, setDialog] = useState<{ kind: "validity" | "replace"; document: KnowledgeDocument } | null>(null);
   const refresh = () => queryClient.invalidateQueries({ queryKey: ["knowledge-bases"] });
 
-  async function uploadAll(files: File[], replacesDocumentId?: number) {
-    const batch = files.map((file) => ({ key: `${Date.now()}-${file.name}`, filename: file.name, message: null }));
-    setUploads((current) => [...current, ...batch]);
-    // 逐个上传，避免同时占满模型调用。
-    for (const [index, file] of files.entries()) {
-      const key = batch[index]!.key;
-      try {
-        await uploadDocument(knowledgeBaseId, file, replacesDocumentId);
-        setUploads((current) => current.filter((upload) => upload.key !== key));
+  async function start(next: Batch) {
+    setBatch(next);
+    await run(
+      next.items,
+      async (file) => {
+        await uploadDocument(knowledgeBaseId, file, next.replacesDocumentId, next.validity);
         await refresh();
-      } catch (e) {
-        const message = e instanceof Error ? e.message : "上传失败";
-        setUploads((current) => current.map((upload) => (upload.key === key ? { ...upload, message } : upload)));
-      }
+      },
+      (key, change) =>
+        setBatch(
+          (current) =>
+            current && {
+              ...current,
+              items: current.items.map((item) => (item.key === key ? { ...item, ...change } : item)),
+            },
+        ),
+    );
+  }
+
+  function uploadAll(files: File[]) {
+    const items = prepare(files);
+    if (items.length === 0) return;
+    if (items.length > MAX_BATCH) {
+      setTooMany(items.length);
+      return;
     }
+    setTooMany(null);
+    void start({ items });
+  }
+
+  function retry() {
+    if (!batch) return;
+    void start({
+      ...batch,
+      items: batch.items.map((item) =>
+        item.outcome === "failed" ? { ...item, outcome: "pending", message: null } : item,
+      ),
+    });
   }
 
   function drop(event: DragEvent) {
     event.preventDefault();
     setDragging(false);
-    void uploadAll([...event.dataTransfer.files]);
+    uploadAll([...event.dataTransfer.files]);
   }
 
   function search(event: FormEvent) {
@@ -92,50 +137,75 @@ export function DocumentsPanel({ knowledgeBaseId }: { knowledgeBaseId: number })
               <NativeSelectOption value="FAILED">失败</NativeSelectOption>
             </NativeSelect>
           </Label>
+          <Label className="flex flex-col gap-1 text-sm">
+            有效期
+            <NativeSelect
+              value={filter.validity ?? ""}
+              onChange={(event) =>
+                setFilter({ ...filter, validity: (event.target.value || null) as Validity | null, page: 1 })
+              }
+            >
+              <NativeSelectOption value="">全部</NativeSelectOption>
+              <NativeSelectOption value="EXPIRING">即将到期</NativeSelectOption>
+              <NativeSelectOption value="EXPIRED">已失效</NativeSelectOption>
+              <NativeSelectOption value="PENDING">未生效</NativeSelectOption>
+            </NativeSelect>
+          </Label>
           <Button type="submit" size="sm" variant="outline">
             <Search aria-hidden="true" className="size-4" />
             查询
           </Button>
         </form>
         <Can permission="doc:upload">
-          <Button asChild size="sm" className="ml-auto">
-            <Label>
-              <Upload aria-hidden="true" className="size-4" />
-              上传文档
-              <Input
-                type="file"
-                multiple
-                accept={ACCEPT}
-                aria-label="选择文件"
-                className="sr-only"
-                onChange={(event) => {
-                  void uploadAll([...(event.target.files ?? [])]);
-                  event.target.value = "";
-                }}
-              />
-            </Label>
-          </Button>
+          <div className="ml-auto flex gap-2">
+            <Button asChild size="sm" variant="outline">
+              <Label>
+                <FolderUp aria-hidden="true" className="size-4" />
+                上传文件夹
+                <Input
+                  type="file"
+                  multiple
+                  aria-label="选择文件夹"
+                  className="sr-only"
+                  // 浏览器的文件夹选择：取文件夹里（含子文件夹）的全部文件，不保留目录层级。
+                  {...{ webkitdirectory: "" }}
+                  onChange={(event) => {
+                    uploadAll([...(event.target.files ?? [])]);
+                    event.target.value = "";
+                  }}
+                />
+              </Label>
+            </Button>
+            <Button asChild size="sm">
+              <Label>
+                <Upload aria-hidden="true" className="size-4" />
+                上传文档
+                <Input
+                  type="file"
+                  multiple
+                  accept={ACCEPT}
+                  aria-label="选择文件"
+                  className="sr-only"
+                  onChange={(event) => {
+                    uploadAll([...(event.target.files ?? [])]);
+                    event.target.value = "";
+                  }}
+                />
+              </Label>
+            </Button>
+          </div>
         </Can>
       </div>
       <p className="text-xs text-muted-foreground">
-        支持 PDF、Word（.docx）、Excel、TXT 和 Markdown，单个文件不超过 50 MB，也可以把文件拖到下面的表格上；扫描件 PDF
-        暂不支持。
+        支持 PDF、Word（.docx）、Excel、TXT 和 Markdown，单个文件不超过 50 MB，一次最多 {MAX_BATCH}{" "}
+        个文件，也可以把文件拖到下面的表格上；选文件夹时会跳过不支持的格式。扫描件 PDF 暂不支持。
       </p>
-      {uploads.length > 0 && (
-        <ul aria-label="上传中" className="flex flex-col gap-1 text-sm">
-          {uploads.map((upload) =>
-            upload.message ? (
-              <li key={upload.key} role="alert" className="text-destructive">
-                {upload.filename}：{upload.message}
-              </li>
-            ) : (
-              <li key={upload.key} className="text-muted-foreground">
-                {upload.filename}：上传中…
-              </li>
-            ),
-          )}
-        </ul>
+      {tooMany !== null && (
+        <p role="alert" className="text-sm text-destructive">
+          一次最多上传 {MAX_BATCH} 个文件，这次选了 {tooMany} 个，请分批选择。
+        </p>
       )}
+      {batch && <UploadBatch items={batch.items} onRetry={retry} onClose={() => setBatch(null)} />}
       {documents.isError && <p className="text-destructive">{documents.error.message}</p>}
       <div
         onDragOver={(event) => {
@@ -151,7 +221,7 @@ export function DocumentsPanel({ knowledgeBaseId }: { knowledgeBaseId: number })
             <TableRow>
               <TableHead>文件</TableHead>
               <TableHead>状态</TableHead>
-              <TableHead>大小</TableHead>
+              <TableHead>有效期</TableHead>
               <TableHead className="text-right">操作</TableHead>
             </TableRow>
           </TableHeader>
@@ -159,7 +229,9 @@ export function DocumentsPanel({ knowledgeBaseId }: { knowledgeBaseId: number })
             {documents.data?.items.length === 0 && (
               <TableRow>
                 <TableCell colSpan={4} className="py-6 text-center text-muted-foreground">
-                  {filter.keyword || filter.status ? "没有符合条件的文档" : "还没有文档，先上传一份吧。"}
+                  {filter.keyword || filter.status || filter.validity
+                    ? "没有符合条件的文档"
+                    : "还没有文档，先上传一份吧。"}
                 </TableCell>
               </TableRow>
             )}
@@ -167,7 +239,8 @@ export function DocumentsPanel({ knowledgeBaseId }: { knowledgeBaseId: number })
               <DocumentRow
                 key={document.id}
                 document={document}
-                onReplace={(file) => void uploadAll([file], document.id)}
+                onValidity={() => setDialog({ kind: "validity", document })}
+                onReplace={() => setDialog({ kind: "replace", document })}
                 onDelete={async () => {
                   await deleteDocument(knowledgeBaseId, document.id);
                   await refresh();
@@ -185,20 +258,40 @@ export function DocumentsPanel({ knowledgeBaseId }: { knowledgeBaseId: number })
           onChange={(next) => setFilter({ ...filter, ...next })}
         />
       )}
+      <Dialog open={dialog !== null} onOpenChange={(open) => !open && setDialog(null)}>
+        {dialog?.kind === "validity" && (
+          <ValidityDialog knowledgeBaseId={knowledgeBaseId} document={dialog.document} onDone={() => setDialog(null)} />
+        )}
+        {dialog?.kind === "replace" && (
+          <ReplaceDialog
+            document={dialog.document}
+            onSubmit={(file, validity) =>
+              void start({ items: prepare([file]), replacesDocumentId: dialog.document.id, validity })
+            }
+            onDone={() => setDialog(null)}
+          />
+        )}
+      </Dialog>
     </section>
   );
 }
 
-/** 一份文档：状态、分块数、失败原因，以及“上传新版本”和“删除”（行内二次确认）。 */
+/**
+ * 一份文档：状态、分块数、失败原因、有效期，以及“上传新版本”和“删除”（行内二次确认）。
+ * 有修改权限时点有效期本身就能改，不再单占一个操作按钮，窄屏下操作列放得下。
+ */
 function DocumentRow({
   document,
+  onValidity,
   onReplace,
   onDelete,
 }: {
   document: KnowledgeDocument;
-  onReplace: (file: File) => void;
+  onValidity: () => void;
+  onReplace: () => void;
   onDelete: () => Promise<void>;
 }) {
+  const canUpdate = useCan("doc:update");
   const [confirming, setConfirming] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const status = STATUS[document.status];
@@ -214,9 +307,10 @@ function DocumentRow({
 
   return (
     <TableRow>
-      <TableCell className="max-w-md py-2.5">
+      <TableCell className="max-w-md min-w-40 py-2.5">
         <div className="flex flex-col gap-0.5">
-          <span className="truncate font-medium">{document.filename}</span>
+          <span className="font-medium wrap-anywhere">{document.filename}</span>
+          <span className="text-xs text-muted-foreground">{formatSize(document.sizeBytes)}</span>
           {document.replacesFilename && (
             <span className="text-xs text-muted-foreground">替换《{document.replacesFilename}》</span>
           )}
@@ -230,12 +324,36 @@ function DocumentRow({
         </div>
       </TableCell>
       <TableCell>
-        <Badge variant={status.variant}>{status.label}</Badge>
-        {document.status === "READY" && (
-          <span className="ml-2 text-xs text-muted-foreground">{document.chunkCount} 个分块</span>
-        )}
+        <div className="flex flex-col items-start gap-0.5">
+          <Badge variant={status.variant}>{status.label}</Badge>
+          {document.status === "READY" && (
+            <span className="text-xs whitespace-nowrap text-muted-foreground">{document.chunkCount} 个分块</span>
+          )}
+        </div>
       </TableCell>
-      <TableCell className="text-muted-foreground">{formatSize(document.sizeBytes)}</TableCell>
+      <TableCell>
+        <div className="flex flex-col items-start gap-0.5">
+          {canUpdate ? (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="-ml-2 h-auto min-h-7 justify-start px-2 text-left font-normal whitespace-normal text-muted-foreground"
+              aria-label={`有效期 ${document.filename}`}
+              onClick={onValidity}
+            >
+              <Range document={document} />
+              <Pencil aria-hidden="true" className="size-3" />
+            </Button>
+          ) : (
+            <span className="text-sm text-muted-foreground">
+              <Range document={document} />
+            </span>
+          )}
+          {document.validity !== "ACTIVE" && (
+            <Badge variant={VALIDITY[document.validity].variant}>{VALIDITY[document.validity].label}</Badge>
+          )}
+        </div>
+      </TableCell>
       <TableCell className="text-right">
         {confirming ? (
           <div className="flex items-center justify-end gap-1">
@@ -248,23 +366,10 @@ function DocumentRow({
             </Button>
           </div>
         ) : (
-          <div className="flex items-center justify-end gap-1">
+          <div className="flex flex-wrap items-center justify-end gap-1">
             <Can permission="doc:replace">
-              <Button asChild size="sm" variant="ghost">
-                <Label>
-                  上传新版本
-                  <Input
-                    type="file"
-                    accept={ACCEPT}
-                    aria-label={`上传新版本 ${document.filename}`}
-                    className="sr-only"
-                    onChange={(event) => {
-                      const file = event.target.files?.[0];
-                      if (file) onReplace(file);
-                      event.target.value = "";
-                    }}
-                  />
-                </Label>
+              <Button size="sm" variant="ghost" aria-label={`上传新版本 ${document.filename}`} onClick={onReplace}>
+                上传新版本
               </Button>
             </Can>
             <Can permission="doc:delete">
@@ -281,6 +386,18 @@ function DocumentRow({
         )}
       </TableCell>
     </TableRow>
+  );
+}
+
+function Range({ document }: { document: KnowledgeDocument }) {
+  return (
+    <span className="flex flex-col">
+      {rangeParts(document).map((part) => (
+        <span key={part} className="whitespace-nowrap">
+          {part}
+        </span>
+      ))}
+    </span>
   );
 }
 
