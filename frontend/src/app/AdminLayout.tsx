@@ -3,12 +3,13 @@ import { useState } from "react";
 import { Link, NavLink, Outlet, useLocation } from "react-router";
 import { Button } from "@/components/ui/button";
 import { useMe } from "@/lib/permissions";
+import { APP_VERSION } from "@/lib/version";
 import { cn } from "@/lib/utils";
 import { type AdminMenu, adminMenusFor, useSignOut } from "./AppShell";
 
 /**
  * 管理端布局（D-038）：左侧树形菜单，只显示有菜单权限的项，一个都没有的分组整组隐藏；分组可以折叠，折叠状态记在
- * 本机。当前页面所在的分组始终展开。底部显示当前账号、回到问答和退出。
+ * 本机。当前页面所在的分组始终展开。底部显示当前账号、回到问答、退出和运行的版本（D-048）。
  */
 export function AdminLayout() {
   const me = useMe();
@@ -45,6 +46,7 @@ export function AdminLayout() {
             <LogOut aria-hidden="true" className="size-4" />
             退出
           </Button>
+          <span className="px-3 text-xs text-muted-foreground">版本 {APP_VERSION}</span>
         </div>
       </aside>
       <div className="min-h-0 flex-1 overflow-y-auto print:overflow-visible">

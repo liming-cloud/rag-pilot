@@ -8,6 +8,9 @@ RUN ./mvnw -B -ntp -pl backend/rag-app -am package -DskipTests
 
 # 运行阶段：只保留 JRE 和一个 jar，以非 root 用户运行。
 FROM eclipse-temurin:25-jre
+# 版本号（D-048）：发布时由 git tag 传入，/actuator/info 显示。
+ARG RAG_VERSION=dev
+ENV RAG_VERSION=${RAG_VERSION}
 WORKDIR /opt/rag
 # 上传文件目录预先归属运行用户，命名卷首次挂载时会继承这个属主。
 RUN mkdir -p /data/files && chown 10001:10001 /data/files
