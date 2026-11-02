@@ -56,7 +56,7 @@ class AskController {
         var tenantId = currentUser.tenantId();
         var userId = currentUser.userId();
         var answer = answers.ask(tenantId, userId, request.knowledgeBaseIds(), request.question());
-        return log.record(tenantId, userId, request.question(), answer);
+        return log.record(tenantId, userId, request.question(), answer, request.knowledgeBaseIds());
     }
 
     /**
@@ -75,7 +75,8 @@ class AskController {
                 var answer = answers.ask(tenantId, userId, request.knowledgeBaseIds(), request.question(),
                         delta -> send(emitter, "delta", Map.of("text", delta)),
                         status -> send(emitter, "status", Map.of("text", status)));
-                send(emitter, "done", log.record(tenantId, userId, request.question(), answer));
+                send(emitter, "done", log.record(tenantId, userId, request.question(), answer,
+                        request.knowledgeBaseIds()));
                 emitter.complete();
             } catch (BusinessException e) {
                 finishWithError(emitter, e.code(), e.getMessage());

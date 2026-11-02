@@ -4,6 +4,8 @@ import com.liming.rag.answering.api.Answer;
 import com.liming.rag.answering.domain.AnswerRecord;
 import com.liming.rag.answering.domain.AnswerRecordRepository;
 import com.liming.rag.identity.api.UserDirectory;
+import com.liming.rag.knowledge.api.KnowledgeAccess;
+import com.liming.rag.knowledge.api.KnowledgeBaseRef;
 import com.liming.rag.settings.api.AnsweringSettings;
 import com.liming.rag.shared.TenantId;
 import com.liming.rag.shared.UserId;
@@ -25,13 +27,15 @@ public class AnswerLogService {
     private final AnswerRecordRepository records;
     private final AnswerReviews reviews;
     private final UserDirectory users;
+    private final KnowledgeAccess access;
     private final AnsweringSettings settings;
 
     AnswerLogService(AnswerRecordRepository records, AnswerReviews reviews, UserDirectory users,
-            AnsweringSettings settings) {
+            KnowledgeAccess access, AnsweringSettings settings) {
         this.records = records;
         this.reviews = reviews;
         this.users = users;
+        this.access = access;
         this.settings = settings;
     }
 
@@ -103,10 +107,33 @@ public class AnswerLogService {
         return find(tenantId, answerId).question();
     }
 
-    /** 记下一次问答，返回带 id 的回答。 */
+    /** 记下一次问答，返回带 id 的回答；没点名知识库，检索的是提问人能访问的全部知识库。 */
     @Transactional
     public Answer record(TenantId tenantId, UserId asker, String question, Answer answer) {
-        return answer.withId(records.record(tenantId, asker, question.strip(), answer));
+        return record(tenantId, asker, question, answer, List.of());
+    }
+
+    /**
+     * 记下一次问答，连同实际检索的知识库：点名的库里提问人能访问的那些，没点名时是能访问的全部（D-047）。
+     * 检索时的权限过滤仍在 rag-knowledge 的检索服务里，这里只为了让知识缺口显示涉及的知识库。
+     *
+     * @param requested 员工点名的知识库，可以为空
+     */
+    @Transactional
+    public Answer record(TenantId tenantId, UserId asker, String question, Answer answer, List<Long> requested) {
+        var accessible = access.accessible(tenantId, asker).stream().map(KnowledgeBaseRef::id).toList();
+        var searched = requested == null || requested.isEmpty() ? accessible
+                : requested.stream().distinct().filter(accessible::contains).toList();
+        return recordSearched(tenantId, asker, question, answer, searched);
+    }
+
+    /**
+     * 记下一次问答，{@code searched} 是已经按权限算好的实际检索范围（会话提问时由会话给出，为空表示所选的库都已收回授权）。
+     */
+    @Transactional
+    public Answer recordSearched(TenantId tenantId, UserId asker, String question, Answer answer,
+            List<Long> searched) {
+        return answer.withId(records.record(tenantId, asker, question.strip(), answer, List.copyOf(searched)));
     }
 
     /**

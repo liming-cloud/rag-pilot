@@ -95,7 +95,7 @@ export function GapsPage() {
               <TableHead>代表问题</TableHead>
               <TableHead className="w-24 text-right">待处理 / 共</TableHead>
               <TableHead className="w-32">类型</TableHead>
-              <TableHead className="hidden w-40 lg:table-cell">当时引用</TableHead>
+              <TableHead className="hidden w-40 lg:table-cell">知识库</TableHead>
               <TableHead className="w-28">最近一次</TableHead>
             </TableRow>
           </TableHeader>
@@ -177,11 +177,17 @@ function GapRow({ group, onOpen }: { group: GapGroup; onOpen: () => void }) {
         </div>
       </TableCell>
       <TableCell className="hidden text-muted-foreground lg:table-cell">
-        <span className="line-clamp-2">{group.citedDocuments.join("、") || "—"}</span>
+        <span title={group.knowledgeBases.join("、")}>{knowledgeBaseLabel(group.knowledgeBases)}</span>
       </TableCell>
       <TableCell className="whitespace-nowrap text-muted-foreground">
         {new Date(group.lastAskedAt).toLocaleDateString("zh-CN", { month: "numeric", day: "numeric" })}
       </TableCell>
     </TableRow>
   );
+}
+
+/** 最多列两个库，其余用“等 N 个”；员工没点名知识库时检索的是全部可访问的库，列表可能很长。 */
+function knowledgeBaseLabel(names: string[]) {
+  if (names.length === 0) return "—";
+  return names.length <= 2 ? names.join("、") : `${names.slice(0, 2).join("、")} 等 ${names.length} 个`;
 }

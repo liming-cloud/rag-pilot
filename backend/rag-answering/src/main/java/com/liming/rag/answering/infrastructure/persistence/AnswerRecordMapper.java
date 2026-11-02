@@ -14,7 +14,7 @@ interface AnswerRecordMapper {
     long insert(@Param("tenantId") long tenantId, @Param("userId") long userId, @Param("question") String question,
             @Param("answerText") String answerText, @Param("refused") boolean refused,
             @Param("refusalReason") String refusalReason, @Param("topRelevance") Double topRelevance,
-            @Param("rewrittenQuestion") String rewrittenQuestion);
+            @Param("rewrittenQuestion") String rewrittenQuestion, @Param("knowledgeBaseIds") Long[] knowledgeBaseIds);
 
     void insertCitation(@Param("answerId") long answerId, @Param("index") int index, @Param("chunkId") long chunkId,
             @Param("documentId") long documentId, @Param("documentName") String documentName,

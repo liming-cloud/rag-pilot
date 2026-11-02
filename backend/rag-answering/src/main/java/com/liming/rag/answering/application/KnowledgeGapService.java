@@ -6,6 +6,7 @@ import com.liming.rag.answering.application.GapRecords.GapRecord;
 import com.liming.rag.answering.domain.AnswerRecord;
 import com.liming.rag.answering.domain.AnswerRecordRepository;
 import com.liming.rag.identity.api.UserDirectory;
+import com.liming.rag.knowledge.api.KnowledgeAccess;
 import com.liming.rag.settings.api.AnsweringSettings;
 import com.liming.rag.shared.TenantId;
 import com.liming.rag.shared.UserId;
@@ -18,6 +19,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -44,15 +46,17 @@ public class KnowledgeGapService {
     private final AnswerRecordRepository records;
     private final EmbeddingClient embeddings;
     private final UserDirectory users;
+    private final KnowledgeAccess access;
     private final AnsweringSettings settings;
     private final AnsweringProperties properties;
 
     KnowledgeGapService(GapRecords gapRecords, AnswerRecordRepository records, EmbeddingClient embeddings,
-            UserDirectory users, AnsweringSettings settings, AnsweringProperties properties) {
+            UserDirectory users, KnowledgeAccess access, AnsweringSettings settings, AnsweringProperties properties) {
         this.gapRecords = gapRecords;
         this.records = records;
         this.embeddings = embeddings;
         this.users = users;
+        this.access = access;
         this.settings = settings;
         this.properties = properties;
     }
@@ -76,15 +80,17 @@ public class KnowledgeGapService {
      * @param id 代表问题对应的最近一条记录，“重新回答”用它
      * @param question 代表问题：类里出现最多的原文
      * @param phrasings 不同的问题原文数
+     * @param knowledgeBases 类里的记录当时检索过的知识库，出现多的在前；提示资料该补到哪个库
      * @param citedDocuments 差评记录当时引用的文档（拒答没有引用），提示该改哪份资料
      */
     public record Group(long id, String question, int count, int openCount, int refusedCount, int dislikedCount,
-            int phrasings, OffsetDateTime lastAskedAt, List<String> citedDocuments, List<Entry> records) {
+            int phrasings, OffsetDateTime lastAskedAt, List<String> knowledgeBases, List<String> citedDocuments,
+            List<Entry> records) {
     }
 
-    /** 类里的一条原始记录。 */
+    /** 类里的一条原始记录；{@code knowledgeBases} 是当时检索的知识库，旧记录为空。 */
     public record Entry(long id, String question, String askerName, OffsetDateTime createdAt, boolean refused,
-            String comment, List<String> citedDocuments, String reviewStatus) {
+            String comment, List<String> knowledgeBases, List<String> citedDocuments, String reviewStatus) {
     }
 
     /**
@@ -139,8 +145,11 @@ public class KnowledgeGapService {
         }
 
         var names = users.summaries(tenantId, found.stream().map(GapRecord::userId).distinct().toList());
+        // 只用来显示名字；已删除的库没有名字，不显示。
+        var knowledgeBaseNames = access.names(tenantId,
+                found.stream().flatMap(record -> record.knowledgeBaseIds().stream()).distinct().toList());
         var groups = clusters.stream()
-                .map(indexes -> group(indexes.stream().map(texts::get).toList(), byText, names))
+                .map(indexes -> group(indexes.stream().map(texts::get).toList(), byText, names, knowledgeBaseNames))
                 .sorted(Comparator.comparingInt(Group::openCount).thenComparingInt(Group::count)
                         .thenComparing(Group::lastAskedAt).reversed())
                 .toList();
@@ -191,7 +200,7 @@ public class KnowledgeGapService {
     }
 
     private static Group group(List<String> texts, Map<String, List<GapRecord>> byText,
-            Map<Long, UserDirectory.UserSummary> names) {
+            Map<Long, UserDirectory.UserSummary> names, Map<Long, String> knowledgeBaseNames) {
         var members = texts.stream().flatMap(text -> byText.get(text).stream())
                 .sorted(Comparator.comparing(GapRecord::createdAt).reversed().thenComparing(GapRecord::id,
                         Comparator.reverseOrder()))
@@ -200,16 +209,25 @@ public class KnowledgeGapService {
         var latestOfRepresentative = byText.get(representative).getFirst();
         var documents = new LinkedHashSet<String>();
         members.forEach(record -> documents.addAll(record.citedDocuments()));
+        var knowledgeBaseCounts = members.stream().flatMap(record -> record.knowledgeBaseIds().stream())
+                .filter(knowledgeBaseNames::containsKey)
+                .collect(Collectors.groupingBy(id -> id, LinkedHashMap::new, Collectors.counting()));
+        var knowledgeBases = knowledgeBaseCounts.entrySet().stream()
+                .sorted(Map.Entry.<Long, Long>comparingByValue().reversed())
+                .map(entry -> knowledgeBaseNames.get(entry.getKey()))
+                .toList();
         return new Group(latestOfRepresentative.id(), representative, members.size(),
                 (int) members.stream().filter(record -> "OPEN".equals(record.reviewStatus())).count(),
                 (int) members.stream().filter(GapRecord::refused).count(),
                 (int) members.stream().filter(record -> !record.refused()).count(),
-                texts.size(), members.getFirst().createdAt(), List.copyOf(documents),
+                texts.size(), members.getFirst().createdAt(), knowledgeBases, List.copyOf(documents),
                 members.stream().map(record -> {
                     var asker = names.get(record.userId());
                     return new Entry(record.id(), record.question(), asker == null ? null : asker.displayName(),
-                            record.createdAt(), record.refused(), record.comment(), record.citedDocuments(),
-                            record.reviewStatus());
+                            record.createdAt(), record.refused(), record.comment(),
+                            record.knowledgeBaseIds().stream().filter(knowledgeBaseNames::containsKey)
+                                    .map(knowledgeBaseNames::get).toList(),
+                            record.citedDocuments(), record.reviewStatus());
                 }).toList());
     }
 

@@ -161,6 +161,9 @@ class ConversationTests {
         assertThat(detail.get("title")).isEqualTo("青柚气泡水在哪个货架？");
         assertThat(jdbc.queryForObject("SELECT count(*) FROM answer_record WHERE user_id = ?", Integer.class,
                 setup.userId())).isEqualTo(1);
+        // 回答记录记下这一轮实际检索的知识库（D-047）。
+        assertThat(jdbc.queryForObject("SELECT array_to_string(knowledge_base_ids, ',') FROM answer_record "
+                + "WHERE user_id = ?", String.class, setup.userId())).isEqualTo(String.valueOf(setup.knowledgeBaseId()));
     }
 
     @Test

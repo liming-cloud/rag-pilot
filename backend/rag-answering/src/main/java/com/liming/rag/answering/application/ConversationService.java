@@ -161,7 +161,8 @@ public class ConversationService {
     ConversationViews.Turn recordTurn(TenantId tenantId, UserId userId, long id, long turnId, String question,
             ConversationTurn.Status status, Answer answer, List<Long> knowledgeBaseIds, Long replacesTurnId) {
         var conversation = owned(tenantId, userId, id);
-        var recorded = answer == null ? null : log.record(tenantId, userId, question, answer);
+        var recorded = answer == null ? null
+                : log.recordSearched(tenantId, userId, question, answer, knowledgeBaseIds);
         var now = Instant.now();
         var turn = new ConversationTurn(turnId, null, question.strip(), status, recorded == null ? null : recorded.id(),
                 knowledgeBaseIds, now);
