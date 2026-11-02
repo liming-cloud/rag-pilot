@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 
 /** document 表的持久化对象，只在 infrastructure 包内使用。 */
@@ -25,6 +26,11 @@ public class DocumentDO {
     private String error;
     private Integer chunkCount;
     private Long replacesDocumentId;
+    /** 有效期可以改回不限，所以 null 也要写入。 */
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
+    private LocalDate effectiveFrom;
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
+    private LocalDate expiresOn;
     /** 由数据库默认值生成。 */
     @TableField(insertStrategy = FieldStrategy.NEVER, updateStrategy = FieldStrategy.NEVER)
     private OffsetDateTime createdAt;
@@ -123,5 +129,21 @@ public class DocumentDO {
 
     public void setReplacesDocumentId(Long replacesDocumentId) {
         this.replacesDocumentId = replacesDocumentId;
+    }
+
+    public LocalDate getEffectiveFrom() {
+        return effectiveFrom;
+    }
+
+    public void setEffectiveFrom(LocalDate effectiveFrom) {
+        this.effectiveFrom = effectiveFrom;
+    }
+
+    public LocalDate getExpiresOn() {
+        return expiresOn;
+    }
+
+    public void setExpiresOn(LocalDate expiresOn) {
+        this.expiresOn = expiresOn;
     }
 }

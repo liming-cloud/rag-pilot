@@ -6,10 +6,12 @@ import com.liming.rag.identity.api.UserDirectory.UserSummary;
 import com.liming.rag.knowledge.api.KnowledgeAccess;
 import com.liming.rag.knowledge.api.KnowledgeBaseRef;
 import com.liming.rag.knowledge.application.KnowledgeQueries.DocumentRow;
+import com.liming.rag.knowledge.application.KnowledgeQueries.ExpirySummary;
 import com.liming.rag.knowledge.application.KnowledgeQueries.KnowledgeBaseSummary;
 import com.liming.rag.knowledge.domain.DocumentStatus;
 import com.liming.rag.knowledge.domain.KnowledgeBase;
 import com.liming.rag.knowledge.domain.KnowledgeBaseRepository;
+import com.liming.rag.knowledge.domain.Validity;
 import com.liming.rag.shared.TenantId;
 import com.liming.rag.shared.UserId;
 import java.util.Collection;
@@ -32,12 +34,14 @@ public class KnowledgeBaseService implements KnowledgeAccess {
     private final KnowledgeBaseRepository knowledgeBases;
     private final KnowledgeQueries queries;
     private final UserDirectory users;
+    private final DocumentCalendar calendar;
 
     public KnowledgeBaseService(KnowledgeBaseRepository knowledgeBases, KnowledgeQueries queries,
-            UserDirectory users) {
+            UserDirectory users, DocumentCalendar calendar) {
         this.knowledgeBases = knowledgeBases;
         this.queries = queries;
         this.users = users;
+        this.calendar = calendar;
     }
 
     /** 直接授权的账号：用户名和显示名一起给出。账号已被删除时只有 id。 */
@@ -81,12 +85,32 @@ public class KnowledgeBaseService implements KnowledgeAccess {
                 .collect(Collectors.toMap(KnowledgeBase::id, KnowledgeBase::name));
     }
 
-    /** 管理端列表（D-039）：按名称筛选、分页，带文档数、失败数和授权情况。 */
+    /**
+     * 管理端列表（D-039）：按名称筛选、分页，带文档数、失败数、到期情况和授权情况。
+     *
+     * @param validity EXPIRING 或 EXPIRED（不区分大小写）时只列有这种文档的库，为空不筛
+     */
     @Transactional(readOnly = true)
-    public Paged<KnowledgeBaseSummary> page(TenantId tenantId, UserId actor, String keyword, int page, int size) {
-        var grantee = users.isSuperAdmin(tenantId, actor) ? null
+    public Paged<KnowledgeBaseSummary> page(TenantId tenantId, UserId actor, String keyword, String validity,
+            int page, int size) {
+        var state = parseValidity(validity);
+        if (state == Validity.State.ACTIVE || state == Validity.State.PENDING) {
+            throw new KnowledgeException(KnowledgeException.Reason.INVALID, "资料有效期只能按 EXPIRING 或 EXPIRED 筛选");
+        }
+        return queries.knowledgeBases(tenantId, visibleTo(tenantId, actor), blankToNull(keyword), state,
+                calendar.window(), new Paged.Request(page, size));
+    }
+
+    /** 运营概览的到期提醒（#124）：自己能管理的库里即将到期和已失效的文档数。 */
+    @Transactional(readOnly = true)
+    public ExpirySummary expirySummary(TenantId tenantId, UserId actor) {
+        return queries.expirySummary(tenantId, visibleTo(tenantId, actor), calendar.window());
+    }
+
+    /** 超级管理员看本租户全部的库（null），其他人只看授权给自己或自己角色的。 */
+    private Grantee visibleTo(TenantId tenantId, UserId actor) {
+        return users.isSuperAdmin(tenantId, actor) ? null
                 : new Grantee(tenantId, actor, users.roleIds(tenantId, actor));
-        return queries.knowledgeBases(tenantId, grantee, blankToNull(keyword), new Paged.Request(page, size));
     }
 
     /** 只要求知识库属于该租户；调用方已确认操作人能管理它（文档入库、后台处理）。 */
@@ -107,13 +131,16 @@ public class KnowledgeBaseService implements KnowledgeAccess {
                 .orElseThrow(KnowledgeBaseService::notFound);
     }
 
-    /** @param status PARSING、READY、FAILED（不区分大小写），为空不筛 */
+    /**
+     * @param status PARSING、READY、FAILED（不区分大小写），为空不筛
+     * @param validity ACTIVE、EXPIRING、EXPIRED、PENDING（不区分大小写），为空不筛
+     */
     @Transactional(readOnly = true)
     public Paged<DocumentRow> documents(TenantId tenantId, UserId actor, long knowledgeBaseId, String keyword,
-            String status, int page, int size) {
+            String status, String validity, int page, int size) {
         getManageable(tenantId, actor, knowledgeBaseId);
         return queries.documents(tenantId, knowledgeBaseId, blankToNull(keyword), parseStatus(status),
-                new Paged.Request(page, size));
+                parseValidity(validity), calendar.window(), new Paged.Request(page, size));
     }
 
     @Transactional
@@ -174,6 +201,18 @@ public class KnowledgeBaseService implements KnowledgeAccess {
     @EventListener
     void on(RoleDeleted event) {
         knowledgeBases.removeGrantsOfRole(event.tenantId(), event.roleId());
+    }
+
+    private static Validity.State parseValidity(String validity) {
+        if (validity == null || validity.isBlank()) {
+            return null;
+        }
+        try {
+            return Validity.State.valueOf(validity.toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException e) {
+            throw new KnowledgeException(KnowledgeException.Reason.INVALID,
+                    "有效期只能是 ACTIVE、EXPIRING、EXPIRED 或 PENDING");
+        }
     }
 
     private static DocumentStatus parseStatus(String status) {

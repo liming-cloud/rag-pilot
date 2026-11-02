@@ -22,7 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class AccountAdminService {
 
-    private static final Pattern USERNAME = Pattern.compile("[A-Za-z0-9_.-]{3,50}");
+    static final Pattern USERNAME = Pattern.compile("[A-Za-z0-9_.-]{3,50}");
 
     private final Accounts accounts;
     private final Roles roles;

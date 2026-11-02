@@ -2,9 +2,12 @@ package com.liming.rag.knowledge.application;
 
 import com.liming.rag.knowledge.domain.Document;
 import com.liming.rag.knowledge.domain.DocumentRepository;
+import com.liming.rag.knowledge.domain.Validity;
 import com.liming.rag.shared.TenantId;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.time.LocalDate;
+import java.time.format.DateTimeParseException;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Locale;
@@ -55,22 +58,24 @@ public class DocumentIngestionService {
      */
     @Transactional
     public Document ingest(TenantId tenantId, long knowledgeBaseId, String filename, byte[] content) {
-        return ingest(tenantId, knowledgeBaseId, filename, content, null);
+        return ingest(tenantId, knowledgeBaseId, filename, content, null, null, null);
     }
 
     /**
      * 上传一份文档；{@code replacesDocumentId} 不为空时作为该文档的新版本，解析成功后替换它，失败时旧版本保留。
+     * 有效期（D-046）：日期为 yyyy-MM-dd，空串表示不限；不传（null）时新文档长期有效，新版本继承旧版本的失效日期。
      *
-     * @throws KnowledgeException 要替换的文档不在这个知识库里时为 NOT_FOUND
+     * @throws KnowledgeException 要替换的文档不在这个知识库里时为 NOT_FOUND；日期不合法时为 INVALID
      */
     @Transactional
     public Document ingest(TenantId tenantId, long knowledgeBaseId, String filename, byte[] content,
-            Long replacesDocumentId) {
+            Long replacesDocumentId, String effectiveFrom, String expiresOn) {
         var knowledgeBase = knowledgeBases.get(tenantId, knowledgeBaseId);
-        if (replacesDocumentId != null && documents.find(tenantId, replacesDocumentId)
-                .filter(old -> old.knowledgeBaseId() == knowledgeBaseId).isEmpty()) {
-            throw new KnowledgeException(KnowledgeException.Reason.NOT_FOUND, "要替换的文档不存在");
-        }
+        var previous = replacesDocumentId == null ? null : documents.find(tenantId, replacesDocumentId)
+                .filter(old -> old.knowledgeBaseId() == knowledgeBaseId)
+                .orElseThrow(() -> new KnowledgeException(KnowledgeException.Reason.NOT_FOUND, "要替换的文档不存在"));
+        var inheritedExpiry = previous == null ? null : previous.validity().expiresOn();
+        var validity = validity(date(effectiveFrom, null), date(expiresOn, inheritedExpiry));
         var mediaType = mediaTypeOf(filename);
         if (content.length == 0) {
             throw new KnowledgeException(KnowledgeException.Reason.INVALID, "文件是空的");
@@ -85,7 +90,7 @@ public class DocumentIngestionService {
 
         storage.store(tenantId, sha256, content);
         var document = Document.received(tenantId, knowledgeBase.id(), filename, mediaType, sha256, content.length,
-                replacesDocumentId);
+                replacesDocumentId, validity);
         documents.save(document);
 
         // 解析、分块、向量化在事务提交后由后台完成，上传请求只返回“解析中”的文档。
@@ -108,10 +113,50 @@ public class DocumentIngestionService {
         }
     }
 
+    /**
+     * 修改有效期（doc:update），保存后立即按新日期参与或退出检索。日期为 yyyy-MM-dd，null 或空串表示不限。
+     *
+     * @throws KnowledgeException 文档不在这个知识库里时为 NOT_FOUND；日期不合法时为 INVALID
+     */
+    @Transactional
+    public Document changeValidity(TenantId tenantId, long knowledgeBaseId, long documentId, String effectiveFrom,
+            String expiresOn) {
+        knowledgeBases.get(tenantId, knowledgeBaseId);
+        var document = documents.find(tenantId, documentId)
+                .filter(found -> found.knowledgeBaseId() == knowledgeBaseId)
+                .orElseThrow(() -> new KnowledgeException(KnowledgeException.Reason.NOT_FOUND, "文档不存在"));
+        document.changeValidity(validity(date(effectiveFrom, null), date(expiresOn, null)));
+        documents.save(document);
+        return document;
+    }
+
     @Transactional(readOnly = true)
     public List<Document> list(TenantId tenantId, long knowledgeBaseId) {
         knowledgeBases.get(tenantId, knowledgeBaseId);
         return documents.list(tenantId, knowledgeBaseId);
+    }
+
+    /** null 表示没传，用默认值；空串表示不限。 */
+    private static LocalDate date(String value, LocalDate absent) {
+        if (value == null) {
+            return absent;
+        }
+        if (value.isBlank()) {
+            return null;
+        }
+        try {
+            return LocalDate.parse(value.strip());
+        } catch (DateTimeParseException e) {
+            throw new KnowledgeException(KnowledgeException.Reason.INVALID, "日期格式应为 yyyy-MM-dd：" + value);
+        }
+    }
+
+    private static Validity validity(LocalDate effectiveFrom, LocalDate expiresOn) {
+        try {
+            return new Validity(effectiveFrom, expiresOn);
+        } catch (IllegalArgumentException e) {
+            throw new KnowledgeException(KnowledgeException.Reason.INVALID, e.getMessage());
+        }
     }
 
     private static String mediaTypeOf(String filename) {
@@ -127,8 +172,6 @@ public class DocumentIngestionService {
         }
         return mediaType;
     }
-
-
 
     private static String sha256(byte[] content) {
         try {

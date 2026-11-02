@@ -134,7 +134,7 @@ describe("用户管理页", () => {
     const checked = within(dialog).getByRole("table", { name: "导入预检" });
     expect(within(checked).getByText("用户名已存在")).toBeInTheDocument();
     expect(within(checked).getByText("与第 2 行的用户名重复")).toBeInTheDocument();
-    expect(within(checked).getByText("不能分配超出自己权限的角色“超级管理员”")).toBeInTheDocument();
+    expect(within(checked).getByText("超级管理员角色不能分配")).toBeInTheDocument();
     expect(within(checked).getByText(/用户名必须是 3 到 50 个.*；没有叫“不存在的角色”的角色/)).toBeInTheDocument();
     // 默认只看有问题的行；没有初始密码和导入按钮。
     expect(within(checked).queryByText("没问题")).not.toBeInTheDocument();

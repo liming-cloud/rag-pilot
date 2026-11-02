@@ -10,6 +10,8 @@ import java.time.OffsetDateTime;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
 import org.springframework.stereotype.Repository;
 
 @Repository
@@ -34,6 +36,16 @@ class MybatisAccounts implements Accounts {
     @Override
     public boolean existsByUsername(String username) {
         return mapper.exists(byUsername(username));
+    }
+
+    @Override
+    public Set<String> existingUsernames(Collection<String> usernames) {
+        if (usernames.isEmpty()) {
+            return Set.of();
+        }
+        return mapper.selectList(new LambdaQueryWrapper<AppUserDO>().select(AppUserDO::getUsername)
+                .in(AppUserDO::getUsername, usernames)).stream().map(AppUserDO::getUsername)
+                .collect(Collectors.toSet());
     }
 
     @Override

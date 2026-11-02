@@ -18,6 +18,18 @@
         </if>
     </sql>
 
+    <!--
+      当天有效的文档（#124、D-046）：未到生效日期、过了失效日期的不参与检索；失效日期当天仍有效。today 按部署的统计时区
+      由检索服务算出。有效期不是权限，但和权限过滤写在同一个检索 SQL 里，保证检索入口只有一处。
+      accessibleContents 不加这个条件：员工过去的回答里引用的原文，资料过期后仍能查看（审计）。
+    -->
+    <sql id="currentDocuments">
+        SELECT id FROM document
+        WHERE tenant_id = #{tenantId}
+          AND (effective_from IS NULL OR effective_from &lt;= #{today})
+          AND (expires_on IS NULL OR expires_on &gt;= #{today})
+    </sql>
+
     <select id="nearest" resultType="long">
         SELECT id FROM chunk
         WHERE tenant_id = #{tenantId}
@@ -25,6 +37,7 @@
           <if test="knowledgeBaseIds != null and !knowledgeBaseIds.isEmpty()">
             AND knowledge_base_id IN <foreach collection="knowledgeBaseIds" item="kb" open="(" separator="," close=")">#{kb}</foreach>
           </if>
+          AND document_id IN (<include refid="currentDocuments"/>)
           AND embedding IS NOT NULL
         ORDER BY embedding &lt;=&gt; CAST(#{vector} AS vector)
         LIMIT #{limit}
@@ -37,6 +50,7 @@
           <if test="knowledgeBaseIds != null and !knowledgeBaseIds.isEmpty()">
             AND knowledge_base_id IN <foreach collection="knowledgeBaseIds" item="kb" open="(" separator="," close=")">#{kb}</foreach>
           </if>
+          AND document_id IN (<include refid="currentDocuments"/>)
           AND content ||| #{text}
         ORDER BY pdb.score(id) DESC
         LIMIT #{limit}

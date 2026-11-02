@@ -44,6 +44,24 @@ class EvalReportTest {
     }
 
     @Test
+    @DisplayName("检索或引用了已失效、未生效的资料的题单独计数（D-046）")
+    void countsStaleDocuments() {
+        var outcomes = List.of(
+                new EvalOutcome(SHELF, List.of(new Retrieved("陈列旧版.md", "放在 01 号货架")), false, null,
+                        "在 03 号货架[1]", List.of("陈列.md"), 0.9, 100, 400, 1000),
+                new EvalOutcome(CASH, List.of(new Retrieved("收银.md", "备用金 800 元")), false, null,
+                        "800 元[1]", List.of("收银.md"), 0.9, 100, 400, 1000));
+
+        var report = EvalReport.of(outcomes, Set.of(), Set.of("陈列旧版.md"), List.of());
+
+        assertThat(report.staleHits()).isEqualTo(1);
+        assertThat(report.leaks()).isZero();
+        assertThat(report.failures()).contains("货架：检索或引用了已失效、未生效的资料");
+        assertThat(report.toMarkdown()).contains("| 检索或引用过期资料 | 1 | 0 |");
+        assertThat(EvalRounds.of(List.of(report, report)).staleHits()).isEqualTo(2);
+    }
+
+    @Test
     @DisplayName("按阶段给出耗时 p95，按问法分别统计召回、引用正确、误拒")
     void reportsStagesAndStyles() {
         var colloquial = new EvalCase("货架-口语", "青柚放哪了", Kind.ANSWERABLE, "陈列.md", List.of("03 号"), false, "口语");

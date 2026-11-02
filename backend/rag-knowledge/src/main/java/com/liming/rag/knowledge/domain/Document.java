@@ -9,6 +9,7 @@ import java.util.Objects;
  * 文档聚合：一份上传到知识库的原始文件，以及它的处理状态。
  *
  * <p>状态只能从 PARSING 进入 READY 或 FAILED；失败原因面向管理员展示，必须是可操作的中文说明。
+ * 有效期（{@link Validity}）决定哪天参与检索，可以随时修改，与处理状态无关。
  */
 public final class Document implements AggregateRoot {
 
@@ -28,10 +29,11 @@ public final class Document implements AggregateRoot {
     private final OffsetDateTime createdAt;
     /** 要替换的旧文档；本文档解析成功后删除它。 */
     private final Long replacesDocumentId;
+    private Validity validity;
 
     private Document(Long id, TenantId tenantId, long knowledgeBaseId, String filename, String mediaType,
             String sha256, long sizeBytes, DocumentStatus status, String error, int chunkCount,
-            OffsetDateTime createdAt, Long replacesDocumentId) {
+            OffsetDateTime createdAt, Long replacesDocumentId, Validity validity) {
         this.id = id;
         this.tenantId = Objects.requireNonNull(tenantId, "租户不能为空");
         this.knowledgeBaseId = knowledgeBaseId;
@@ -44,27 +46,33 @@ public final class Document implements AggregateRoot {
         this.chunkCount = chunkCount;
         this.createdAt = createdAt;
         this.replacesDocumentId = replacesDocumentId;
+        this.validity = Objects.requireNonNull(validity, "有效期不能为空");
     }
 
     /** 接收一份新上传的文件，进入解析状态。 */
     public static Document received(TenantId tenantId, long knowledgeBaseId, String filename, String mediaType,
             String sha256, long sizeBytes) {
-        return received(tenantId, knowledgeBaseId, filename, mediaType, sha256, sizeBytes, null);
+        return received(tenantId, knowledgeBaseId, filename, mediaType, sha256, sizeBytes, null, Validity.ALWAYS);
     }
 
-    /** 接收一份新版本，解析成功后替换 {@code replacesDocumentId}。 */
+    /** 接收一份文件；{@code replacesDocumentId} 不为空时是它的新版本，解析成功后替换它。 */
     public static Document received(TenantId tenantId, long knowledgeBaseId, String filename, String mediaType,
-            String sha256, long sizeBytes, Long replacesDocumentId) {
+            String sha256, long sizeBytes, Long replacesDocumentId, Validity validity) {
         return new Document(null, tenantId, knowledgeBaseId, filename, mediaType, sha256, sizeBytes,
-                DocumentStatus.PARSING, null, 0, null, replacesDocumentId);
+                DocumentStatus.PARSING, null, 0, null, replacesDocumentId, validity);
     }
 
     /** 仓储从数据库恢复聚合时使用，不做状态校验。 */
     public static Document restore(long id, TenantId tenantId, long knowledgeBaseId, String filename,
             String mediaType, String sha256, long sizeBytes, DocumentStatus status, String error, int chunkCount,
-            OffsetDateTime createdAt, Long replacesDocumentId) {
+            OffsetDateTime createdAt, Long replacesDocumentId, Validity validity) {
         return new Document(id, tenantId, knowledgeBaseId, filename, mediaType, sha256, sizeBytes, status, error,
-                chunkCount, createdAt, replacesDocumentId);
+                chunkCount, createdAt, replacesDocumentId, validity);
+    }
+
+    /** 修改有效期，保存后立即按新日期参与或退出检索。 */
+    public void changeValidity(Validity changed) {
+        this.validity = Objects.requireNonNull(changed, "有效期不能为空");
     }
 
     /**
@@ -141,6 +149,10 @@ public final class Document implements AggregateRoot {
 
     public Long replacesDocumentId() {
         return replacesDocumentId;
+    }
+
+    public Validity validity() {
+        return validity;
     }
 
     public DocumentStatus status() {

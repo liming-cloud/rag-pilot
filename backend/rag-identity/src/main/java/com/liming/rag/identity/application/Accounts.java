@@ -5,6 +5,7 @@ import java.time.OffsetDateTime;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 /** 账号存储端口。 */
 public interface Accounts {
@@ -14,6 +15,9 @@ public interface Accounts {
     Optional<Account> findByUsername(String username);
 
     boolean existsByUsername(String username);
+
+    /** 这些用户名里已被使用的（区分大小写，与唯一约束一致）。 */
+    Set<String> existingUsernames(Collection<String> usernames);
 
     /** 按筛选条件分页，按创建顺序。 */
     Paged<Account> page(TenantId tenantId, AccountQuery query);

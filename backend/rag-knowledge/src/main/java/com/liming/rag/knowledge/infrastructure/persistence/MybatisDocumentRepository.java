@@ -5,6 +5,7 @@ import com.liming.rag.knowledge.domain.Chunk;
 import com.liming.rag.knowledge.domain.Document;
 import com.liming.rag.knowledge.domain.DocumentRepository;
 import com.liming.rag.knowledge.domain.DocumentStatus;
+import com.liming.rag.knowledge.domain.Validity;
 import com.liming.rag.shared.TenantId;
 import java.util.List;
 import java.util.Optional;
@@ -35,6 +36,8 @@ class MybatisDocumentRepository implements DocumentRepository {
         row.setError(document.error());
         row.setChunkCount(document.chunkCount());
         row.setReplacesDocumentId(document.replacesDocumentId());
+        row.setEffectiveFrom(document.validity().effectiveFrom());
+        row.setExpiresOn(document.validity().expiresOn());
         if (row.getId() == null) {
             documents.insert(row);
             document.assignId(row.getId());
@@ -113,6 +116,6 @@ class MybatisDocumentRepository implements DocumentRepository {
         return Document.restore(row.getId(), new TenantId(row.getTenantId()), row.getKnowledgeBaseId(),
                 row.getFilename(), row.getMediaType(), row.getSha256(), row.getSizeBytes(),
                 DocumentStatus.valueOf(row.getStatus()), row.getError(), row.getChunkCount(), row.getCreatedAt(),
-                row.getReplacesDocumentId());
+                row.getReplacesDocumentId(), new Validity(row.getEffectiveFrom(), row.getExpiresOn()));
     }
 }

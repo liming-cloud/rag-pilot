@@ -9,7 +9,9 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.UnaryOperator;
+import java.util.stream.Collectors;
 
 /** 账号和角色存储的内存实现，只用于单元测试。 */
 final class InMemoryIdentity implements Accounts, Roles {
@@ -32,6 +34,11 @@ final class InMemoryIdentity implements Accounts, Roles {
     @Override
     public boolean existsByUsername(String username) {
         return findByUsername(username).isPresent();
+    }
+
+    @Override
+    public Set<String> existingUsernames(Collection<String> usernames) {
+        return accounts.stream().map(Account::username).filter(usernames::contains).collect(Collectors.toSet());
     }
 
     @Override

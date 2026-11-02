@@ -5,6 +5,7 @@ import com.liming.rag.knowledge.application.ChunkIndex;
 import com.liming.rag.knowledge.application.Grantee;
 import com.liming.rag.shared.TenantId;
 import java.util.HashMap;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import org.springframework.stereotype.Repository;
@@ -19,15 +20,17 @@ class MybatisChunkIndex implements ChunkIndex {
     }
 
     @Override
-    public List<Long> nearest(Grantee grantee, List<Long> knowledgeBaseIds, float[] vector, int limit) {
+    public List<Long> nearest(Grantee grantee, List<Long> knowledgeBaseIds, LocalDate today, float[] vector,
+            int limit) {
         return mapper.nearest(grantee.tenantId().value(), grantee.userId().value(), grantee.roleIds(),
-                knowledgeBaseIds, VectorTypeHandler.format(vector), limit);
+                knowledgeBaseIds, today, VectorTypeHandler.format(vector), limit);
     }
 
     @Override
-    public List<Long> keyword(Grantee grantee, List<Long> knowledgeBaseIds, String text, int limit) {
+    public List<Long> keyword(Grantee grantee, List<Long> knowledgeBaseIds, LocalDate today, String text,
+            int limit) {
         return mapper.keyword(grantee.tenantId().value(), grantee.userId().value(), grantee.roleIds(),
-                knowledgeBaseIds, text, limit);
+                knowledgeBaseIds, today, text, limit);
     }
 
     @Override

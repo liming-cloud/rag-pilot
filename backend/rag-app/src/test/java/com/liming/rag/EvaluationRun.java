@@ -15,7 +15,10 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.time.Duration;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -93,6 +96,7 @@ class EvaluationRun {
     void evaluate() throws IOException {
         long store = createKnowledgeBase("鲜邻便利门店运营");
         long restricted = createKnowledgeBase("鲜邻便利店长专用");
+        loadValidity();
         uploadCorpus(store, "store");
         var restrictedDocuments = uploadCorpus(restricted, "restricted");
 
@@ -118,12 +122,13 @@ class EvaluationRun {
                     System.out.printf(Locale.ROOT, "第 %d 轮：已评测 %d / %d 题%n", round, outcomes.size(), cases.size());
                 }
             }
-            reports.add(EvalReport.of(outcomes, restrictedDocuments, unavailable));
+            reports.add(EvalReport.of(outcomes, restrictedDocuments, staleDocuments(), unavailable));
         }
         var rounds = EvalRounds.of(reports);
         publish(rounds);
 
         assertThat(rounds.leaks()).as("越权泄漏必须为 0（各轮合计）").isZero();
+        assertThat(rounds.staleHits()).as("检索或引用过期资料必须为 0（各轮合计）").isZero();
         assertThat(reports).as("模型服务不可用的题超过 5%，结果不可信").allMatch(EvalReport::credible);
     }
 
@@ -336,6 +341,50 @@ class EvaluationRun {
         }).toList();
     }
 
+    /** 语料的有效期（D-046）：文件名 → 生效日期、失效日期；没写的文件长期有效。 */
+    private final Map<String, Map<String, String>> validity = new LinkedHashMap<>();
+
+    /**
+     * 读 {@code corpus/validity.json}（可选）：按库目录列出文件的 effectiveFrom、expiresOn，值是 yyyy-MM-dd 或相对
+     * 评测当天的天数（+30d、-1d，按北京时间，与默认的统计时区一致）。私有评测集没有这个文件时全部长期有效。
+     */
+    @SuppressWarnings("unchecked")
+    private void loadValidity() throws IOException {
+        var resource = RESOURCES.getResource(dataLocation() + "corpus/validity.json");
+        if (!resource.exists()) {
+            return;
+        }
+        Map<String, Object> raw = JsonMapper.builder().build().readValue(
+                resource.getContentAsString(StandardCharsets.UTF_8), new TypeReference<>() {
+                });
+        var today = LocalDate.now(ZoneId.of("Asia/Shanghai"));
+        raw.forEach((folder, files) -> {
+            if (files instanceof Map<?, ?> byFile) {
+                ((Map<String, Map<String, String>>) byFile).forEach((filename, dates) -> {
+                    var resolved = new LinkedHashMap<String, String>();
+                    dates.forEach((key, value) -> resolved.put(key, value.matches("[+-]\\d+d")
+                            ? today.plusDays(Long.parseLong(value.substring(0, value.length() - 1))).toString()
+                            : value));
+                    validity.put(filename, resolved);
+                });
+            }
+        });
+    }
+
+    /** 评测当天已失效或未生效的文档，不应被检索或引用。 */
+    private Set<String> staleDocuments() {
+        var today = LocalDate.now(ZoneId.of("Asia/Shanghai")).toString();
+        var stale = new HashSet<String>();
+        validity.forEach((filename, dates) -> {
+            var from = dates.get("effectiveFrom");
+            var to = dates.get("expiresOn");
+            if (from != null && from.compareTo(today) > 0 || to != null && to.compareTo(today) < 0) {
+                stale.add(filename);
+            }
+        });
+        return stale;
+    }
+
     /** 先把文件全部上传，再统一等入库完成：后台按并发数处理，比逐篇上传逐篇等快得多。 */
     /** 入库重试后仍失败的文档；不超过 1% 时照常评测，在报告开头列出（#81）。 */
     private final List<String> corpusFailures = new ArrayList<>();
@@ -394,6 +443,7 @@ class EvaluationRun {
         };
         var body = new LinkedMultiValueMap<String, Object>();
         body.add("file", file);
+        validity.getOrDefault(filename, Map.of()).forEach(body::add);
         var headers = new HttpHeaders();
         headers.setContentType(MediaType.MULTIPART_FORM_DATA);
         var uploaded = http.postForEntity("/api/knowledge-bases/{id}/documents", new HttpEntity<>(body, headers),

@@ -22,7 +22,8 @@ public class RoleService {
     /** 内置“管理员”的默认权限：知识库、用户、回答记录、使用统计的全部权限和问答。 */
     static final Set<String> ADMIN_DEFAULT = Set.of(Permissions.CHAT_USE,
             Permissions.KB_VIEW, Permissions.KB_CREATE, Permissions.KB_UPDATE, Permissions.KB_DELETE,
-            Permissions.DOC_UPLOAD, Permissions.DOC_REPLACE, Permissions.DOC_DELETE, Permissions.KB_GRANT,
+            Permissions.DOC_UPLOAD, Permissions.DOC_REPLACE, Permissions.DOC_UPDATE, Permissions.DOC_DELETE,
+            Permissions.KB_GRANT,
             Permissions.USER_VIEW, Permissions.USER_CREATE, Permissions.USER_UPDATE, Permissions.USER_DISABLE,
             Permissions.USER_RESET_PASSWORD, Permissions.USER_ASSIGN_ROLE, Permissions.USER_IMPORT,
             Permissions.ANSWER_VIEW, Permissions.ANSWER_REVIEW, Permissions.ANSWER_RECHECK, Permissions.ANSWER_EXPORT,

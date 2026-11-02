@@ -227,9 +227,8 @@ function importProblems(rows: ImportRow[]): ImportProblem[] {
     for (const name of row.roleNames) {
       const role = state.roles.find((candidate) => candidate.name === name);
       if (!role) add(`没有叫“${name}”的角色`);
-      else if (role.builtIn === "SUPER_ADMIN" || role.permissions.some((code) => !mine.has(code))) {
-        add(`不能分配超出自己权限的角色“${name}”`);
-      }
+      else if (role.builtIn === "SUPER_ADMIN") add("超级管理员角色不能分配");
+      else if (role.permissions.some((code) => !mine.has(code))) add(`不能分配超出自己权限的角色：${name}`);
     }
   }
   return problems;
@@ -368,10 +367,11 @@ export const identityHandlers = [
     const denied = forbidden("user:import");
     if (denied) return denied;
     const { rows, password } = (await request.json()) as { rows: ImportRow[]; password: string };
-    if (password.length < 8 || password.length > 64) return problem(400, "IDENTITY_INVALID", "密码必须是 8 到 64 位");
-    if (importProblems(rows).length > 0) {
-      return problem(400, "IDENTITY_INVALID", "导入文件有问题，请重新预检");
+    if (password.length < 8 || password.length > 64) {
+      return problem(400, "IDENTITY_INVALID", "初始密码必须是 8 到 64 个字符");
     }
+    const lines = new Set(importProblems(rows).map((found) => found.line)).size;
+    if (lines > 0) return problem(400, "IDENTITY_INVALID", `导入文件有 ${lines} 行有问题，请重新检查后再导入`);
     for (const row of rows) {
       state.accounts.push({
         id: state.nextId++,
