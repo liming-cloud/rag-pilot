@@ -39,6 +39,8 @@ describe("页面外壳与管理端菜单", () => {
         .getAllByRole("link")
         .map((link) => link.textContent),
     ).toEqual(["模型管理", "系统设置"]);
+    // 运行的版本（D-048），测试环境没有传入版本号时为 dev。
+    expect(screen.getByText("版本 dev")).toBeInTheDocument();
   });
 
   it("管理端首页 /admin 跳到第一个有权限的菜单", async () => {

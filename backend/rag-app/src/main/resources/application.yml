@@ -38,6 +38,12 @@ sa-token:
   is-read-header: true
   is-print: false
 
+# 运行的版本（4 位：主.次.修订.构建号，D-048），镜像构建时由 git tag 写进环境变量 RAG_VERSION；开发时为 dev。
+# 运维用 /actuator/info 查看。
+info:
+  app:
+    version: ${RAG_VERSION:dev}
+
 server:
   port: 8080
   shutdown: graceful
@@ -47,6 +53,9 @@ management:
     web:
       exposure:
         include: health,info
+  info:
+    env:
+      enabled: true
   endpoint:
     health:
       probes:

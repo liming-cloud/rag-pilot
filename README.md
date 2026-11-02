@@ -34,7 +34,7 @@ JDK 25、Spring Boot 4.1、Spring AI 2.0、Spring Modulith 2.1、MyBatis-Plus、
 
 ## 本地运行
 
-需要 Docker。
+需要 Docker。客户现场用离线包安装、升级、备份恢复，见 [deploy/README.md](deploy/README.md)（运维手册）；下面是开发时从源码启动：
 
 ```sh
 cp deploy/.env.example deploy/.env   # 填写 DB_PASSWORD、MODEL_API_KEY 和 RAG_ADMIN_PASSWORD

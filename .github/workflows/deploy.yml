@@ -1,0 +1,94 @@
+# 部署验证与发布（D-048）。
+# - 改了部署相关的文件时：打一个临时版本的离线包，跑全新安装（或从最近的 Release 升级）、备份恢复、迁移失败回退三个场景。
+# - 打 4 位版本号的 tag（如 v1.0.0.1）时：同样验证，通过后把离线包发布到 GitHub Release。
+# 只在相关改动时跑，不加进分支保护的必选检查。
+name: deploy
+
+on:
+  pull_request:
+    paths:
+      - deploy/**
+      - backend/**/db/migration/**
+      - .github/workflows/deploy.yml
+      - .github/scripts/deploy-scenarios.sh
+  push:
+    tags:
+      - "v*.*.*.*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: 确定版本号
+        id: version
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            version="${GITHUB_REF#refs/tags/v}"
+            [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "tag 要是 v 加 4 位版本号，如 v1.0.0.1"; exit 1; }
+          else
+            # 临时版本：不发布，只用于验证；构建号用运行编号，保证比已发布的版本新。
+            version="0.0.0.$GITHUB_RUN_NUMBER"
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: 构建镜像
+        run: |
+          docker build -f deploy/backend.Dockerfile --build-arg RAG_VERSION=${{ steps.version.outputs.version }} \
+            -t rag-pilot-app:${{ steps.version.outputs.version }} .
+          docker build -f deploy/web.Dockerfile --build-arg RAG_VERSION=${{ steps.version.outputs.version }} \
+            -t rag-pilot-web:${{ steps.version.outputs.version }} .
+
+      - name: 打离线包
+        run: deploy/package.sh ${{ steps.version.outputs.version }} packages
+
+      - name: 取最近一个 Release 的离线包（用于升级场景）
+        id: previous
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="$(gh release list --exclude-drafts --exclude-pre-releases --limit 20 --json tagName \
+            --jq "[.[] | select(.tagName != \"$GITHUB_REF_NAME\")][0].tagName // empty")"
+          if [ -z "$tag" ]; then
+            echo "还没有发布过的版本，跳过升级场景"
+            exit 0
+          fi
+          gh release download "$tag" --dir previous --pattern "rag-pilot-*"
+          echo "${tag#v}" > previous/VERSION
+          echo "dir=$PWD/previous" >> "$GITHUB_OUTPUT"
+
+      - name: 安装 / 升级、备份恢复、迁移失败回退
+        run: .github/scripts/deploy-scenarios.sh ${{ steps.version.outputs.version }} "${{ steps.previous.outputs.dir }}"
+
+      - name: 失败时保存日志
+        if: failure()
+        run: docker compose -p rag-pilot logs --no-color > deploy-logs.txt 2>&1 || true
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: failure()
+        with:
+          name: deploy-logs
+          path: deploy-logs.txt
+          retention-days: 7
+
+      - name: 发布到 GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version=${{ steps.version.outputs.version }}
+          gh release create "v$version" packages/* --title "$version" --verify-tag \
+            --notes "离线包：先下载 rag-pilot-$version.tar.gz 和三个 *.image.tar.gz，解压后把镜像文件放进 images/，按 README.md 安装或升级。校验和见 rag-pilot-$version.SHA256SUMS。"

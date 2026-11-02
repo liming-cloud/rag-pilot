@@ -1,5 +1,8 @@
 # 构建阶段：Node 24（见 DECISIONS.md D-012）构建前端，字体随包打进 dist（D-011）。
 FROM node:24-alpine AS builder
+# 版本号（D-048）：发布时由 git tag 传入，管理端左下角显示。
+ARG RAG_VERSION=dev
+ENV VITE_APP_VERSION=${RAG_VERSION}
 WORKDIR /web
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci --no-audit --no-fund

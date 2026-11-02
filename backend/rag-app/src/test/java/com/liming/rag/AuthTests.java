@@ -37,6 +37,15 @@ class AuthTests {
     private TestRestTemplate http;
 
     @Test
+    @DisplayName("运维端点：健康检查和版本号不用登录（D-048），版本号由环境变量 RAG_VERSION 给出，开发时为 dev")
+    @SuppressWarnings("unchecked")
+    void exposesHealthAndVersion() {
+        assertThat(http.getForEntity("/actuator/health", Map.class).getBody()).containsEntry("status", "UP");
+        var info = http.getForEntity("/actuator/info", Map.class).getBody();
+        assertThat((Map<String, Object>) info.get("app")).containsEntry("version", "dev");
+    }
+
+    @Test
     @DisplayName("未登录访问业务接口返回 401")
     void rejectsAnonymous() {
         assertThat(status(HttpMethod.GET, "/api/knowledge-bases", null, null))
