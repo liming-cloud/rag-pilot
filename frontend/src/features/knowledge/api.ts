@@ -167,7 +167,20 @@ export async function updateValidity(
 }
 
 /** 自己能访问的知识库里即将到期和已失效的文档数，供运营概览提醒。 */
-export type ExpirySummary = { expiring: number; expired: number; warningDays: number };
+export type ExpirySummary = {
+  expiring: number;
+  expired: number;
+  warningDays: number;
+  /** 最早到期的若干份（已失效的在前），供运营概览和周报列出（#125）。 */
+  documents: {
+    knowledgeBaseId: number;
+    knowledgeBaseName: string;
+    documentId: number;
+    filename: string;
+    expiresOn: string;
+    validity: "EXPIRING" | "EXPIRED";
+  }[];
+};
 
 export async function fetchExpirySummary(): Promise<ExpirySummary> {
   return json(await authFetch("/api/knowledge-bases/expiry-summary"), "读取资料有效期失败");

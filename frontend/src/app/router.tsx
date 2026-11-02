@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { createBrowserRouter, Navigate, type RouteObject } from "react-router";
 import { AnswersPage } from "@/features/answers/AnswersPage";
+import { GapsPage } from "@/features/gaps/GapsPage";
 import { ChangePasswordPage } from "@/features/auth/ChangePasswordPage";
 import { LoginPage } from "@/features/auth/LoginPage";
 import { ChatPage } from "@/features/chat/ChatPage";
@@ -53,6 +54,7 @@ export const routes: RouteObject[] = [
       { path: "knowledge/:knowledgeBaseId", element: guarded("kb:view", <KnowledgeDetailPage />) },
       { path: "users", element: guarded("user:view", <UsersPage />) },
       { path: "roles", element: guarded("role:view", <RolesPage />) },
+      { path: "gaps", element: guarded("answer:view", <GapsPage />) },
       { path: "answers", element: guarded("answer:view", <AnswersPage />) },
       { path: "stats", element: guarded("stats:view", <StatsPage />) },
       { path: "models", element: guarded("model:view", <ModelsPage />) },

@@ -14,6 +14,7 @@ import { type Me, useMe } from "@/lib/permissions";
 export const ADMIN_MENUS = [
   { to: "/admin/stats", label: "运营概览", permission: "stats:view", group: null },
   { to: "/admin/knowledge", label: "知识库", permission: "kb:view", group: "知识运营" },
+  { to: "/admin/gaps", label: "知识缺口", permission: "answer:view", group: "知识运营" },
   { to: "/admin/answers", label: "回答记录", permission: "answer:view", group: "知识运营" },
   { to: "/admin/users", label: "用户", permission: "user:view", group: "账号与权限" },
   { to: "/admin/roles", label: "角色与权限", permission: "role:view", group: "账号与权限" },
