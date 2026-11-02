@@ -8,7 +8,7 @@ import { forbidden } from "./identity";
  */
 type StoredRecord = GapRecord & { topic: string };
 
-const TOPICS: { topic: string; phrasings: string[]; document: string; disliked?: string }[] = [
+const TOPICS: { topic: string; phrasings: string[]; document: string; knowledgeBase?: string; disliked?: string }[] = [
   {
     topic: "营业时间",
     phrasings: ["门店几点打烊？", "晚上几点关门", "营业到几点", "周末营业时间有变化吗"],
@@ -29,6 +29,7 @@ const TOPICS: { topic: string; phrasings: string[]; document: string; disliked?:
     topic: "生日优惠",
     phrasings: ["会员生日当天有什么优惠？", "会员生日有礼品吗"],
     document: "会员与促销.md",
+    knowledgeBase: "商品知识库",
   },
   {
     topic: "临期折扣",
@@ -42,6 +43,7 @@ const TOPICS: { topic: string; phrasings: string[]; document: string; disliked?:
       "如果顾客在会员日用了满减券又想用积分抵扣，同时购买的商品里有一部分是临期打折的，这种情况下收银应该先算哪一个优惠，最后的价格怎么算才对？",
     ],
     document: "会员与促销.md",
+    knowledgeBase: "商品知识库",
   },
   // 只出现一两次的零散问题，原型里能看到长尾和分页。
   ...Array.from({ length: 26 }, (_, index) => ({
@@ -56,7 +58,7 @@ let records: StoredRecord[] = [];
 export function resetGaps() {
   const now = Date.now();
   let id = 9000;
-  records = TOPICS.flatMap(({ topic, phrasings, document, disliked }, topicIndex) => {
+  records = TOPICS.flatMap(({ topic, phrasings, document, knowledgeBase, disliked }, topicIndex) => {
     // 前几个话题问得多，越往后越少。
     const times = Math.max(1, 12 - topicIndex * 2);
     return Array.from({ length: times }, (_, index): StoredRecord => {
@@ -74,6 +76,9 @@ export function resetGaps() {
         createdAt: new Date(now - daysAgo * 86_400_000 - index * 3_600_000).toISOString(),
         refused: !isDisliked,
         comment: isDisliked ? (disliked ?? null) : null,
+        // 员工没点名知识库时检索全部可访问的库；有一部分点名了一个库。
+        knowledgeBases:
+          index % 3 === 1 ? [knowledgeBase ?? "门店运营知识库"] : ["门店运营知识库", "商品知识库", "区域 1 门店规范"],
         // 只有差评有当时引用的文档，拒答没有引用。
         citedDocuments: isDisliked ? [document] : [],
         // 营业时间这一类有一部分已经处理过。
@@ -83,6 +88,13 @@ export function resetGaps() {
   });
 }
 resetGaps();
+
+/** 去重，出现多的在前（与后端一致）。 */
+function byFrequency(names: string[]) {
+  const counts = new Map<string, number>();
+  for (const name of names) counts.set(name, (counts.get(name) ?? 0) + 1);
+  return [...counts.entries()].sort((a, b) => b[1] - a[1]).map(([name]) => name);
+}
 
 function withoutTopic(record: StoredRecord): GapRecord {
   const copy: Partial<StoredRecord> = { ...record };
@@ -114,6 +126,7 @@ function report(days: number, status: string): GapReport {
         dislikedCount: list.filter((record) => !record.refused).length,
         phrasings: counts.size,
         lastAskedAt: sorted[0]!.createdAt,
+        knowledgeBases: byFrequency(list.flatMap((record) => record.knowledgeBases)),
         citedDocuments: [...new Set(list.flatMap((record) => record.citedDocuments))],
         records: sorted.map(withoutTopic),
       };

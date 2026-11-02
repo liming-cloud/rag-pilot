@@ -17,8 +17,9 @@ public interface GapRecords {
      * @param comment 差评时员工的留言
      * @param citedDocuments 当时引用的文档名（拒答没有引用）
      * @param reviewStatus OPEN 或 RESOLVED
+     * @param knowledgeBaseIds 当时实际检索的知识库；记下检索范围之前的旧记录为空
      */
     record GapRecord(long id, long userId, String question, OffsetDateTime createdAt, boolean refused,
-            String comment, List<String> citedDocuments, String reviewStatus) {
+            String comment, List<String> citedDocuments, String reviewStatus, List<Long> knowledgeBaseIds) {
     }
 }

@@ -11,6 +11,8 @@ export type GapRecord = {
   refused: boolean;
   /** 差评时员工的留言。 */
   comment: string | null;
+  /** 当时实际检索的知识库；记下检索范围之前的旧记录为空。 */
+  knowledgeBases: string[];
   /** 当时引用的文档名；拒答没有引用。 */
   citedDocuments: string[];
   reviewStatus: "OPEN" | "RESOLVED";
@@ -33,10 +35,9 @@ export type GapGroup = {
   /** 不同的问法数（按原文去重）。 */
   phrasings: number;
   lastAskedAt: string;
-  /**
-   * 类里差评记录当时引用的文档，提示该改哪份资料。回答记录没有存当时检索了哪些知识库，拒答也没有引用，
-   * 所以显示引用的文档而不是知识库（D-047）。
-   */
+  /** 类里的记录当时检索过的知识库，出现多的在前，提示资料该补到哪个库（D-047）。 */
+  knowledgeBases: string[];
+  /** 类里差评记录当时引用的文档（拒答没有引用），提示该改哪份资料。 */
   citedDocuments: string[];
   records: GapRecord[];
 };

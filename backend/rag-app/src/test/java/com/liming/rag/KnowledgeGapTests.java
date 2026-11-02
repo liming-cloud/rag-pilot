@@ -119,6 +119,39 @@ class KnowledgeGapTests {
     }
 
     @Test
+    @DisplayName("显示当时检索的知识库：点名的库里有权访问的那些，出现多的在前；没有权限的库不记")
+    @SuppressWarnings("unchecked")
+    void showsSearchedKnowledgeBases() {
+        long store = createKnowledgeBase("缺口测试门店库");
+        long goods = createKnowledgeBase("缺口测试商品库");
+        long foreign = ((Number) jdbc.queryForObject(
+                "INSERT INTO knowledge_base (tenant_id, name) VALUES (1, '缺口测试无权库') RETURNING id", Long.class))
+                .longValue();
+        // 经问答接口提问：空库里检索不到，记为拒答，连同点名且有权访问的库。
+        for (var knowledgeBases : List.of(List.of(store), List.of(store, goods), List.of(store, foreign))) {
+            var asked = http.postForObject("/api/ask", Map.of("question", "门店几点打烊",
+                    "knowledgeBaseIds", knowledgeBases), Map.class);
+            assertThat(asked).containsEntry("refused", true);
+        }
+
+        var groups = (List<Map<String, Object>>) http.getForObject("/api/answers/gaps?days=7", Map.class)
+                .get("groups");
+
+        assertThat(groups).singleElement().satisfies(group -> {
+            assertThat(group).containsEntry("knowledgeBases", List.of("缺口测试门店库", "缺口测试商品库"));
+            assertThat((List<Map<String, Object>>) group.get("records"))
+                    .extracting(record -> record.get("knowledgeBases"))
+                    .containsExactly(List.of("缺口测试门店库"), List.of("缺口测试门店库", "缺口测试商品库"),
+                            List.of("缺口测试门店库"));
+        });
+    }
+
+    private long createKnowledgeBase(String name) {
+        return ((Number) http.postForObject("/api/knowledge-bases", Map.of("name", name), Map.class).get("id"))
+                .longValue();
+    }
+
+    @Test
     @DisplayName("整类标记已处理后不再出现在待处理里；没有处理权限 403 且不写入")
     @SuppressWarnings("unchecked")
     void resolvesWholeGroup() {

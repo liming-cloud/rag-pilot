@@ -38,6 +38,7 @@ export function GapDialog({ group, onDone }: { group: GapGroup; onDone: () => vo
         <DialogTitle className="wrap-anywhere">{group.question}</DialogTitle>
         <DialogDescription>
           共 {group.count} 次，{group.phrasings} 种问法，待处理 {group.openCount} 条
+          {group.knowledgeBases.length > 0 && ` · 检索过 ${group.knowledgeBases.join("、")}`}
           {group.citedDocuments.length > 0 && ` · 差评时引用了 ${group.citedDocuments.join("、")}`}
         </DialogDescription>
       </DialogHeader>
@@ -62,6 +63,11 @@ export function GapDialog({ group, onDone }: { group: GapGroup; onDone: () => vo
                 <TableCell>
                   <div className="flex flex-col gap-0.5">
                     <span className="wrap-anywhere">{record.question}</span>
+                    {record.knowledgeBases.length > 0 && (
+                      <span className="text-xs text-muted-foreground wrap-anywhere">
+                        检索：{record.knowledgeBases.join("、")}
+                      </span>
+                    )}
                     {record.comment && (
                       <span className="text-xs text-muted-foreground wrap-anywhere">留言：{record.comment}</span>
                     )}

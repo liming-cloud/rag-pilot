@@ -37,6 +37,13 @@ class MybatisGapRecords implements GapRecords {
         return new GapRecord(((Number) row.get("id")).longValue(), ((Number) row.get("user_id")).longValue(),
                 (String) row.get("question"), createdAt, (Boolean) row.get("refused"),
                 (String) row.get("feedback_comment"),
-                cited == null ? List.of() : Arrays.asList(cited.split("\u001F")), (String) row.get("review_status"));
+                cited == null ? List.of() : Arrays.asList(cited.split("\u001F")), (String) row.get("review_status"),
+                ids((String) row.get("knowledge_base_ids")));
+    }
+
+    /** SQL 里用 array_to_string 转成逗号分隔，避免依赖驱动的数组类型。 */
+    private static List<Long> ids(String joined) {
+        return joined == null || joined.isEmpty() ? List.of()
+                : Arrays.stream(joined.split(",")).map(Long::valueOf).toList();
     }
 }

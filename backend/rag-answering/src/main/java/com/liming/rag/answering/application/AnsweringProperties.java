@@ -33,14 +33,14 @@ public record AnsweringProperties(
      *
      * @param similarity 两个问题的向量余弦相似度达到它就归为一类；用评测集里的同义问法校准（D-047）
      */
-    public record Gaps(@DefaultValue("0.85") double similarity) {
+    public record Gaps(@DefaultValue("0.80") double similarity) {
 
         public Gaps {
             require(similarity >= 0.5 && similarity <= 0.99, "rag.answering.gaps.similarity 必须在 0.5 到 0.99 之间");
         }
 
         static Gaps defaults() {
-            return new Gaps(0.85);
+            return new Gaps(0.80);
         }
     }
 

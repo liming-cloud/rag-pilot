@@ -24,10 +24,11 @@ class MybatisAnswerRecordRepository implements AnswerRecordRepository {
     }
 
     @Override
-    public long record(TenantId tenantId, UserId asker, String question, Answer answer) {
+    public long record(TenantId tenantId, UserId asker, String question, Answer answer,
+            List<Long> knowledgeBaseIds) {
         long id = mapper.insert(tenantId.value(), asker.value(), question, answer.text(), answer.refused(),
                 answer.refusalReason() == null ? null : answer.refusalReason().name(), answer.topRelevance(),
-                answer.rewrittenQuestion());
+                answer.rewrittenQuestion(), knowledgeBaseIds.toArray(Long[]::new));
         for (var citation : answer.citations()) {
             mapper.insertCitation(id, citation.index(), citation.chunkId(), citation.documentId(),
                     citation.documentName(), citation.headingPath() == null ? "" : citation.headingPath());

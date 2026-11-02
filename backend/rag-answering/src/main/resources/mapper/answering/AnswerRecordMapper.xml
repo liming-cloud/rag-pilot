@@ -5,9 +5,9 @@
     <!-- INSERT … RETURNING 要用 select 取回主键；每次都执行，不用一级缓存。 -->
     <select id="insert" resultType="long" flushCache="true" useCache="false">
         INSERT INTO answer_record (tenant_id, user_id, question, answer_text, refused, refusal_reason, top_relevance,
-                                   rewritten_question)
+                                   rewritten_question, knowledge_base_ids)
         VALUES (#{tenantId}, #{userId}, #{question}, #{answerText}, #{refused}, #{refusalReason}, #{topRelevance},
-                #{rewrittenQuestion})
+                #{rewrittenQuestion}, #{knowledgeBaseIds, typeHandler=org.apache.ibatis.type.ArrayTypeHandler})
         RETURNING id
     </select>
 
@@ -117,6 +117,7 @@
 
     <select id="gapRecords" resultType="map">
         SELECT r.id, r.user_id, r.question, r.created_at, r.refused, r.feedback_comment, r.review_status,
+               array_to_string(r.knowledge_base_ids, ',') AS knowledge_base_ids,
                (SELECT string_agg(DISTINCT c.document_name, chr(31)) FROM answer_citation c
                  WHERE c.answer_id = r.id) AS cited_documents
         FROM answer_record r

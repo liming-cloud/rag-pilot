@@ -5,13 +5,18 @@ import com.liming.rag.shared.TenantId;
 import com.liming.rag.shared.UserId;
 import java.util.Collection;
 import java.util.Map;
+import java.util.List;
 import java.util.Optional;
 
 /** 回答记录仓储。所有查询都带租户。 */
 public interface AnswerRecordRepository {
 
-    /** 记下一次问答连同引用，返回记录标识。 */
-    long record(TenantId tenantId, UserId asker, String question, Answer answer);
+    /**
+     * 记下一次问答连同引用，返回记录标识。
+     *
+     * @param knowledgeBaseIds 这次实际检索的知识库
+     */
+    long record(TenantId tenantId, UserId asker, String question, Answer answer, List<Long> knowledgeBaseIds);
 
     Optional<AnswerRecord> find(TenantId tenantId, long id);
 
