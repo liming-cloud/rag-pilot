@@ -65,9 +65,11 @@ wait_healthy() {
   done
 }
 
+# 用 TCP 判断：新数据卷第一次启动时，镜像先用只监听本地套接字的临时实例做初始化，套接字上的 pg_isready
+# 会提前返回就绪，接着临时实例关闭，正在执行的恢复会被中断。
 wait_db() {
   local waited=0
-  until compose exec -T db pg_isready -U rag -d rag >/dev/null 2>&1; do
+  until compose exec -T db pg_isready -h 127.0.0.1 -U rag -d rag >/dev/null 2>&1; do
     [ "$waited" -ge 120 ] || { sleep 2; waited=$((waited + 2)); continue; }
     die "数据库 2 分钟内没有就绪"
   done

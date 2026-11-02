@@ -24,7 +24,8 @@ services:
     volumes:
       - db-data:/var/lib/postgresql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U rag -d rag"]
+      # 走 TCP：初始化用的临时实例只监听本地套接字，不能算就绪。
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U rag -d rag"]
       interval: 5s
       timeout: 3s
       retries: 20
