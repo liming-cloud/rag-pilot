@@ -5,6 +5,7 @@ import com.liming.rag.knowledge.domain.DocumentStatus;
 import com.liming.rag.knowledge.domain.Validity;
 import com.liming.rag.shared.TenantId;
 import java.time.LocalDate;
+import java.util.List;
 
 /** 管理端列表的查询端口（D-039）：分页、筛选，带上列表要显示的统计，不加载聚合。 */
 public interface KnowledgeQueries {
@@ -30,11 +31,11 @@ public interface KnowledgeQueries {
             Validity.State validity, Window window, Paged.Request page);
 
     /**
-     * 即将到期和已失效的文档数。
+     * 即将到期和已失效的文档数，以及最早到期的 {@code limit} 份。
      *
      * @param grantee 只算授权给他本人或其角色的库；为 null 时算本租户全部（超级管理员）
      */
-    ExpirySummary expirySummary(TenantId tenantId, Grantee grantee, Window window);
+    ExpirySummary expirySummary(TenantId tenantId, Grantee grantee, Window window, int limit);
 
     /** 按哪天判断有效期：今天，以及“即将到期”截止到哪天（含），口径同 {@link Validity#state}。 */
     record Window(LocalDate today, LocalDate warnUntil) {
@@ -45,7 +46,13 @@ public interface KnowledgeQueries {
             long expiredCount, long roleGrantCount, long memberCount) {
     }
 
-    record ExpirySummary(long expiring, long expired) {
+    /** @param documents 最早到期的若干份（已失效、即将到期，按失效日期先后），供运营概览和周报列出 */
+    record ExpirySummary(long expiring, long expired, List<ExpiringDocument> documents) {
+    }
+
+    /** @param validity EXPIRING 或 EXPIRED */
+    record ExpiringDocument(long knowledgeBaseId, String knowledgeBaseName, long documentId, String filename,
+            LocalDate expiresOn, Validity.State validity) {
     }
 
     /** 文档和它要替换的旧版本的文件名（分页后旧版本不一定在同一页）。 */

@@ -38,7 +38,7 @@ export function GapDialog({ group, onDone }: { group: GapGroup; onDone: () => vo
         <DialogTitle className="wrap-anywhere">{group.question}</DialogTitle>
         <DialogDescription>
           共 {group.count} 次，{group.phrasings} 种问法，待处理 {group.openCount} 条
-          {group.knowledgeBaseNames.length > 0 && ` · 涉及 ${group.knowledgeBaseNames.join("、")}`}
+          {group.citedDocuments.length > 0 && ` · 差评时引用了 ${group.citedDocuments.join("、")}`}
         </DialogDescription>
       </DialogHeader>
       <div className="max-h-72 overflow-y-auto rounded-lg border">

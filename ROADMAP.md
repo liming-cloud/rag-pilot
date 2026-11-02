@@ -69,8 +69,9 @@
 | 用户管理 | 新建、停用、重置密码、分配角色、批量导入 | 有新建和停用 |
 | 角色与权限 | 新建、编辑角色，按菜单勾选按钮权限；内置角色只读 | 没有 |
 | 模型管理 | 见第四节 | 没有 |
+| 知识缺口 | 答不上和差评的问题按意思归类、按次数排序；重新回答验证、整类标记已处理（D-047） | 有 |
 | 回答记录 | 查看问答（含已被员工删除的会话）、处理差评、导出评测题草稿 | 有 |
-| 运营概览（管理端首页） | 提问量、拒答、评价、排行、知识缺口 | 有前四项 |
+| 运营概览（管理端首页） | 提问量、拒答、评价、排行、知识缺口、资料到期；按周查看与上周对比，打印周报、导出问答明细（D-047） | 有 |
 | 系统设置 | 行业包、品牌名称、推荐问题、会话保留天数 | 没有 |
 
 现在管理页是顶部导航，和员工的问答页共用一个外壳，要改成两种布局。界面仍只用 shadcn/ui 组件，先做 MSW 原型，确认后再接接口。
@@ -89,7 +90,7 @@
   | 用户管理 | `user:view` | `user:create`、`user:update`、`user:disable`、`user:reset-password`、`user:assign-role`、`user:import` |
   | 角色与权限 | `role:view` | `role:create`、`role:update`、`role:delete` |
   | 模型管理 | `model:view` | `model:update`、`model:test` |
-  | 回答记录 | `answer:view` | `answer:review`、`answer:recheck`、`answer:export` |
+  | 回答记录、知识缺口 | `answer:view` | `answer:review`、`answer:recheck`、`answer:export` |
   | 运营概览 | `stats:view` | `stats:export` |
   | 系统设置 | `setting:view` | `setting:update` |
 

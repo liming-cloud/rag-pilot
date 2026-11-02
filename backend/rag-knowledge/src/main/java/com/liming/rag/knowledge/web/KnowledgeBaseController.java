@@ -11,6 +11,7 @@ import com.liming.rag.knowledge.application.DocumentCalendar;
 import com.liming.rag.knowledge.application.DocumentIngestionService;
 import com.liming.rag.knowledge.application.KnowledgeBaseService;
 import com.liming.rag.knowledge.application.KnowledgeBaseService.Member;
+import com.liming.rag.knowledge.application.KnowledgeQueries;
 import com.liming.rag.knowledge.application.KnowledgeQueries.DocumentRow;
 import com.liming.rag.knowledge.application.KnowledgeQueries.KnowledgeBaseSummary;
 import com.liming.rag.knowledge.application.Paged;
@@ -125,10 +126,12 @@ class KnowledgeBaseController {
     @GetMapping("/expiry-summary")
     ExpirySummaryView expirySummary() {
         var summary = knowledgeBases.expirySummary(currentUser.tenantId(), currentUser.userId());
-        return new ExpirySummaryView(summary.expiring(), summary.expired(), calendar.warningDays());
+        return new ExpirySummaryView(summary.expiring(), summary.expired(), calendar.warningDays(),
+                summary.documents());
     }
 
-    record ExpirySummaryView(long expiring, long expired, int warningDays) {
+    record ExpirySummaryView(long expiring, long expired, int warningDays,
+            List<KnowledgeQueries.ExpiringDocument> documents) {
     }
 
     @SaCheckPermission(Permissions.KB_VIEW)

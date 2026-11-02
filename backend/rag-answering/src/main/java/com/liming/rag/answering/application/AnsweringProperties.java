@@ -15,6 +15,7 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  * @param rewriteMinRelevance   改写前最高分低于这个下限时不改写，直接拒答（D-023）
  * @param rewriteTimeout        改写超过这个时限就放弃
  * @param conversation          员工端会话（D-036）
+ * @param gaps                  知识缺口归类（D-047）
  */
 @ConfigurationProperties("rag.answering")
 public record AnsweringProperties(
@@ -24,7 +25,24 @@ public record AnsweringProperties(
         @DefaultValue("true") boolean rewriteOnLowRelevance,
         @DefaultValue("0.03") double rewriteMinRelevance,
         @DefaultValue("3s") Duration rewriteTimeout,
-        @DefaultValue Conversation conversation) {
+        @DefaultValue Conversation conversation,
+        @DefaultValue Gaps gaps) {
+
+    /**
+     * 知识缺口归类的配置（{@code rag.answering.gaps}）。
+     *
+     * @param similarity 两个问题的向量余弦相似度达到它就归为一类；用评测集里的同义问法校准（D-047）
+     */
+    public record Gaps(@DefaultValue("0.85") double similarity) {
+
+        public Gaps {
+            require(similarity >= 0.5 && similarity <= 0.99, "rag.answering.gaps.similarity 必须在 0.5 到 0.99 之间");
+        }
+
+        static Gaps defaults() {
+            return new Gaps(0.85);
+        }
+    }
 
     /**
      * 员工端会话的配置（{@code rag.answering.conversation}）。
@@ -63,7 +81,7 @@ public record AnsweringProperties(
     public AnsweringProperties(int candidates, int evidenceLimit, double minRelevance, boolean rewriteOnLowRelevance,
             double rewriteMinRelevance, Duration rewriteTimeout) {
         this(candidates, evidenceLimit, minRelevance, rewriteOnLowRelevance, rewriteMinRelevance, rewriteTimeout,
-                Conversation.defaults());
+                Conversation.defaults(), Gaps.defaults());
     }
 
     @ConstructorBinding
@@ -77,6 +95,7 @@ public record AnsweringProperties(
                 "rag.answering.rewrite-min-relevance 必须在 0 到 1 之间");
         require(rewriteTimeout != null && rewriteTimeout.isPositive(), "rag.answering.rewrite-timeout 必须大于 0");
         conversation = conversation == null ? Conversation.defaults() : conversation;
+        gaps = gaps == null ? Gaps.defaults() : gaps;
     }
 
     private static void require(boolean condition, String message) {

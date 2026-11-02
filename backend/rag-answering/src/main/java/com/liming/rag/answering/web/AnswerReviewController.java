@@ -6,11 +6,18 @@ import com.liming.rag.answering.api.Answer;
 import com.liming.rag.answering.application.AnswerLogService;
 import com.liming.rag.answering.application.AnswerReview;
 import com.liming.rag.answering.application.AnswerService;
+import com.liming.rag.answering.application.KnowledgeGapService;
+import com.liming.rag.answering.application.UsageReportService;
 import com.liming.rag.answering.application.UsageStats;
 import com.liming.rag.identity.api.CurrentUser;
 import com.liming.rag.identity.api.Permissions;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -30,13 +37,24 @@ class AnswerReviewController {
     record ReviewRequest(String status, String note) {
     }
 
+    record ResolveGapRequest(List<Long> recordIds, String note) {
+    }
+
+    record ResolveGapResponse(int resolved) {
+    }
+
     private final AnswerLogService log;
     private final AnswerService answers;
+    private final UsageReportService usage;
+    private final KnowledgeGapService gaps;
     private final CurrentUser currentUser;
 
-    AnswerReviewController(AnswerLogService log, AnswerService answers, CurrentUser currentUser) {
+    AnswerReviewController(AnswerLogService log, AnswerService answers, UsageReportService usage,
+            KnowledgeGapService gaps, CurrentUser currentUser) {
         this.log = log;
         this.answers = answers;
+        this.usage = usage;
+        this.gaps = gaps;
         this.currentUser = currentUser;
     }
 
@@ -57,11 +75,41 @@ class AnswerReviewController {
         return new PageView<>(found.items(), found.total(), found.page(), found.size());
     }
 
-    /** 最近几天（含今天）的使用统计，供试点汇报。 */
+    /** 最近几天（含今天）或某个自然周的使用统计，按周时与上一周对比（#125）。 */
     @SaCheckPermission(Permissions.STATS_VIEW)
     @GetMapping("/stats")
-    UsageStats stats(@RequestParam(name = "days", defaultValue = "30") int days) {
-        return log.usage(currentUser.tenantId(), days);
+    UsageStats stats(@RequestParam(name = "days", required = false) Integer days,
+            @RequestParam(name = "week", required = false) String week) {
+        return usage.usage(currentUser.tenantId(), days, week);
+    }
+
+    /** 导出这段时间每条问答的 CSV（UTF-8 带 BOM）。 */
+    @SaCheckPermission(Permissions.STATS_EXPORT)
+    @GetMapping("/stats/export")
+    ResponseEntity<byte[]> export(@RequestParam(name = "days", required = false) Integer days,
+            @RequestParam(name = "week", required = false) String week) {
+        var export = usage.export(currentUser.tenantId(), days, week);
+        return ResponseEntity.ok()
+                .contentType(new MediaType("text", "csv", StandardCharsets.UTF_8))
+                .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.attachment()
+                        .filename(export.filename(), StandardCharsets.UTF_8).build().toString())
+                .body(export.csv().getBytes(StandardCharsets.UTF_8));
+    }
+
+    /** 知识缺口（D-047）：按意思归类的拒答和差评，status 为 open（有待处理的类）或 all。 */
+    @SaCheckPermission(Permissions.ANSWER_VIEW)
+    @GetMapping("/gaps")
+    KnowledgeGapService.Report gaps(@RequestParam(name = "days", defaultValue = "30") int days,
+            @RequestParam(name = "status", defaultValue = "open") String status) {
+        return gaps.report(currentUser.tenantId(), days, status);
+    }
+
+    /** 整类标记已处理：这些记录里还没处理的都标记已处理，附同一条说明。 */
+    @SaCheckPermission(Permissions.ANSWER_REVIEW)
+    @PostMapping("/gaps/resolve")
+    ResolveGapResponse resolveGap(@RequestBody ResolveGapRequest request) {
+        return new ResolveGapResponse(gaps.resolve(currentUser.tenantId(), currentUser.userId(), request.recordIds(),
+                request.note()));
     }
 
     /** 标记已处理（附处理说明）或重新打开。 */

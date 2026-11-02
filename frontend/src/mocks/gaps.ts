@@ -8,32 +8,32 @@ import { forbidden } from "./identity";
  */
 type StoredRecord = GapRecord & { topic: string };
 
-const TOPICS: { topic: string; phrasings: string[]; knowledgeBase: string; disliked?: string }[] = [
+const TOPICS: { topic: string; phrasings: string[]; document: string; disliked?: string }[] = [
   {
     topic: "营业时间",
     phrasings: ["门店几点打烊？", "晚上几点关门", "营业到几点", "周末营业时间有变化吗"],
-    knowledgeBase: "门店运营知识库",
+    document: "门店营业规范.md",
   },
   {
     topic: "餐补",
     phrasings: ["员工餐补怎么报销？", "餐补报销流程是什么", "餐费补贴每月多少"],
-    knowledgeBase: "门店运营知识库",
+    document: "员工手册.md",
   },
   {
     topic: "冷柜报修",
     phrasings: ["冷柜坏了找谁修？", "冷柜不制冷联系谁", "设备报修电话是多少"],
-    knowledgeBase: "门店运营知识库",
+    document: "设备维护手册.md",
     disliked: "给的电话是旧的",
   },
   {
     topic: "生日优惠",
     phrasings: ["会员生日当天有什么优惠？", "会员生日有礼品吗"],
-    knowledgeBase: "商品知识库",
+    document: "会员与促销.md",
   },
   {
     topic: "临期折扣",
     phrasings: ["临期商品打几折？"],
-    knowledgeBase: "门店运营知识库",
+    document: "临期与报损管理.md",
     disliked: "门店规定是五折",
   },
   {
@@ -41,13 +41,13 @@ const TOPICS: { topic: string; phrasings: string[]; knowledgeBase: string; disli
     phrasings: [
       "如果顾客在会员日用了满减券又想用积分抵扣，同时购买的商品里有一部分是临期打折的，这种情况下收银应该先算哪一个优惠，最后的价格怎么算才对？",
     ],
-    knowledgeBase: "商品知识库",
+    document: "会员与促销.md",
   },
   // 只出现一两次的零散问题，原型里能看到长尾和分页。
   ...Array.from({ length: 26 }, (_, index) => ({
     topic: `零散-${index}`,
     phrasings: [`第 ${index + 1} 个零散问题：区域 ${(index % 5) + 1} 的特殊规定是什么？`],
-    knowledgeBase: `区域 ${(index % 5) + 1} 门店规范`,
+    document: `区域 ${(index % 5) + 1} 门店规范.md`,
   })),
 ];
 
@@ -56,7 +56,7 @@ let records: StoredRecord[] = [];
 export function resetGaps() {
   const now = Date.now();
   let id = 9000;
-  records = TOPICS.flatMap(({ topic, phrasings, knowledgeBase, disliked }, topicIndex) => {
+  records = TOPICS.flatMap(({ topic, phrasings, document, disliked }, topicIndex) => {
     // 前几个话题问得多，越往后越少。
     const times = Math.max(1, 12 - topicIndex * 2);
     return Array.from({ length: times }, (_, index): StoredRecord => {
@@ -74,7 +74,8 @@ export function resetGaps() {
         createdAt: new Date(now - daysAgo * 86_400_000 - index * 3_600_000).toISOString(),
         refused: !isDisliked,
         comment: isDisliked ? (disliked ?? null) : null,
-        knowledgeBaseNames: [knowledgeBase],
+        // 只有差评有当时引用的文档，拒答没有引用。
+        citedDocuments: isDisliked ? [document] : [],
         // 营业时间这一类有一部分已经处理过。
         reviewStatus: topic === "营业时间" && index >= 8 ? "RESOLVED" : "OPEN",
       };
@@ -113,7 +114,7 @@ function report(days: number, status: string): GapReport {
         dislikedCount: list.filter((record) => !record.refused).length,
         phrasings: counts.size,
         lastAskedAt: sorted[0]!.createdAt,
-        knowledgeBaseNames: [...new Set(list.flatMap((record) => record.knowledgeBaseNames))],
+        citedDocuments: [...new Set(list.flatMap((record) => record.citedDocuments))],
         records: sorted.map(withoutTopic),
       };
     })

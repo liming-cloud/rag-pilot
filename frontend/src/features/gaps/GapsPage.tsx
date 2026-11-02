@@ -95,7 +95,7 @@ export function GapsPage() {
               <TableHead>代表问题</TableHead>
               <TableHead className="w-24 text-right">待处理 / 共</TableHead>
               <TableHead className="w-32">类型</TableHead>
-              <TableHead className="hidden w-40 lg:table-cell">知识库</TableHead>
+              <TableHead className="hidden w-40 lg:table-cell">当时引用</TableHead>
               <TableHead className="w-28">最近一次</TableHead>
             </TableRow>
           </TableHeader>
@@ -177,7 +177,7 @@ function GapRow({ group, onOpen }: { group: GapGroup; onOpen: () => void }) {
         </div>
       </TableCell>
       <TableCell className="hidden text-muted-foreground lg:table-cell">
-        <span className="line-clamp-2">{group.knowledgeBaseNames.join("、") || "—"}</span>
+        <span className="line-clamp-2">{group.citedDocuments.join("、") || "—"}</span>
       </TableCell>
       <TableCell className="whitespace-nowrap text-muted-foreground">
         {new Date(group.lastAskedAt).toLocaleDateString("zh-CN", { month: "numeric", day: "numeric" })}

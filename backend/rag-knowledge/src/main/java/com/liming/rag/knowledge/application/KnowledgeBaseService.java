@@ -101,10 +101,16 @@ public class KnowledgeBaseService implements KnowledgeAccess {
                 calendar.window(), new Paged.Request(page, size));
     }
 
-    /** 运营概览的到期提醒（#124）：自己能管理的库里即将到期和已失效的文档数。 */
+    /** 运营概览列出的到期资料份数上限。 */
+    static final int EXPIRING_LIST_LIMIT = 20;
+
+    /**
+     * 运营概览的到期提醒（#124、#125）：自己能管理的库里即将到期和已失效的文档数，以及最早到期的
+     * {@value #EXPIRING_LIST_LIMIT} 份。
+     */
     @Transactional(readOnly = true)
     public ExpirySummary expirySummary(TenantId tenantId, UserId actor) {
-        return queries.expirySummary(tenantId, visibleTo(tenantId, actor), calendar.window());
+        return queries.expirySummary(tenantId, visibleTo(tenantId, actor), calendar.window(), EXPIRING_LIST_LIMIT);
     }
 
     /** 超级管理员看本租户全部的库（null），其他人只看授权给自己或自己角色的。 */

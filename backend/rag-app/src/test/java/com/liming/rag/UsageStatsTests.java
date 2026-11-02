@@ -49,7 +49,7 @@ class UsageStatsTests {
     private JdbcTemplate jdbc;
 
     @Test
-    @DisplayName("汇总、每日趋势、拒答原因、答不上来的问题、引用最多的文档；超出范围的记录不算")
+    @DisplayName("汇总、每日趋势、拒答原因、知识缺口、引用最多的文档；超出范围的记录不算")
     @SuppressWarnings("unchecked")
     void summarizes() {
         TestLogin.asAdmin(http);
@@ -87,8 +87,12 @@ class UsageStatsTests {
                 .containsEntry("refused", 3).containsEntry("disliked", 1);
         assertThat((List<Map<String, Object>>) stats.get("refusalReasons")).containsExactly(
                 Map.of("reason", "LOW_RELEVANCE", "count", 2), Map.of("reason", "NO_EVIDENCE", "count", 1));
-        assertThat((List<Map<String, Object>>) stats.get("topRefusedQuestions")).first()
+        // 知识缺口按意思归类（D-047），已处理的“餐补怎么报”不算待处理。
+        assertThat((List<Map<String, Object>>) stats.get("topGaps")).first()
                 .isEqualTo(Map.of("question", "门店几点打烊", "count", 2));
+        assertThat((List<Map<String, Object>>) stats.get("topGaps"))
+                .noneMatch(gap -> "餐补怎么报".equals(gap.get("question")));
+        assertThat(stats).containsEntry("previous", null);
         assertThat((List<Map<String, Object>>) stats.get("topCitedDocuments")).containsExactly(
                 Map.of("documentName", "临期与报损管理.md", "count", 2), Map.of("documentName", "陈列规范.md", "count", 1));
     }

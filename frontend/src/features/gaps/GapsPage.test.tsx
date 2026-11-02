@@ -21,16 +21,19 @@ const row = async (question: string) => (await within(await table()).findByText(
 describe("知识缺口页", () => {
   beforeEach(() => signInAs("admin"));
 
-  it("按待处理次数排序，同义问法归在一类，显示其他问法数、类型、知识库", async () => {
+  it("按待处理次数排序，同义问法归在一类，显示其他问法数、类型、当时引用的文档", async () => {
     renderPage();
 
     const first = await row("门店几点打烊？");
     expect(within(await table()).getAllByRole("row")[1]).toBe(first);
     expect(within(first).getByText("另有 3 种问法")).toBeInTheDocument();
     expect(within(first).getByText(/^答不上来 \d+$/)).toBeInTheDocument();
-    expect(within(first).getByText("门店运营知识库")).toBeInTheDocument();
+    // 拒答没有引用，“当时引用”为空；差评带当时引用的文档。
+    expect(within(first).getByText("—")).toBeInTheDocument();
     // 差评和拒答混在一类时两种都标出来。
-    expect(within(await row("冷柜坏了找谁修？")).getByText(/^没帮助 \d+$/)).toBeInTheDocument();
+    const fridge = await row("冷柜坏了找谁修？");
+    expect(within(fridge).getByText(/^没帮助 \d+$/)).toBeInTheDocument();
+    expect(within(fridge).getByText("设备维护手册.md")).toBeInTheDocument();
     expect(screen.getByText(/条答不上来或差评，归成 \d+ 类/)).toBeInTheDocument();
   });
 

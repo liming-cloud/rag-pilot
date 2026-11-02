@@ -9,11 +9,17 @@ import java.util.List;
  * @param from 第一天（含）
  * @param to 最后一天（含）
  * @param zone 统计时区，如 Asia/Shanghai
+ * @param previous 按周查看时上一周同样天数的汇总，用来对比；按最近 N 天查看时为 null（#125）
  * @param daily 每天一条，没有提问的日子也有，数都是 0
+ * @param topGaps 待处理次数最多的知识缺口（按意思归类，D-047）：代表问题和待处理次数
  */
-public record UsageStats(LocalDate from, LocalDate to, String zone, Totals totals, List<Day> daily,
-        List<ReasonCount> refusalReasons, List<QuestionCount> topRefusedQuestions,
-        List<DocumentCount> topCitedDocuments) {
+public record UsageStats(LocalDate from, LocalDate to, String zone, Totals totals, Totals previous, List<Day> daily,
+        List<ReasonCount> refusalReasons, List<QuestionCount> topGaps, List<DocumentCount> topCitedDocuments) {
+
+    public UsageStats withComparison(Totals previousTotals, List<QuestionCount> gaps) {
+        return new UsageStats(from, to, zone, totals, previousTotals, daily, refusalReasons, List.copyOf(gaps),
+                topCitedDocuments);
+    }
 
     /**
      * @param rated 给出了回答、且被点了赞或踩的记录数

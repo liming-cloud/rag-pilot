@@ -56,11 +56,19 @@ class MybatisKnowledgeQueries implements KnowledgeQueries {
     }
 
     @Override
-    public ExpirySummary expirySummary(TenantId tenantId, Grantee grantee, Window window) {
+    public ExpirySummary expirySummary(TenantId tenantId, Grantee grantee, Window window, int limit) {
         boolean all = grantee == null;
-        var row = mapper.expirySummary(tenantId.value(), all, all ? null : grantee.userId().value(),
-                all ? List.of() : grantee.roleIds(), window.today(), window.warnUntil());
-        return new ExpirySummary(number(row, "expiring"), number(row, "expired"));
+        Long userId = all ? null : grantee.userId().value();
+        List<Long> roleIds = all ? List.of() : grantee.roleIds();
+        var row = mapper.expirySummary(tenantId.value(), all, userId, roleIds, window.today(), window.warnUntil());
+        var documents = mapper.expiringDocuments(tenantId.value(), all, userId, roleIds, window.today(),
+                window.warnUntil(), limit).stream()
+                .map(document -> new ExpiringDocument(number(document, "knowledge_base_id"),
+                        (String) document.get("knowledge_base_name"), number(document, "id"),
+                        (String) document.get("filename"), date(document.get("expires_on")),
+                        Validity.State.valueOf((String) document.get("validity"))))
+                .toList();
+        return new ExpirySummary(number(row, "expiring"), number(row, "expired"), documents);
     }
 
     private static Document toDocument(Map<String, Object> row) {

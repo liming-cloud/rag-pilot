@@ -84,4 +84,17 @@
             AND d.knowledge_base_id IN (<include refid="com.liming.rag.knowledge.infrastructure.persistence.ChunkSearchMapper.accessibleKnowledgeBases"/>)
         </if>
     </select>
+
+    <select id="expiringDocuments" resultType="map">
+        SELECT d.id, d.knowledge_base_id, kb.name AS knowledge_base_name, d.filename, d.expires_on,
+               CASE WHEN <include refid="expired"/> THEN 'EXPIRED' ELSE 'EXPIRING' END AS validity
+        FROM document d JOIN knowledge_base kb ON kb.id = d.knowledge_base_id
+        WHERE d.tenant_id = #{tenantId}
+          AND ((<include refid="expired"/>) OR (<include refid="expiring"/>))
+        <if test="!all">
+            AND d.knowledge_base_id IN (<include refid="com.liming.rag.knowledge.infrastructure.persistence.ChunkSearchMapper.accessibleKnowledgeBases"/>)
+        </if>
+        ORDER BY d.expires_on, d.id
+        LIMIT #{limit}
+    </select>
 </mapper>

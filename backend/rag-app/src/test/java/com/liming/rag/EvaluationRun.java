@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.fail;
 
 import com.liming.rag.ai.AnswerJudge;
+import com.liming.rag.ai.EmbeddingClient;
 import com.liming.rag.ai.ModelCallException;
 import com.liming.rag.evaluation.api.EvalCase;
 import com.liming.rag.evaluation.api.EvalOutcome;
@@ -86,6 +87,10 @@ class EvaluationRun {
     @Autowired
     private TestRestTemplate http;
 
+    /** 只用于校准知识缺口的归类门槛（{@link GapCalibration}）。 */
+    @Autowired
+    private EmbeddingClient embeddings;
+
     @BeforeEach
     void signIn() {
         TestLogin.asAdmin(http);
@@ -105,6 +110,7 @@ class EvaluationRun {
         configureAnswerModelThroughSettings();
 
         var cases = loadCases();
+        var calibration = GapCalibration.report(cases, embeddings);
         var judge = cases.stream().anyMatch(evalCase -> evalCase.referenceAnswer() != null) ? judge() : null;
         int roundCount = Integer.parseInt(env("EVAL_ROUNDS", "1"));
         var reports = new ArrayList<EvalReport>();
@@ -125,7 +131,7 @@ class EvaluationRun {
             reports.add(EvalReport.of(outcomes, restrictedDocuments, staleDocuments(), unavailable));
         }
         var rounds = EvalRounds.of(reports);
-        publish(rounds);
+        publish(rounds, calibration);
 
         assertThat(rounds.leaks()).as("越权泄漏必须为 0（各轮合计）").isZero();
         assertThat(rounds.staleHits()).as("检索或引用过期资料必须为 0（各轮合计）").isZero();
@@ -555,8 +561,8 @@ class EvaluationRun {
         return value == null ? null : ((Number) value).longValue();
     }
 
-    private void publish(EvalRounds rounds) throws IOException {
-        var markdown = rounds.toMarkdown();
+    private void publish(EvalRounds rounds, String calibration) throws IOException {
+        var markdown = rounds.toMarkdown() + calibration;
         if (!corpusFailures.isEmpty()) {
             markdown = "> 重传后仍入库失败、不在语料里的文档 " + corpusFailures.size() + " 篇：" + String.join("；", corpusFailures)
                     + "\n\n" + markdown;

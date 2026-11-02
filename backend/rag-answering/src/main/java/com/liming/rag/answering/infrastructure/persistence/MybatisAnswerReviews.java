@@ -32,6 +32,11 @@ class MybatisAnswerReviews implements AnswerReviews {
                 page.size());
     }
 
+    @Override
+    public List<AnswerReview> between(TenantId tenantId, OffsetDateTime from, OffsetDateTime to, int limit) {
+        return mapper.between(tenantId.value(), from, to, limit).stream().map(MybatisAnswerReviews::toReview).toList();
+    }
+
     private static AnswerReview toReview(Map<String, Object> row) {
         var cited = (String) row.get("cited_documents");
         return new AnswerReview(
