@@ -40,14 +40,22 @@ class MybatisAnswerStatistics implements AnswerStatistics {
             return new UsageStats.Day(day, count(row, "questions"), count(row, "refused"), count(row, "disliked"));
         }).toList();
 
-        return new UsageStats(from, to, zone.getId(),
-                new UsageStats.Totals(count(totals, "questions"), count(totals, "askers"), count(totals, "refused"),
-                        count(totals, "rated"), count(totals, "liked"), count(totals, "disliked"),
-                        count(totals, "open_reviews")),
-                daily,
+        return new UsageStats(from, to, zone.getId(), toTotals(totals), null, daily,
                 ranked(mapper.refusalReasons(tenant, start, end), UsageStats.ReasonCount::new),
-                ranked(mapper.topRefusedQuestions(tenant, start, end, TOP), UsageStats.QuestionCount::new),
+                List.of(),
                 ranked(mapper.topCitedDocuments(tenant, start, end, TOP), UsageStats.DocumentCount::new));
+    }
+
+    @Override
+    public UsageStats.Totals totals(TenantId tenantId, LocalDate from, LocalDate to, ZoneId zone) {
+        return toTotals(mapper.totals(tenantId.value(), from.atStartOfDay(zone).toOffsetDateTime(),
+                to.plusDays(1).atStartOfDay(zone).toOffsetDateTime()));
+    }
+
+    private static UsageStats.Totals toTotals(Map<String, Object> totals) {
+        return new UsageStats.Totals(count(totals, "questions"), count(totals, "askers"), count(totals, "refused"),
+                count(totals, "rated"), count(totals, "liked"), count(totals, "disliked"),
+                count(totals, "open_reviews"));
     }
 
     private static <T> List<T> ranked(List<Map<String, Object>> rows,

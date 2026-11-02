@@ -33,4 +33,8 @@ interface KnowledgeQueryMapper {
     Map<String, Object> expirySummary(@Param("tenantId") long tenantId, @Param("all") boolean all,
             @Param("userId") Long userId, @Param("roleIds") List<Long> roleIds, @Param("today") LocalDate today,
             @Param("warnUntil") LocalDate warnUntil);
+
+    List<Map<String, Object>> expiringDocuments(@Param("tenantId") long tenantId, @Param("all") boolean all,
+            @Param("userId") Long userId, @Param("roleIds") List<Long> roleIds, @Param("today") LocalDate today,
+            @Param("warnUntil") LocalDate warnUntil, @Param("limit") int limit);
 }

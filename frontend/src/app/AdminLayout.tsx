@@ -16,8 +16,8 @@ export function AdminLayout() {
   const menus = adminMenusFor(me.data);
 
   return (
-    <div className="flex h-dvh">
-      <aside className="flex w-52 shrink-0 flex-col border-r bg-card">
+    <div className="flex h-dvh print:block print:h-auto">
+      <aside className="flex w-52 shrink-0 flex-col border-r bg-card print:hidden">
         <div className="flex h-12 items-center px-4 font-medium">管理后台</div>
         <nav aria-label="管理菜单" className="flex flex-1 flex-col gap-0.5 overflow-y-auto px-2">
           {menuTree(menus).map((node) =>
@@ -47,7 +47,7 @@ export function AdminLayout() {
           </Button>
         </div>
       </aside>
-      <div className="min-h-0 flex-1 overflow-y-auto">
+      <div className="min-h-0 flex-1 overflow-y-auto print:overflow-visible">
         <Outlet />
       </div>
     </div>

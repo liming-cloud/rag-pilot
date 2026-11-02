@@ -108,6 +108,10 @@ class RbacTests {
                         Map.of("status", "RESOLVED")),
                 new Endpoint(Permissions.ANSWER_RECHECK, HttpMethod.POST, "/api/answers/999999/recheck", null),
                 new Endpoint(Permissions.STATS_VIEW, HttpMethod.GET, "/api/answers/stats", null),
+                new Endpoint(Permissions.STATS_EXPORT, HttpMethod.GET, "/api/answers/stats/export?days=7", null),
+                new Endpoint(Permissions.ANSWER_VIEW, HttpMethod.GET, "/api/answers/gaps", null),
+                new Endpoint(Permissions.ANSWER_REVIEW, HttpMethod.POST, "/api/answers/gaps/resolve",
+                        Map.of("recordIds", List.of(999999))),
                 // 模型管理：用不存在的服务商，权限通过后也不会真的去连外部模型服务。
                 new Endpoint(Permissions.MODEL_VIEW, HttpMethod.GET, "/api/models", null),
                 new Endpoint(Permissions.MODEL_VIEW, HttpMethod.GET, "/api/models/changes", null),

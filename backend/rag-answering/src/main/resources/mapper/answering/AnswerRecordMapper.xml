@@ -97,17 +97,6 @@
         ]]>
     </select>
 
-    <select id="topRefusedQuestions" resultType="map">
-        <![CDATA[
-        SELECT question AS label, count(*) AS count
-        FROM answer_record
-        WHERE tenant_id = #{tenantId} AND created_at >= #{from} AND created_at < #{to} AND refused
-        GROUP BY question
-        ORDER BY count DESC, max(created_at) DESC
-        LIMIT #{limit}
-        ]]>
-    </select>
-
     <select id="topCitedDocuments" resultType="map">
         <![CDATA[
         SELECT c.document_name AS label, count(DISTINCT c.answer_id) AS count
@@ -118,6 +107,40 @@
         ORDER BY count DESC, c.document_name
         LIMIT #{limit}
         ]]>
+    </select>
+
+    <!-- 知识缺口要归类的记录（D-047）：答不上来的和被点踩的，最新的在前。 -->
+    <sql id="gapFilter">
+        WHERE r.tenant_id = #{tenantId} AND r.created_at &gt;= #{from} AND r.created_at &lt; #{to}
+          AND (r.refused OR r.rating = 'DOWN')
+    </sql>
+
+    <select id="gapRecords" resultType="map">
+        SELECT r.id, r.user_id, r.question, r.created_at, r.refused, r.feedback_comment, r.review_status,
+               (SELECT string_agg(DISTINCT c.document_name, chr(31)) FROM answer_citation c
+                 WHERE c.answer_id = r.id) AS cited_documents
+        FROM answer_record r
+        <include refid="gapFilter"/>
+        ORDER BY r.created_at DESC, r.id DESC
+        LIMIT #{limit}
+    </select>
+
+    <select id="countGapRecords" resultType="long">
+        SELECT count(*) FROM answer_record r
+        <include refid="gapFilter"/>
+    </select>
+
+    <!-- 运营明细导出（#125）：一段时间内的全部问答，按时间先后。 -->
+    <select id="between" resultType="map">
+        SELECT r.id, r.user_id, r.question, r.answer_text, r.refused, r.refusal_reason, r.top_relevance,
+               r.rating, r.feedback_comment, r.created_at, r.rewritten_question, r.review_status,
+               r.resolution_note, r.resolved_at,
+               (SELECT string_agg(DISTINCT c.document_name, chr(31)) FROM answer_citation c
+                 WHERE c.answer_id = r.id) AS cited_documents
+        FROM answer_record r
+        WHERE r.tenant_id = #{tenantId} AND r.created_at &gt;= #{from} AND r.created_at &lt; #{to}
+        ORDER BY r.created_at, r.id
+        LIMIT #{limit}
     </select>
 
     <update id="updateReview">

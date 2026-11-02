@@ -47,10 +47,16 @@ interface AnswerRecordMapper {
     List<Map<String, Object>> refusalReasons(@Param("tenantId") long tenantId, @Param("from") OffsetDateTime from,
             @Param("to") OffsetDateTime to);
 
-    List<Map<String, Object>> topRefusedQuestions(@Param("tenantId") long tenantId,
-            @Param("from") OffsetDateTime from, @Param("to") OffsetDateTime to, @Param("limit") int limit);
-
     List<Map<String, Object>> topCitedDocuments(@Param("tenantId") long tenantId, @Param("from") OffsetDateTime from,
+            @Param("to") OffsetDateTime to, @Param("limit") int limit);
+
+    List<Map<String, Object>> gapRecords(@Param("tenantId") long tenantId, @Param("from") OffsetDateTime from,
+            @Param("to") OffsetDateTime to, @Param("limit") int limit);
+
+    long countGapRecords(@Param("tenantId") long tenantId, @Param("from") OffsetDateTime from,
+            @Param("to") OffsetDateTime to);
+
+    List<Map<String, Object>> between(@Param("tenantId") long tenantId, @Param("from") OffsetDateTime from,
             @Param("to") OffsetDateTime to, @Param("limit") int limit);
 
     void updateReview(@Param("tenantId") long tenantId, @Param("id") long id, @Param("status") String status,

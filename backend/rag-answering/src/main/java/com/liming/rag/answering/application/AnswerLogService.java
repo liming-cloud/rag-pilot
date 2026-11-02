@@ -19,37 +19,20 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class AnswerLogService {
 
-    /** 使用统计最多看多少天。 */
+    /** 回答记录最多按多少天筛选。 */
     static final int MAX_STATS_DAYS = 90;
 
     private final AnswerRecordRepository records;
     private final AnswerReviews reviews;
-    private final AnswerStatistics statistics;
     private final UserDirectory users;
     private final AnsweringSettings settings;
 
-    AnswerLogService(AnswerRecordRepository records, AnswerReviews reviews, AnswerStatistics statistics,
-            UserDirectory users, AnsweringSettings settings) {
+    AnswerLogService(AnswerRecordRepository records, AnswerReviews reviews, UserDirectory users,
+            AnsweringSettings settings) {
         this.records = records;
         this.reviews = reviews;
-        this.statistics = statistics;
         this.users = users;
         this.settings = settings;
-    }
-
-    /**
-     * 最近 {@code days} 天（含今天）的使用统计，“一天”按部署配置的统计时区划分（D-045）。
-     *
-     * @throws AnsweringException 天数不在 1 到 {@value #MAX_STATS_DAYS} 之间
-     */
-    @Transactional(readOnly = true)
-    public UsageStats usage(TenantId tenantId, int days) {
-        if (days < 1 || days > MAX_STATS_DAYS) {
-            throw invalid("统计天数只能是 1 到 " + MAX_STATS_DAYS + " 天");
-        }
-        var zone = settings.statsZone();
-        var today = LocalDate.now(zone);
-        return statistics.usage(tenantId, today.minusDays(days - 1L), today, zone);
     }
 
     /**

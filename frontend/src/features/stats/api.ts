@@ -1,5 +1,17 @@
-import { json } from "@/lib/api";
+import { ApiError, json, query } from "@/lib/api";
 import { authFetch } from "@/lib/auth";
+
+export type Totals = {
+  questions: number;
+  askers: number;
+  refused: number;
+  /** 点了赞或踩的回答数。 */
+  rated: number;
+  liked: number;
+  disliked: number;
+  /** 差评和答不上来、还没标记已处理的记录数。 */
+  openReviews: number;
+};
 
 /** 与后端 answering 模块的 UsageStats 一致。日期按部署配置的统计时区划分（D-045）。 */
 export type UsageStats = {
@@ -7,28 +19,58 @@ export type UsageStats = {
   to: string;
   /** 统计时区，如 Asia/Shanghai。 */
   zone: string;
-  totals: {
-    questions: number;
-    askers: number;
-    refused: number;
-    /** 点了赞或踩的回答数。 */
-    rated: number;
-    liked: number;
-    disliked: number;
-    /** 差评和答不上来、还没标记已处理的记录数。 */
-    openReviews: number;
-  };
+  totals: Totals;
+  /**
+   * 按周查看时是上一周的汇总，用来对比；本周还没过完时只统计到今天，上一周取同样的几天。按最近 N 天查看时为 null（#125）。
+   */
+  previous: Totals | null;
   daily: { date: string; questions: number; refused: number; disliked: number }[];
   refusalReasons: { reason: string; count: number }[];
-  topRefusedQuestions: { question: string; count: number }[];
+  /** 待处理次数最多的知识缺口（按意思归类，D-047），代表问题和次数。 */
+  topGaps: { question: string; count: number }[];
   topCitedDocuments: { documentName: string; count: number }[];
 };
 
 export const RANGES = [7, 30, 90] as const;
 export type Range = (typeof RANGES)[number];
 
-export async function fetchUsageStats(days: Range): Promise<UsageStats> {
-  return json(await authFetch(`/api/answers/stats?days=${days}`), "读取运营概览失败");
+/** 最近 N 天，或某个自然周（周一的日期，yyyy-MM-dd）。 */
+export type StatsPeriod = { days: Range } | { week: string };
+
+export async function fetchUsageStats(period: StatsPeriod): Promise<UsageStats> {
+  return json(await authFetch(`/api/answers/stats${query(period)}`), "读取运营概览失败");
+}
+
+/**
+ * 导出这段时间的问答明细（stats:export）：每条问答一行，UTF-8 带 BOM 的 CSV，Excel 直接打开中文不乱码。
+ * 文件名由后端给出。
+ */
+export async function exportUsageCsv(period: StatsPeriod): Promise<{ filename: string; blob: Blob }> {
+  const response = await authFetch(`/api/answers/stats/export${query(period)}`);
+  if (!response.ok) {
+    await json(response, "导出失败");
+    throw new ApiError(response.status, "导出失败");
+  }
+  const disposition = response.headers.get("Content-Disposition") ?? "";
+  const encoded = /filename\*=UTF-8''([^;]+)/.exec(disposition)?.[1];
+  return { filename: encoded ? decodeURIComponent(encoded) : "运营明细.csv", blob: await response.blob() };
+}
+
+/** 一个自然周：周一到周日。 */
+export type Week = { start: string; end: string };
+
+/**
+ * 统计时区里最近 {@code count} 个自然周（周一到周日），本周在前。只用来生成选项，统计的切分以后端为准。
+ */
+export function recentWeeks(zone: string, count = 12, now = new Date()): Week[] {
+  const today = new Intl.DateTimeFormat("sv-SE", { timeZone: zone }).format(now);
+  const date = new Date(`${today}T00:00:00Z`);
+  const monday = new Date(date.getTime() - ((date.getUTCDay() + 6) % 7) * 86_400_000);
+  return Array.from({ length: count }, (_, index) => {
+    const start = new Date(monday.getTime() - index * 7 * 86_400_000);
+    const end = new Date(start.getTime() + 6 * 86_400_000);
+    return { start: start.toISOString().slice(0, 10), end: end.toISOString().slice(0, 10) };
+  });
 }
 
 /** 常见时区给个好懂的名字，其余直接显示时区名。 */
