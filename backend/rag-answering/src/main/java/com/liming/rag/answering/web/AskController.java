@@ -13,10 +13,10 @@ import java.io.UncheckedIOException;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.core.task.AsyncTaskExecutor;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -35,17 +35,19 @@ class AskController {
 
     private static final Logger LOG = LoggerFactory.getLogger(AskController.class);
     private static final long STREAM_TIMEOUT_MILLIS = Duration.ofMinutes(2).toMillis();
-    /** 每次流式问答一个虚拟线程，阻塞等待模型输出不占平台线程。 */
-    private static final ExecutorService STREAMS = Executors.newVirtualThreadPerTaskExecutor();
 
     private final AnswerService answers;
     private final AnswerLogService log;
     private final CurrentUser currentUser;
+    /** 每次流式问答一个虚拟线程，阻塞等待模型输出不占平台线程；停机时等它答完（#135）。 */
+    private final AsyncTaskExecutor streams;
 
-    AskController(AnswerService answers, AnswerLogService log, CurrentUser currentUser) {
+    AskController(AnswerService answers, AnswerLogService log, CurrentUser currentUser,
+            @Qualifier("applicationTaskExecutor") AsyncTaskExecutor streams) {
         this.answers = answers;
         this.log = log;
         this.currentUser = currentUser;
+        this.streams = streams;
     }
 
     record AskRequest(String question, List<Long> knowledgeBaseIds) {
@@ -70,7 +72,7 @@ class AskController {
         var tenantId = currentUser.tenantId();
         var userId = currentUser.userId();
         var emitter = new SseEmitter(STREAM_TIMEOUT_MILLIS);
-        STREAMS.execute(() -> {
+        streams.execute(() -> {
             try {
                 var answer = answers.ask(tenantId, userId, request.knowledgeBaseIds(), request.question(),
                         delta -> send(emitter, "delta", Map.of("text", delta)),

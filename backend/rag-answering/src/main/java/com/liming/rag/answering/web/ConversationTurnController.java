@@ -9,11 +9,11 @@ import com.liming.rag.shared.BusinessException;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.Map;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.core.task.AsyncTaskExecutor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -36,15 +36,17 @@ class ConversationTurnController {
 
     private static final Logger LOG = LoggerFactory.getLogger(ConversationTurnController.class);
     private static final long STREAM_TIMEOUT_MILLIS = Duration.ofMinutes(2).toMillis();
-    /** 每次提问一个虚拟线程，阻塞等待模型输出不占平台线程。 */
-    private static final ExecutorService STREAMS = Executors.newVirtualThreadPerTaskExecutor();
 
     private final ConversationAskService turns;
     private final CurrentUser currentUser;
+    /** 每次提问一个虚拟线程，阻塞等待模型输出不占平台线程；停机时等这一轮生成完并保存（#135）。 */
+    private final AsyncTaskExecutor streams;
 
-    ConversationTurnController(ConversationAskService turns, CurrentUser currentUser) {
+    ConversationTurnController(ConversationAskService turns, CurrentUser currentUser,
+            @Qualifier("applicationTaskExecutor") AsyncTaskExecutor streams) {
         this.turns = turns;
         this.currentUser = currentUser;
+        this.streams = streams;
     }
 
     /** @param replacesTurnId 重新生成或修改问题时，指向要替换的最后一轮 */
@@ -63,7 +65,7 @@ class ConversationTurnController {
         var emitter = new SseEmitter(STREAM_TIMEOUT_MILLIS);
         var client = new Client(emitter);
         client.send("turn", Map.of("id", pending.turnId()));
-        STREAMS.execute(() -> {
+        streams.execute(() -> {
             try {
                 var turn = turns.run(pending, new ConversationAskService.Events(
                         status -> client.send("status", Map.of("text", status)),

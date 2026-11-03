@@ -36,7 +36,7 @@ class SearchPlannerTest {
                 return reply;
             }
         };
-        return new SearchPlanner(chat, Duration.ofMillis(300));
+        return new SearchPlanner(chat, Duration.ofMillis(300), TestExecutor.VIRTUAL);
     }
 
     @Test

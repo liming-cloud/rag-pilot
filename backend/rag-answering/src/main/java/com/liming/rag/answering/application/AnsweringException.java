@@ -10,7 +10,9 @@ public class AnsweringException extends BusinessException {
 
     public enum Reason {
         INVALID(ErrorKind.INVALID),
-        NOT_FOUND(ErrorKind.NOT_FOUND);
+        NOT_FOUND(ErrorKind.NOT_FOUND),
+        /** 会话刚被别的操作改过（同时在两个窗口提问等），这次修改没有保存。 */
+        CONFLICT(ErrorKind.CONFLICT);
 
         private final ErrorKind kind;
 

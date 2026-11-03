@@ -71,6 +71,9 @@ services:
       # 只绑定本机，用于运维检查健康状态和版本；员工经 web 访问接口。
       - "127.0.0.1:${APP_PORT:-8080}:8080"
     restart: unless-stopped
+    # 停服务时先等进行中的请求（最多 30 秒），再等后台正在生成的回答（最多 30 秒，见 application.yml 的
+    # spring.task.execution.shutdown），之后才强制结束；Docker 默认只等 10 秒（#135）。
+    stop_grace_period: 75s
     logging: *logging
 
   web:

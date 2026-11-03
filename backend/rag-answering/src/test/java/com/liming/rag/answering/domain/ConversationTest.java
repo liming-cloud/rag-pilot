@@ -99,4 +99,34 @@ class ConversationTest {
         assertThatThrownBy(() -> conversation.selectKnowledgeBases(OWNER, List.of()))
                 .isInstanceOf(IllegalArgumentException.class);
     }
+
+    @Test
+    @DisplayName("接着问时接在主线最后一轮之后；替换时接在被替换那一轮的上一轮之后（#135）")
+    void appendsTurnsToTheMainLine() {
+        var conversation = started();
+        var at = Instant.parse("2026-11-03T08:00:00Z");
+
+        assertThat(conversation.appendTurn(10, null, "青柚在哪？", at)).isNull();
+        assertThat(conversation.appendTurn(11, null, "补货先做什么？", at)).isEqualTo(10L);
+        assertThat(conversation.appendTurn(12, 11L, "补货前要移出什么？", at)).isEqualTo(10L);
+
+        assertThat(conversation.tail()).isEqualTo(new Conversation.MainLineTail(12, 10L));
+        assertThat(conversation.title()).as("第一轮的问题当标题").isEqualTo("青柚在哪？");
+    }
+
+    @Test
+    @DisplayName("只能重新生成或修改主线最后一轮；还没提问时不能替换（#135）")
+    void replacesOnlyTheLastTurn() {
+        var conversation = started();
+
+        assertThatThrownBy(() -> conversation.checkReplaceable(10L)).isInstanceOf(IllegalArgumentException.class);
+        conversation.appendTurn(10, null, "青柚在哪？", Instant.now());
+        conversation.appendTurn(11, null, "补货先做什么？", Instant.now());
+
+        assertThatThrownBy(() -> conversation.appendTurn(12, 10L, "改问", Instant.now()))
+                .isInstanceOf(IllegalArgumentException.class).hasMessage("只能重新生成或修改最后一轮");
+        assertThat(conversation.tail()).as("被拒绝时主线不变").isEqualTo(new Conversation.MainLineTail(11, 10L));
+        conversation.checkReplaceable(11L);
+        conversation.checkReplaceable(null);
+    }
 }

@@ -109,7 +109,7 @@ public class ConversationService {
         } catch (IllegalArgumentException e) {
             throw invalid(e.getMessage());
         }
-        return summary(conversations.save(conversation));
+        return summary(save(conversation));
     }
 
     /** 员工删除会话只影响员工端，回答记录照常保留（D-036）。 */
@@ -128,10 +128,12 @@ public class ConversationService {
     @Transactional(readOnly = true)
     TurnContext prepareTurn(TenantId tenantId, UserId userId, long id, Long replacesTurnId) {
         var conversation = owned(tenantId, userId, id);
-        var mainLine = conversations.mainLine(id);
-        if (replacesTurnId != null && (mainLine.isEmpty() || mainLine.getLast().id() != replacesTurnId)) {
-            throw invalid("只能重新生成或修改最后一轮");
+        try {
+            conversation.checkReplaceable(replacesTurnId);
+        } catch (IllegalArgumentException e) {
+            throw invalid(e.getMessage());
         }
+        var mainLine = conversations.mainLine(id);
         var history = replacesTurnId == null ? mainLine : mainLine.subList(0, mainLine.size() - 1);
         var recorded = answers.answers(tenantId, history.stream().map(ConversationTurn::answerRecordId)
                 .filter(Objects::nonNull).toList());
@@ -154,8 +156,10 @@ public class ConversationService {
 
     /**
      * 存下一轮：有回答时先记回答记录，再把这一轮接到主线上，更新最后提问时间（第一次提问时标题用问题截断）。
+     * 回答记录和会话在同一个事务里：会话没保存成功时，回答记录也不留（#135）。
      *
      * @param answer 停止时没留下可核对的内容、或出错时为 null
+     * @throws AnsweringException 要替换的已不是最后一轮（INVALID），或会话刚被别的提问改过（CONFLICT）
      */
     @Transactional
     ConversationViews.Turn recordTurn(TenantId tenantId, UserId userId, long id, long turnId, String question,
@@ -164,15 +168,16 @@ public class ConversationService {
         var recorded = answer == null ? null
                 : log.recordSearched(tenantId, userId, question, answer, knowledgeBaseIds);
         var now = Instant.now();
-        var turn = new ConversationTurn(turnId, null, question.strip(), status, recorded == null ? null : recorded.id(),
-                knowledgeBaseIds, now);
+        Long parent;
         try {
-            conversations.addTurn(id, turn, replacesTurnId);
+            parent = conversation.appendTurn(turnId, replacesTurnId, question, now);
         } catch (IllegalArgumentException e) {
             throw invalid(e.getMessage());
         }
-        conversation.asked(question, now);
-        conversations.save(conversation);
+        save(conversation);
+        var turn = new ConversationTurn(turnId, parent, question.strip(), status,
+                recorded == null ? null : recorded.id(), knowledgeBaseIds, now);
+        conversations.addTurn(id, turn, replacesTurnId);
         return new ConversationViews.Turn(turnId, turn.question(), status, recorded, knowledgeBaseIds, now);
     }
 
@@ -181,13 +186,34 @@ public class ConversationService {
         return conversations.nextTurnId();
     }
 
-    /** 模型在后台生成的标题；会话已被删除或员工改过标题时不动。 */
+    /** 后台生成标题时，会话被别的操作改过的话重新读一次再试，最多几次。 */
+    static final int TITLE_ATTEMPTS = 3;
+
+    /** 模型在后台生成的标题；会话已被删除或员工改过标题时不动。和提问撞上时重新读一次会话再试。 */
     @Transactional
     void applyGeneratedTitle(TenantId tenantId, long id, String title) {
-        conversations.find(tenantId, id).ifPresent(conversation -> {
-            conversation.titleGenerated(title);
-            conversations.save(conversation);
-        });
+        for (int attempt = 1; attempt <= TITLE_ATTEMPTS; attempt++) {
+            var conversation = conversations.find(tenantId, id);
+            if (conversation.isEmpty()) {
+                return;
+            }
+            conversation.get().titleGenerated(title);
+            try {
+                conversations.save(conversation.get());
+                return;
+            } catch (Conversation.ConcurrentChangeException e) {
+                // 读取之后会话被改过，再读一次。
+            }
+        }
+    }
+
+    /** 保存会话；读取之后被别的操作改过时，这次修改作废，让员工刷新后重试。 */
+    private Conversation save(Conversation conversation) {
+        try {
+            return conversations.save(conversation);
+        } catch (Conversation.ConcurrentChangeException e) {
+            throw new AnsweringException(AnsweringException.Reason.CONFLICT, "这段对话刚在别处更新过，请刷新后重试");
+        }
     }
 
     /** 自己的会话；不存在或不是自己的都按不存在处理。 */

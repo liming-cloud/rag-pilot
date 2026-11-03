@@ -14,9 +14,11 @@ interface ConversationMapper {
             @Param("titleSource") String titleSource, @Param("knowledgeBaseIds") Long[] knowledgeBaseIds,
             @Param("lastAskedAt") OffsetDateTime lastAskedAt);
 
-    void update(@Param("tenantId") long tenantId, @Param("id") long id, @Param("title") String title,
-            @Param("titleSource") String titleSource, @Param("knowledgeBaseIds") Long[] knowledgeBaseIds,
-            @Param("lastAskedAt") OffsetDateTime lastAskedAt);
+    /** 按版本号更新，版本号加一；返回更新的行数，版本已变时为 0。 */
+    int update(@Param("tenantId") long tenantId, @Param("id") long id, @Param("version") long version,
+            @Param("title") String title, @Param("titleSource") String titleSource,
+            @Param("knowledgeBaseIds") Long[] knowledgeBaseIds, @Param("lastAskedAt") OffsetDateTime lastAskedAt,
+            @Param("lastTurnId") Long lastTurnId);
 
     Map<String, Object> find(@Param("tenantId") long tenantId, @Param("id") long id);
 
@@ -27,11 +29,6 @@ interface ConversationMapper {
     int deleteInactiveSince(@Param("before") OffsetDateTime before);
 
     long nextTurnId();
-
-    Long lastMainLineTurnId(@Param("conversationId") long conversationId);
-
-    /** 被替换的那一轮接在哪一轮之后；不是这个会话主线上的轮次时返回空。 */
-    Map<String, Object> mainLineTurn(@Param("conversationId") long conversationId, @Param("turnId") long turnId);
 
     void markSuperseded(@Param("conversationId") long conversationId, @Param("turnId") long turnId);
 

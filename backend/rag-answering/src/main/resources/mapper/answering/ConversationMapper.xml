@@ -10,25 +10,31 @@
         RETURNING id
     </select>
 
+    <!-- 乐观锁：版本号不是加载时的那个，说明会话已被别的操作改过，不更新（返回 0 行）。 -->
     <update id="update">
         UPDATE conversation
         SET title = #{title}, title_source = #{titleSource},
             knowledge_base_ids = #{knowledgeBaseIds,typeHandler=org.apache.ibatis.type.ArrayTypeHandler},
-            last_asked_at = #{lastAskedAt}
-        WHERE tenant_id = #{tenantId} AND id = #{id}
+            last_asked_at = #{lastAskedAt}, last_turn_id = #{lastTurnId}, version = version + 1
+        WHERE tenant_id = #{tenantId} AND id = #{id} AND version = #{version}
     </update>
 
+    <sql id="columns">
+        c.id, c.tenant_id, c.user_id, c.version, c.title, c.title_source, c.knowledge_base_ids, c.last_asked_at,
+        c.last_turn_id, t.parent_turn_id AS last_turn_parent_id
+        FROM conversation c
+        LEFT JOIN conversation_turn t ON t.id = c.last_turn_id
+    </sql>
+
     <select id="find" resultType="map">
-        SELECT id, tenant_id, user_id, title, title_source, knowledge_base_ids, last_asked_at
-        FROM conversation
-        WHERE tenant_id = #{tenantId} AND id = #{id}
+        SELECT <include refid="columns"/>
+        WHERE c.tenant_id = #{tenantId} AND c.id = #{id}
     </select>
 
     <select id="listOwned" resultType="map">
-        SELECT id, tenant_id, user_id, title, title_source, knowledge_base_ids, last_asked_at
-        FROM conversation
-        WHERE tenant_id = #{tenantId} AND user_id = #{userId}
-        ORDER BY last_asked_at DESC, id DESC
+        SELECT <include refid="columns"/>
+        WHERE c.tenant_id = #{tenantId} AND c.user_id = #{userId}
+        ORDER BY c.last_asked_at DESC, c.id DESC
     </select>
 
     <delete id="delete">
@@ -45,15 +51,6 @@
         SELECT nextval(pg_get_serial_sequence('conversation_turn', 'id'))
     </select>
 
-    <select id="lastMainLineTurnId" resultType="long">
-        SELECT max(id) FROM conversation_turn WHERE conversation_id = #{conversationId} AND NOT superseded
-    </select>
-
-    <select id="mainLineTurn" resultType="map">
-        SELECT id, parent_turn_id FROM conversation_turn
-        WHERE conversation_id = #{conversationId} AND id = #{turnId} AND NOT superseded
-    </select>
-
     <update id="markSuperseded">
         UPDATE conversation_turn SET superseded = true WHERE conversation_id = #{conversationId} AND id = #{turnId}
     </update>
@@ -65,10 +62,22 @@
                 #{knowledgeBaseIds,typeHandler=org.apache.ibatis.type.ArrayTypeHandler}, #{askedAt})
     </insert>
 
+    <!-- 主线：从会话记下的最后一轮沿 parent_turn_id 往回找，再按先后排列（#135）。 -->
     <select id="mainLine" resultType="map">
+        WITH RECURSIVE chain AS (
+            SELECT t.id, t.parent_turn_id, t.question, t.status, t.answer_record_id, t.knowledge_base_ids, t.asked_at,
+                   0 AS depth
+            FROM conversation c
+            JOIN conversation_turn t ON t.id = c.last_turn_id
+            WHERE c.id = #{conversationId}
+            UNION ALL
+            SELECT p.id, p.parent_turn_id, p.question, p.status, p.answer_record_id, p.knowledge_base_ids, p.asked_at,
+                   chain.depth + 1
+            FROM conversation_turn p
+            JOIN chain ON p.id = chain.parent_turn_id
+        )
         SELECT id, parent_turn_id, question, status, answer_record_id, knowledge_base_ids, asked_at
-        FROM conversation_turn
-        WHERE conversation_id = #{conversationId} AND NOT superseded
-        ORDER BY id
+        FROM chain
+        ORDER BY depth DESC
     </select>
 </mapper>

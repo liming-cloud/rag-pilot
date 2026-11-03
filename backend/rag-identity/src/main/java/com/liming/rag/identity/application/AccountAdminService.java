@@ -12,6 +12,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.regex.Pattern;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -71,10 +72,16 @@ public class AccountAdminService {
         var assigned = rolesIn(tenantId, roleIds);
         rulesFor(actor).checkAssignable(assigned);
         if (accounts.existsByUsername(name)) {
-            throw new IdentityException(IdentityException.Reason.CONFLICT, "用户名已被使用：" + name);
+            throw usernameTaken(name);
         }
-        var created = accounts.insert(new Account(null, tenantId, name, display,
-                BCrypt.hashpw(password, BCrypt.gensalt()), true, false, 0, null));
+        Account created;
+        try {
+            created = accounts.insert(new Account(null, tenantId, name, display,
+                    BCrypt.hashpw(password, BCrypt.gensalt()), true, false, 0, null));
+        } catch (DuplicateKeyException e) {
+            // 查重之后、插入之前别人用了这个用户名：靠唯一约束兜底（#135）。
+            throw usernameTaken(name);
+        }
         roles.setUserRoles(created.id(), assigned.stream().map(Role::id).toList());
         return managed(created, assigned);
     }
@@ -164,6 +171,10 @@ public class AccountAdminService {
 
     private static String blankToNull(String value) {
         return value == null || value.isBlank() ? null : value.strip();
+    }
+
+    private static IdentityException usernameTaken(String username) {
+        return new IdentityException(IdentityException.Reason.CONFLICT, "用户名已被使用：" + username);
     }
 
     private static IdentityException notFound() {

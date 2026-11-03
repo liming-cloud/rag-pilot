@@ -9,6 +9,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -60,9 +61,14 @@ public class RoleService {
         var granted = permissionsOrEmpty(permissions);
         rulesFor(actor).checkGrantable(granted);
         if (roles.existsByName(tenantId, trimmed)) {
-            throw new IdentityException(IdentityException.Reason.CONFLICT, "已有同名角色：" + trimmed);
+            throw nameTaken(trimmed);
         }
-        return new RoleSummary(roles.insert(new Role(null, tenantId, trimmed, null, granted)), 0);
+        try {
+            return new RoleSummary(roles.insert(new Role(null, tenantId, trimmed, null, granted)), 0);
+        } catch (DuplicateKeyException e) {
+            // 查重之后、插入之前别人建了同名角色：靠唯一约束兜底（#135）。
+            throw nameTaken(trimmed);
+        }
     }
 
     /** {@code name}、{@code permissions} 为 null 表示不改。 */
@@ -79,7 +85,7 @@ public class RoleService {
             }
             newName = checkName(name);
             if (roles.existsByName(tenantId, newName)) {
-                throw new IdentityException(IdentityException.Reason.CONFLICT, "已有同名角色：" + newName);
+                throw nameTaken(newName);
             }
         }
         var granted = role.permissions();
@@ -88,7 +94,11 @@ public class RoleService {
             rulesFor(actor).checkGrantable(granted);
         }
         var updated = new Role(role.id(), tenantId, newName, role.builtIn(), granted);
-        roles.update(updated);
+        try {
+            roles.update(updated);
+        } catch (DuplicateKeyException e) {
+            throw nameTaken(newName);
+        }
         return new RoleSummary(updated, roles.userIds(id).size());
     }
 
@@ -144,6 +154,10 @@ public class RoleService {
 
     private static Set<String> permissionsOrEmpty(Collection<String> permissions) {
         return permissions == null ? Set.of() : Set.copyOf(permissions);
+    }
+
+    private static IdentityException nameTaken(String name) {
+        return new IdentityException(IdentityException.Reason.CONFLICT, "已有同名角色：" + name);
     }
 
     private static IdentityException invalid(String message) {

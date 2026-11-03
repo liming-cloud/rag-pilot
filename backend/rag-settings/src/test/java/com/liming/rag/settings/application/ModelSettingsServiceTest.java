@@ -17,6 +17,7 @@ import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.transaction.support.TransactionOperations;
 
 /** 模型管理的规则（D-043）：测通才保存、每次保存记变更、恢复、在用的服务商不能删、路由按当前配置。 */
 class ModelSettingsServiceTest {
@@ -27,7 +28,8 @@ class ModelSettingsServiceTest {
     private final InMemoryStore store = new InMemoryStore();
     private final FakeProbe probe = new FakeProbe();
     private final ModelSettingsService service = new ModelSettingsService(store, probe,
-            new KeyCipher(new SettingsProperties(KeyCipherTest.MASTER_KEY)), new FakeUsers());
+            new KeyCipher(new SettingsProperties(KeyCipherTest.MASTER_KEY)), new FakeUsers(),
+            TransactionOperations.withoutTransaction());
 
     @Test
     @DisplayName("没在界面配置过时全部用环境变量，路由返回空")
@@ -117,7 +119,7 @@ class ModelSettingsServiceTest {
     @DisplayName("没设主密钥时不能保存密钥，不需要密钥的服务商照常能加")
     void masterKeyMissing() {
         var withoutKey = new ModelSettingsService(store, probe, new KeyCipher(new SettingsProperties("")),
-                new FakeUsers());
+                new FakeUsers(), TransactionOperations.withoutTransaction());
 
         assertThatThrownBy(() -> withoutKey.createProvider("云服务", "https://x/v1", "sk-1234567890"))
                 .hasMessageContaining("RAG_MASTER_KEY");

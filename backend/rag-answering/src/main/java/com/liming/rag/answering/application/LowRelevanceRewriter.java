@@ -7,12 +7,11 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import org.springframework.ai.rag.Query;
 import org.springframework.ai.rag.preretrieval.query.transformation.QueryTransformer;
+import org.springframework.core.task.AsyncTaskExecutor;
 
 /**
  * 把员工的问题改写成规范说法，供“低分时再检索一次”使用。实现 Spring AI 的 {@link QueryTransformer}，
@@ -31,9 +30,6 @@ final class LowRelevanceRewriter implements QueryTransformer {
     /** 一句问题用不了这么多 token；遇换行就停，模型多写的解释不会被生成。 */
     static final ChatGateway.Limits LIMITS = new ChatGateway.Limits(64, List.of("\n"));
 
-    /** 每次改写一个虚拟线程，超时后不再等它。 */
-    private static final ExecutorService CALLS = Executors.newVirtualThreadPerTaskExecutor();
-
     /** 一次改写的结果。 */
     record Result(Query query, Outcome outcome, int outputChars, long modelMillis) {
     }
@@ -41,11 +37,14 @@ final class LowRelevanceRewriter implements QueryTransformer {
     private final ChatGateway chat;
     private final Duration timeout;
     private final String system;
+    /** 每次改写在这里另起一个虚拟线程，超时后不再等它。 */
+    private final AsyncTaskExecutor calls;
 
-    LowRelevanceRewriter(ChatGateway chat, Duration timeout, IndustryPack pack) {
+    LowRelevanceRewriter(ChatGateway chat, Duration timeout, IndustryPack pack, AsyncTaskExecutor calls) {
         this.chat = chat;
         this.timeout = timeout;
         this.system = system(pack);
+        this.calls = calls;
     }
 
     /** 改写的系统提示词：行业包给开头的角色和行业提示，其余规则是内核的。 */
@@ -67,7 +66,7 @@ final class LowRelevanceRewriter implements QueryTransformer {
 
     Result rewrite(Query query) {
         long start = System.nanoTime();
-        var call = CALLS.submit(() -> chat.complete(system, query.text(), LIMITS));
+        var call = calls.submit(() -> chat.complete(system, query.text(), LIMITS));
         String reply;
         try {
             reply = call.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
