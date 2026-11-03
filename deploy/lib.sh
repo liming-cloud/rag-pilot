@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # 部署脚本的公共函数（D-048），由 backup.sh、restore.sh、upgrade.sh、verify.sh 引入，不单独执行。
-# 只依赖 bash、docker（含 compose 插件）和 curl。脚本在部署目录（离线包解压后的目录，或仓库的 deploy/）里运行。
+# 只依赖 bash、docker（含 compose 插件）和 curl。脚本在部署目录（发布包解压后的目录，#138）里运行。
 
 set -euo pipefail
 
@@ -42,7 +42,7 @@ compose() {
 
 APP_URL="http://127.0.0.1:$(setting APP_PORT 8080)"
 
-# 这个部署目录对应的版本：离线包的 release.env 里写着；开发时为 dev。
+# 这个部署目录对应的版本：发布包的 release.env 里写着。
 package_version() {
   setting RAG_VERSION dev
 }

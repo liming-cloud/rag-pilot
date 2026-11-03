@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# 部署验证的 CI 场景（D-048），由 .github/workflows/deploy.yml 调用。全部用离线包和部署脚本完成，与客户现场的步骤一致；
-# 模型用本地确定性实现，不访问外网。
-#   ./deploy-scenarios.sh <新版本号> [上一版本的离线包目录]
+# 部署验证的 CI 场景（D-048、#138），由 .github/workflows/deploy.yml 调用。全部用发布包和部署脚本完成，与客户现场的步骤一致：
+# 镜像由 build.sh 在本机构建；模型用本地确定性实现。
+#   ./deploy-scenarios.sh <新版本号> [上一版本的 Release 附件目录]
 # 场景：(a) 全新安装（没有上一版本时）或从上一版本升级；(b) 停服务备份 → 删卷 → 恢复；
 #       (c) 升级到一个迁移会失败的版本：升级脚本停下并提示回退，用升级前的备份回退后系统正常。
 set -euo pipefail
@@ -25,11 +25,13 @@ WEB_PORT=8081
 EOF
 }
 
-# 解开离线包：部署目录 + 三个镜像放进 images/。
+# 解开发布包。0.9.0.1 及以前的旧格式离线包另带三个镜像文件，放进 images/ 由它自己的 install.sh 加载。
 unpack() {
   local packages="$1" ver="$2"
   tar -xzf "$packages/rag-pilot-$ver.tar.gz" -C "$work"
-  cp "$packages"/rag-pilot-"$ver"-*.image.tar.gz "$work/rag-pilot-$ver/images/"
+  if compgen -G "$packages/rag-pilot-$ver-*.image.tar.gz" >/dev/null; then
+    cp "$packages"/rag-pilot-"$ver"-*.image.tar.gz "$work/rag-pilot-$ver/images/"
+  fi
   env_file "$work/rag-pilot-$ver"
   echo "$work/rag-pilot-$ver"
 }
@@ -44,7 +46,6 @@ if [ -n "$previous" ]; then
   title "(a) 安装上一版本 $previous_version"
   "$old/install.sh"
   title "(a) 升级 $previous_version → $version"
-  "$current/load.sh"
   "$current/upgrade.sh" --yes
 else
   title "(a) 全新安装 $version（没有上一版本，跳过升级）"
@@ -62,18 +63,14 @@ broken_version="${version%.*}.$(( ${version##*.} + 1000 ))"
 broken="$work/rag-pilot-$broken_version"
 cp -R "$current" "$broken"
 sed -i.bak "s/^RAG_VERSION=.*/RAG_VERSION=$broken_version/" "$broken/release.env"
-docker tag "rag-pilot-web:$version" "rag-pilot-web:$broken_version"
-docker tag "rag-pilot-db:$version" "rag-pilot-db:$broken_version"
-sed -i.bak "s/^RAG_DB_IMAGE=.*/RAG_DB_IMAGE=rag-pilot-db:$broken_version/" "$broken/release.env"
-# 在正常镜像上多加一个必然失败的迁移。
-mkdir -p "$work/broken-image"
-echo "SELECT 1 / 0;" > "$work/broken-image/V209912310001__ci_broken.sql"
-cat > "$work/broken-image/Dockerfile" <<EOF
-FROM rag-pilot-app:$version
-COPY V209912310001__ci_broken.sql /opt/rag/broken/
+# 发布包里带着 Dockerfile：在这个版本的 app 镜像里多加一个必然失败的迁移，upgrade.sh 照常用 build.sh 构建它。
+mkdir -p "$broken/broken"
+echo "SELECT 1 / 0;" > "$broken/broken/V209912310001__ci_broken.sql"
+echo '!broken' >> "$broken/.dockerignore"
+cat >> "$broken/app.Dockerfile" <<'EOF'
+COPY broken/V209912310001__ci_broken.sql /opt/rag/broken/
 ENV SPRING_FLYWAY_LOCATIONS=classpath:db/migration/identity,classpath:db/migration/knowledge,classpath:db/migration/answering,classpath:db/migration/evaluation,classpath:db/migration/settings,filesystem:/opt/rag/broken
 EOF
-docker build -q -t "rag-pilot-app:$broken_version" "$work/broken-image"
 if "$broken/upgrade.sh" --yes 2> "$work/upgrade-error.txt"; then
   echo "迁移失败的版本居然升级成功了" >&2
   exit 1

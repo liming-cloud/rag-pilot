@@ -15,13 +15,16 @@ done
 backup_version="$(cat "$source_dir/VERSION")"
 version="$(package_version)"
 if [ "$backup_version" != "$version" ]; then
-  die "这份备份是版本 $backup_version 的，本目录是版本 $version。请在版本 $backup_version 的部署目录里恢复（离线包要先 ./load.sh）"
+  die "这份备份是版本 $backup_version 的，本目录是版本 $version。请在版本 $backup_version 的部署目录里恢复"
 fi
 
 if [ "${2:-}" != "--yes" ]; then
   read -r -p "将用 $source_dir 覆盖当前的数据库和上传文件，确定吗？输入 yes 继续：" answer
   [ "$answer" = "yes" ] || die "已取消"
 fi
+
+# 回退时旧版本的镜像可能已被清理，先确认本版本的镜像都在（已有时很快，不会重新下载）。
+"$DEPLOY_DIR/build.sh"
 
 info "停止 app（页面显示“系统维护中”）"
 compose stop app 2>/dev/null || true

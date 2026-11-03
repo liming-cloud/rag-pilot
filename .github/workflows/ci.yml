@@ -63,15 +63,30 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: 构建后端镜像
-        run: docker build -f deploy/backend.Dockerfile -t rag-app:ci .
-      - name: 构建前端镜像
-        run: docker build -f deploy/web.Dockerfile -t rag-web:ci .
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: "25"
+          cache: maven
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      # 与客户现场相同（#138）：打发布包，在解压后的目录里用 Compose 从 jar、dist 构建镜像。
+      - name: 打发布包
+        run: deploy/package.sh 0.0.0.0 packages && tar -xzf packages/rag-pilot-0.0.0.0.tar.gz
+      - name: 校验 Compose 配置并构建镜像
+        working-directory: rag-pilot-0.0.0.0
+        env:
+          DB_PASSWORD: ci
+          MODEL_API_KEY: ci
+        run: |
+          docker compose -f compose.yml --env-file release.env config --quiet
+          docker compose -f compose.yml --env-file release.env build app web
       - name: 校验 Nginx 配置
         # app 主机名只在 Compose 网络里能解析，这里临时指向本机。
-        run: docker run --rm --add-host app:127.0.0.1 rag-web:ci nginx -t
-      - name: 校验 Compose 配置
-        run: DB_PASSWORD=ci MODEL_API_KEY=ci docker compose -f deploy/compose.yml config --quiet
+        run: docker run --rm --add-host app:127.0.0.1 rag-pilot-web:0.0.0.0 nginx -t
 
   frontend:
     name: frontend

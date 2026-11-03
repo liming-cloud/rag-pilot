@@ -278,3 +278,13 @@ Compose 增加 web 服务（`deploy/web.Dockerfile`）：Node 24 构建前端，
 - **加固**：容器日志按大小轮转（每个服务 5 × 20 MB），三个服务 `restart: unless-stopped`，web 加健康检查；Compose 增加 `MODEL_BASE_URL`、本地模型开关和 `APP_PORT`。
 - **另开的 Issue**：管理端窄屏适配另开 #130；Spring AI 升级（#131）经人答复“版本升级暂不考虑”，关闭。
 
+
+## D-050 发布包只给编译产物，镜像在宿主机上构建（2026-11-03）
+
+#138 经人答复，取代 D-048 里“离线包带镜像”的部分（备份、恢复、升级与回退的流程，4 位版本号，每个版本一个部署目录，都不变）：
+
+- **发布包**：Release 只附 `rag-pilot-<版本>.tar.gz` 和 `SHA256SUMS`。包里是部署目录（Compose、脚本、运维手册、`.env.example`、`release.env`）、编译好的 `app/rag-app.jar` 和前端 `web/dist/`（版本号在打包时写进去），以及只含运行阶段的 `app.Dockerfile`、`web.Dockerfile`。不再附 app、web、db 三个镜像文件，去掉 `load.sh`。每次升级的下载量从约 600 MB 降到约 120 MB。
+- **在宿主机上构建**：`build.sh`（`docker compose build`）用包里的 jar 和 dist 构建 `rag-pilot-app:<版本>`、`rag-pilot-web:<版本>`；`install.sh` 先构建再启动，`upgrade.sh` 在停服务备份之前构建（旧版本照常服务），`restore.sh` 回退时镜像被清理了也能重建。镜像在服务器上构建，CPU 架构跟着服务器走。构建上下文是发布包目录，`.dockerignore` 只放进 jar、dist 和 `nginx.conf`，`.env` 和备份不会交给 Docker。
+- **基础镜像从仓库拉**（人答复）：JRE（`eclipse-temurin:25-jre`）、Nginx（`nginx:1.28-alpine`）和数据库（ParadeDB）三个镜像按摘要锁定在 `compose.yml`，第一次和摘要变化时才下载。服务器不能直接访问 Docker Hub 时，在 `.env` 里用 `RAG_DB_IMAGE`、`RAG_JRE_IMAGE`、`RAG_NGINX_IMAGE` 改成镜像源或内网仓库的地址，摘要不变。D-048 的“安装不需要访问外网”相应改为：安装和升级时要能访问镜像仓库。数据库镜像不再重新打成 `rag-pilot-db:<版本>`。
+- **打包**：`deploy/package.sh` 编译 jar（JDK 25）和 dist（Node 24），组装发布包，不构建、不导出镜像。开发时也用它打本地发布包再安装，仓库里的 `deploy/` 不再能直接 `up --build`，开发和客户现场只有一条路径。
+- **CI**：`ci.yml` 的 `image` 任务改为打发布包、在解压后的目录里用 Compose 构建两个镜像并校验 Nginx 配置（任务名不变，分支保护不用改）。`deploy.yml` 检查发布包内容（有 jar、dist、Dockerfile、脚本，没有镜像文件），三个场景都由 `build.sh` 构建镜像；迁移失败的场景改为在发布包的 `app.Dockerfile` 里追加一个必然失败的迁移。升级场景兼容从 0.9.0.1 的旧格式离线包（带镜像文件）升级。

@@ -1,25 +1,25 @@
 # 运维手册
 
-写给客户现场的运维人员：会用 Linux 和 Docker，不需要了解这个项目的代码。系统在 HTTP 下用 Docker Compose 部署；HTTPS、统一入口、监控告警按客户现有的方式加在前面（不在本手册范围）。决定见 DECISIONS.md D-048。
+写给客户现场的运维人员：会用 Linux 和 Docker，不需要了解这个项目的代码。系统在 HTTP 下用 Docker Compose 部署；HTTPS、统一入口、监控告警按客户现有的方式加在前面（不在本手册范围）。决定见 DECISIONS.md D-048、D-050。
 
 ## 一、准备
 
-- 一台 Linux 服务器（x86_64），4 核 8 GB 内存以上，磁盘 100 GB 以上（数据库、上传文件和备份）。
+- 一台 Linux 服务器（x86_64 或 arm64），4 核 8 GB 内存以上，磁盘 100 GB 以上（数据库、上传文件和备份）。
 - Docker 24 以上，带 Compose 插件（`docker compose version` 能输出版本）；`curl`。
-- 能访问模型服务（默认硅基流动 `https://api.siliconflow.cn`）；除此之外不需要访问外网。
+- 能访问模型服务（默认硅基流动 `https://api.siliconflow.cn`）。
+- 安装和升级时能访问镜像仓库：系统的镜像在服务器上构建，要拉数据库镜像和 JRE、Nginx 基础镜像（第一次约 600 MB，之后只在它们变化时才下载）。默认从 Docker Hub 拉；用镜像源或内网仓库时见“三、安装”里的 `RAG_DB_IMAGE` 等三项。
 - 一个运维账号，能执行 `docker` 命令。下面的命令都用这个账号执行。
 
-## 二、离线包
+## 二、发布包
 
-每个版本在 GitHub Release（`https://github.com/liming-cloud/rag-pilot/releases`）上有 5 个文件：
+每个版本在 GitHub Release（`https://github.com/liming-cloud/rag-pilot/releases`）上有 2 个文件：
 
 | 文件 | 内容 |
 | --- | --- |
-| `rag-pilot-<版本>.tar.gz` | 部署目录：本手册、`compose.yml`、脚本、`.env.example`、`release.env`（版本号） |
-| `rag-pilot-<版本>-app.image.tar.gz` | 后端镜像 |
-| `rag-pilot-<版本>-web.image.tar.gz` | 前端和 Nginx 镜像 |
-| `rag-pilot-<版本>-db.image.tar.gz` | 数据库镜像（ParadeDB / PostgreSQL 18） |
+| `rag-pilot-<版本>.tar.gz` | 部署目录：本手册、`compose.yml`、脚本、`.env.example`、`release.env`（版本号），编译好的后端 `app/rag-app.jar` 和前端 `web/dist/`，以及在服务器上构建镜像用的 `app.Dockerfile`、`web.Dockerfile` |
 | `rag-pilot-<版本>.SHA256SUMS` | 校验和 |
+
+镜像不随发布包提供：`install.sh`、`upgrade.sh` 会调用 `build.sh`，在服务器上用包里的 jar 和 dist 构建 `rag-pilot-app:<版本>`、`rag-pilot-web:<版本>`。数据库镜像和两个基础镜像按摘要锁定，保证每台服务器拿到的是同一个镜像。
 
 版本号是 4 位：主.次.修订.构建号（如 `1.0.0.1`）。主版本变了说明有不兼容的数据库变更，升级前要看 Release 说明。
 
@@ -38,20 +38,20 @@
 cd /opt/rag-pilot
 sha256sum -c rag-pilot-1.0.0.1.SHA256SUMS        # 校验下载的文件
 tar -xzf rag-pilot-1.0.0.1.tar.gz
-mv rag-pilot-1.0.0.1-*.image.tar.gz rag-pilot-1.0.0.1/images/
 cd rag-pilot-1.0.0.1
 cp .env.example .env && chmod 600 .env
 vi .env                                           # 至少填 DB_PASSWORD、MODEL_API_KEY、RAG_ADMIN_PASSWORD、RAG_MASTER_KEY
 ./install.sh
 ```
 
-`install.sh` 依次：加载三个镜像 → 启动 → 等健康检查通过 → 运行 `verify.sh`。看到“部署验证通过”就装好了，浏览器打开 `http://<服务器地址>`（端口是 `.env` 里的 `WEB_PORT`），用 `RAG_ADMIN_USERNAME` / `RAG_ADMIN_PASSWORD` 登录。
+`install.sh` 依次：构建镜像（`build.sh`：拉数据库镜像和基础镜像，用包里的 jar 和 dist 构建 app、web 镜像）→ 启动 → 等健康检查通过 → 运行 `verify.sh`。看到“部署验证通过”就装好了，浏览器打开 `http://<服务器地址>`（端口是 `.env` 里的 `WEB_PORT`），用 `RAG_ADMIN_USERNAME` / `RAG_ADMIN_PASSWORD` 登录。
 
 `.env` 里每一项的含义见 `.env.example` 的注释。几项要特别注意：
 
 - `RAG_MASTER_KEY`：用 `openssl rand -base64 32` 生成，**装好后不要再改**，并抄存一份到安全的地方（见“七、主密钥”）。
 - `RAG_ADMIN_PASSWORD`：只在第一次启动时用来创建超级管理员，之后在界面上改密码；改了以后 `verify.sh` 要用环境变量 `VERIFY_ADMIN_PASSWORD` 给新密码。
-- `.env` 里有密码和密钥，不要发给别人，不要放进备份。
+- `.env` 里有密码和密钥，不要发给别人，不要放进备份。构建镜像时只用到 jar、dist 和 `nginx.conf`，`.env` 不会进镜像（见包里的 `.dockerignore`）。
+- `RAG_DB_IMAGE`、`RAG_JRE_IMAGE`、`RAG_NGINX_IMAGE`：服务器不能直接访问 Docker Hub 时，改成镜像源或内网仓库里的地址，`@sha256:` 后面的摘要保持与 `compose.yml` 里的一致。不填时从 Docker Hub 拉。
 
 `verify.sh` 会建一个叫“部署验证”的知识库和一个测试账号 `deploy-verify`，用来检查检索、问答和权限；以后每次运行都复用它们。不想留可以在管理端删掉，下次运行会重新建。
 
@@ -99,9 +99,9 @@ docker compose --env-file .env --env-file release.env logs --tail 200 app   # �
 ./restore.sh /opt/rag-pilot/backups/20261102-020000
 ```
 
-恢复会**覆盖当前的全部数据**（输入 yes 确认）。备份的版本必须与部署目录的版本一致：要恢复旧版本的备份，到旧版本的部署目录里执行（目录删了就重新下载那个版本的离线包、`./load.sh`）。恢复完会自动启动，然后运行 `./verify.sh` 检查。
+恢复会**覆盖当前的全部数据**（输入 yes 确认）。备份的版本必须与部署目录的版本一致：要恢复旧版本的备份，到旧版本的部署目录里执行（目录删了就重新下载那个版本的发布包解压；镜像被清理了也没关系，`restore.sh` 会先用 `build.sh` 重新构建）。恢复完会自动启动，然后运行 `./verify.sh` 检查。
 
-恢复到一台新服务器：按“三、安装”解压同一个版本的离线包，`.env` 用原来的（尤其是同一个 `RAG_MASTER_KEY`），`./load.sh` 加载镜像后直接 `./restore.sh <备份目录>`，不需要先 `install.sh`。
+恢复到一台新服务器：按“三、安装”解压同一个版本的发布包，`.env` 用原来的（尤其是同一个 `RAG_MASTER_KEY`），直接 `./restore.sh <备份目录>`（会先构建镜像），不需要先 `install.sh`。
 
 ## 六、升级与回退
 
@@ -109,15 +109,16 @@ docker compose --env-file .env --env-file release.env logs --tail 200 app   # �
 
 ```bash
 cd /opt/rag-pilot
+sha256sum -c rag-pilot-1.1.0.1.SHA256SUMS
 tar -xzf rag-pilot-1.1.0.1.tar.gz
-mv rag-pilot-1.1.0.1-*.image.tar.gz rag-pilot-1.1.0.1/images/
 cp rag-pilot-1.0.0.1/.env rag-pilot-1.1.0.1/.env
 cd rag-pilot-1.1.0.1
-./load.sh
 ./upgrade.sh
 ```
 
-`upgrade.sh` 依次：检查镜像和备份目录的剩余空间（至少 2 GB）→ **自动备份**（备份目录名带 `before-<新版本>`）→ 用新版本启动（数据库结构在启动时自动升级）→ 等健康检查通过 → 运行 `verify.sh`。整个过程停服务几分钟。
+`upgrade.sh` 依次：构建新版本的镜像（构建时旧版本照常服务）→ 检查备份目录的剩余空间（至少 2 GB）→ **自动备份**（备份目录名带 `before-<新版本>`）→ 用新版本启动（数据库结构在启动时自动升级）→ 等健康检查通过 → 运行 `verify.sh`。停服务的时间只有备份和启动这几分钟。
+
+从 0.9.0.1（旧格式离线包，镜像随包提供）升级也是同样的步骤：新版本的镜像在服务器上构建，数据库镜像从镜像仓库重新拉一次（与旧版本是同一个镜像）。
 
 ### 回退
 
@@ -158,7 +159,8 @@ cd /opt/rag-pilot/rag-pilot-1.0.0.1
 | 提问都答“找不到”，或上传的文档一直“失败：向量化失败” | 模型服务不可用或密钥失效：在管理端“模型管理”测试连通，检查 `MODEL_API_KEY` 和服务器能否访问模型服务 |
 | `app` 反复重启，日志里有 `Flyway` / `Migration` 报错 | 数据库结构升级失败：按“六、回退”用升级前的备份恢复，把日志发给开发方 |
 | `app` 启动失败，日志里有“rag.xxx 必须…” | `.env` 里的配置值不合法，按提示改正后 `up -d app` |
-| 磁盘满 | `df -h` 看哪个分区；清理旧备份（`backups/`）和不用的镜像（`docker image prune`，不要删正在用的版本） |
+| `build.sh` 拉镜像失败（`pull access denied`、超时） | 服务器访问不了镜像仓库：配置 Docker 的镜像源，或在 `.env` 里把 `RAG_DB_IMAGE`、`RAG_JRE_IMAGE`、`RAG_NGINX_IMAGE` 改成能访问的仓库地址（摘要不变），再运行一次 |
+| 磁盘满 | `df -h` 看哪个分区；清理旧备份（`backups/`）和不用的镜像（`docker image prune`，不要删正在用的版本；旧版本的镜像删了，回退时 `restore.sh` 会重新构建） |
 | `restore.sh` 提示“这份备份是版本 X 的” | 到版本 X 的部署目录里恢复，见“五、恢复” |
 | 超级管理员登录不了 | 见“八” |
 

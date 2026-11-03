@@ -1,11 +1,9 @@
 #!/usr/bin/env bash
-# 打离线包（D-048），由 CI 在打 tag 时调用，也可以在本机手动打。要求 app、web 镜像已按版本号构建好：
-#   docker build -f deploy/backend.Dockerfile --build-arg RAG_VERSION=<版本> -t rag-pilot-app:<版本> .
-#   docker build -f deploy/web.Dockerfile --build-arg RAG_VERSION=<版本> -t rag-pilot-web:<版本> .
+# 打发布包（#138），由 CI 在打 tag 时调用，也可以在本机手动打（开发时用来在本机安装）。需要 JDK 25 和 Node 24。
+# 编译后端 jar 和前端 dist，连同部署目录一起打成一个包；不构建镜像，镜像由宿主机上的 build.sh 构建。
 # 用法：deploy/package.sh <版本，如 1.0.0.1> <输出目录>
-# 输出：<输出目录>/rag-pilot-<版本>.tar.gz（部署目录：Compose、脚本、手册、.env.example、release.env）
-#       <输出目录>/rag-pilot-<版本>-{app,web,db}.image.tar.gz（三个镜像，放进部署目录的 images/ 下再 ./load.sh）
-# 镜像分开放，是因为 GitHub Release 单个附件不能超过 2 GB。
+# 输出：<输出目录>/rag-pilot-<版本>.tar.gz（Compose、脚本、手册、.env.example、release.env、Dockerfile、
+#       app/rag-app.jar、web/dist）和 <输出目录>/rag-pilot-<版本>.SHA256SUMS
 set -euo pipefail
 
 version="${1:-}"
@@ -14,32 +12,32 @@ out="${2:-}"
 [ -n "$out" ] || { echo "用法：deploy/package.sh <版本> <输出目录>" >&2; exit 1; }
 
 source_dir="$(cd "$(dirname "$0")" && pwd)"
+repo="$(cd "$source_dir/.." && pwd)"
 mkdir -p "$out"
 out="$(cd "$out" && pwd)"
 name="rag-pilot-$version"
 stage="$(mktemp -d)"
 trap 'rm -rf "$stage"' EXIT
 
-# 数据库镜像按摘要锁定在 compose.yml 里；docker load 之后摘要引用不可用，所以重新打成带版本号的名字。
-db_image="$(grep -o 'paradedb/paradedb@sha256:[0-9a-f]*' "$source_dir/compose.yml" | head -n 1)"
-docker image inspect "$db_image" >/dev/null 2>&1 || docker pull "$db_image"
-docker tag "$db_image" "rag-pilot-db:$version"
+echo "==> 编译后端 jar"
+(cd "$repo" && ./mvnw -B -ntp -q -pl backend/rag-app -am package -DskipTests)
 
-mkdir -p "$stage/$name/images"
-cp "$source_dir"/{compose.yml,README.md,.env.example,lib.sh,load.sh,install.sh,backup.sh,restore.sh,upgrade.sh,verify.sh} \
-  "$stage/$name/"
-cat > "$stage/$name/release.env" <<EOF
+echo "==> 构建前端（版本号 $version 写进管理端左下角）"
+(cd "$repo/frontend" && npm ci --no-audit --no-fund --loglevel=error && VITE_APP_VERSION="$version" npm run build)
+
+dir="$stage/$name"
+mkdir -p "$dir/app" "$dir/web"
+cp "$source_dir"/{compose.yml,README.md,.env.example,.dockerignore,app.Dockerfile,web.Dockerfile,nginx.conf} "$dir/"
+cp "$source_dir"/{lib.sh,build.sh,install.sh,backup.sh,restore.sh,upgrade.sh,verify.sh} "$dir/"
+cp "$repo/backend/rag-app/target/rag-app.jar" "$dir/app/"
+cp -R "$repo/frontend/dist" "$dir/web/dist"
+cat > "$dir/release.env" <<ENV
 # 这个部署目录的版本（D-048），由打包脚本生成，不要修改。
 RAG_VERSION=$version
-RAG_DB_IMAGE=rag-pilot-db:$version
-EOF
-chmod +x "$stage/$name"/*.sh
+ENV
+chmod +x "$dir"/*.sh
 tar -czf "$out/$name.tar.gz" -C "$stage" "$name"
 
-for part in app web db; do
-  echo "==> 导出 rag-pilot-$part:$version"
-  docker save "rag-pilot-$part:$version" | gzip > "$out/$name-$part.image.tar.gz"
-done
 sum() { if command -v sha256sum >/dev/null; then sha256sum "$@"; else shasum -a 256 "$@"; fi; }
-(cd "$out" && sum "$name.tar.gz" "$name"-*.image.tar.gz > "$name.SHA256SUMS")
-ls -lh "$out"
+(cd "$out" && sum "$name.tar.gz" > "$name.SHA256SUMS")
+ls -lh "$out/$name.tar.gz"
