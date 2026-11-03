@@ -34,12 +34,15 @@ JDK 25、Spring Boot 4.1、Spring AI 2.0、Spring Modulith 2.1、MyBatis-Plus、
 
 ## 本地运行
 
-需要 Docker。客户现场用离线包安装、升级、备份恢复，见 [deploy/README.md](deploy/README.md)（运维手册）；下面是开发时从源码启动：
+需要 Docker、JDK 25 和 Node 24。客户现场用发布包安装、升级、备份恢复，见 [deploy/README.md](deploy/README.md)（运维手册）；开发时也按同样的方式，先打一个本地发布包再安装（D-050）：
 
 ```sh
-cp deploy/.env.example deploy/.env   # 填写 DB_PASSWORD、MODEL_API_KEY 和 RAG_ADMIN_PASSWORD
-docker compose -f deploy/compose.yml --env-file deploy/.env up --build
-curl http://localhost:8080/actuator/health   # 后端健康检查，只在本机可访问
+deploy/package.sh 0.0.0.1 /tmp/rag-pilot          # 编译 jar 和 dist，打成发布包
+tar -xzf /tmp/rag-pilot/rag-pilot-0.0.0.1.tar.gz -C /tmp/rag-pilot
+cd /tmp/rag-pilot/rag-pilot-0.0.0.1
+cp .env.example .env                              # 填写 DB_PASSWORD、MODEL_API_KEY 和 RAG_ADMIN_PASSWORD
+./install.sh                                      # 在本机构建镜像、启动、跑部署验证
+curl http://localhost:8080/actuator/health        # 后端健康检查，只在本机可访问
 ```
 
 浏览器打开 `http://<服务器地址>`（端口改 `WEB_PORT`），用管理员账号登录。页面、字体和接口都从这一个地址提供，不访问外网（模型调用除外）。

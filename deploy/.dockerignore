@@ -1,0 +1,5 @@
+# 构建上下文是整个发布包目录，里面有 .env（密码和密钥）和备份：只把镜像要用的文件交给 Docker。
+*
+!app/rag-app.jar
+!web/dist
+!nginx.conf

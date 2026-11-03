@@ -1,6 +1,7 @@
 # 部署验证与发布（D-048）。
-# - 改了部署相关的文件时：打一个临时版本的离线包，跑全新安装（或从最近的 Release 升级）、备份恢复、迁移失败回退三个场景。
-# - 打 4 位版本号的 tag（如 v1.0.0.1）时：同样验证，通过后把离线包发布到 GitHub Release。
+# - 改了部署相关的文件时：打一个临时版本的发布包（编译好的 jar、dist 和运维脚本，#138），镜像在运行器上用 build.sh 构建，
+#   跑全新安装（或从最近的 Release 升级）、备份恢复、迁移失败回退三个场景。
+# - 打 4 位版本号的 tag（如 v1.0.0.1）时：同样验证，通过后把发布包发布到 GitHub Release。
 # 只在相关改动时跑，不加进分支保护的必选检查。
 name: deploy
 
@@ -45,17 +46,34 @@ jobs:
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
-      - name: 构建镜像
-        run: |
-          docker build -f deploy/backend.Dockerfile --build-arg RAG_VERSION=${{ steps.version.outputs.version }} \
-            -t rag-pilot-app:${{ steps.version.outputs.version }} .
-          docker build -f deploy/web.Dockerfile --build-arg RAG_VERSION=${{ steps.version.outputs.version }} \
-            -t rag-pilot-web:${{ steps.version.outputs.version }} .
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: "25"
+          cache: maven
 
-      - name: 打离线包
+      # Node 24 自带 npm 11（见 DECISIONS.md D-012）。
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: 打发布包
         run: deploy/package.sh ${{ steps.version.outputs.version }} packages
 
-      - name: 取最近一个 Release 的离线包（用于升级场景）
+      - name: 检查发布包内容
+        run: |
+          version=${{ steps.version.outputs.version }}
+          ls packages
+          [ "$(ls packages | wc -l)" -eq 2 ] || { echo "发布包目录里应只有 tar.gz 和 SHA256SUMS"; exit 1; }
+          tar -tzf "packages/rag-pilot-$version.tar.gz" > contents.txt
+          for file in app/rag-app.jar web/dist/index.html app.Dockerfile web.Dockerfile build.sh install.sh upgrade.sh README.md; do
+            grep -qx "rag-pilot-$version/$file" contents.txt || { echo "发布包里缺少 $file"; exit 1; }
+          done
+          if grep -q 'image.tar.gz' contents.txt; then echo "发布包里不应再有镜像文件"; exit 1; fi
+
+      - name: 取最近一个 Release 的附件（用于升级场景）
         id: previous
         env:
           GH_TOKEN: ${{ github.token }}
@@ -91,4 +109,4 @@ jobs:
         run: |
           version=${{ steps.version.outputs.version }}
           gh release create "v$version" packages/* --title "$version" --verify-tag \
-            --notes "离线包：先下载 rag-pilot-$version.tar.gz 和三个 *.image.tar.gz，解压后把镜像文件放进 images/，按 README.md 安装或升级。校验和见 rag-pilot-$version.SHA256SUMS。"
+            --notes "发布包：下载 rag-pilot-$version.tar.gz，解压后按其中的 README.md 安装或升级；镜像在服务器上用 build.sh 构建，需要能访问镜像仓库（或在 .env 里配置镜像源）。校验和见 rag-pilot-$version.SHA256SUMS。"

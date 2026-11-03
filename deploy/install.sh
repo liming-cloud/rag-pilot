@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 全新安装（D-048）：加载镜像（离线包）→ 启动 → 等健康检查通过 → 跑一遍 verify.sh。
+# 全新安装（D-048、#138）：在宿主机上构建镜像（build.sh）→ 启动 → 等健康检查通过 → 跑一遍 verify.sh。
 # 先复制 .env.example 为 .env 并填写（至少 DB_PASSWORD、MODEL_API_KEY、RAG_ADMIN_PASSWORD、RAG_MASTER_KEY）。
 # 用法：./install.sh
 source "$(dirname "$0")/lib.sh"
@@ -9,9 +9,7 @@ source "$(dirname "$0")/lib.sh"
 [ -z "$(running_version)" ] || die "已经有版本 $(running_version) 在运行；升级请用 ./upgrade.sh"
 
 version="$(package_version)"
-if [ -f release.env ] && ! docker image inspect "rag-pilot-app:$version" >/dev/null 2>&1; then
-  "$DEPLOY_DIR/load.sh"
-fi
+"$DEPLOY_DIR/build.sh"
 
 info "启动版本 $version"
 compose up -d

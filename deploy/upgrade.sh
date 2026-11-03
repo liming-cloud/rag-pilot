@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# 升级到本部署目录的版本（D-048）。在新版本离线包解压后的目录里运行，先 ./load.sh 加载镜像、把旧目录的 .env 复制过来。
-# 步骤：检查镜像和磁盘 → 停服务备份 → 换新镜像启动（Flyway 自动迁移数据库）→ 等健康检查通过 → 跑一遍 verify.sh。
+# 升级到本部署目录的版本（D-048、#138）。在新版本发布包解压后的目录里运行，先把旧目录的 .env 复制过来。
+# 步骤：在宿主机上构建新版本的镜像（旧版本照常服务）→ 检查磁盘 → 停服务备份 → 换新镜像启动（Flyway 自动迁移数据库）
+# → 等健康检查通过 → 跑一遍 verify.sh。
 # 迁移不可逆：失败时停掉新版本，按提示在旧版本目录里用这次的备份恢复（会丢升级后写入的数据，这里刚升级，通常没有）。
 # 用法：./upgrade.sh [--yes]
 source "$(dirname "$0")/lib.sh"
@@ -9,9 +10,8 @@ version="$(package_version)"
 current="$(running_version)"
 [ -n "$current" ] || die "没有检测到正在运行的版本（$APP_URL/actuator/info），全新安装请按 README.md 的“安装”"
 [ "$current" != "$version" ] || die "正在运行的已经是版本 $version"
-for image in "rag-pilot-app:$version" "rag-pilot-web:$version" "$(setting RAG_DB_IMAGE)"; do
-  [ -z "$image" ] || docker image inspect "$image" >/dev/null 2>&1 || die "没有镜像 $image，先运行 ./load.sh"
-done
+info "构建版本 $version 的镜像，构建期间旧版本照常服务"
+"$DEPLOY_DIR/build.sh"
 
 root="$(backup_root)"
 free_kb="$(df -Pk "$root" | awk 'NR == 2 { print $4 }')"
@@ -41,6 +41,6 @@ EOF
 fi
 
 running="$(running_version)"
-[ "$running" = "$version" ] || die "启动后运行的版本是 $running，不是 $version：镜像可能不对，请重新 ./load.sh 本版本的离线包"
+[ "$running" = "$version" ] || die "启动后运行的版本是 $running，不是 $version：镜像可能不对，请在本目录重新运行 ./build.sh 后再升级"
 info "升级完成：$current → $version。升级前的备份在 $backup"
 "$DEPLOY_DIR/verify.sh"
