@@ -9,6 +9,11 @@ import java.util.Optional;
 /** 会话仓储。所有查询都带租户；是不是本人由聚合判断。 */
 public interface ConversationRepository {
 
+    /**
+     * 新会话插入并回填标识；已有的会话按加载时的版本号更新，返回带新版本号的聚合。
+     *
+     * @throws Conversation.ConcurrentChangeException 会话在加载之后被别的操作改过
+     */
     Conversation save(Conversation conversation);
 
     Optional<Conversation> find(TenantId tenantId, long id);
@@ -26,11 +31,11 @@ public interface ConversationRepository {
     long nextTurnId();
 
     /**
-     * 存一轮问答，接在主线最后一轮之后。{@code replacesTurnId} 不为 null 时，被替换的那一轮移出主线，
-     * 新的一轮接在它的上一轮之后。
+     * 存一轮问答。接在哪一轮之后由聚合算好（{@link Conversation#appendTurn}，即 {@code turn.parentTurnId()}），
+     * 调用方先用 {@link #save} 保存会话；{@code replacesTurnId} 不为 null 时，被替换的那一轮移出主线，留着供审计。
      */
     void addTurn(long conversationId, ConversationTurn turn, Long replacesTurnId);
 
-    /** 主线上的轮次，按先后排列。 */
+    /** 主线上的轮次：从会话记下的最后一轮沿“上一轮”往回找，按先后排列。 */
     List<ConversationTurn> mainLine(long conversationId);
 }
