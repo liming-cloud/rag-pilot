@@ -5,6 +5,9 @@ import com.liming.rag.identity.api.UserDirectory;
 import com.liming.rag.identity.api.UserDirectory.UserSummary;
 import com.liming.rag.knowledge.api.KnowledgeAccess;
 import com.liming.rag.knowledge.api.KnowledgeBaseRef;
+import com.liming.rag.knowledge.api.KnowledgeSearch;
+import com.liming.rag.knowledge.api.SearchHit;
+import com.liming.rag.knowledge.api.SearchQuery;
 import com.liming.rag.knowledge.application.KnowledgeQueries.DocumentRow;
 import com.liming.rag.knowledge.application.KnowledgeQueries.ExpirySummary;
 import com.liming.rag.knowledge.application.KnowledgeQueries.KnowledgeBaseSummary;
@@ -35,13 +38,15 @@ public class KnowledgeBaseService implements KnowledgeAccess {
     private final KnowledgeQueries queries;
     private final UserDirectory users;
     private final DocumentCalendar calendar;
+    private final KnowledgeSearch search;
 
     public KnowledgeBaseService(KnowledgeBaseRepository knowledgeBases, KnowledgeQueries queries,
-            UserDirectory users, DocumentCalendar calendar) {
+            UserDirectory users, DocumentCalendar calendar, KnowledgeSearch search) {
         this.knowledgeBases = knowledgeBases;
         this.queries = queries;
         this.users = users;
         this.calendar = calendar;
+        this.search = search;
     }
 
     /** 直接授权的账号：用户名和显示名一起给出。账号已被删除时只有 id。 */
@@ -119,12 +124,6 @@ public class KnowledgeBaseService implements KnowledgeAccess {
                 : new Grantee(tenantId, actor, users.roleIds(tenantId, actor));
     }
 
-    /** 只要求知识库属于该租户；调用方已确认操作人能管理它（文档入库、后台处理）。 */
-    @Transactional(readOnly = true)
-    public KnowledgeBase get(TenantId tenantId, long id) {
-        return knowledgeBases.find(tenantId, id).orElseThrow(KnowledgeBaseService::notFound);
-    }
-
     /** 管理操作的入口：库不存在、或操作人不能访问它时一律“不存在”，不暴露知识库是否存在。 */
     @Transactional(readOnly = true)
     public KnowledgeBase getManageable(TenantId tenantId, UserId actor, long id) {
@@ -147,6 +146,16 @@ public class KnowledgeBaseService implements KnowledgeAccess {
         getManageable(tenantId, actor, knowledgeBaseId);
         return queries.documents(tenantId, knowledgeBaseId, blankToNull(keyword), parseStatus(status),
                 parseValidity(validity), calendar.window(), new Paged.Request(page, size));
+    }
+
+    /**
+     * 检索调试与评测用：在自己能管理的一个库里检索。命中的分块仍由检索服务按操作人的授权过滤（D-041），
+     * 这里只保证库不存在、或操作人不能管理它时一律“不存在”。
+     */
+    public List<SearchHit> searchIn(TenantId tenantId, UserId actor, long knowledgeBaseId, String question,
+            int limit) {
+        getManageable(tenantId, actor, knowledgeBaseId);
+        return search.search(new SearchQuery(tenantId, actor, List.of(knowledgeBaseId), question, limit));
     }
 
     @Transactional

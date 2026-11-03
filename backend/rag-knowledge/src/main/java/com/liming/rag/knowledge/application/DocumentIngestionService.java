@@ -4,6 +4,7 @@ import com.liming.rag.knowledge.domain.Document;
 import com.liming.rag.knowledge.domain.DocumentRepository;
 import com.liming.rag.knowledge.domain.Validity;
 import com.liming.rag.shared.TenantId;
+import com.liming.rag.shared.UserId;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.LocalDate;
@@ -53,24 +54,19 @@ public class DocumentIngestionService {
     }
 
     /**
-     * 上传一份文档。格式不支持、重复上传会直接拒绝；返回的文档状态是“解析中”。内容问题（编码不对、没有文字、
-     * 文件损坏）在后台处理时发现，保存为失败文档，让管理员在列表里看到原因。
-     */
-    @Transactional
-    public Document ingest(TenantId tenantId, long knowledgeBaseId, String filename, byte[] content) {
-        return ingest(tenantId, knowledgeBaseId, filename, content, null, null, null);
-    }
-
-    /**
      * 上传一份文档；{@code replacesDocumentId} 不为空时作为该文档的新版本，解析成功后替换它，失败时旧版本保留。
      * 有效期（D-046）：日期为 yyyy-MM-dd，空串表示不限；不传（null）时新文档长期有效，新版本继承旧版本的失效日期。
      *
-     * @throws KnowledgeException 要替换的文档不在这个知识库里时为 NOT_FOUND；日期不合法时为 INVALID
+     * 格式不支持、重复上传会直接拒绝；返回的文档状态是“解析中”。内容问题（编码不对、没有文字、文件损坏）在后台处理时
+     * 发现，保存为失败文档，让管理员在列表里看到原因。
+     *
+     * @param actor 操作人：只能往自己能管理的库里上传（#135）
+     * @throws KnowledgeException 库不存在或操作人不能管理它、要替换的文档不在这个知识库里时为 NOT_FOUND；日期不合法时为 INVALID
      */
     @Transactional
-    public Document ingest(TenantId tenantId, long knowledgeBaseId, String filename, byte[] content,
+    public Document ingest(TenantId tenantId, UserId actor, long knowledgeBaseId, String filename, byte[] content,
             Long replacesDocumentId, String effectiveFrom, String expiresOn) {
-        var knowledgeBase = knowledgeBases.get(tenantId, knowledgeBaseId);
+        var knowledgeBase = knowledgeBases.getManageable(tenantId, actor, knowledgeBaseId);
         var previous = replacesDocumentId == null ? null : documents.find(tenantId, replacesDocumentId)
                 .filter(old -> old.knowledgeBaseId() == knowledgeBaseId)
                 .orElseThrow(() -> new KnowledgeException(KnowledgeException.Reason.NOT_FOUND, "要替换的文档不存在"));
@@ -101,11 +97,11 @@ public class DocumentIngestionService {
     /**
      * 删除文档及其分块；正在解析的文档删除后，后台处理结束时不会把它写回来。
      *
-     * @throws KnowledgeException 文档不在这个知识库里时为 NOT_FOUND
+     * @throws KnowledgeException 库不存在或操作人不能管理它、文档不在这个知识库里时为 NOT_FOUND
      */
     @Transactional
-    public void delete(TenantId tenantId, long knowledgeBaseId, long documentId) {
-        knowledgeBases.get(tenantId, knowledgeBaseId);
+    public void delete(TenantId tenantId, UserId actor, long knowledgeBaseId, long documentId) {
+        knowledgeBases.getManageable(tenantId, actor, knowledgeBaseId);
         var inKnowledgeBase = documents.find(tenantId, documentId)
                 .filter(document -> document.knowledgeBaseId() == knowledgeBaseId).isPresent();
         if (!inKnowledgeBase || !remover.remove(tenantId, documentId)) {
@@ -116,24 +112,18 @@ public class DocumentIngestionService {
     /**
      * 修改有效期（doc:update），保存后立即按新日期参与或退出检索。日期为 yyyy-MM-dd，null 或空串表示不限。
      *
-     * @throws KnowledgeException 文档不在这个知识库里时为 NOT_FOUND；日期不合法时为 INVALID
+     * @throws KnowledgeException 库不存在或操作人不能管理它、文档不在这个知识库里时为 NOT_FOUND；日期不合法时为 INVALID
      */
     @Transactional
-    public Document changeValidity(TenantId tenantId, long knowledgeBaseId, long documentId, String effectiveFrom,
-            String expiresOn) {
-        knowledgeBases.get(tenantId, knowledgeBaseId);
+    public Document changeValidity(TenantId tenantId, UserId actor, long knowledgeBaseId, long documentId,
+            String effectiveFrom, String expiresOn) {
+        knowledgeBases.getManageable(tenantId, actor, knowledgeBaseId);
         var document = documents.find(tenantId, documentId)
                 .filter(found -> found.knowledgeBaseId() == knowledgeBaseId)
                 .orElseThrow(() -> new KnowledgeException(KnowledgeException.Reason.NOT_FOUND, "文档不存在"));
         document.changeValidity(validity(date(effectiveFrom, null), date(expiresOn, null)));
         documents.save(document);
         return document;
-    }
-
-    @Transactional(readOnly = true)
-    public List<Document> list(TenantId tenantId, long knowledgeBaseId) {
-        knowledgeBases.get(tenantId, knowledgeBaseId);
-        return documents.list(tenantId, knowledgeBaseId);
     }
 
     /** null 表示没传，用默认值；空串表示不限。 */
