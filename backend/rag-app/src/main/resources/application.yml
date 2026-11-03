@@ -4,6 +4,13 @@ spring:
   threads:
     virtual:
       enabled: true
+  task:
+    execution:
+      # 流式回答、会话轮次的保存、标题生成都在 applicationTaskExecutor 里跑：停机时最多等 30 秒让它们做完（#135）。
+      # deploy/compose.yml 的 stop_grace_period 要留出这段时间。
+      shutdown:
+        await-termination: true
+        await-termination-period: 30s
   servlet:
     multipart:
       # 与 DocumentIngestionService.MAX_SIZE_BYTES 一致。

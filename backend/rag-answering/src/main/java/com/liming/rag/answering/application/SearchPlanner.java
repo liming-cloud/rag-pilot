@@ -5,10 +5,9 @@ import java.time.Duration;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import org.springframework.core.task.AsyncTaskExecutor;
 
 /**
  * 追问时的检索规划（D-036）：参考对话 agent“模型读完历史、自己写检索词”的做法，但检索由系统执行。
@@ -37,9 +36,6 @@ final class SearchPlanner {
     private static final ChatGateway.Limits LIMITS = new ChatGateway.Limits(MAX_TOKENS, List.of());
     private static final String NO_SEARCH = "不检索";
 
-    /** 每次规划一个虚拟线程，超时后不再等它。 */
-    private static final ExecutorService CALLS = Executors.newVirtualThreadPerTaskExecutor();
-
     enum Outcome {
         /** 模型给出了检索词，或判断为寒暄。 */
         PLANNED,
@@ -56,10 +52,13 @@ final class SearchPlanner {
 
     private final ChatGateway chat;
     private final Duration timeout;
+    /** 每次规划在这里另起一个虚拟线程，超时后不再等它。 */
+    private final AsyncTaskExecutor calls;
 
-    SearchPlanner(ChatGateway chat, Duration timeout) {
+    SearchPlanner(ChatGateway chat, Duration timeout, AsyncTaskExecutor calls) {
         this.chat = chat;
         this.timeout = timeout;
+        this.calls = calls;
     }
 
     /** 不需要规划时（没有历史）直接用原问题检索。 */
@@ -70,7 +69,7 @@ final class SearchPlanner {
     Plan plan(String history, String question) {
         long start = System.nanoTime();
         var message = "前面的对话：\n" + history + "\n\n当前问题：" + question;
-        var call = CALLS.submit(() -> chat.complete(SYSTEM, message, LIMITS));
+        var call = calls.submit(() -> chat.complete(SYSTEM, message, LIMITS));
         String reply;
         try {
             reply = call.get(timeout.toMillis(), TimeUnit.MILLISECONDS);

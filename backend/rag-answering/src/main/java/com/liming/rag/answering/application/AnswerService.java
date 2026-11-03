@@ -21,6 +21,8 @@ import org.springframework.ai.rag.Query;
 import org.springframework.ai.rag.generation.augmentation.QueryAugmenter;
 import org.springframework.ai.rag.postretrieval.document.DocumentPostProcessor;
 import org.springframework.ai.rag.retrieval.search.DocumentRetriever;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.core.task.AsyncTaskExecutor;
 import org.springframework.stereotype.Service;
 
 /**
@@ -74,13 +76,17 @@ public class AnswerService {
     private final double minRelevance;
     private final boolean rewriteOnLowRelevance;
 
+    /**
+     * @param executor Spring 管理的虚拟线程执行器（{@code applicationTaskExecutor}），停机时等正在跑的任务做完（#135）
+     */
     AnswerService(KnowledgeSearch search, RerankClient rerank, ChatGateway chat, AnsweringProperties properties,
-            AnsweringSettings settings) {
+            AnsweringSettings settings, @Qualifier("applicationTaskExecutor") AsyncTaskExecutor executor) {
         var pack = settings.pack();
         this.retriever = new KnowledgeDocumentRetriever(search, properties.candidates());
         this.reranker = new RerankPostProcessor(rerank);
         this.recovery = new LowRelevanceRecovery(retriever, reranker,
-                new LowRelevanceRewriter(chat, properties.rewriteTimeout(), pack), properties.rewriteMinRelevance());
+                new LowRelevanceRewriter(chat, properties.rewriteTimeout(), pack, executor),
+                properties.rewriteMinRelevance());
         this.chat = chat;
         this.settings = settings;
         this.system = AnswerPrompt.system(pack);
