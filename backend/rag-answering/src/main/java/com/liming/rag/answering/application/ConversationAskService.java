@@ -9,12 +9,12 @@ import com.liming.rag.shared.UserId;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.function.Consumer;
 import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.core.task.AsyncTaskExecutor;
 import org.springframework.stereotype.Service;
 
 /**
@@ -51,24 +51,24 @@ public class ConversationAskService {
             new ChatGateway.Limits(32, List.of("\n"), ChatGateway.Tier.LIGHT);
     private static final Pattern DIGITS = Pattern.compile("\\d");
 
-    /** 标题在后台生成，不占回答的时间。 */
-    private static final ExecutorService TITLES = Executors.newVirtualThreadPerTaskExecutor();
-
     private final ConversationService conversations;
     private final AnswerService answers;
     private final ChatGateway chat;
     private final SearchPlanner planner;
     private final TurnStops stops;
     private final AnsweringProperties.Conversation settings;
+    /** 标题在后台生成，不占回答的时间；停机时等它写完（#135）。 */
+    private final AsyncTaskExecutor background;
 
     ConversationAskService(ConversationService conversations, AnswerService answers, ChatGateway chat, TurnStops stops,
-            AnsweringProperties properties) {
+            AnsweringProperties properties, @Qualifier("applicationTaskExecutor") AsyncTaskExecutor background) {
         this.conversations = conversations;
         this.answers = answers;
         this.chat = chat;
         this.stops = stops;
         this.settings = properties.conversation();
-        this.planner = new SearchPlanner(chat, settings.planningTimeout());
+        this.background = background;
+        this.planner = new SearchPlanner(chat, settings.planningTimeout(), background);
     }
 
     /** 准备好的一轮：已校验、已分配 id、已登记停止信号。 */
@@ -116,7 +116,7 @@ public class ConversationAskService {
             var kept = stopped && answer.refused() ? null : answer;
             var turn = record(pending, status, kept);
             if (pending.context().firstTurn() && kept != null) {
-                TITLES.execute(() -> generateTitle(pending));
+                background.execute(() -> generateTitle(pending));
             }
             return turn;
         } finally {

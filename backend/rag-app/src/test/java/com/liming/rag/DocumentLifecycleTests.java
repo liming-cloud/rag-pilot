@@ -1,6 +1,12 @@
 package com.liming.rag;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+import com.liming.rag.knowledge.application.DocumentIngestionService;
+import com.liming.rag.knowledge.application.KnowledgeException;
+import com.liming.rag.shared.TenantId;
+import com.liming.rag.shared.UserId;
 
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -50,6 +56,9 @@ class DocumentLifecycleTests {
 
     @Value("${rag.knowledge.storage.root}")
     private String storageRoot;
+
+    @Autowired
+    private DocumentIngestionService ingestion;
 
     @BeforeEach
     void signIn() {
@@ -107,6 +116,43 @@ class DocumentLifecycleTests {
 
         var wrongKb = upload(other, "陈列规范-新版.txt", "新内容".getBytes(StandardCharsets.UTF_8), oldId);
         assertThat(wrongKb.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+    }
+
+    @Test
+    @DisplayName("应用服务自己判定资源授权：不能管理这个库的人直接调用上传、替换、改有效期、删除都按不存在处理，什么都不写（#135）")
+    void ingestionChecksResourceAccessItself() throws Exception {
+        long kb = createKnowledgeBase("授权下沉知识库");
+        var doc = uploadReady(kb, "收银规范.txt", "收银员交班时要清点备用金。", null);
+        long docId = ((Number) doc.get("id")).longValue();
+        var tenant = new TenantId(1);
+        var outsider = new UserId(createStaff("ingest01"));
+        var content = "外人想塞进来的内容".getBytes(StandardCharsets.UTF_8);
+        int documentsBefore = jdbc.queryForObject("select count(*) from document where knowledge_base_id = ?",
+                Integer.class, kb);
+
+        assertNotFound(() -> ingestion.ingest(tenant, outsider, kb, "外人.txt", content, null, null, null));
+        assertNotFound(() -> ingestion.ingest(tenant, outsider, kb, "外人.txt", content, docId, null, null));
+        assertNotFound(() -> ingestion.changeValidity(tenant, outsider, kb, docId, "2020-01-01", "2020-01-02"));
+        assertNotFound(() -> ingestion.delete(tenant, outsider, kb, docId));
+
+        assertThat(jdbc.queryForObject("select count(*) from document where knowledge_base_id = ?", Integer.class, kb))
+                .isEqualTo(documentsBefore);
+        assertThat(jdbc.queryForObject("select expires_on is null from document where id = ?", Boolean.class, docId))
+                .as("有效期没被改").isTrue();
+        var sha = java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(content));
+        assertThat(Files.exists(Path.of(storageRoot, "1", sha.substring(0, 2), sha))).as("原始文件没写入").isFalse();
+    }
+
+    private static void assertNotFound(org.assertj.core.api.ThrowableAssert.ThrowingCallable call) {
+        assertThatThrownBy(call).isInstanceOfSatisfying(KnowledgeException.class,
+                e -> assertThat(e.reason()).isEqualTo(KnowledgeException.Reason.NOT_FOUND));
+    }
+
+    private long createStaff(String username) {
+        var created = http.postForEntity("/api/users", Map.of("username", username, "displayName", "店员",
+                "password", "staff-password", "roleIds", List.of(TestLogin.staffRoleId(http))), Map.class);
+        assertThat(created.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        return ((Number) created.getBody().get("id")).longValue();
     }
 
     private Map<String, Object> uploadReady(long kb, String filename, String text, Long replaces) {

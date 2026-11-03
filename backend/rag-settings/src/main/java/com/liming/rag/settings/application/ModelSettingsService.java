@@ -14,13 +14,17 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionOperations;
 
 /**
  * 模型管理（D-043）：各用途用哪个服务商和模型、服务商、变更记录。保存和恢复前都先测连通，不通不保存；
  * 同时是 rag-ai 的 {@link ModelRouting}：每次模型调用前都读一次，保存后下一次请求就生效，不用重启。
  * 没在界面配置过的用途用环境变量。
+ *
+ * <p>连通测试、读服务商的模型列表都是外部调用，可能等到超时，所以不在数据库事务里做；测通之后才开一个短事务写库（#135）。
  */
 @Service
 public class ModelSettingsService implements ModelRouting {
@@ -31,12 +35,15 @@ public class ModelSettingsService implements ModelRouting {
     private final ModelProbe probe;
     private final KeyCipher cipher;
     private final UserDirectory users;
+    private final TransactionOperations transactions;
 
-    ModelSettingsService(ModelSettingsStore store, ModelProbe probe, KeyCipher cipher, UserDirectory users) {
+    ModelSettingsService(ModelSettingsStore store, ModelProbe probe, KeyCipher cipher, UserDirectory users,
+            TransactionOperations transactions) {
         this.store = store;
         this.probe = probe;
         this.cipher = cipher;
         this.users = users;
+        this.transactions = transactions;
     }
 
     /** 一个用途当前的配置，给界面显示。 */
@@ -82,26 +89,22 @@ public class ModelSettingsService implements ModelRouting {
     }
 
     /** 只测试，不保存。 */
-    @Transactional(readOnly = true)
     public ModelProbe.ProbeResult test(ModelUsage usage, Long providerId, String model) {
         return probe.probe(usage, route(usage, providerId, checkModel(model)));
     }
 
     /** 服务商提供的模型，用来在界面上选。 */
-    @Transactional(readOnly = true)
     public List<String> availableModels(Long providerId) {
         var route = route(ModelUsage.ANSWER, providerId, "");
         return probe.models(route.baseUrl(), route.apiKey());
     }
 
     /** 先测连通，通了才保存并记一条变更，下一次请求就用新模型。 */
-    @Transactional
     public PurposeView save(TenantId tenantId, UserId actor, ModelUsage usage, Long providerId, String model) {
         return apply(tenantId, actor, usage, providerId, checkModel(model), null);
     }
 
     /** 恢复到某条记录之后的配置，同样先测连通。 */
-    @Transactional
     public PurposeView restore(TenantId tenantId, UserId actor, long changeId) {
         var change = store.change(changeId).orElseThrow(() -> notFound("变更记录不存在"));
         if (change.afterProviderId() != null && store.provider(change.afterProviderId()).isEmpty()) {
@@ -120,7 +123,13 @@ public class ModelSettingsService implements ModelRouting {
         var checkedName = checkName(name, null);
         var checkedUrl = checkBaseUrl(baseUrl);
         var key = blankToNull(apiKey);
-        var created = store.insertProvider(new ModelProvider(null, checkedName, checkedUrl, encrypt(key), last4(key)));
+        ModelProvider created;
+        try {
+            created = store.insertProvider(new ModelProvider(null, checkedName, checkedUrl, encrypt(key), last4(key)));
+        } catch (DuplicateKeyException e) {
+            // 查重之后、插入之前别人添加了同名服务商：靠唯一约束兜底（#135）。
+            throw nameTaken(checkedName);
+        }
         return new ProviderView(created.id(), created.name(), created.baseUrl(), created.apiKeyLast4(), true,
                 List.of());
     }
@@ -132,7 +141,11 @@ public class ModelSettingsService implements ModelRouting {
         var key = blankToNull(apiKey);
         var updated = new ModelProvider(id, checkName(name, id), checkBaseUrl(baseUrl), encrypt(key),
                 key == null ? existing.apiKeyLast4() : last4(key));
-        store.updateProvider(updated);
+        try {
+            store.updateProvider(updated);
+        } catch (DuplicateKeyException e) {
+            throw nameTaken(updated.name());
+        }
         var purposes = Arrays.stream(ModelUsage.values()).map(this::view).toList();
         return new ProviderView(id, updated.name(), updated.baseUrl(), updated.apiKeyLast4(), true,
                 usedBy(purposes, id));
@@ -149,18 +162,21 @@ public class ModelSettingsService implements ModelRouting {
 
     private PurposeView apply(TenantId tenantId, UserId actor, ModelUsage usage, Long providerId, String model,
             Long restoredFrom) {
+        // 外部调用在事务外：连通测试可能等到超时。
         var result = probe.probe(usage, route(usage, providerId, model));
         if (!result.ok()) {
             throw new SettingsException(SettingsException.Reason.UNREACHABLE,
                     "连通测试没通过，没有" + (restoredFrom == null ? "保存" : "恢复") + "：" + result.message());
         }
-        var before = view(usage);
         var actorName = users.summaries(tenantId, List.of(actor.value())).values().stream().findFirst()
                 .map(UserDirectory.UserSummary::displayName).orElse("账号 " + actor.value());
-        store.savePurpose(new PurposeSetting(usage, providerId, model, actorName, OffsetDateTime.now()));
-        store.insertChange(new ModelChange(null, usage, before.providerName(), before.model(), providerId,
-                providerName(providerId), model, actor.value(), actorName, OffsetDateTime.now(), restoredFrom));
-        return view(usage);
+        return transactions.execute(status -> {
+            var before = view(usage);
+            store.savePurpose(new PurposeSetting(usage, providerId, model, actorName, OffsetDateTime.now()));
+            store.insertChange(new ModelChange(null, usage, before.providerName(), before.model(), providerId,
+                    providerName(providerId), model, actor.value(), actorName, OffsetDateTime.now(), restoredFrom));
+            return view(usage);
+        });
     }
 
     private PurposeView view(ModelUsage usage) {
@@ -218,7 +234,7 @@ public class ModelSettingsService implements ModelRouting {
             throw invalid("服务商名称必须是 1 到 30 个字符");
         }
         if (store.providerNameTaken(trimmed, exceptId)) {
-            throw new SettingsException(SettingsException.Reason.CONFLICT, "已有同名服务商：" + trimmed);
+            throw nameTaken(trimmed);
         }
         return trimmed;
     }
@@ -249,6 +265,10 @@ public class ModelSettingsService implements ModelRouting {
 
     private static String blankToNull(String value) {
         return value == null || value.isBlank() ? null : value.strip();
+    }
+
+    private static SettingsException nameTaken(String name) {
+        return new SettingsException(SettingsException.Reason.CONFLICT, "已有同名服务商：" + name);
     }
 
     private static SettingsException invalid(String message) {

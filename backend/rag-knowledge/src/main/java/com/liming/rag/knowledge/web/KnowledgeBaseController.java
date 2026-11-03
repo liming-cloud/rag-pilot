@@ -4,9 +4,7 @@ import cn.dev33.satoken.annotation.SaCheckLogin;
 import cn.dev33.satoken.annotation.SaCheckPermission;
 import com.liming.rag.identity.api.CurrentUser;
 import com.liming.rag.identity.api.Permissions;
-import com.liming.rag.knowledge.api.KnowledgeSearch;
 import com.liming.rag.knowledge.api.SearchHit;
-import com.liming.rag.knowledge.api.SearchQuery;
 import com.liming.rag.knowledge.application.DocumentCalendar;
 import com.liming.rag.knowledge.application.DocumentIngestionService;
 import com.liming.rag.knowledge.application.KnowledgeBaseService;
@@ -78,15 +76,13 @@ class KnowledgeBaseController {
 
     private final KnowledgeBaseService knowledgeBases;
     private final DocumentIngestionService ingestion;
-    private final KnowledgeSearch search;
     private final DocumentCalendar calendar;
     private final CurrentUser currentUser;
 
     KnowledgeBaseController(KnowledgeBaseService knowledgeBases, DocumentIngestionService ingestion,
-            KnowledgeSearch search, DocumentCalendar calendar, CurrentUser currentUser) {
+            DocumentCalendar calendar, CurrentUser currentUser) {
         this.knowledgeBases = knowledgeBases;
         this.ingestion = ingestion;
-        this.search = search;
         this.calendar = calendar;
         this.currentUser = currentUser;
     }
@@ -137,7 +133,8 @@ class KnowledgeBaseController {
     @SaCheckPermission(Permissions.KB_VIEW)
     @GetMapping("/{knowledgeBaseId}")
     KnowledgeBaseView get(@PathVariable long knowledgeBaseId) {
-        return KnowledgeBaseView.of(manageable(knowledgeBaseId));
+        return KnowledgeBaseView.of(knowledgeBases.getManageable(currentUser.tenantId(), currentUser.userId(),
+                knowledgeBaseId));
     }
 
     @SaCheckPermission(Permissions.KB_CREATE)
@@ -167,9 +164,8 @@ class KnowledgeBaseController {
     DocumentView upload(@PathVariable long knowledgeBaseId, @RequestParam("file") MultipartFile file,
             @RequestParam(name = "effectiveFrom", required = false) String effectiveFrom,
             @RequestParam(name = "expiresOn", required = false) String expiresOn) throws IOException {
-        manageable(knowledgeBaseId);
-        return view(ingestion.ingest(currentUser.tenantId(), knowledgeBaseId, file.getOriginalFilename(),
-                file.getBytes(), null, effectiveFrom, expiresOn), null);
+        return view(ingestion.ingest(currentUser.tenantId(), currentUser.userId(), knowledgeBaseId,
+                file.getOriginalFilename(), file.getBytes(), null, effectiveFrom, expiresOn), null);
     }
 
     /** 上传新版本：新版本处理成功后自动删除旧版本（D-026）；不传失效日期时继承旧版本的（D-046）。 */
@@ -181,9 +177,8 @@ class KnowledgeBaseController {
             @RequestParam("file") MultipartFile file,
             @RequestParam(name = "effectiveFrom", required = false) String effectiveFrom,
             @RequestParam(name = "expiresOn", required = false) String expiresOn) throws IOException {
-        manageable(knowledgeBaseId);
-        return view(ingestion.ingest(currentUser.tenantId(), knowledgeBaseId, file.getOriginalFilename(),
-                file.getBytes(), documentId, effectiveFrom, expiresOn), null);
+        return view(ingestion.ingest(currentUser.tenantId(), currentUser.userId(), knowledgeBaseId,
+                file.getOriginalFilename(), file.getBytes(), documentId, effectiveFrom, expiresOn), null);
     }
 
     /** 修改有效期（D-046），保存后立即按新日期参与或退出检索。 */
@@ -191,17 +186,15 @@ class KnowledgeBaseController {
     @PutMapping("/{knowledgeBaseId}/documents/{documentId}/validity")
     DocumentView changeValidity(@PathVariable long knowledgeBaseId, @PathVariable long documentId,
             @RequestBody ValidityRequest request) {
-        manageable(knowledgeBaseId);
-        return view(ingestion.changeValidity(currentUser.tenantId(), knowledgeBaseId, documentId,
-                request.effectiveFrom(), request.expiresOn()), null);
+        return view(ingestion.changeValidity(currentUser.tenantId(), currentUser.userId(), knowledgeBaseId,
+                documentId, request.effectiveFrom(), request.expiresOn()), null);
     }
 
     @SaCheckPermission(Permissions.DOC_DELETE)
     @DeleteMapping("/{knowledgeBaseId}/documents/{documentId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     void deleteDocument(@PathVariable long knowledgeBaseId, @PathVariable long documentId) {
-        manageable(knowledgeBaseId);
-        ingestion.delete(currentUser.tenantId(), knowledgeBaseId, documentId);
+        ingestion.delete(currentUser.tenantId(), currentUser.userId(), knowledgeBaseId, documentId);
     }
 
     /** 检索调试与评测用：直接看某个知识库对一个问题召回了哪些分块，同样按授权过滤。 */
@@ -209,9 +202,7 @@ class KnowledgeBaseController {
     @GetMapping("/{knowledgeBaseId}/search")
     List<SearchHit> search(@PathVariable long knowledgeBaseId, @RequestParam("q") String question,
             @RequestParam(name = "limit", defaultValue = "10") int limit) {
-        manageable(knowledgeBaseId);
-        return search.search(new SearchQuery(currentUser.tenantId(), currentUser.userId(), List.of(knowledgeBaseId),
-                question, limit));
+        return knowledgeBases.searchIn(currentUser.tenantId(), currentUser.userId(), knowledgeBaseId, question, limit);
     }
 
     @SaCheckPermission(Permissions.KB_GRANT)
@@ -255,7 +246,4 @@ class KnowledgeBaseController {
         knowledgeBases.revokeRole(currentUser.tenantId(), currentUser.userId(), knowledgeBaseId, roleId);
     }
 
-    private KnowledgeBase manageable(long knowledgeBaseId) {
-        return knowledgeBases.getManageable(currentUser.tenantId(), currentUser.userId(), knowledgeBaseId);
-    }
 }

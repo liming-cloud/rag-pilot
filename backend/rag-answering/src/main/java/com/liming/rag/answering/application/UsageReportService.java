@@ -51,11 +51,12 @@ public class UsageReportService {
     }
 
     /**
+     * 不开事务：里面的知识缺口归类要调用嵌入模型，不能占着数据库连接等它（#135）。
+     *
      * @param days 最近几天（含今天），与 {@code week} 二选一；都不给时看最近 30 天
      * @param week 某周的周一（yyyy-MM-dd），只能是最近 {@value #MAX_WEEKS} 周里的；本周只统计到今天
      * @throws AnsweringException 参数不合法
      */
-    @Transactional(readOnly = true)
     public UsageStats usage(TenantId tenantId, Integer days, String week) {
         var zone = settings.statsZone();
         var period = period(days, week, zone);

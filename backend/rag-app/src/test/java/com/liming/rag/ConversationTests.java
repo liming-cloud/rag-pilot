@@ -5,11 +5,16 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.liming.rag.answering.application.ConversationAskService;
 import com.liming.rag.answering.application.ConversationRetention;
 import com.liming.rag.answering.domain.ConversationTurn;
+import com.liming.rag.shared.BusinessException;
 import com.liming.rag.shared.TenantId;
 import com.liming.rag.shared.UserId;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -188,6 +193,71 @@ class ConversationTests {
     }
 
     @Test
+    @DisplayName("主线按接上的先后排列：先开始、后结束的一轮排在后面（#135）")
+    void ordersMainLineByWhenTurnsWereAttached() {
+        var setup = staffWithStore("conv13", "会话测试排序库");
+        long id = id(exchange(HttpMethod.POST, "/api/conversations", Map.of(), setup.token()));
+        var tenant = new TenantId(1);
+        var user = new UserId(setup.userId());
+
+        var slow = asking.start(tenant, user, id, "先问的问题：青柚在哪？", null);
+        var fast = asking.start(tenant, user, id, "后问的问题：补货先做什么？", null);
+        asking.run(fast, silent());
+        asking.run(slow, silent());
+
+        assertThat(turns(id, setup.token())).extracting(turn -> turn.get("question"))
+                .containsExactly("后问的问题：补货先做什么？", "先问的问题：青柚在哪？");
+    }
+
+    @Test
+    @DisplayName("同一会话并发提问：主线始终是一条链，不分叉；没接上的一轮返回 ANSWERING_CONFLICT（#135）")
+    void concurrentTurnsNeverForkTheMainLine() throws Exception {
+        var setup = staffWithStore("conv14", "会话测试并发库");
+        long id = id(exchange(HttpMethod.POST, "/api/conversations", Map.of(), setup.token()));
+        var tenant = new TenantId(1);
+        var user = new UserId(setup.userId());
+        var pendings = new ArrayList<ConversationAskService.Pending>();
+        for (int i = 0; i < 6; i++) {
+            pendings.add(asking.start(tenant, user, id, "并发问题 " + i + "：青柚在哪？", null));
+        }
+
+        var outcomes = runConcurrently(pendings);
+
+        assertThat(outcomes).allSatisfy(outcome -> assertThat(outcome).isIn("OK", "ANSWERING_CONFLICT"));
+        long attached = outcomes.stream().filter("OK"::equals).count();
+        assertThat(attached).isPositive();
+        assertThat(turns(id, setup.token())).hasSize((int) attached);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM conversation_turn WHERE conversation_id = ? AND NOT superseded",
+                Long.class, id)).as("没接上的轮次不留在库里").isEqualTo(attached);
+        assertThat(jdbc.queryForObject("SELECT count(DISTINCT coalesce(parent_turn_id, 0)) FROM conversation_turn "
+                + "WHERE conversation_id = ? AND NOT superseded", Long.class, id))
+                .as("每一轮接在不同的上一轮之后").isEqualTo(attached);
+    }
+
+    @Test
+    @DisplayName("并发重新生成同一轮：只替换一次，主线长度不变（#135）")
+    void concurrentReplacementsReplaceOnce() throws Exception {
+        var setup = staffWithStore("conv15", "会话测试并发重答库");
+        long id = id(exchange(HttpMethod.POST, "/api/conversations", Map.of(), setup.token()));
+        var tenant = new TenantId(1);
+        var user = new UserId(setup.userId());
+        var last = asking.run(asking.start(tenant, user, id, "青柚在哪？", null), silent());
+        var pendings = new ArrayList<ConversationAskService.Pending>();
+        for (int i = 0; i < 4; i++) {
+            pendings.add(asking.start(tenant, user, id, "重新生成 " + i, last.id()));
+        }
+
+        var outcomes = runConcurrently(pendings);
+
+        assertThat(outcomes).filteredOn("OK"::equals).hasSize(1);
+        assertThat(outcomes).filteredOn(outcome -> !"OK".equals(outcome))
+                .allSatisfy(outcome -> assertThat(outcome).isIn("ANSWERING_CONFLICT", "ANSWERING_INVALID"));
+        assertThat(turns(id, setup.token())).hasSize(1);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM conversation_turn WHERE conversation_id = ? AND superseded",
+                Integer.class, id)).isEqualTo(1);
+    }
+
+    @Test
     @DisplayName("授权收回后：知识库标为无权限，历史引用不再给原文，之后的提问不检索它；全部收回时直接拒答")
     void respectsRevokedAccess() {
         var setup = staffWithStore("conv07", "会话测试收回库");
@@ -286,6 +356,37 @@ class ConversationTests {
                 .isEqualTo(HttpStatus.OK);
         assertThat(jdbc.queryForObject("SELECT count(*) FROM answer_record WHERE question = '保留期测试问题'",
                 Integer.class)).isEqualTo(1);
+    }
+
+    private static ConversationAskService.Events silent() {
+        return new ConversationAskService.Events(status -> {
+        }, delta -> {
+        });
+    }
+
+    /** 同时生成并保存这几轮，返回每一轮的结果：接上了是 OK，否则是业务错误码。 */
+    private List<String> runConcurrently(List<ConversationAskService.Pending> pendings) throws Exception {
+        var ready = new CountDownLatch(pendings.size());
+        var go = new CountDownLatch(1);
+        try (var threads = Executors.newVirtualThreadPerTaskExecutor()) {
+            var futures = pendings.stream().map(pending -> threads.submit(() -> {
+                ready.countDown();
+                go.await();
+                try {
+                    asking.run(pending, silent());
+                    return "OK";
+                } catch (BusinessException e) {
+                    return e.code();
+                }
+            })).toList();
+            ready.await();
+            go.countDown();
+            var outcomes = new ArrayList<String>();
+            for (var future : futures) {
+                outcomes.add(future.get(30, TimeUnit.SECONDS));
+            }
+            return outcomes;
+        }
     }
 
     /** 一个店员和一个只授权给他的知识库，库里有一篇陈列文档。 */

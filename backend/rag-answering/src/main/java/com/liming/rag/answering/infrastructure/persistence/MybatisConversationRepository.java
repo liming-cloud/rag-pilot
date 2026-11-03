@@ -34,9 +34,14 @@ class MybatisConversationRepository implements ConversationRepository {
                     conversation.titleSource().name(), ids, lastAskedAt);
             return conversation.withId(id);
         }
-        mapper.update(conversation.tenantId().value(), conversation.id(), conversation.title(),
-                conversation.titleSource().name(), ids, lastAskedAt);
-        return conversation;
+        var tail = conversation.tail();
+        int updated = mapper.update(conversation.tenantId().value(), conversation.id(), conversation.version(),
+                conversation.title(), conversation.titleSource().name(), ids, lastAskedAt,
+                tail == null ? null : tail.turnId());
+        if (updated == 0) {
+            throw new Conversation.ConcurrentChangeException();
+        }
+        return conversation.withVersion(conversation.version() + 1);
     }
 
     @Override
@@ -67,17 +72,10 @@ class MybatisConversationRepository implements ConversationRepository {
 
     @Override
     public void addTurn(long conversationId, ConversationTurn turn, Long replacesTurnId) {
-        Long parent = mapper.lastMainLineTurnId(conversationId);
         if (replacesTurnId != null) {
-            // 只能替换主线最后一轮（D-036：重新生成最后一条、修改最后一个问题）。
-            var replaced = mapper.mainLineTurn(conversationId, replacesTurnId);
-            if (replaced == null || !replacesTurnId.equals(parent)) {
-                throw new IllegalArgumentException("只能重新生成或修改最后一轮");
-            }
-            parent = replaced.get("parent_turn_id") == null ? null : ((Number) replaced.get("parent_turn_id")).longValue();
             mapper.markSuperseded(conversationId, replacesTurnId);
         }
-        mapper.insertTurn(turn.id(), conversationId, parent, turn.question(), turn.status().name(),
+        mapper.insertTurn(turn.id(), conversationId, turn.parentTurnId(), turn.question(), turn.status().name(),
                 turn.answerRecordId(), turn.knowledgeBaseIds().toArray(Long[]::new), time(turn.askedAt()));
     }
 
@@ -96,13 +94,18 @@ class MybatisConversationRepository implements ConversationRepository {
     }
 
     private static Conversation toDomain(Map<String, Object> row) {
+        var lastTurn = (Number) row.get("last_turn_id");
+        var lastTurnParent = (Number) row.get("last_turn_parent_id");
         return Conversation.restore(((Number) row.get("id")).longValue(),
                 new TenantId(((Number) row.get("tenant_id")).longValue()),
                 new UserId(((Number) row.get("user_id")).longValue()),
+                ((Number) row.get("version")).longValue(),
                 (String) row.get("title"),
                 Conversation.TitleSource.valueOf((String) row.get("title_source")),
                 longs(row.get("knowledge_base_ids")),
-                instant(row.get("last_asked_at")));
+                instant(row.get("last_asked_at")),
+                lastTurn == null ? null : new Conversation.MainLineTail(lastTurn.longValue(),
+                        lastTurnParent == null ? null : lastTurnParent.longValue()));
     }
 
     /** bigint[] 列：驱动可能直接给出 Long[]，也可能给出 {@link Array}。 */

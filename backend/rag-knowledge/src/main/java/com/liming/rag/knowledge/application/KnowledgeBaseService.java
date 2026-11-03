@@ -5,6 +5,9 @@ import com.liming.rag.identity.api.UserDirectory;
 import com.liming.rag.identity.api.UserDirectory.UserSummary;
 import com.liming.rag.knowledge.api.KnowledgeAccess;
 import com.liming.rag.knowledge.api.KnowledgeBaseRef;
+import com.liming.rag.knowledge.api.KnowledgeSearch;
+import com.liming.rag.knowledge.api.SearchHit;
+import com.liming.rag.knowledge.api.SearchQuery;
 import com.liming.rag.knowledge.application.KnowledgeQueries.DocumentRow;
 import com.liming.rag.knowledge.application.KnowledgeQueries.ExpirySummary;
 import com.liming.rag.knowledge.application.KnowledgeQueries.KnowledgeBaseSummary;
@@ -20,6 +23,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.stream.Collectors;
 import org.springframework.context.event.EventListener;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -35,13 +39,15 @@ public class KnowledgeBaseService implements KnowledgeAccess {
     private final KnowledgeQueries queries;
     private final UserDirectory users;
     private final DocumentCalendar calendar;
+    private final KnowledgeSearch search;
 
     public KnowledgeBaseService(KnowledgeBaseRepository knowledgeBases, KnowledgeQueries queries,
-            UserDirectory users, DocumentCalendar calendar) {
+            UserDirectory users, DocumentCalendar calendar, KnowledgeSearch search) {
         this.knowledgeBases = knowledgeBases;
         this.queries = queries;
         this.users = users;
         this.calendar = calendar;
+        this.search = search;
     }
 
     /** 直接授权的账号：用户名和显示名一起给出。账号已被删除时只有 id。 */
@@ -57,9 +63,15 @@ public class KnowledgeBaseService implements KnowledgeAccess {
             throw new KnowledgeException(KnowledgeException.Reason.INVALID, e.getMessage());
         }
         if (knowledgeBases.existsByName(tenantId, knowledgeBase.name())) {
-            throw new KnowledgeException(KnowledgeException.Reason.CONFLICT, "已有同名知识库：" + knowledgeBase.name());
+            throw nameTaken(knowledgeBase.name());
         }
-        var saved = knowledgeBases.save(knowledgeBase);
+        KnowledgeBase saved;
+        try {
+            saved = knowledgeBases.save(knowledgeBase);
+        } catch (DuplicateKeyException e) {
+            // 查重之后、插入之前别人建了同名的库：靠唯一约束兜底（#135）。
+            throw nameTaken(knowledgeBase.name());
+        }
         knowledgeBases.addMember(tenantId, saved.id(), creator);
         return saved;
     }
@@ -119,12 +131,6 @@ public class KnowledgeBaseService implements KnowledgeAccess {
                 : new Grantee(tenantId, actor, users.roleIds(tenantId, actor));
     }
 
-    /** 只要求知识库属于该租户；调用方已确认操作人能管理它（文档入库、后台处理）。 */
-    @Transactional(readOnly = true)
-    public KnowledgeBase get(TenantId tenantId, long id) {
-        return knowledgeBases.find(tenantId, id).orElseThrow(KnowledgeBaseService::notFound);
-    }
-
     /** 管理操作的入口：库不存在、或操作人不能访问它时一律“不存在”，不暴露知识库是否存在。 */
     @Transactional(readOnly = true)
     public KnowledgeBase getManageable(TenantId tenantId, UserId actor, long id) {
@@ -147,6 +153,16 @@ public class KnowledgeBaseService implements KnowledgeAccess {
         getManageable(tenantId, actor, knowledgeBaseId);
         return queries.documents(tenantId, knowledgeBaseId, blankToNull(keyword), parseStatus(status),
                 parseValidity(validity), calendar.window(), new Paged.Request(page, size));
+    }
+
+    /**
+     * 检索调试与评测用：在自己能管理的一个库里检索。命中的分块仍由检索服务按操作人的授权过滤（D-041），
+     * 这里只保证库不存在、或操作人不能管理它时一律“不存在”。
+     */
+    public List<SearchHit> searchIn(TenantId tenantId, UserId actor, long knowledgeBaseId, String question,
+            int limit) {
+        getManageable(tenantId, actor, knowledgeBaseId);
+        return search.search(new SearchQuery(tenantId, actor, List.of(knowledgeBaseId), question, limit));
     }
 
     @Transactional
@@ -234,6 +250,10 @@ public class KnowledgeBaseService implements KnowledgeAccess {
 
     private static String blankToNull(String value) {
         return value == null || value.isBlank() ? null : value.strip();
+    }
+
+    private static KnowledgeException nameTaken(String name) {
+        return new KnowledgeException(KnowledgeException.Reason.CONFLICT, "已有同名知识库：" + name);
     }
 
     private static KnowledgeException notFound() {
