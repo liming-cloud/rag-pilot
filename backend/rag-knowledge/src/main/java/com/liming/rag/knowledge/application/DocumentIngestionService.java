@@ -14,6 +14,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -81,13 +82,18 @@ public class DocumentIngestionService {
         }
         var sha256 = sha256(content);
         if (documents.existsInKnowledgeBase(knowledgeBase.id(), sha256)) {
-            throw new KnowledgeException(KnowledgeException.Reason.CONFLICT, "这份文件已经在知识库里了：" + filename);
+            throw duplicate(filename);
         }
 
         storage.store(tenantId, sha256, content);
         var document = Document.received(tenantId, knowledgeBase.id(), filename, mediaType, sha256, content.length,
                 replacesDocumentId, validity);
-        documents.save(document);
+        try {
+            documents.save(document);
+        } catch (DuplicateKeyException e) {
+            // 查重之后、插入之前同一份文件被别人传进来了（#135）。原始文件按内容存，正是那份文档的文件，不用删。
+            throw duplicate(filename);
+        }
 
         // 解析、分块、向量化在事务提交后由后台完成，上传请求只返回“解析中”的文档。
         events.publishEvent(new DocumentReceived(tenantId, document.id()));
@@ -124,6 +130,10 @@ public class DocumentIngestionService {
         document.changeValidity(validity(date(effectiveFrom, null), date(expiresOn, null)));
         documents.save(document);
         return document;
+    }
+
+    private static KnowledgeException duplicate(String filename) {
+        return new KnowledgeException(KnowledgeException.Reason.CONFLICT, "这份文件已经在知识库里了：" + filename);
     }
 
     /** null 表示没传，用默认值；空串表示不限。 */

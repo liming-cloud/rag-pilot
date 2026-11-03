@@ -23,6 +23,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.stream.Collectors;
 import org.springframework.context.event.EventListener;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -62,9 +63,15 @@ public class KnowledgeBaseService implements KnowledgeAccess {
             throw new KnowledgeException(KnowledgeException.Reason.INVALID, e.getMessage());
         }
         if (knowledgeBases.existsByName(tenantId, knowledgeBase.name())) {
-            throw new KnowledgeException(KnowledgeException.Reason.CONFLICT, "已有同名知识库：" + knowledgeBase.name());
+            throw nameTaken(knowledgeBase.name());
         }
-        var saved = knowledgeBases.save(knowledgeBase);
+        KnowledgeBase saved;
+        try {
+            saved = knowledgeBases.save(knowledgeBase);
+        } catch (DuplicateKeyException e) {
+            // 查重之后、插入之前别人建了同名的库：靠唯一约束兜底（#135）。
+            throw nameTaken(knowledgeBase.name());
+        }
         knowledgeBases.addMember(tenantId, saved.id(), creator);
         return saved;
     }
@@ -243,6 +250,10 @@ public class KnowledgeBaseService implements KnowledgeAccess {
 
     private static String blankToNull(String value) {
         return value == null || value.isBlank() ? null : value.strip();
+    }
+
+    private static KnowledgeException nameTaken(String name) {
+        return new KnowledgeException(KnowledgeException.Reason.CONFLICT, "已有同名知识库：" + name);
     }
 
     private static KnowledgeException notFound() {

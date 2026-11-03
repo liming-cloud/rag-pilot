@@ -14,6 +14,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -120,7 +121,13 @@ public class ModelSettingsService implements ModelRouting {
         var checkedName = checkName(name, null);
         var checkedUrl = checkBaseUrl(baseUrl);
         var key = blankToNull(apiKey);
-        var created = store.insertProvider(new ModelProvider(null, checkedName, checkedUrl, encrypt(key), last4(key)));
+        ModelProvider created;
+        try {
+            created = store.insertProvider(new ModelProvider(null, checkedName, checkedUrl, encrypt(key), last4(key)));
+        } catch (DuplicateKeyException e) {
+            // 查重之后、插入之前别人添加了同名服务商：靠唯一约束兜底（#135）。
+            throw nameTaken(checkedName);
+        }
         return new ProviderView(created.id(), created.name(), created.baseUrl(), created.apiKeyLast4(), true,
                 List.of());
     }
@@ -132,7 +139,11 @@ public class ModelSettingsService implements ModelRouting {
         var key = blankToNull(apiKey);
         var updated = new ModelProvider(id, checkName(name, id), checkBaseUrl(baseUrl), encrypt(key),
                 key == null ? existing.apiKeyLast4() : last4(key));
-        store.updateProvider(updated);
+        try {
+            store.updateProvider(updated);
+        } catch (DuplicateKeyException e) {
+            throw nameTaken(updated.name());
+        }
         var purposes = Arrays.stream(ModelUsage.values()).map(this::view).toList();
         return new ProviderView(id, updated.name(), updated.baseUrl(), updated.apiKeyLast4(), true,
                 usedBy(purposes, id));
@@ -218,7 +229,7 @@ public class ModelSettingsService implements ModelRouting {
             throw invalid("服务商名称必须是 1 到 30 个字符");
         }
         if (store.providerNameTaken(trimmed, exceptId)) {
-            throw new SettingsException(SettingsException.Reason.CONFLICT, "已有同名服务商：" + trimmed);
+            throw nameTaken(trimmed);
         }
         return trimmed;
     }
@@ -249,6 +260,10 @@ public class ModelSettingsService implements ModelRouting {
 
     private static String blankToNull(String value) {
         return value == null || value.isBlank() ? null : value.strip();
+    }
+
+    private static SettingsException nameTaken(String name) {
+        return new SettingsException(SettingsException.Reason.CONFLICT, "已有同名服务商：" + name);
     }
 
     private static SettingsException invalid(String message) {
