@@ -40,8 +40,8 @@ class HybridSearchService implements KnowledgeSearch {
         return new Grantee(tenantId, userId, users.roleIds(tenantId, userId));
     }
 
+    /** 不开事务：先给问题向量化（外部调用），再查库；每次查询各自读取，不占着连接等模型（#135）。 */
     @Override
-    @Transactional(readOnly = true)
     public List<SearchHit> search(SearchQuery query) {
         var text = query.text() == null ? "" : query.text().strip();
         if (text.isEmpty()) {

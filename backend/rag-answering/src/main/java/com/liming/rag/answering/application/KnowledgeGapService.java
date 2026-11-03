@@ -29,6 +29,8 @@ import org.springframework.transaction.annotation.Transactional;
  * 知识缺口（#125、D-047）：把一段时间内答不上来的和被点踩的问题按意思归类，按待处理次数排序，告诉总部该补哪些资料。
  * 查询时现算、不落表：取范围内最近的 {@value #MAX_RECORDS} 条，把不同的问题原文向量化后归类
  * （{@link QuestionClusters}），嵌入模型不可用时退回按原文分组。不调用对话模型。
+ *
+ * <p>查询报告不开事务：向量化是外部调用，不能占着数据库连接等它（#135）；几次读之间不要求同一快照。
  */
 @Service
 public class KnowledgeGapService {
@@ -99,7 +101,6 @@ public class KnowledgeGapService {
      * @param status open：只列还有待处理记录的类；all：全部
      * @throws AnsweringException 天数或状态不合法
      */
-    @Transactional(readOnly = true)
     public Report report(TenantId tenantId, int days, String status) {
         if (days < 1 || days > MAX_DAYS) {
             throw invalid("天数只能是 1 到 " + MAX_DAYS + " 天");
@@ -120,7 +121,6 @@ public class KnowledgeGapService {
     }
 
     /** {@code from} 到 {@code to}（都含）的知识缺口，按待处理次数、总次数从多到少。 */
-    @Transactional(readOnly = true)
     public Report report(TenantId tenantId, LocalDate from, LocalDate to, ZoneId zone) {
         var start = from.atStartOfDay(zone).toOffsetDateTime();
         var end = to.plusDays(1).atStartOfDay(zone).toOffsetDateTime();
@@ -157,7 +157,6 @@ public class KnowledgeGapService {
     }
 
     /** 待处理次数最多的几类，供运营概览；只看还有待处理记录的类。 */
-    @Transactional(readOnly = true)
     public List<UsageStats.QuestionCount> top(TenantId tenantId, LocalDate from, LocalDate to, ZoneId zone,
             int limit) {
         return report(tenantId, from, to, zone).groups().stream()
