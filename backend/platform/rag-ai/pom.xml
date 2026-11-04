@@ -42,12 +42,6 @@
             <artifactId>spring-ai-client-chat</artifactId>
             <optional>true</optional>
         </dependency>
-        <!-- 问题改写用框架的 RewriteQueryTransformer（原来在 rag-answering，#145 收进防腐层）。 -->
-        <dependency>
-            <groupId>org.springframework.ai</groupId>
-            <artifactId>spring-ai-rag</artifactId>
-            <optional>true</optional>
-        </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>

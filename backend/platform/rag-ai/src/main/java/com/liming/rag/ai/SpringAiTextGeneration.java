@@ -79,22 +79,6 @@ final class SpringAiTextGeneration implements TextGeneration {
         }
     }
 
-    /** 由 Spring AI 的结构化输出转换器在提示词末尾附上 JSON 格式要求，并把回复解析成 {@code type}。 */
-    @Override
-    public <T> T structured(String systemPrompt, String userMessage, Class<T> type, Limits limits) {
-        var route = route(limits);
-        T result;
-        try {
-            result = client(route).prompt(prompt(systemPrompt, userMessage, limited(route, limits))).call().entity(type);
-        } catch (RuntimeException e) {
-            throw new ModelCallException("模型没有按约定的格式回复", e);
-        }
-        if (result == null) {
-            throw new ModelCallException("模型没有按约定的格式回复");
-        }
-        return result;
-    }
-
     /**
      * 在调用线程上阻塞到生成结束；调用方在虚拟线程里运行，不占用平台线程。
      *

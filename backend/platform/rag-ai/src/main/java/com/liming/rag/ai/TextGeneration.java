@@ -6,7 +6,7 @@ import java.util.concurrent.CompletionStage;
 import java.util.function.Consumer;
 
 /**
- * 文字生成能力（Spring AI 防腐层，#145）：一次性生成、流式生成（可停止、带备用请求）、结构化输出。上下文只依赖这个接口，
+ * 文字生成能力（Spring AI 防腐层，#145）：一次性生成、流式生成（可停止、带备用请求）。上下文只依赖这个接口，
  * 不接触 Spring AI 的类型；实现内部用 Spring AI 的 {@code ChatClient}，并留下框架自带的观测（耗时、token 用量）。
  * 提示词是调用方的策略，这里只负责怎么调用模型。
  */
@@ -39,16 +39,6 @@ public interface TextGeneration {
     /** 带输出限制的生成；默认忽略限制，供不支持的本地实现使用。 */
     default String complete(String systemPrompt, String userMessage, Limits limits) {
         return complete(systemPrompt, userMessage);
-    }
-
-    /**
-     * 结构化输出：要求模型按 {@code type}（record）的字段输出 JSON，解析后返回；按 {@code limits} 的用途选模型。
-     * 本地确定性实现不支持，抛 {@link ModelCallException}，调用方应退回不依赖模型的做法。
-     *
-     * @throws ModelCallException 模型不可用，或输出不是约定的 JSON
-     */
-    default <T> T structured(String systemPrompt, String userMessage, Class<T> type, Limits limits) {
-        throw new ModelCallException("本地模型实现不支持结构化输出");
     }
 
     /**

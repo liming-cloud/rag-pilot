@@ -28,7 +28,7 @@ class SpringAiQueryRewritingTest {
     }
 
     @Test
-    @DisplayName("用框架的改写组件：调用方的规则和原问题都发给回答模型，输出限一句话（最多 64 个 token，遇换行停）（#145）")
+    @DisplayName("规则作系统提示词、原问题作用户消息发给回答模型，输出限一句话（最多 64 个 token，遇换行停）（#145）")
     void rewritesWithCallerInstructions() throws Exception {
         start(200, "临期商品打几折？");
 
@@ -36,18 +36,19 @@ class SpringAiQueryRewritingTest {
 
         assertThat(rewritten).isEqualTo("临期商品打几折？");
         assertThat(bodies).hasSize(1);
-        assertThat(bodies.getFirst()).contains("你负责把员工的问题改写成规范说法", "纠正错别字", "临期的东西打几者",
+        assertThat(bodies.getFirst()).contains("\"role\":\"system\"", "你负责把员工的问题改写成规范说法", "纠正错别字",
+                "\"content\":\"临期的东西打几者\"",
                 "\"max_tokens\":64", "\"stop\":\"\\n\"", "\"model\":\"m\"");
     }
 
     @Test
-    @DisplayName("规则里的花括号不会被当成模板占位符")
+    @DisplayName("规则里的花括号原样发给模型，不当作模板占位符")
     void keepsBracesInInstructions() throws Exception {
         start(200, "改写");
 
         rewriting().rewrite("规则：把 {简称} 改成全称", "问题");
 
-        assertThat(bodies.getFirst()).contains("把 ｛简称｝ 改成全称");
+        assertThat(bodies.getFirst()).contains("把 {简称} 改成全称");
     }
 
     @Test

@@ -40,7 +40,7 @@
 
 - 权限过滤只在 rag-knowledge 的检索服务里写一处，禁止绕过。
 - 框架选用：上下文只依赖能力接口，不直接用第三方框架。只有一个上下文用的库放在它的 `infrastructure`（如 PDFBox、POI、MyBatis-Plus、Sa-Token 的会话和密码摘要），多个上下文要用的做成平台层的能力模块；Spring 全家（Boot、Web、Tx、Modulith）和 web 层的 Sa-Token 注解例外。
-- AI 能力只经平台层的 rag-ai（Spring AI 防腐层，D-052）：按能力提供文字生成（一次性、流式、结构化输出）、问题改写、向量化、重排、连通测试，参数和返回值都是自己的类型，内部用足 Spring AI 并打开它自带的观测；提示词和判断规则是上下文的策略，不放进 rag-ai。上下文层用 Enforcer 禁止依赖 Spring AI，`ArchitectureRulesTest` 检查代码。各用途用哪个服务商和模型由 rag-settings 经 `ModelRouting` 提供（D-043、D-044）。服务商密钥用 AES-GCM 加密存库，主密钥只从环境变量 `RAG_MASTER_KEY` 读；环境变量里的密钥同样只从环境变量读；接口、日志都不返回密钥明文，界面只显示后 4 位。
+- AI 能力只经平台层的 rag-ai（Spring AI 防腐层，D-052）：按能力提供文字生成（一次性、流式）、问题改写、向量化、重排、连通测试，参数和返回值都是自己的类型，内部用足 Spring AI 并打开它自带的观测；提示词和判断规则是上下文的策略，不放进 rag-ai。上下文层用 Enforcer 禁止依赖 Spring AI，`ArchitectureRulesTest` 检查代码。各用途用哪个服务商和模型由 rag-settings 经 `ModelRouting` 提供（D-043、D-044）。服务商密钥用 AES-GCM 加密存库，主密钥只从环境变量 `RAG_MASTER_KEY` 读；环境变量里的密钥同样只从环境变量读；接口、日志都不返回密钥明文，界面只显示后 4 位。
 - DDD：聚合只在 knowledge、answering；上下文模块之间只用对方的 `api` 包或监听事件，依赖方向见下面的“上下文依赖”。
 - MyBatis-Plus 的 DO、Wrapper、Page 只出现在 infrastructure 包；查询结果映射到 infrastructure 里只有字段的 `XxxDO`，不用 `Map` 加强转（`bigint[]` 列在 `resultMap` 里指定 `ArrayTypeHandler`）；不引入 MapStruct，不做多层 DTO 转换。
 - SQL 只写在 Mapper XML（`src/main/resources/mapper/<模块名>/<Mapper 名>.xml`）里；不用 `@Select` 等 SQL 注解，条件构造器不拼原始 SQL（`apply`、`last`、`inSql` 等）。简单的单表条件用 `LambdaQueryWrapper`。

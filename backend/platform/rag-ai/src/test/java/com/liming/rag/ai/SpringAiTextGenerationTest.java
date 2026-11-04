@@ -175,32 +175,6 @@ class SpringAiTextGenerationTest {
         assertThat(awaitModels(2)).containsExactly("light-m", "m");
     }
 
-    /** 结构化输出的目标类型：模型按字段输出 JSON，由框架解析（#145）。 */
-    record Plan(boolean smallTalk, List<String> queries) {
-    }
-
-    @Test
-    @DisplayName("结构化输出：模型按字段输出 JSON，解析成调用方给的类型；用回答模型（#145）")
-    void parsesStructuredOutput() throws Exception {
-        start((call, model) -> new Reply(0, 200, "{\"smallTalk\":false,\"queries\":[\"B 的保修期多久\"]}"));
-        var generation = gateway(null);
-
-        var plan = generation.structured("系统", "问题", Plan.class, new TextGeneration.Limits(96, List.of()));
-
-        assertThat(plan).isEqualTo(new Plan(false, List.of("B 的保修期多久")));
-        assertThat(awaitModels(1)).containsExactly("m");
-    }
-
-    @Test
-    @DisplayName("模型输出不是约定的 JSON 时抛 ModelCallException，由调用方退回默认做法")
-    void rejectsMalformedStructuredOutput() throws Exception {
-        start((call, model) -> new Reply(0, 200, "检索：B 的保修期多久"));
-        var generation = gateway(null);
-
-        org.assertj.core.api.Assertions.assertThatThrownBy(() -> generation.structured("系统", "问题", Plan.class,
-                new TextGeneration.Limits(96, List.of()))).isInstanceOf(ModelCallException.class);
-    }
-
     @Test
     @DisplayName("每次调用都留下 Spring AI 的观测：ChatClient 一层、模型调用一层（带模型名），供 /actuator/metrics 统计（#145）")
     void recordsSpringAiObservations() throws Exception {
