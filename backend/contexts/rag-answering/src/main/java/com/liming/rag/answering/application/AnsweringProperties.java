@@ -16,6 +16,7 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  * @param rewriteTimeout        改写超过这个时限就放弃
  * @param conversation          员工端会话（D-036）
  * @param gaps                  知识缺口归类（D-047）
+ * @param limits                每个账号的提问频率上限（#145）
  */
 @ConfigurationProperties("rag.answering")
 public record AnsweringProperties(
@@ -26,7 +27,28 @@ public record AnsweringProperties(
         @DefaultValue("0.03") double rewriteMinRelevance,
         @DefaultValue("3s") Duration rewriteTimeout,
         @DefaultValue Conversation conversation,
-        @DefaultValue Gaps gaps) {
+        @DefaultValue Gaps gaps,
+        @DefaultValue Limits limits) {
+
+    /**
+     * 每个账号的提问频率上限（{@code rag.answering.limits}，#145）：防止一个账号短时间内大量提问，占满模型额度
+     * （OWASP LLM10“无限制消耗”）。
+     *
+     * @param perMinute 最近 1 分钟最多问几个
+     * @param perDay    最近 24 小时最多问几个，不少于 perMinute
+     */
+    public record Limits(@DefaultValue("10") int perMinute, @DefaultValue("300") int perDay) {
+
+        public Limits {
+            require(perMinute >= 1 && perMinute <= 1000, "rag.answering.limits.per-minute 必须在 1 到 1000 之间");
+            require(perDay >= perMinute && perDay <= 100_000,
+                    "rag.answering.limits.per-day 必须在 per-minute 到 100000 之间");
+        }
+
+        static Limits defaults() {
+            return new Limits(10, 300);
+        }
+    }
 
     /**
      * 知识缺口归类的配置（{@code rag.answering.gaps}）。
@@ -81,7 +103,7 @@ public record AnsweringProperties(
     public AnsweringProperties(int candidates, int evidenceLimit, double minRelevance, boolean rewriteOnLowRelevance,
             double rewriteMinRelevance, Duration rewriteTimeout) {
         this(candidates, evidenceLimit, minRelevance, rewriteOnLowRelevance, rewriteMinRelevance, rewriteTimeout,
-                Conversation.defaults(), Gaps.defaults());
+                Conversation.defaults(), Gaps.defaults(), Limits.defaults());
     }
 
     @ConstructorBinding
@@ -96,6 +118,7 @@ public record AnsweringProperties(
         require(rewriteTimeout != null && rewriteTimeout.isPositive(), "rag.answering.rewrite-timeout 必须大于 0");
         conversation = conversation == null ? Conversation.defaults() : conversation;
         gaps = gaps == null ? Gaps.defaults() : gaps;
+        limits = limits == null ? Limits.defaults() : limits;
     }
 
     private static void require(boolean condition, String message) {

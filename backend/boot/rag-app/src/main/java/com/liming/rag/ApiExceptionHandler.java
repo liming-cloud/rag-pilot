@@ -71,6 +71,7 @@ class ApiExceptionHandler extends ResponseEntityExceptionHandler {
             case CONFLICT -> HttpStatus.CONFLICT;
             case UNSUPPORTED -> HttpStatus.UNSUPPORTED_MEDIA_TYPE;
             case UNAVAILABLE -> HttpStatus.SERVICE_UNAVAILABLE;
+            case TOO_MANY_REQUESTS -> HttpStatus.TOO_MANY_REQUESTS;
         };
     }
 

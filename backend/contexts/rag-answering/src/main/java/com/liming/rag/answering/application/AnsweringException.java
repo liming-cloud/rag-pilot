@@ -12,7 +12,9 @@ public class AnsweringException extends BusinessException {
         INVALID(ErrorKind.INVALID),
         NOT_FOUND(ErrorKind.NOT_FOUND),
         /** 会话刚被别的操作改过（同时在两个窗口提问等），这次修改没有保存。 */
-        CONFLICT(ErrorKind.CONFLICT);
+        CONFLICT(ErrorKind.CONFLICT),
+        /** 提问超过频率上限（#145）。 */
+        RATE_LIMITED(ErrorKind.TOO_MANY_REQUESTS);
 
         private final ErrorKind kind;
 

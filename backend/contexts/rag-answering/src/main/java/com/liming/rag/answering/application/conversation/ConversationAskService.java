@@ -57,6 +57,7 @@ public class ConversationAskService {
     private static final Pattern DIGITS = Pattern.compile("\\d");
 
     private final ConversationService conversations;
+    private final AskRateLimiter limiter;
     private final AnswerService answers;
     private final TextGeneration chat;
     private final SearchPlanner planner;
@@ -66,8 +67,10 @@ public class ConversationAskService {
     private final AsyncTaskExecutor background;
 
     ConversationAskService(ConversationService conversations, AnswerService answers, TextGeneration chat, TurnStops stops,
-            AnsweringProperties properties, @Qualifier("applicationTaskExecutor") AsyncTaskExecutor background) {
+            AskRateLimiter limiter, AnsweringProperties properties,
+            @Qualifier("applicationTaskExecutor") AsyncTaskExecutor background) {
         this.conversations = conversations;
+        this.limiter = limiter;
         this.answers = answers;
         this.chat = chat;
         this.stops = stops;
@@ -91,6 +94,8 @@ public class ConversationAskService {
     public Pending start(TenantId tenantId, UserId userId, long conversationId, String question, Long replacesTurnId) {
         var text = AnswerService.question(question);
         var context = conversations.prepareTurn(tenantId, userId, conversationId, replacesTurnId);
+        // 问题合规、会话是自己的之后才计数，超过频率上限时不调用模型（#145）。
+        limiter.acquire(tenantId, userId);
         long turnId = conversations.nextTurnId();
         var stop = stops.register(conversationId, turnId);
         return new Pending(tenantId, userId, conversationId, turnId, text, replacesTurnId, context, stop);

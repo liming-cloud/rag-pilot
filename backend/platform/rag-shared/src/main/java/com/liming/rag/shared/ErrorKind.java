@@ -18,5 +18,7 @@ public enum ErrorKind {
     /** 不支持的内容，例如上传了不支持的文件类型。 */
     UNSUPPORTED,
     /** 依赖的外部服务暂时不可用，稍后可以重试。 */
-    UNAVAILABLE
+    UNAVAILABLE,
+    /** 一段时间内请求太多（如提问超过频率上限，#145），过一会儿再试。 */
+    TOO_MANY_REQUESTS
 }

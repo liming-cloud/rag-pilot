@@ -37,7 +37,8 @@ export function LoginPage() {
       navigate(me.mustChangePassword ? "/change-password" : "/chat", { replace: true });
     } catch (e) {
       setError(
-        e instanceof BadCredentialsError || (e instanceof ApiError && e.code === "IDENTITY_LOCKED")
+        e instanceof BadCredentialsError ||
+          (e instanceof ApiError && (e.code === "IDENTITY_LOCKED" || e.code === "TOO_MANY_REQUESTS"))
           ? e.message
           : "暂时无法登录，请稍后重试。",
       );

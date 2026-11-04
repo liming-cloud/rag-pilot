@@ -325,3 +325,11 @@ Compose 增加 web 服务（`deploy/web.Dockerfile`）：Node 24 构建前端，
 - **其他取舍**：`EmbeddingClient` 保留原名（它本来就是“向量化”能力，只换内部实现，重试用 OpenAI SDK 自带的退避）；评判不用结构化输出（要兼容先输出思考过程的模型，提示词和解析已经过评判自检校准），评判规则移到 rag-evaluation，模型调用经 `TextGeneration.fixed`。
 - **Maven 分三层聚合**：`backend/platform`（rag-shared、rag-ai）、`backend/contexts`（五个上下文）、`backend/boot`（rag-app），Java 包名不变。rag-ai 把 Spring AI 声明为 optional，不传给上下文，运行时由 rag-app 带上；`backend/contexts/pom.xml` 用 `maven-enforcer-plugin` 禁止 `org.springframework.ai`（含传递依赖）；架构规则改为“Spring AI 只在 rag-ai”。
 - **不加 `maven-dependency-plugin:analyze`**（原计划要加）：试跑时每个模块都报十几项 Spring 底层包“用了没声明”、starter“声明了没用”，要让它通过就得在每个模块声明 `spring-context`、`spring-beans`、`slf4j` 等并去掉 starter，与 Spring Boot 的常规做法相反、维护成本高；它要防的“经传递依赖用 Spring AI”已由 optional、Enforcer、ArchUnit 三层拦住。
+
+**准确与安全（第 3、4 步）**
+
+- **大数据量向量召回**（人答复选“只对召回查询打开”）：HNSW 先扫索引再按授权、有效期过滤，默认 `hnsw.ef_search = 40`，员工能访问的资料只占 2% 时只召回 1 条（要 30 条）。召回查询在自己的只读事务里 `SET LOCAL hnsw.iterative_scan = relaxed_order`，结果用物化 CTE 按距离重排（pgvector 文档的写法）。不改库级设置：恢复备份是新建空库再 `pg_restore`（不带 `--create`），库级设置不会带过去，迁移记录又显示已执行，会悄悄失效。数据库按代价决定走不走 HNSW（数据量、统计信息、参数是不是绑定参数都会影响），所以 `LargeScaleRetrievalTests` 关掉排序、固定在“选了 HNSW”的情形。
+- **关键词检索也查章节路径**：BM25 索引加上 `heading_path`（以文件名开头），只重建索引、不改数据；以评测决定是否保留。
+- **登录锁定原子计数**：失败次数在数据库里原子加一并返回新值，同时发来的错误密码不再能绕过锁定。
+- **安全响应头**：CSP 只允许本站脚本（登录令牌在 localStorage），样式允许内联（对话框运行时插入 `<style>`），不许被嵌入；另有 `X-Content-Type-Options`、`X-Frame-Options`、`Referrer-Policy`。放在 `security-headers.conf`，server 级和带 `add_header` 的 location 都 include（Nginx 的 location 有自己的 `add_header` 时不继承 server 级的）。
+- **限流**（人答复的值）：每个账号最近 1 分钟最多 10 个问题、最近 24 小时最多 300 个（`RAG_ASK_LIMIT_PER_MINUTE`、`RAG_ASK_LIMIT_PER_DAY`），超出返回 429、不调用模型、不留下这一轮；计数在内存里，单实例部署，重启清零。问题合规、会话是自己的之后才计数；管理员“重新回答”不受限。Nginx 对 `/api/auth/login` 按来源 IP 每分钟 10 次、可突发 5 次。为此共享内核的 `ErrorKind` 新增 `TOO_MANY_REQUESTS`（D-034：所有上下文共用的错误分类，转 429 由 rag-app 的入口负责）。

@@ -80,4 +80,19 @@ describe("登录页", () => {
 
     expect(await screen.findByText(/账号已锁定，请 \d+ 分钟后再试/)).toBeInTheDocument();
   });
+
+  it("登录尝试太频繁被限流时显示原因（#145）", async () => {
+    server.use(
+      http.post("/api/auth/login", () =>
+        HttpResponse.json(
+          { status: 429, code: "TOO_MANY_REQUESTS", detail: "登录尝试太频繁，请稍后再试" },
+          { status: 429 },
+        ),
+      ),
+    );
+    renderLogin();
+    submit("staff01", "staff-password");
+
+    expect(await screen.findByText("登录尝试太频繁，请稍后再试")).toBeInTheDocument();
+  });
 });

@@ -141,6 +141,14 @@ ask_in_conversation "$kb" "冷柜什么时候除霜" "$staff_token"
 grep -q 'deploy-verify.txt' <<<"$RESPONSE" && fail "未授权的账号的回答引用了“$KB_NAME”的文档" \
   || ok "未授权的账号的回答没有引用“$KB_NAME”"
 
+# 6. 登录限流（#145 B5）：同一来源短时间内连续登录被限流（放在最后，免得影响前面的登录）。
+limited=0
+for _ in $(seq 1 20); do
+  api POST /api/auth/login '{"username":"verify-rate-limit","password":"wrong-password"}' ""
+  [ "$STATUS" = 429 ] && { limited=1; break; }
+done
+[ "$limited" = 1 ] && grep -q 'TOO_MANY_REQUESTS' <<<"$RESPONSE" && ok "连续登录会被限流" || fail "连续登录 20 次没有被限流"
+
 if [ "$failures" -gt 0 ]; then
   echo "部署验证没有通过：$failures 项失败" >&2
   exit 1

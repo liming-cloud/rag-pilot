@@ -107,6 +107,10 @@ rag:
     rewrite-min-relevance: ${RAG_REWRITE_MIN_RELEVANCE:0.03}
     # 改写超过这个时限就放弃，按原方式拒答。
     rewrite-timeout: ${RAG_REWRITE_TIMEOUT:3s}
+    # 每个账号的提问频率上限（#145，防止一个账号短时间内占满模型额度）：超过时返回 429，不调用模型。
+    limits:
+      per-minute: ${RAG_ASK_LIMIT_PER_MINUTE:10}
+      per-day: ${RAG_ASK_LIMIT_PER_DAY:300}
     gaps:
       # 知识缺口归类：两个问题的向量余弦相似度达到它就归为一类（D-047，按评测报告里的校准结果调整）。
       similarity: ${RAG_GAP_SIMILARITY:0.80}

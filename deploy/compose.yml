@@ -62,6 +62,8 @@ services:
       RAG_INDUSTRY_PACK: ${RAG_INDUSTRY_PACK:-retail}
       RAG_STATS_ZONE: ${RAG_STATS_ZONE:-Asia/Shanghai}
       RAG_EXPIRY_WARNING_DAYS: ${RAG_EXPIRY_WARNING_DAYS:-30}
+      RAG_ASK_LIMIT_PER_MINUTE: ${RAG_ASK_LIMIT_PER_MINUTE:-10}
+      RAG_ASK_LIMIT_PER_DAY: ${RAG_ASK_LIMIT_PER_DAY:-300}
     volumes:
       - app-files:/data/files
     depends_on:
