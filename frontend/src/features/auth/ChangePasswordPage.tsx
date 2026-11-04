@@ -39,7 +39,7 @@ export function ChangePasswordPage() {
     try {
       await changePassword(form.oldPassword, form.newPassword);
       await queryClient.invalidateQueries({ queryKey: ["me"] });
-      navigate("/chat", { replace: true });
+      void navigate("/chat", { replace: true });
     } catch (e) {
       setError(e instanceof Error ? e.message : "修改密码失败");
     } finally {
@@ -58,7 +58,7 @@ export function ChangePasswordPage() {
         <h1 className="font-serif text-2xl font-semibold">修改密码</h1>
         {forced && <p className="text-sm text-muted-foreground">管理员重置了你的密码，请先设置新密码再继续使用。</p>}
       </div>
-      <form onSubmit={submit} className="flex flex-col gap-4">
+      <form onSubmit={(event) => void submit(event)} className="flex flex-col gap-4">
         <Label className="flex flex-col gap-1">
           {forced ? "管理员给你的临时密码" : "当前密码"}
           <Input type="password" autoComplete="current-password" required {...field("oldPassword")} />

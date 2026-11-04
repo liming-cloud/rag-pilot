@@ -175,7 +175,7 @@ function CreateDialog({ onDone }: { onDone: () => void }) {
     onSuccess: async (created) => {
       await queryClient.invalidateQueries({ queryKey: ["knowledge-bases"] });
       onDone();
-      navigate(`/admin/knowledge/${created.id}`);
+      void navigate(`/admin/knowledge/${created.id}`);
     },
   });
   return (

@@ -128,7 +128,7 @@ describe("运营概览页", () => {
 
     const weeks = screen.getByLabelText("按周查看");
     expect(within(weeks).getAllByRole("option")).toHaveLength(13);
-    const lastWeek = within(weeks).getByRole("option", { name: /（上周）$/ }) as HTMLOptionElement;
+    const lastWeek = within(weeks).getByRole<HTMLOptionElement>("option", { name: /（上周）$/ });
     fireEvent.change(weeks, { target: { value: lastWeek.value } });
 
     expect(await screen.findByRole("heading", { name: "运营周报" })).toBeInTheDocument();

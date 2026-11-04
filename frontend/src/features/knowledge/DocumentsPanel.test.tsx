@@ -159,7 +159,7 @@ describe("知识库的文档", () => {
   it("上传新版本默认继承旧版本的失效日期", async () => {
     renderPanel();
     const old = await row("会员积分规则（本季度）.docx");
-    const expiresOn = within(old).getByText(/^至 /).textContent!.slice(2);
+    const expiresOn = within(old).getByText(/^至 /).textContent.slice(2);
 
     fireEvent.click(within(old).getByRole("button", { name: "上传新版本 会员积分规则（本季度）.docx" }));
     const dialog = await screen.findByRole("dialog", { name: "上传新版本" });

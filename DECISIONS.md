@@ -344,3 +344,7 @@ Compose 增加 web 服务（`deploy/web.Dockerfile`）：Node 24 构建前端，
 - **日志与指标**（人答复：先不接 Prometheus，保证指标和日志可用）：Actuator 加开 `metrics`，Spring AI 的模型调用观测（`gen_ai.client.operation`、`spring.ai.chat.client`）和接口请求统计都在里面，Nginx 只转发 `/api`，所以只在本机 8080 能看。关键事件记成一行 `event=<名字> 键=值`（logfmt 写法）：`docker compose logs` 里人能直接读，`grep` 就能筛，不用引入日志收集组件，也不用把整套日志改成 JSON。事件有模型调用失败（rag-ai 在转成 `ModelCallException` 的地方记，只记用途、模型、异常类型）、拒答、低分改写、入库失败（分文件问题和模型不可用）、登录失败和锁定、越权拒绝（缺权限点在统一异常出口记，不能管理的库在 knowledge 记）。不记密码、密钥、提示词和问题原文；不合规的用户名不原样写进日志，防止伪造日志行。
 - **前后端接口契约**（人答复选“集成测试导出响应样例、前端测试校验”）：rag-app 的 `ApiContractTests` 造一套数据，按管理员调用前端用到的 21 个查询接口，把响应换成形状（字段名和值的类型，不含具体值，数组合并各元素），连同权限码清单写进 `frontend/src/test/contract/api-shapes.json`；和仓库里的不一致就失败，接口改了用 `-Dcontract.update=true` 重新生成。前端 `contract.test.ts` 把 MSW 假数据换成同样的形状比较：字段要一一对应，某一边是 null 或空数组时不比较类型。权限码改成 `PERMISSIONS` 常量，`Can`、`useCan` 和路由守卫只接受常量里的值，写错在类型检查时就报；结构测试禁止在界面代码里手写权限码。不生成 TypeScript 类型（要引入 OpenAPI 生成工具，属于新增依赖），只校验假数据，类型仍手写、由假数据带着对齐。第一次运行就发现文档列表、会话详情的假数据少了后端已有的字段。
 - **失败路径测试**：补流式事件（员工断开后照样做完、超时、业务异常、意外错误）、重排（错误状态码、越界序号、连不上）、连通测试（错误不是 JSON、说明过长截断、模型列表为空、地址格式）、文档解析（不支持的类型、Word 的正文样式和表格边界、加密 Excel、只有表头的工作表）、前端评价条和各 `api.ts` 写操作被拒绝时的测试。下线 `/api/ask` 后流式事件“断开就停止生成”的分支没有调用方了，一并删掉。覆盖率用命令行临时插桩统计，口径和基线相同（前端不含假数据、测试工具和 shadcn 组件）。
+
+**代码写法（第 7 步）**
+
+- **前端**：管理端页面按路由分包（React Router 的 `lazy`），打开时才下载，问答页和登录页留在主包，主包从 555 KB 降到 370 KB；`engines` 和 `.nvmrc` 改为 Node 24，与 CI 一致；ESLint 改用 typescript-eslint 带类型信息的推荐规则，查出的 17 处主要是 React Router 7 的 `navigate()` 返回 Promise 没有处理，统一写成 `void navigate(…)`，表单的异步提交包一层。

@@ -16,7 +16,7 @@ function readBytes(blob: Blob) {
   return new Promise<ArrayBuffer>((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(reader.result as ArrayBuffer);
-    reader.onerror = () => reject(reader.error);
+    reader.onerror = () => reject(reader.error ?? new Error("读取文件失败"));
     reader.readAsArrayBuffer(blob);
   });
 }

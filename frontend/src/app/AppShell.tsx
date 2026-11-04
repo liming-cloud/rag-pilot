@@ -34,7 +34,7 @@ export function useSignOut() {
   return async () => {
     await logout().catch(() => undefined);
     queryClient.clear();
-    navigate("/login", { replace: true });
+    void navigate("/login", { replace: true });
   };
 }
 

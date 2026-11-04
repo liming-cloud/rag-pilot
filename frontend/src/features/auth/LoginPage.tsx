@@ -34,7 +34,7 @@ export function LoginPage() {
     setError(null);
     try {
       const me = await login(username.trim(), password);
-      navigate(me.mustChangePassword ? "/change-password" : "/chat", { replace: true });
+      void navigate(me.mustChangePassword ? "/change-password" : "/chat", { replace: true });
     } catch (e) {
       setError(
         e instanceof BadCredentialsError ||
@@ -76,7 +76,7 @@ export function LoginPage() {
             <h1 className="font-serif text-2xl font-semibold">登录{branding.name}</h1>
             {branding.tagline && <p className="text-sm text-muted-foreground lg:hidden">{branding.tagline}</p>}
           </div>
-          <form onSubmit={submit} className="flex flex-col gap-4">
+          <form onSubmit={(event) => void submit(event)} className="flex flex-col gap-4">
             <Label className="flex flex-col gap-1">
               用户名
               <Input

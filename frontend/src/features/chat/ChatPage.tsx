@@ -114,7 +114,7 @@ function ConversationView({ conversationId }: { conversationId: number | null })
         knowledgeBases: options.filter((option) => created.knowledgeBaseIds.includes(option.id)),
         turns: [],
       });
-      navigate(`/chat/${id}`);
+      void navigate(`/chat/${id}`);
     }
     const target = id;
     setSelectionChangedIn(null);

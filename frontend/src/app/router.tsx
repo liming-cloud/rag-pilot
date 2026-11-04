@@ -1,17 +1,8 @@
-import type { ReactNode } from "react";
+import type { ComponentType, ReactNode } from "react";
 import { createBrowserRouter, Navigate, type RouteObject } from "react-router";
-import { AnswersPage } from "@/features/answers/AnswersPage";
-import { GapsPage } from "@/features/gaps/GapsPage";
 import { ChangePasswordPage } from "@/features/auth/ChangePasswordPage";
 import { LoginPage } from "@/features/auth/LoginPage";
 import { ChatPage } from "@/features/chat/ChatPage";
-import { KnowledgeDetailPage } from "@/features/knowledge/KnowledgeDetailPage";
-import { KnowledgePage } from "@/features/knowledge/KnowledgePage";
-import { RolesPage } from "@/features/roles/RolesPage";
-import { ModelsPage } from "@/features/models/ModelsPage";
-import { SettingsPage } from "@/features/settings/SettingsPage";
-import { StatsPage } from "@/features/stats/StatsPage";
-import { UsersPage } from "@/features/users/UsersPage";
 import { getToken } from "@/lib/auth";
 import { AdminLayout } from "./AdminLayout";
 import { AdminHome, AppShell, RequirePasswordChanged, RequirePermission } from "./AppShell";
@@ -25,6 +16,17 @@ function RequireAuth({ children }: { children: ReactNode }) {
 const guarded = (permission: Permission, page: ReactNode) => (
   <RequirePermission permission={permission}>{page}</RequirePermission>
 );
+
+/**
+ * 管理端页面按路由分包，打开时才下载（#145）：只用问答页的员工不用下载管理端的代码。
+ * 问答页和登录页最常用，留在主包里。
+ */
+const adminPage = (permission: Permission, load: () => Promise<ComponentType>): Pick<RouteObject, "lazy"> => ({
+  lazy: async () => {
+    const Page = await load();
+    return { element: guarded(permission, <Page />) };
+  },
+});
 
 /** 路由表单独导出，测试用内存路由复用同一份配置。 */
 export const routes: RouteObject[] = [
@@ -51,15 +53,50 @@ export const routes: RouteObject[] = [
     ),
     children: [
       { index: true, element: <AdminHome /> },
-      { path: "knowledge", element: guarded(PERMISSIONS.KB_VIEW, <KnowledgePage />) },
-      { path: "knowledge/:knowledgeBaseId", element: guarded(PERMISSIONS.KB_VIEW, <KnowledgeDetailPage />) },
-      { path: "users", element: guarded(PERMISSIONS.USER_VIEW, <UsersPage />) },
-      { path: "roles", element: guarded(PERMISSIONS.ROLE_VIEW, <RolesPage />) },
-      { path: "gaps", element: guarded(PERMISSIONS.ANSWER_VIEW, <GapsPage />) },
-      { path: "answers", element: guarded(PERMISSIONS.ANSWER_VIEW, <AnswersPage />) },
-      { path: "stats", element: guarded(PERMISSIONS.STATS_VIEW, <StatsPage />) },
-      { path: "models", element: guarded(PERMISSIONS.MODEL_VIEW, <ModelsPage />) },
-      { path: "settings", element: guarded(PERMISSIONS.SETTING_VIEW, <SettingsPage />) },
+      {
+        path: "knowledge",
+        ...adminPage(PERMISSIONS.KB_VIEW, () =>
+          import("@/features/knowledge/KnowledgePage").then((m) => m.KnowledgePage),
+        ),
+      },
+      {
+        path: "knowledge/:knowledgeBaseId",
+        ...adminPage(PERMISSIONS.KB_VIEW, () =>
+          import("@/features/knowledge/KnowledgeDetailPage").then((m) => m.KnowledgeDetailPage),
+        ),
+      },
+      {
+        path: "users",
+        ...adminPage(PERMISSIONS.USER_VIEW, () => import("@/features/users/UsersPage").then((m) => m.UsersPage)),
+      },
+      {
+        path: "roles",
+        ...adminPage(PERMISSIONS.ROLE_VIEW, () => import("@/features/roles/RolesPage").then((m) => m.RolesPage)),
+      },
+      {
+        path: "gaps",
+        ...adminPage(PERMISSIONS.ANSWER_VIEW, () => import("@/features/gaps/GapsPage").then((m) => m.GapsPage)),
+      },
+      {
+        path: "answers",
+        ...adminPage(PERMISSIONS.ANSWER_VIEW, () =>
+          import("@/features/answers/AnswersPage").then((m) => m.AnswersPage),
+        ),
+      },
+      {
+        path: "stats",
+        ...adminPage(PERMISSIONS.STATS_VIEW, () => import("@/features/stats/StatsPage").then((m) => m.StatsPage)),
+      },
+      {
+        path: "models",
+        ...adminPage(PERMISSIONS.MODEL_VIEW, () => import("@/features/models/ModelsPage").then((m) => m.ModelsPage)),
+      },
+      {
+        path: "settings",
+        ...adminPage(PERMISSIONS.SETTING_VIEW, () =>
+          import("@/features/settings/SettingsPage").then((m) => m.SettingsPage),
+        ),
+      },
     ],
   },
 ];

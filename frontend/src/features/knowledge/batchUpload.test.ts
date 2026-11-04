@@ -41,7 +41,10 @@ describe("批量上传", () => {
     const uploaded: string[] = [];
     await run(
       items,
-      async (file) => void uploaded.push(file.name),
+      (file) => {
+        uploaded.push(file.name);
+        return Promise.resolve();
+      },
       () => {},
     );
     expect(uploaded).toEqual(["b.PDF"]);
