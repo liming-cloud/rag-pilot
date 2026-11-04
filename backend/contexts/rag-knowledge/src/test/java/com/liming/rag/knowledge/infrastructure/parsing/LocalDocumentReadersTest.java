@@ -3,7 +3,7 @@ package com.liming.rag.knowledge.infrastructure.parsing;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.liming.rag.knowledge.application.DocumentParseException;
+import com.liming.rag.knowledge.application.ingestion.DocumentParseException;
 import com.liming.rag.knowledge.application.DocumentReaders;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;

@@ -7,7 +7,7 @@ import com.liming.rag.answering.application.TestSettings;
 import com.liming.rag.knowledge.api.SearchHit;
 import com.liming.rag.shared.TenantId;
 import com.liming.rag.shared.UserId;
-import com.liming.rag.answering.application.ask.AskResult.Rewrite.Outcome;
+import com.liming.rag.answering.application.ask.Rewrite.Outcome;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;

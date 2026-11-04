@@ -1,6 +1,6 @@
 package com.liming.rag.knowledge.infrastructure.parsing;
 
-import com.liming.rag.knowledge.application.DocumentParseException;
+import com.liming.rag.knowledge.application.ingestion.DocumentParseException;
 import com.liming.rag.knowledge.application.DocumentReaders;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;

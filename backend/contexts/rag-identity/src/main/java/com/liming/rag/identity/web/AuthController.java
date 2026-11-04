@@ -1,7 +1,7 @@
 package com.liming.rag.identity.web;
 
 import cn.dev33.satoken.annotation.SaCheckLogin;
-import com.liming.rag.identity.application.AuthService;
+import com.liming.rag.identity.application.auth.AuthService;
 import com.liming.rag.identity.web.UserView.MeView;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;

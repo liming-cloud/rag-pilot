@@ -1,7 +1,7 @@
 package com.liming.rag.identity.infrastructure.persistence;
 
-import com.liming.rag.identity.application.Role;
-import com.liming.rag.identity.application.Roles;
+import com.liming.rag.identity.application.role.Role;
+import com.liming.rag.identity.application.role.Roles;
 import com.liming.rag.shared.TenantId;
 import java.util.Collection;
 import java.util.LinkedHashMap;

@@ -56,7 +56,7 @@ public record EvalOutcome(EvalCase evalCase, List<Retrieved> retrieved, boolean 
     }
 
     /**
-     * 低分改写的情况，与服务端 AskResult.Rewrite 对应。
+     * 低分改写的情况，与服务端 Rewrite 对应。
      *
      * @param outcome SKIPPED_BELOW_FLOOR、TIMED_OUT、NO_CHANGE 或 REWRITTEN
      * @param question 改写后的问题，只有 REWRITTEN 时有值

@@ -1,5 +1,11 @@
 package com.liming.rag.knowledge.infrastructure.persistence;
 
+import com.liming.rag.knowledge.application.Window;
+import com.liming.rag.knowledge.application.KnowledgeBaseSummary;
+import com.liming.rag.knowledge.application.ExpirySummary;
+import com.liming.rag.knowledge.application.ExpiringDocument;
+import com.liming.rag.knowledge.application.DocumentRow;
+
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.liming.rag.knowledge.api.KnowledgeBaseRef;
 import com.liming.rag.knowledge.application.Grantee;

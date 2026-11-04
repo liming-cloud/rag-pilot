@@ -16,7 +16,9 @@ import com.liming.rag.archfixture.infrastructure.AnnotatedSqlMapper;
 import com.liming.rag.archfixture.infrastructure.RawSqlWrapper;
 import com.liming.rag.archfixture.web.ChecksRoleByHand;
 import com.liming.rag.archfixture.web.UnguardedEndpoint;
+import com.liming.rag.archfixture.application.FixtureService;
 import com.liming.rag.archfixture.web.UnknownPermission;
+import com.liming.rag.archfixture.web.WebUsesServiceNestedType;
 import com.tngtech.archunit.base.DescribedPredicate;
 import com.tngtech.archunit.core.domain.JavaClass;
 import com.tngtech.archunit.core.domain.JavaMethod;
@@ -149,10 +151,31 @@ class ArchitectureRulesTest {
             .should().dependOnClassesThat().haveFullyQualifiedName("org.springframework.beans.factory.annotation.Value")
             .as("配置只通过各模块的 @ConfigurationProperties record 读取（带取值校验），不用 @Value");
 
+    static final ArchRule WEB_NOT_USING_SERVICE_NESTED_TYPES = classes()
+            .that().resideInAPackage("..web..")
+            .should(new ArchCondition<JavaClass>("不读取 application 里 Service 的内部类型（只 new 出来当参数的除外）") {
+                @Override
+                public void check(JavaClass web, ConditionEvents events) {
+                    web.getDirectDependenciesFromSelf().stream()
+                            .filter(dependency -> isServiceNested(dependency.getTargetClass()))
+                            .filter(dependency -> !dependency.getDescription().contains("calls constructor"))
+                            .forEach(dependency -> events.add(
+                                    SimpleConditionEvent.violated(dependency, dependency.getDescription())));
+                }
+            })
+            .as("web 展示用的类型（返回值、参数、读取结果）不放在 Service 里面，提成 application 的顶层类型；"
+                    + "只由 web 构造后交给 Service 的参数（如 Upload）可以留在里面（#145）");
+
+    static boolean isServiceNested(JavaClass type) {
+        return type.getEnclosingClass()
+                .map(outer -> outer.getPackageName().contains(".application") && outer.getSimpleName().endsWith("Service"))
+                .orElse(false);
+    }
+
     static final List<ArchRule> RULES = List.of(MYBATIS_ONLY_IN_INFRASTRUCTURE, DO_ONLY_IN_INFRASTRUCTURE,
             SPRING_AI_ONLY_IN_RAG_AI, SEARCH_FILTER_IN_ONE_PLACE, LOGIN_AND_ROLE_ONLY_BY_ANNOTATION,
             NO_SQL_ANNOTATIONS, NO_RAW_SQL_IN_WRAPPER, ONE_EXCEPTION_HANDLER, NO_VALUE_INJECTION,
-            ENDPOINTS_NEED_PERMISSION, PERMISSIONS_IN_CATALOG);
+            ENDPOINTS_NEED_PERMISSION, PERMISSIONS_IN_CATALOG, WEB_NOT_USING_SERVICE_NESTED_TYPES);
 
     @Test
     @DisplayName("生产代码遵守全部架构规则")
@@ -179,6 +202,7 @@ class ArchitectureRulesTest {
         assertViolates(NO_VALUE_INJECTION, ReadsConfigWithValue.class);
         assertViolates(ENDPOINTS_NEED_PERMISSION, UnguardedEndpoint.class);
         assertViolates(PERMISSIONS_IN_CATALOG, UnknownPermission.class);
+        assertViolates(WEB_NOT_USING_SERVICE_NESTED_TYPES, WebUsesServiceNestedType.class, FixtureService.class);
     }
 
     /** 只导入违规样例（以及它需要的类），规则应报出违规。 */

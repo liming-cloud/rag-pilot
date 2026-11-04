@@ -1,5 +1,11 @@
 package com.liming.rag.identity.application;
 
+import com.liming.rag.identity.application.account.Account;
+import com.liming.rag.identity.application.account.AccountQuery;
+import com.liming.rag.identity.application.account.Accounts;
+import com.liming.rag.identity.application.role.Role;
+import com.liming.rag.identity.application.role.Roles;
+
 import com.liming.rag.shared.TenantId;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
@@ -14,11 +20,11 @@ import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 
 /** 账号和角色存储的内存实现，只用于单元测试。 */
-final class InMemoryIdentity implements Accounts, Roles {
+public final class InMemoryIdentity implements Accounts, Roles {
 
-    final List<Account> accounts = new ArrayList<>();
-    final Map<Long, Role> roles = new LinkedHashMap<>();
-    final Map<Long, List<Long>> userRoles = new HashMap<>();
+    public final List<Account> accounts = new ArrayList<>();
+    public final Map<Long, Role> roles = new LinkedHashMap<>();
+    public final Map<Long, List<Long>> userRoles = new HashMap<>();
     private long nextRoleId = 1;
 
     @Override
@@ -88,7 +94,7 @@ final class InMemoryIdentity implements Accounts, Roles {
     }
 
     /** 测试里直接设失败计数和锁定（不经端口）。 */
-    void seedFailedLogins(long id, int failedAttempts, OffsetDateTime lockedUntil) {
+    public void seedFailedLogins(long id, int failedAttempts, OffsetDateTime lockedUntil) {
         update(id, a -> new Account(a.id(), a.tenantId(), a.username(), a.displayName(), a.passwordHash(),
                 a.enabled(), a.mustChangePassword(), failedAttempts, lockedUntil));
     }

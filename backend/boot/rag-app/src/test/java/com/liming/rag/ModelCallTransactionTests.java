@@ -15,7 +15,7 @@ import com.liming.rag.answering.application.insight.UsageReportService;
 import com.liming.rag.answering.domain.RefusalReason;
 import com.liming.rag.knowledge.api.KnowledgeSearch;
 import com.liming.rag.knowledge.api.SearchQuery;
-import com.liming.rag.settings.application.ModelSettingsService;
+import com.liming.rag.settings.application.model.ModelSettingsService;
 import com.liming.rag.shared.TenantId;
 import com.liming.rag.shared.UserId;
 import java.util.ArrayList;

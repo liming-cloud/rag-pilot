@@ -1,5 +1,7 @@
 package com.liming.rag.knowledge.application;
 
+import com.liming.rag.knowledge.application.ingestion.DocumentCalendar;
+
 import com.liming.rag.identity.api.UserDirectory;
 import com.liming.rag.knowledge.api.KnowledgeBaseRef;
 import com.liming.rag.knowledge.api.SearchHit;
@@ -37,24 +39,24 @@ import java.util.concurrent.atomic.AtomicLong;
  * 规则只保留测试要用到的部分，授权的口径与 {@code ChunkSearchMapper.accessibleKnowledgeBases} 一致：
  * 直接授权给本人的 ∪ 授权给其角色的。
  */
-final class InMemoryKnowledge {
+public final class InMemoryKnowledge {
 
-    static final TenantId TENANT = new TenantId(1);
-    static final TenantId OTHER_TENANT = new TenantId(2);
+    public static final TenantId TENANT = new TenantId(1);
+    public static final TenantId OTHER_TENANT = new TenantId(2);
     /** 测试里的“今天”：2026-11-04（Asia/Shanghai）。 */
-    static final LocalDate TODAY = LocalDate.of(2026, 11, 4);
+    public static final LocalDate TODAY = LocalDate.of(2026, 11, 4);
 
-    final KnowledgeBases knowledgeBases = new KnowledgeBases();
-    final Documents documents = new Documents();
-    final Files files = new Files();
-    final Queries queries = new Queries();
-    final Index index = new Index();
-    final Directory users = new Directory();
+    public final KnowledgeBases knowledgeBases = new KnowledgeBases();
+    public final Documents documents = new Documents();
+    public final Files files = new Files();
+    public final Queries queries = new Queries();
+    public final Index index = new Index();
+    public final Directory users = new Directory();
     /** 记下的审计：每条是“操作 说明”（#145 C2）。 */
-    final List<String> audited = new ArrayList<>();
-    final com.liming.rag.identity.api.AuditTrail audit =
+    public final List<String> audited = new ArrayList<>();
+    public final com.liming.rag.identity.api.AuditTrail audit =
             (tenantId, actor, action, targetType, targetId, detail) -> audited.add(action + " " + detail);
-    final DocumentCalendar calendar = calendar();
+    public final DocumentCalendar calendar = calendar();
 
     private static DocumentCalendar calendar() {
         StatsZone settings = () -> ZoneId.of("Asia/Shanghai");
@@ -65,15 +67,15 @@ final class InMemoryKnowledge {
     }
 
     /** 知识库和授权：按库存直接授权、角色授权，保存时只写聚合记下的增减，口径同 {@code MybatisKnowledgeBaseRepository}。 */
-    final class KnowledgeBases implements KnowledgeBaseRepository {
+    public final class KnowledgeBases implements KnowledgeBaseRepository {
 
-        record Row(TenantId tenantId, String name, Set<Long> members, Set<Long> roles) {
+        public record Row(TenantId tenantId, String name, Set<Long> members, Set<Long> roles) {
         }
 
-        final Map<Long, Row> rows = new LinkedHashMap<>();
+        public final Map<Long, Row> rows = new LinkedHashMap<>();
         private final AtomicLong ids = new AtomicLong(100);
         /** 模拟并发时唯一约束冲突：下一次保存时抛出。 */
-        RuntimeException failNextSave;
+        public RuntimeException failNextSave;
         int saves;
 
         @Override
@@ -125,13 +127,13 @@ final class InMemoryKnowledge {
     }
 
     /** 文档和分块。 */
-    final class Documents implements DocumentRepository {
+    public final class Documents implements DocumentRepository {
 
-        final Map<Long, Document> rows = new LinkedHashMap<>();
+        public final Map<Long, Document> rows = new LinkedHashMap<>();
         final Map<Long, List<Chunk>> chunks = new HashMap<>();
         private final AtomicLong ids = new AtomicLong(500);
         /** 模拟并发时唯一约束冲突：下一次插入新文档时抛出。 */
-        RuntimeException failNextInsert;
+        public RuntimeException failNextInsert;
 
         @Override
         public void save(Document document) {
@@ -195,7 +197,7 @@ final class InMemoryKnowledge {
         }
 
         /** 直接放一份已就绪的文档。 */
-        Document ready(long knowledgeBaseId, String filename, String sha256, Validity validity) {
+        public Document ready(long knowledgeBaseId, String filename, String sha256, Validity validity) {
             var document = Document.received(TENANT, knowledgeBaseId,
                     new UploadedFile(filename, "text/plain", sha256, 10), null, validity);
             save(document);
@@ -205,9 +207,9 @@ final class InMemoryKnowledge {
     }
 
     /** 原始文件，按租户和摘要存放。 */
-    static final class Files implements FileStorage {
+    public static final class Files implements FileStorage {
 
-        final Map<String, byte[]> stored = new HashMap<>();
+        public final Map<String, byte[]> stored = new HashMap<>();
 
         @Override
         public void store(TenantId tenantId, String sha256, byte[] content) {
@@ -224,7 +226,7 @@ final class InMemoryKnowledge {
             stored.remove(key(tenantId, sha256));
         }
 
-        boolean has(TenantId tenantId, String sha256) {
+        public boolean has(TenantId tenantId, String sha256) {
             return stored.containsKey(key(tenantId, sha256));
         }
 
@@ -234,7 +236,7 @@ final class InMemoryKnowledge {
     }
 
     /** 只读查询：可访问的库按知识库的授权算；管理端列表只记下调用参数，返回空页（分页和筛选的 SQL 由 rag-app 的集成测试覆盖）。 */
-    final class Queries implements KnowledgeQueries {
+    public final class Queries implements KnowledgeQueries {
 
         @Override
         public List<KnowledgeBaseRef> accessible(Grantee grantee) {
@@ -257,14 +259,14 @@ final class InMemoryKnowledge {
             return result;
         }
 
-        Grantee grantee;
-        boolean superAdminView;
-        String keyword;
-        DocumentStatus status;
-        Validity.State validity;
-        Window window;
-        Paged.Request page;
-        int limit;
+        public Grantee grantee;
+        public boolean superAdminView;
+        public String keyword;
+        public DocumentStatus status;
+        public Validity.State validity;
+        public Window window;
+        public Paged.Request page;
+        public int limit;
 
         @Override
         public Paged<KnowledgeBaseSummary> knowledgeBases(TenantId tenantId, Grantee grantee, String keyword,
@@ -300,16 +302,16 @@ final class InMemoryKnowledge {
     }
 
     /** 分块索引：两路召回的结果由测试给出，记下查询时用的授权范围和日期。 */
-    static final class Index implements ChunkIndex {
+    public static final class Index implements ChunkIndex {
 
-        List<Long> semantic = List.of();
-        List<Long> keyword = List.of();
-        final Map<Long, SearchHit> hits = new HashMap<>();
-        final Map<Long, String> contents = new HashMap<>();
-        Grantee grantee;
-        LocalDate today;
-        int limit;
-        final List<String> keywordTexts = new ArrayList<>();
+        public List<Long> semantic = List.of();
+        public List<Long> keyword = List.of();
+        public final Map<Long, SearchHit> hits = new HashMap<>();
+        public final Map<Long, String> contents = new HashMap<>();
+        public Grantee grantee;
+        public LocalDate today;
+        public int limit;
+        public final List<String> keywordTexts = new ArrayList<>();
 
         @Override
         public List<Long> nearest(Grantee grantee, List<Long> knowledgeBaseIds, LocalDate today, float[] vector,
@@ -342,14 +344,14 @@ final class InMemoryKnowledge {
     }
 
     /** identity 的账号目录：存在的账号、各账号的角色、超级管理员、存在的角色。 */
-    static final class Directory implements UserDirectory {
+    public static final class Directory implements UserDirectory {
 
         final Map<Long, List<Long>> roles = new HashMap<>();
-        final Set<Long> superAdmins = new HashSet<>();
-        final Set<Long> existingRoles = new HashSet<>();
+        public final Set<Long> superAdmins = new HashSet<>();
+        public final Set<Long> existingRoles = new HashSet<>();
         final Map<Long, String> names = new HashMap<>();
 
-        Directory user(long id, String displayName, Long... roleIds) {
+        public Directory user(long id, String displayName, Long... roleIds) {
             names.put(id, displayName);
             roles.put(id, List.of(roleIds));
             return this;

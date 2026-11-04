@@ -6,9 +6,9 @@ import com.liming.rag.identity.api.CurrentUser;
 import com.liming.rag.identity.api.IdentityPermissions;
 import com.liming.rag.settings.api.IndustryPack;
 import com.liming.rag.settings.api.SettingsPermissions;
-import com.liming.rag.settings.application.SystemSettingsService;
-import com.liming.rag.settings.application.SystemSettingsService.ChatTexts;
-import com.liming.rag.settings.application.SystemSettingsService.Item;
+import com.liming.rag.settings.application.system.SystemSettingsService;
+import com.liming.rag.settings.application.system.ChatTexts;
+import com.liming.rag.settings.application.system.SettingItem;
 import java.time.OffsetDateTime;
 import java.util.List;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -32,7 +32,7 @@ class SystemSettingsController {
 
     record ItemView(String key, String kind, Object value, Object defaultValue, String source, String defaultSource,
             OffsetDateTime updatedAt, String updatedBy) {
-        static ItemView of(Item item) {
+        static ItemView of(SettingItem item) {
             boolean list = item.key().list();
             return new ItemView(item.key().name(), list ? "list" : "text", shape(list, item.value()),
                     shape(list, item.defaultValue()), item.source().name(), item.defaultSource().name(),

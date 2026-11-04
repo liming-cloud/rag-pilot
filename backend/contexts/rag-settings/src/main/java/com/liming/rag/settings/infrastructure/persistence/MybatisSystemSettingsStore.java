@@ -1,7 +1,7 @@
 package com.liming.rag.settings.infrastructure.persistence;
 
 import com.liming.rag.settings.application.SettingKey;
-import com.liming.rag.settings.application.SystemSettingsStore;
+import com.liming.rag.settings.application.system.SystemSettingsStore;
 import java.time.OffsetDateTime;
 import java.util.EnumMap;
 import java.util.List;

@@ -251,7 +251,7 @@ class AnswerServiceTest {
 
         assertThat(rewriteCalls).singleElement()
                 .isEqualTo(List.of(LowRelevanceRewriter.system(TestSettings.RETAIL_PACK), "青柚放哪了"));
-        assertThat(answer.rewrite().outcome()).isEqualTo(AskResult.Rewrite.Outcome.REWRITTEN);
+        assertThat(answer.rewrite().outcome()).isEqualTo(Rewrite.Outcome.REWRITTEN);
         assertThat(answer.rewrite().outputChars()).isEqualTo("青柚气泡水放在哪个货架？".length());
         assertThat(answer.rewrite().modelMillis()).isNotNull();
         assertThat(answer.rewrite().retrievalMillis()).isNotNull();
@@ -268,7 +268,7 @@ class AnswerServiceTest {
                 }, statuses::add);
 
         assertThat(answer.refusalReason()).isEqualTo(RefusalReason.LOW_RELEVANCE);
-        assertThat(answer.rewrite().outcome()).isEqualTo(AskResult.Rewrite.Outcome.SKIPPED_BELOW_FLOOR);
+        assertThat(answer.rewrite().outcome()).isEqualTo(Rewrite.Outcome.SKIPPED_BELOW_FLOOR);
         assertThat(answer.rewrittenQuestion()).isNull();
         assertThat(prompts).isEmpty();
         assertThat(statuses).isEmpty();
@@ -282,7 +282,7 @@ class AnswerServiceTest {
 
         assertThat((System.nanoTime() - start) / 1_000_000).isLessThan(1_500);
         assertThat(answer.refusalReason()).isEqualTo(RefusalReason.LOW_RELEVANCE);
-        assertThat(answer.rewrite().outcome()).isEqualTo(AskResult.Rewrite.Outcome.TIMED_OUT);
+        assertThat(answer.rewrite().outcome()).isEqualTo(Rewrite.Outcome.TIMED_OUT);
         assertThat(answer.rewrittenQuestion()).isNull();
     }
 
@@ -311,7 +311,7 @@ class AnswerServiceTest {
             var answer = rewriting(invalid, true).ask(TENANT, USER, List.of(), "青柚放哪了");
             assertThat(answer.refusalReason()).isEqualTo(RefusalReason.LOW_RELEVANCE);
             assertThat(answer.rewrittenQuestion()).isNull();
-            assertThat(answer.rewrite().outcome()).isEqualTo(AskResult.Rewrite.Outcome.NO_CHANGE);
+            assertThat(answer.rewrite().outcome()).isEqualTo(Rewrite.Outcome.NO_CHANGE);
         }
 
         prompts.clear();

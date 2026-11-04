@@ -2,7 +2,7 @@ package com.liming.rag;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.liming.rag.knowledge.application.IngestionWorker;
+import com.liming.rag.knowledge.application.ingestion.IngestionWorker;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;

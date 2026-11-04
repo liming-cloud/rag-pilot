@@ -2,7 +2,7 @@ package com.liming.rag.identity.infrastructure.security;
 
 import cn.dev33.satoken.stp.StpUtil;
 import com.liming.rag.identity.api.CurrentUser;
-import com.liming.rag.identity.application.Sessions;
+import com.liming.rag.identity.application.auth.Sessions;
 import com.liming.rag.shared.TenantId;
 import com.liming.rag.shared.UserId;
 import org.springframework.stereotype.Component;

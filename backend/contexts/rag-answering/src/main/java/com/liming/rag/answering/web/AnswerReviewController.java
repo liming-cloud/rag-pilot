@@ -1,5 +1,7 @@
 package com.liming.rag.answering.web;
 
+import com.liming.rag.answering.application.insight.GapReport;
+
 import cn.dev33.satoken.annotation.SaCheckLogin;
 import cn.dev33.satoken.annotation.SaCheckPermission;
 import com.liming.rag.answering.api.AnsweringPermissions;
@@ -99,7 +101,7 @@ class AnswerReviewController {
     /** 知识缺口（D-047）：按意思归类的拒答和差评，status 为 open（有待处理的类）或 all。 */
     @SaCheckPermission(AnsweringPermissions.ANSWER_VIEW)
     @GetMapping("/gaps")
-    KnowledgeGapService.Report gaps(@RequestParam(name = "days", defaultValue = "30") int days,
+    GapReport gaps(@RequestParam(name = "days", defaultValue = "30") int days,
             @RequestParam(name = "status", defaultValue = "open") String status) {
         return gaps.report(currentUser.tenantId(), days, status);
     }

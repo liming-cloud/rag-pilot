@@ -1,9 +1,9 @@
 package com.liming.rag.identity.infrastructure.persistence;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.liming.rag.identity.application.Account;
-import com.liming.rag.identity.application.AccountQuery;
-import com.liming.rag.identity.application.Accounts;
+import com.liming.rag.identity.application.account.Account;
+import com.liming.rag.identity.application.account.AccountQuery;
+import com.liming.rag.identity.application.account.Accounts;
 import com.liming.rag.identity.application.Paged;
 import com.liming.rag.shared.TenantId;
 import java.time.OffsetDateTime;

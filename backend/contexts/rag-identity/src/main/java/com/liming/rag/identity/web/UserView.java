@@ -1,8 +1,10 @@
 package com.liming.rag.identity.web;
 
-import com.liming.rag.identity.application.AccountAdminService.ManagedAccount;
-import com.liming.rag.identity.application.AuthService;
-import com.liming.rag.identity.application.Role;
+import com.liming.rag.identity.application.auth.Profile;
+
+import com.liming.rag.identity.application.account.ManagedAccount;
+import com.liming.rag.identity.application.auth.AuthService;
+import com.liming.rag.identity.application.role.Role;
 import java.time.OffsetDateTime;
 import java.util.List;
 
@@ -26,7 +28,7 @@ record UserView(long id, String username, String displayName, boolean enabled, L
     record MeView(long id, String username, String displayName, List<RoleRef> roles, List<String> permissions,
             boolean superAdmin, boolean mustChangePassword) {
 
-        static MeView of(AuthService.Me me) {
+        static MeView of(Profile me) {
             var account = me.account();
             return new MeView(account.id(), account.username(), account.displayName(), RoleRef.of(me.roles()),
                     me.permissions(), me.superAdmin(), account.mustChangePassword());

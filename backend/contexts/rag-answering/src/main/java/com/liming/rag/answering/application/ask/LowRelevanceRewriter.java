@@ -3,7 +3,7 @@ package com.liming.rag.answering.application.ask;
 import com.liming.rag.ai.QueryRewriting;
 import com.liming.rag.answering.domain.Question;
 import com.liming.rag.settings.api.IndustryPack;
-import com.liming.rag.answering.application.ask.AskResult.Rewrite.Outcome;
+import com.liming.rag.answering.application.ask.Rewrite.Outcome;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;

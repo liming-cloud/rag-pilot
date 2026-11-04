@@ -1,7 +1,7 @@
 package com.liming.rag.settings.web;
 
-import com.liming.rag.settings.application.SystemSettingsService;
-import com.liming.rag.settings.application.SystemSettingsService.Branding;
+import com.liming.rag.settings.application.system.SystemSettingsService;
+import com.liming.rag.settings.application.system.BrandingInfo;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -21,7 +21,7 @@ class BrandingController {
     }
 
     @GetMapping("/branding")
-    Branding branding() {
+    BrandingInfo branding() {
         return settings.branding();
     }
 }

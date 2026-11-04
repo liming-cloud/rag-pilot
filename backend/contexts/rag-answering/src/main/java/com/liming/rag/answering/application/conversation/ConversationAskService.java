@@ -80,11 +80,6 @@ public class ConversationAskService {
         this.planner = new SearchPlanner(chat, settings.planningTimeout(), background);
     }
 
-    /** 准备好的一轮：已校验、已分配 id、已登记停止信号。 */
-    public record Pending(TenantId tenantId, UserId userId, long conversationId, long turnId, String question,
-            @Nullable Long replacesTurnId, ConversationService.TurnContext context, CompletableFuture<Void> stop) {
-    }
-
     /** 生成过程中的事件，交给流式接口转成 SSE。 */
     public record Events(Consumer<String> onStatus, Consumer<String> onDelta) {
     }
@@ -92,14 +87,14 @@ public class ConversationAskService {
     /**
      * @throws AnsweringException 问题为空或太长、会话不存在或不是自己的、要替换的不是最后一轮
      */
-    public Pending start(TenantId tenantId, UserId userId, long conversationId, String question, @Nullable Long replacesTurnId) {
+    public PendingTurn start(TenantId tenantId, UserId userId, long conversationId, String question, @Nullable Long replacesTurnId) {
         var text = AnswerService.question(question);
         var context = conversations.prepareTurn(tenantId, userId, conversationId, replacesTurnId);
         // 问题合规、会话是自己的之后才计数，超过频率上限时不调用模型（#145）。
         limiter.acquire(tenantId, userId);
         long turnId = conversations.nextTurnId();
         var stop = stops.register(conversationId, turnId);
-        return new Pending(tenantId, userId, conversationId, turnId, text, replacesTurnId, context, stop);
+        return new PendingTurn(tenantId, userId, conversationId, turnId, text, replacesTurnId, context, stop);
     }
 
     /**
@@ -107,7 +102,7 @@ public class ConversationAskService {
      *
      * @throws ModelCallException 模型服务不可用
      */
-    public ConversationViews.Turn run(Pending pending, Events events) {
+    public ConversationViews.Turn run(PendingTurn pending, Events events) {
         try {
             AskResult answer;
             try {
@@ -138,7 +133,7 @@ public class ConversationAskService {
         stops.stop(conversationId, turnId);
     }
 
-    private AskResult answer(Pending pending, Events events) {
+    private AskResult answer(PendingTurn pending, Events events) {
         var context = pending.context();
         if (context.knowledgeBaseIds().isEmpty()) {
             return answers.refusal(RefusalReason.NO_EVIDENCE, null);
@@ -194,7 +189,7 @@ public class ConversationAskService {
         return Optional.of(title);
     }
 
-    private void generateTitle(Pending pending) {
+    private void generateTitle(PendingTurn pending) {
         try {
             acceptTitle(chat.complete(TITLE_SYSTEM, pending.question(), TITLE_LIMITS)).ifPresent(title ->
                     conversations.applyGeneratedTitle(pending.tenantId(), pending.conversationId(), title));
@@ -204,7 +199,7 @@ public class ConversationAskService {
         }
     }
 
-    private ConversationViews.Turn record(Pending pending, ConversationTurn.Status status, AskResult answer) {
+    private ConversationViews.Turn record(PendingTurn pending, ConversationTurn.Status status, AskResult answer) {
         return conversations.recordTurn(new ConversationService.NewTurn(pending.tenantId(), pending.userId(),
                 pending.conversationId(), pending.turnId(), pending.question(), pending.context().knowledgeBaseIds(),
                 pending.replacesTurnId()), status, answer);

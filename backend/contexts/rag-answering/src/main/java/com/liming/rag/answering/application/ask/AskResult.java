@@ -19,43 +19,6 @@ import org.jspecify.annotations.Nullable;
 public record AskResult(@Nullable Long id, String text, boolean refused, @Nullable RefusalReason refusalReason,
         List<Citation> citations, @Nullable Double topRelevance, @Nullable Rewrite rewrite, @Nullable Timings timings) {
 
-    /**
-     * 低分时改写问题的情况，用于评测和排查。
-     *
-     * @param question 改写后的问题，只有 {@link Outcome#REWRITTEN} 时有值
-     * @param outputChars 模型改写输出的字数（截取前），没有调用模型时为 0
-     * @param modelMillis 模型改写的耗时，没有调用模型时为 null
-     * @param retrievalMillis 用改写后的问题重新检索的耗时，没有重新检索时为 null
-     * @param rerankMillis 重新重排的耗时，没有重新重排时为 null
-     */
-    public record Rewrite(Outcome outcome, String question, int outputChars, @Nullable Long modelMillis, @Nullable Long retrievalMillis,
-            @Nullable Long rerankMillis) {
-
-        public enum Outcome {
-            /** 改写前最高分低于下限，判定改写也救不回，直接拒答。 */
-            SKIPPED_BELOW_FLOOR,
-            /** 模型改写超时，放弃改写。 */
-            TIMED_OUT,
-            /** 模型没给出有效改写（空、NO_ANSWER、太长或和原问题一样）。 */
-            NO_CHANGE,
-            /** 已改写并用新问题重新检索、重排。 */
-            REWRITTEN
-        }
-    }
-
-    /**
-     * 各阶段耗时（毫秒）。没走到的阶段为 null：检索不到时没有重排，拒答在生成前时没有生成。
-     *
-     * @param retrievalMillis 向量化问题 + 混合检索
-     * @param rerankMillis 重排
-     * @param firstTokenMillis 从开始生成到模型给出第一段文字
-     * @param generationMillis 从开始生成到生成完成
-     * @param rewriteMillis 低分时尝试改写问题并重新检索、重排的耗时（包括模型没给出有效改写的情况），没有尝试时为 null
-     */
-    public record Timings(long retrievalMillis, @Nullable Long rerankMillis, @Nullable Long firstTokenMillis, @Nullable Long generationMillis,
-            @Nullable Long rewriteMillis) {
-    }
-
     public static AskResult answered(String text, List<Citation> citations, double topRelevance) {
         return new AskResult(null, text, false, null, List.copyOf(citations), topRelevance, null, null);
     }

@@ -32,7 +32,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 /**
  * 知识缺口（#125、D-047）：把一段时间内答不上来的和被点踩的问题按意思归类，按待处理次数排序，告诉总部该补哪些资料。
- * 查询时归类、不落表：取范围内最近的 {@value #MAX_RECORDS} 条，按问题向量归类（{@link QuestionClusters}）。
+ * 查询时归类、不落表：取范围内最近的 1000 条，按问题向量归类（{@link QuestionClusters}）。
  * 问题向量在记录回答后由 {@link QuestionVectorRecorder} 存好（#145 C6）；还没有的（旧记录、后台没算成）这里补算并写回，
  * 嵌入模型不可用时退回按原文分组。不调用对话模型。
  *
@@ -71,45 +71,13 @@ public class KnowledgeGapService {
         this.clock = clock;
     }
 
-    /** SEMANTIC：按向量相似度归类；TEXT：嵌入模型不可用，退回按原文分组。 */
-    public enum Grouping {
-        SEMANTIC, TEXT
-    }
-
-    /**
-     * @param records 范围内参与归类的记录数
-     * @param truncated 范围内超过 {@value #MAX_RECORDS} 条，只归类了最近的
-     */
-    public record Report(LocalDate from, LocalDate to, String zone, Grouping grouping, int records,
-            boolean truncated, List<Group> groups) {
-    }
-
-    /**
-     * 一类缺口。
-     *
-     * @param id 代表问题对应的最近一条记录，“重新回答”用它
-     * @param question 代表问题：类里出现最多的原文
-     * @param phrasings 不同的问题原文数
-     * @param knowledgeBases 类里的记录当时检索过的知识库，出现多的在前；提示资料该补到哪个库
-     * @param citedDocuments 差评记录当时引用的文档（拒答没有引用），提示该改哪份资料
-     */
-    public record Group(long id, String question, int count, int openCount, int refusedCount, int dislikedCount,
-            int phrasings, OffsetDateTime lastAskedAt, List<String> knowledgeBases, List<String> citedDocuments,
-            List<Entry> records) {
-    }
-
-    /** 类里的一条原始记录；{@code knowledgeBases} 是当时检索的知识库，旧记录为空。 */
-    public record Entry(long id, String question, String askerName, OffsetDateTime createdAt, boolean refused,
-            String comment, List<String> knowledgeBases, List<String> citedDocuments, String reviewStatus) {
-    }
-
     /**
      * 最近 {@code days} 天（含今天，按统计时区）的知识缺口。
      *
      * @param status open：只列还有待处理记录的类；all：全部
      * @throws AnsweringException 天数或状态不合法
      */
-    public Report report(TenantId tenantId, int days, String status) {
+    public GapReport report(TenantId tenantId, int days, String status) {
         if (days < 1 || days > MAX_DAYS) {
             throw invalid("天数只能是 1 到 " + MAX_DAYS + " 天");
         }
@@ -124,12 +92,12 @@ public class KnowledgeGapService {
         if (!openOnly) {
             return report;
         }
-        return new Report(report.from(), report.to(), report.zone(), report.grouping(), report.records(),
+        return new GapReport(report.from(), report.to(), report.zone(), report.grouping(), report.records(),
                 report.truncated(), report.groups().stream().filter(group -> group.openCount() > 0).toList());
     }
 
     /** {@code from} 到 {@code to}（都含）的知识缺口，按待处理次数、总次数从多到少。 */
-    public Report report(TenantId tenantId, LocalDate from, LocalDate to, ZoneId zone) {
+    public GapReport report(TenantId tenantId, LocalDate from, LocalDate to, ZoneId zone) {
         var start = from.atStartOfDay(zone).toOffsetDateTime();
         var end = to.plusDays(1).atStartOfDay(zone).toOffsetDateTime();
         var found = gapRecords.list(tenantId, start, end, MAX_RECORDS);
@@ -141,13 +109,13 @@ public class KnowledgeGapService {
         var texts = byText.keySet().stream()
                 .sorted(Comparator.comparingInt((String text) -> byText.get(text).size()).reversed())
                 .toList();
-        var grouping = Grouping.SEMANTIC;
+        var grouping = GapGrouping.SEMANTIC;
         List<List<Integer>> clusters;
         try {
             clusters = QuestionClusters.bySimilarity(vectors(tenantId, texts, byText), properties.gaps().similarity());
         } catch (ModelCallException e) {
             log.warn("知识缺口归类时嵌入模型不可用，退回按原文分组：{}", e.getMessage());
-            grouping = Grouping.TEXT;
+            grouping = GapGrouping.TEXT;
             clusters = QuestionClusters.byText(texts);
         }
 
@@ -157,10 +125,10 @@ public class KnowledgeGapService {
                 found.stream().flatMap(record -> record.knowledgeBaseIds().stream()).distinct().toList());
         var groups = clusters.stream()
                 .map(indexes -> group(indexes.stream().map(texts::get).toList(), byText, names, knowledgeBaseNames))
-                .sorted(Comparator.comparingInt(Group::openCount).thenComparingInt(Group::count)
-                        .thenComparing(Group::lastAskedAt).reversed())
+                .sorted(Comparator.comparingInt(GapGroup::openCount).thenComparingInt(GapGroup::count)
+                        .thenComparing(GapGroup::lastAskedAt).reversed())
                 .toList();
-        return new Report(from, to, zone.getId(), grouping, found.size(), truncated, groups);
+        return new GapReport(from, to, zone.getId(), grouping, found.size(), truncated, groups);
     }
 
     /** 每段原文的问题向量：用记录里存好的，没有的一次算完并写回这段原文的每条记录。 */
@@ -225,7 +193,7 @@ public class KnowledgeGapService {
         return open.size();
     }
 
-    private static Group group(List<String> texts, Map<String, List<GapRecord>> byText,
+    private static GapGroup group(List<String> texts, Map<String, List<GapRecord>> byText,
             Map<Long, UserDirectory.UserSummary> names, Map<Long, String> knowledgeBaseNames) {
         var members = texts.stream().flatMap(text -> byText.get(text).stream())
                 .sorted(Comparator.comparing(GapRecord::createdAt).reversed().thenComparing(GapRecord::id,
@@ -242,14 +210,14 @@ public class KnowledgeGapService {
                 .sorted(Map.Entry.<Long, Long>comparingByValue().reversed())
                 .map(entry -> knowledgeBaseNames.get(entry.getKey()))
                 .toList();
-        return new Group(latestOfRepresentative.id(), representative, members.size(),
+        return new GapGroup(latestOfRepresentative.id(), representative, members.size(),
                 (int) members.stream().filter(record -> "OPEN".equals(record.reviewStatus())).count(),
                 (int) members.stream().filter(GapRecord::refused).count(),
                 (int) members.stream().filter(record -> !record.refused()).count(),
                 texts.size(), members.getFirst().createdAt(), knowledgeBases, List.copyOf(documents),
                 members.stream().map(record -> {
                     var asker = names.get(record.userId());
-                    return new Entry(record.id(), record.question(), asker == null ? null : asker.displayName(),
+                    return new GapEntry(record.id(), record.question(), asker == null ? null : asker.displayName(),
                             record.createdAt(), record.refused(), record.comment(),
                             record.knowledgeBaseIds().stream().filter(knowledgeBaseNames::containsKey)
                                     .map(knowledgeBaseNames::get).toList(),

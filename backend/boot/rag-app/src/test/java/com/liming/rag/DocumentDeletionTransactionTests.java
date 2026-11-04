@@ -3,10 +3,10 @@ package com.liming.rag;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.liming.rag.knowledge.application.DocumentIngestionService;
-import com.liming.rag.knowledge.application.DocumentIngestionService.Upload;
+import com.liming.rag.knowledge.application.ingestion.DocumentIngestionService;
+import com.liming.rag.knowledge.application.ingestion.DocumentIngestionService.Upload;
 import com.liming.rag.knowledge.application.FileStorage;
-import com.liming.rag.knowledge.application.KnowledgeBaseService;
+import com.liming.rag.knowledge.application.knowledgebase.KnowledgeBaseService;
 import com.liming.rag.shared.TenantId;
 import com.liming.rag.shared.UserId;
 import java.io.UncheckedIOException;

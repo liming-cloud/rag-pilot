@@ -1,5 +1,6 @@
 package com.liming.rag.settings.application;
 
+
 import java.time.DateTimeException;
 import java.time.ZoneId;
 import java.util.Base64;
@@ -70,7 +71,7 @@ public record SettingsProperties(@DefaultValue("") String masterKey, @DefaultVal
         }
 
         /** 某一项部署时配置的值，没配置时为空串。 */
-        String of(SettingKey key) {
+        public String of(SettingKey key) {
             return switch (key) {
                 case BRAND_NAME -> name;
                 case BRAND_TAGLINE -> tagline;

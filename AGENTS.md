@@ -65,9 +65,13 @@
 - **上下文模块**（identity、knowledge、answering、evaluation、settings）：根包只放 `package-info.java`，类只能在五个子包里：
   - `api`：对其他模块公开的合同（接口、record、枚举、事件），不暴露模块内部类型；
   - `web`：Controller、请求响应 record；
-  - `application`：用例服务，以及它需要的端口接口（如 `ChunkIndex`、`FileStorage`）；用例多时按业务分子包（如 answering 的 `ask`、`conversation`、`review`、`insight`），共用的类留在 `application`；
+  - `application`：用例服务，以及它需要的端口接口（如 `ChunkIndex`、`FileStorage`）；按用例分子包，子包之间不循环依赖：answering 的 `ask`、`conversation`、`review`、`insight`，identity 的 `account`、`role`、`auth`、`audit`，knowledge 的 `ingestion`、`search`、`knowledgebase`（含授权），settings 的 `model`、`system`、`pack`；多个子包共用的异常、`Paged`、`Properties`、端口和枚举留在 `application` 根下；
   - `domain`：聚合、值对象、领域规则，只在 knowledge、answering；
   - `infrastructure`：端口的实现，按技术分子包（`persistence`、`storage`、`parsing`、`security`）。
+- **内部类型**：Service、聚合等类里的内部 record、枚举，按下面的标准决定是否提成顶层（放在使用它的 `application` 子包里，名字带业务含义，如 `ImportRow`、`GapReport`，不叫 `Row`、`Item`）：
+  - 提成顶层：被 web 展示、被别的包或多个文件引用的类型（返回值、读取结果、列表项），如 `DocumentRow`、`Rewrite`、`ProviderView`；
+  - 保持内部：只作外层方法参数或返回值、由调用方构造的类型（`Upload`、`NewTurn`、`AskRequest`）、聚合自己的状态枚举和异常、测试替身；
+  - 自动检查：web 不读取 application 里 `Service` 的内部类型（只 new 出来当参数的除外，`ArchitectureRulesTest`）。
 - **依赖方向**：`domain` 只依赖 JDK（含 JSpecify 空值注解）、rag-shared 和本模块的 `domain`、`api`；`application` 不依赖 `infrastructure`、`web`；`web` 不依赖 `infrastructure`、`domain`（展示用 application 的查询结果 record）；`api` 不依赖本模块其他子包。
 - **上下文依赖**：identity 不依赖其他上下文；settings 依赖 identity；knowledge 依赖 identity、settings；answering 依赖 identity、knowledge、settings；evaluation 不依赖其他上下文。平台层的 shared、ai 都可以用（evaluation 经 ai 调评判模型），ai 不依赖上下文。各上下文在根包 `package-info.java` 的 `allowedDependencies` 里声明，`ModularityTests` 检查。上游要用到下游的东西时（如权限点清单），由上游在 `api` 里定义接口、下游实现，不反向依赖。
 - **输入**：web 只转交原始值（路径、查询参数和请求体里的字符串、数字），application 解析成枚举或值对象，不合规时抛本模块的业务异常；每个模块的解析写在一处。

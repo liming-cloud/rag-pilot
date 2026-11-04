@@ -1,5 +1,7 @@
 package com.liming.rag.knowledge.web;
 
+import com.liming.rag.knowledge.application.ExpiringDocument;
+
 import cn.dev33.satoken.annotation.SaCheckLogin;
 import cn.dev33.satoken.annotation.SaCheckPermission;
 import com.liming.rag.identity.api.CurrentUser;
@@ -7,14 +9,14 @@ import com.liming.rag.identity.api.IdentityPermissions;
 import com.liming.rag.knowledge.api.KnowledgeBaseRef;
 import com.liming.rag.knowledge.api.KnowledgePermissions;
 import com.liming.rag.knowledge.api.SearchHit;
-import com.liming.rag.knowledge.application.DocumentCalendar;
-import com.liming.rag.knowledge.application.DocumentIngestionService;
-import com.liming.rag.knowledge.application.KnowledgeBaseService;
-import com.liming.rag.knowledge.application.KnowledgeGrantService;
-import com.liming.rag.knowledge.application.KnowledgeGrantService.Member;
+import com.liming.rag.knowledge.application.ingestion.DocumentCalendar;
+import com.liming.rag.knowledge.application.ingestion.DocumentIngestionService;
+import com.liming.rag.knowledge.application.knowledgebase.KnowledgeBaseService;
+import com.liming.rag.knowledge.application.knowledgebase.KnowledgeGrantService;
+import com.liming.rag.knowledge.application.knowledgebase.KnowledgeBaseMember;
 import com.liming.rag.knowledge.application.KnowledgeQueries;
-import com.liming.rag.knowledge.application.KnowledgeQueries.DocumentRow;
-import com.liming.rag.knowledge.application.KnowledgeQueries.KnowledgeBaseSummary;
+import com.liming.rag.knowledge.application.DocumentRow;
+import com.liming.rag.knowledge.application.KnowledgeBaseSummary;
 import com.liming.rag.knowledge.application.Paged;
 import com.liming.rag.shared.UserId;
 import java.io.IOException;
@@ -103,7 +105,7 @@ class KnowledgeBaseController {
     }
 
     record ExpirySummaryView(long expiring, long expired, int warningDays,
-            List<KnowledgeQueries.ExpiringDocument> documents) {
+            List<ExpiringDocument> documents) {
     }
 
     @SaCheckPermission(KnowledgePermissions.KB_VIEW)
@@ -189,7 +191,7 @@ class KnowledgeBaseController {
 
     @SaCheckPermission(KnowledgePermissions.KB_GRANT)
     @GetMapping("/{knowledgeBaseId}/members")
-    List<Member> members(@PathVariable long knowledgeBaseId) {
+    List<KnowledgeBaseMember> members(@PathVariable long knowledgeBaseId) {
         return grants.members(currentUser.tenantId(), currentUser.userId(), knowledgeBaseId);
     }
 

@@ -1,5 +1,7 @@
 package com.liming.rag;
 
+import com.liming.rag.answering.application.conversation.PendingTurn;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.liming.rag.answering.application.conversation.ConversationAskService;
@@ -216,7 +218,7 @@ class ConversationTests {
         long id = id(exchange(HttpMethod.POST, "/api/conversations", Map.of(), setup.token()));
         var tenant = new TenantId(1);
         var user = new UserId(setup.userId());
-        var pendings = new ArrayList<ConversationAskService.Pending>();
+        var pendings = new ArrayList<PendingTurn>();
         for (int i = 0; i < 6; i++) {
             pendings.add(asking.start(tenant, user, id, "并发问题 " + i + "：青柚在哪？", null));
         }
@@ -242,7 +244,7 @@ class ConversationTests {
         var tenant = new TenantId(1);
         var user = new UserId(setup.userId());
         var last = asking.run(asking.start(tenant, user, id, "青柚在哪？", null), silent());
-        var pendings = new ArrayList<ConversationAskService.Pending>();
+        var pendings = new ArrayList<PendingTurn>();
         for (int i = 0; i < 4; i++) {
             pendings.add(asking.start(tenant, user, id, "重新生成 " + i, last.id()));
         }
@@ -365,7 +367,7 @@ class ConversationTests {
     }
 
     /** 同时生成并保存这几轮，返回每一轮的结果：接上了是 OK，否则是业务错误码。 */
-    private List<String> runConcurrently(List<ConversationAskService.Pending> pendings) throws Exception {
+    private List<String> runConcurrently(List<PendingTurn> pendings) throws Exception {
         var ready = new CountDownLatch(pendings.size());
         var go = new CountDownLatch(1);
         try (var threads = Executors.newVirtualThreadPerTaskExecutor()) {

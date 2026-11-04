@@ -1,7 +1,7 @@
 package com.liming.rag.identity.infrastructure.security;
 
 import cn.dev33.satoken.secure.BCrypt;
-import com.liming.rag.identity.application.PasswordHasher;
+import com.liming.rag.identity.application.auth.PasswordHasher;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
 

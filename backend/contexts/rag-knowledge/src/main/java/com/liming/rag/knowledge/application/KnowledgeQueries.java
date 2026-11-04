@@ -53,38 +53,4 @@ public interface KnowledgeQueries {
      */
     ExpirySummary expirySummary(TenantId tenantId, @Nullable Grantee grantee, Window window, int limit);
 
-    /** 按哪天判断有效期：今天，以及“即将到期”截止到哪天（含），口径同 {@link Validity#state}。 */
-    record Window(LocalDate today, LocalDate warnUntil) {
-    }
-
-    /** 知识库列表的一行：文档数、失败数、即将到期数、已失效数、授权给几个角色、几个账号。 */
-    record KnowledgeBaseSummary(long id, String name, long documentCount, long failedCount, long expiringCount,
-            long expiredCount, long roleGrantCount, long memberCount) {
-    }
-
-    /** @param documents 最早到期的若干份（已失效、即将到期，按失效日期先后），供运营概览和周报列出 */
-    record ExpirySummary(long expiring, long expired, List<ExpiringDocument> documents) {
-    }
-
-    /** @param validity EXPIRING 或 EXPIRED */
-    record ExpiringDocument(long knowledgeBaseId, String knowledgeBaseName, long documentId, String filename,
-            LocalDate expiresOn, Validity.State validity) {
-    }
-
-    /**
-     * 文档列表的一行（#136）：管理端要显示的字段，不带聚合。{@code replacesFilename} 是要替换的旧版本的文件名
-     * （分页后旧版本不一定在同一页）；{@code validity} 是按部署的统计时区算好的有效期状态，前端不自己比较日期（D-046）。
-     */
-    record DocumentRow(long id, String filename, DocumentStatus status, String error, int chunkCount, long sizeBytes,
-            OffsetDateTime createdAt, @Nullable Long replacesDocumentId, String replacesFilename, LocalDate effectiveFrom,
-            LocalDate expiresOn, Validity.State validity, boolean reprocessable, OffsetDateTime retryAt) {
-
-        public static DocumentRow of(Document document, String replacesFilename, Validity.State state) {
-            var validity = document.validity();
-            return new DocumentRow(document.id(), document.filename(), document.status(), document.error(),
-                    document.chunkCount(), document.sizeBytes(), document.createdAt(), document.replacesDocumentId(),
-                    replacesFilename, validity.effectiveFrom(), validity.expiresOn(), state, document.reprocessable(),
-                    document.retryAt());
-        }
-    }
 }

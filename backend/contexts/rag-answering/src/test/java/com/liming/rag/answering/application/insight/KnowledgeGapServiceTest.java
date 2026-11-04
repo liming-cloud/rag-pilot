@@ -52,7 +52,7 @@ class KnowledgeGapServiceTest {
     void groupsBySimilarity() {
         var report = service.report(TENANT, LocalDate.of(2026, 10, 1), LocalDate.of(2026, 11, 4), ZONE);
 
-        assertThat(report.grouping()).isEqualTo(KnowledgeGapService.Grouping.SEMANTIC);
+        assertThat(report.grouping()).isEqualTo(GapGrouping.SEMANTIC);
         assertThat(report.records()).isEqualTo(4);
         assertThat(report.truncated()).isFalse();
         var cold = report.groups().getFirst();
@@ -64,8 +64,8 @@ class KnowledgeGapServiceTest {
         assertThat(cold.dislikedCount()).isEqualTo(1);
         assertThat(cold.phrasings()).isEqualTo(2);
         assertThat(cold.knowledgeBases()).as("已删除的库不显示").containsExactly("门店规范");
-        assertThat(cold.records()).extracting(KnowledgeGapService.Entry::askerName).containsOnly("店员小王");
-        assertThat(report.groups()).extracting(KnowledgeGapService.Group::question)
+        assertThat(cold.records()).extracting(GapEntry::askerName).containsOnly("店员小王");
+        assertThat(report.groups()).extracting(GapGroup::question)
                 .containsExactly("冷柜温度要多少？", "青柚在哪？");
     }
 
@@ -82,7 +82,7 @@ class KnowledgeGapServiceTest {
 
         var report = service.report(TENANT, LocalDate.of(2026, 10, 1), LocalDate.of(2026, 11, 4), ZONE);
 
-        assertThat(report.groups()).extracting(KnowledgeGapService.Group::question)
+        assertThat(report.groups()).extracting(GapGroup::question)
                 .containsExactly("冷柜温度要多少？", "青柚在哪？");
         assertThat(fixture.embeddings.embedded).as("同一原文已有向量的不再算").containsExactly("冰柜温度设几度？");
         assertThat(fixture.gaps.savedVectors).as("算出的向量写回这段原文的每条记录").containsOnlyKeys(4L, 2L, 3L);
@@ -94,7 +94,7 @@ class KnowledgeGapServiceTest {
                 row.questionVector() != null ? row.questionVector() : fixture.gaps.savedVectors.get(row.id())))
                 .toList();
         assertThat(service.report(TENANT, LocalDate.of(2026, 10, 1), LocalDate.of(2026, 11, 4), ZONE).grouping())
-                .as("向量都存好以后，嵌入模型不可用也能按意思归类").isEqualTo(KnowledgeGapService.Grouping.SEMANTIC);
+                .as("向量都存好以后，嵌入模型不可用也能按意思归类").isEqualTo(GapGrouping.SEMANTIC);
     }
 
     @Test
@@ -104,7 +104,7 @@ class KnowledgeGapServiceTest {
 
         var report = service.report(TENANT, LocalDate.of(2026, 10, 1), LocalDate.of(2026, 11, 4), ZONE);
 
-        assertThat(report.grouping()).isEqualTo(KnowledgeGapService.Grouping.TEXT);
+        assertThat(report.grouping()).isEqualTo(GapGrouping.TEXT);
         assertThat(report.groups()).hasSize(3);
     }
 
@@ -129,7 +129,7 @@ class KnowledgeGapServiceTest {
     @DisplayName("按天数查看：1 到 90 天；open 只列还有待处理记录的类，all 列全部；其他状态是 INVALID")
     void reportsRecentDays() {
         assertThat(service.report(TENANT, 30, "all").groups()).hasSize(2);
-        assertThat(service.report(TENANT, 30, "open").groups()).extracting(KnowledgeGapService.Group::question)
+        assertThat(service.report(TENANT, 30, "open").groups()).extracting(GapGroup::question)
                 .containsExactly("冷柜温度要多少？");
         assertReason(() -> service.report(TENANT, 0, "open"), AnsweringException.Reason.INVALID);
         assertReason(() -> service.report(TENANT, 91, "open"), AnsweringException.Reason.INVALID);

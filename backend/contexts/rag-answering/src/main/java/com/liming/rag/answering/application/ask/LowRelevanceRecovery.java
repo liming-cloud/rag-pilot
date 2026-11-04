@@ -1,6 +1,6 @@
 package com.liming.rag.answering.application.ask;
 
-import com.liming.rag.answering.application.ask.AskResult.Rewrite.Outcome;
+import com.liming.rag.answering.application.ask.Rewrite.Outcome;
 import java.util.List;
 import java.util.function.Consumer;
 
@@ -29,7 +29,7 @@ final class LowRelevanceRecovery {
     /** @param ranked 本次重排结果，非空 */
     Result recover(SearchRequest original, List<Evidence> ranked, StageClock clock, Consumer<String> onStatus) {
         if (ranked.getFirst().score() < floor) {
-            return new Result(ranked, new AskResult.Rewrite(Outcome.SKIPPED_BELOW_FLOOR, null, 0, null, null, null));
+            return new Result(ranked, new Rewrite(Outcome.SKIPPED_BELOW_FLOOR, null, 0, null, null, null));
         }
         onStatus.accept(REWRITING_STATUS);
         clock.rewriteStarted();
@@ -51,7 +51,7 @@ final class LowRelevanceRecovery {
         }
         clock.rewriteFinished();
         var question = rewritten.outcome() == Outcome.REWRITTEN ? rewritten.question() : null;
-        return new Result(best, new AskResult.Rewrite(rewritten.outcome(), question, rewritten.outputChars(),
+        return new Result(best, new Rewrite(rewritten.outcome(), question, rewritten.outputChars(),
                 rewritten.modelMillis(), retrievalMillis, rerankMillis));
     }
 
@@ -59,6 +59,6 @@ final class LowRelevanceRecovery {
      * @param ranked  采用的重排结果：改写后分数更高时是新结果，否则是原结果
      * @param rewrite 改写的过程记录，写进回答供评测报告统计
      */
-    record Result(List<Evidence> ranked, AskResult.Rewrite rewrite) {
+    record Result(List<Evidence> ranked, Rewrite rewrite) {
     }
 }

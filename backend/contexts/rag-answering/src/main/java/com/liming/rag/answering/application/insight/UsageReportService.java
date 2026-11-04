@@ -77,16 +77,12 @@ public class UsageReportService {
         return stats.withComparison(previous, gaps.top(tenantId, period.from(), period.to(), zone, TOP_GAPS));
     }
 
-    /** 导出的文件：文件名和内容（UTF-8 带 BOM 的 CSV，Excel 直接打开中文不乱码）。 */
-    public record Export(String filename, String csv) {
-    }
-
     /**
      * 这段时间的问答明细，每条一行：时间、提问人、问题、结果、评价、留言、引用文档、处理状态。
      * 以 = + - @ 开头的单元格前加单引号，防止在 Excel 里被当成公式执行。
      */
     @Transactional(readOnly = true)
-    public Export export(TenantId tenantId, @Nullable Integer days, String week) {
+    public UsageExport export(TenantId tenantId, @Nullable Integer days, String week) {
         var zone = zones.statsZone();
         var period = period(days, week, zone);
         var rows = reviews.between(tenantId, period.from().atStartOfDay(zone).toOffsetDateTime(),
@@ -103,7 +99,7 @@ public class UsageReportService {
                     row.comment() == null ? "" : row.comment(), String.join("、", row.citedDocuments()),
                     !followUp ? "" : "RESOLVED".equals(row.reviewStatus()) ? "已处理" : "待处理"));
         }
-        return new Export("运营明细_" + period.from() + "_" + period.to() + ".csv", csv.toString());
+        return new UsageExport("运营明细_" + period.from() + "_" + period.to() + ".csv", csv.toString());
     }
 
     Period period(@Nullable Integer days, String week, ZoneId zone) {

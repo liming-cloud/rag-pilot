@@ -1,8 +1,8 @@
 package com.liming.rag.identity.infrastructure.persistence;
 
-import com.liming.rag.identity.application.AuditEntry;
-import com.liming.rag.identity.application.AuditLogs;
-import com.liming.rag.identity.application.AuditRecord;
+import com.liming.rag.identity.application.audit.AuditEntry;
+import com.liming.rag.identity.application.audit.AuditLogs;
+import com.liming.rag.identity.application.audit.AuditRecord;
 import com.liming.rag.identity.application.Paged;
 import java.time.OffsetDateTime;
 import org.jspecify.annotations.Nullable;

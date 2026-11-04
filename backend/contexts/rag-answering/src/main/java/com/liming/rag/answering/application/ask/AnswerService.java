@@ -242,7 +242,7 @@ public class AnswerService {
                 .toList();
     }
 
-    private static AskResult finish(AskResult answer, StageClock clock, AskResult.Rewrite rewrite) {
+    private static AskResult finish(AskResult answer, StageClock clock, Rewrite rewrite) {
         return answer.withRewrite(rewrite).withTimings(clock.timings());
     }
 }

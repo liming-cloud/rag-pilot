@@ -1,11 +1,14 @@
 package com.liming.rag.identity.web;
 
+import com.liming.rag.identity.application.account.ImportRow;
+import com.liming.rag.identity.application.account.ImportProblem;
+
 import cn.dev33.satoken.annotation.SaCheckLogin;
 import cn.dev33.satoken.annotation.SaCheckPermission;
 import com.liming.rag.identity.api.CurrentUser;
 import com.liming.rag.identity.api.IdentityPermissions;
-import com.liming.rag.identity.application.AccountAdminService;
-import com.liming.rag.identity.application.AccountImportService;
+import com.liming.rag.identity.application.account.AccountAdminService;
+import com.liming.rag.identity.application.account.AccountImportService;
 import com.liming.rag.shared.UserId;
 import java.util.List;
 import org.springframework.http.HttpStatus;
@@ -37,13 +40,13 @@ class UserController {
     record ResetPasswordRequest(String password) {
     }
 
-    record ImportCheckRequest(List<AccountImportService.Row> rows) {
+    record ImportCheckRequest(List<ImportRow> rows) {
     }
 
-    record ImportCheckResponse(List<AccountImportService.Problem> problems) {
+    record ImportCheckResponse(List<ImportProblem> problems) {
     }
 
-    record ImportRequest(List<AccountImportService.Row> rows, String password) {
+    record ImportRequest(List<ImportRow> rows, String password) {
     }
 
     record ImportResponse(int imported) {

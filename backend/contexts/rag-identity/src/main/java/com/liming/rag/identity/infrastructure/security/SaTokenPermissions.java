@@ -1,7 +1,7 @@
 package com.liming.rag.identity.infrastructure.security;
 
 import cn.dev33.satoken.stp.StpInterface;
-import com.liming.rag.identity.application.AccessService;
+import com.liming.rag.identity.application.role.AccessService;
 import java.util.List;
 import org.springframework.stereotype.Component;
 

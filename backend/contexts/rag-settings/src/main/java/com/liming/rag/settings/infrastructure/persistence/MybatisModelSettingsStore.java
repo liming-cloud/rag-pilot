@@ -1,11 +1,11 @@
 package com.liming.rag.settings.infrastructure.persistence;
 
 import com.liming.rag.ai.ModelUsage;
-import com.liming.rag.settings.application.ModelChange;
-import com.liming.rag.settings.application.ModelProvider;
-import com.liming.rag.settings.application.ModelSettingsStore;
+import com.liming.rag.settings.application.model.ModelChange;
+import com.liming.rag.settings.application.model.ModelProvider;
+import com.liming.rag.settings.application.model.ModelSettingsStore;
 import com.liming.rag.settings.application.Paged;
-import com.liming.rag.settings.application.PurposeSetting;
+import com.liming.rag.settings.application.model.PurposeSetting;
 import java.util.List;
 import java.util.Optional;
 import org.jspecify.annotations.Nullable;
