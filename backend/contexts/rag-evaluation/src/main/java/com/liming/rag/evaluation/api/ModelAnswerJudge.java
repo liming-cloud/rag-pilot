@@ -1,20 +1,15 @@
-package com.liming.rag.ai;
+package com.liming.rag.evaluation.api;
 
-import java.time.Duration;
-import java.util.List;
+import com.liming.rag.ai.ModelCallException;
+import com.liming.rag.ai.TextGeneration;
 import java.util.regex.Pattern;
-import org.springframework.ai.chat.messages.SystemMessage;
-import org.springframework.ai.chat.messages.UserMessage;
-import org.springframework.ai.chat.model.ChatModel;
-import org.springframework.ai.chat.prompt.Prompt;
-import org.springframework.ai.openai.OpenAiChatModel;
-import org.springframework.ai.openai.OpenAiChatOptions;
 
 /**
- * 用 OpenAI 兼容的对话接口做答案评判。温度为 0，要求最后输出两行：结论和理由。
+ * 用模型做答案评判（#145：评判规则在这里，模型调用经 rag-ai）。温度为 0，要求最后输出两行：结论和理由。
+ * 不用结构化输出：要兼容先输出思考过程的模型，提示词和解析已经过评判自检（JudgeProbeRun）校准。
  * 兼容先输出思考过程的模型：去掉 &lt;think&gt; 段，取最后一个“结论”。
  */
-final class OpenAiCompatibleJudge implements AnswerJudge {
+final class ModelAnswerJudge implements AnswerJudge {
 
     static final String SYSTEM = """
             你是问答系统的评测员。对照参考答案，判断系统回答有没有答对问题。
@@ -31,37 +26,24 @@ final class OpenAiCompatibleJudge implements AnswerJudge {
             """;
 
     /** 先输出思考过程的模型要多留输出长度，思考内容不计入结论。 */
-    private static final int MAX_TOKENS = 2048;
+    static final int MAX_TOKENS = 2048;
 
     private static final Pattern VERDICT = Pattern.compile("结论\\s*[:：]\\s*(.+)");
     private static final Pattern REASON = Pattern.compile("理由\\s*[:：]\\s*(.+)");
     private static final Pattern THINKING = Pattern.compile("(?s)<think>.*?</think>");
 
-    private final ChatModel model;
+    private final TextGeneration generation;
 
-    OpenAiCompatibleJudge(String baseUrl, String apiKey, String model, Duration timeout) {
-        if (apiKey == null || apiKey.isBlank()) {
-            throw new IllegalStateException("未配置评判模型密钥：请设置环境变量 EVAL_JUDGE_API_KEY 或 MODEL_API_KEY");
-        }
-        var options = OpenAiChatOptions.builder()
-                .baseUrl(baseUrl)
-                .apiKey(apiKey)
-                .model(model)
-                .temperature(0.0)
-                .maxTokens(MAX_TOKENS)
-                .timeout(timeout)
-                .maxRetries(1)
-                .build();
-        this.model = OpenAiChatModel.builder().options(options).build();
+    ModelAnswerJudge(TextGeneration generation) {
+        this.generation = generation;
     }
 
     @Override
     public Judgement judge(String question, String referenceAnswer, String answer) {
         var user = "问题：" + question + "\n\n参考答案：" + referenceAnswer + "\n\n系统回答：" + answer;
         try {
-            var response = model.call(new Prompt(List.of(new SystemMessage(SYSTEM), new UserMessage(user))));
-            return parse(response.getResult().getOutput().getText());
-        } catch (RuntimeException e) {
+            return parse(generation.complete(SYSTEM, user));
+        } catch (ModelCallException e) {
             throw new ModelCallException("答案评判失败：评判模型服务暂时不可用，请检查 EVAL_JUDGE_BASE_URL 和 EVAL_JUDGE_MODEL", e);
         }
     }

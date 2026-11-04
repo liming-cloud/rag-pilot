@@ -12,7 +12,7 @@
     </parent>
 
     <artifactId>rag-ai</artifactId>
-    <!-- 外部 AI 系统适配：Spring AI 配置、重排客户端、docling-serve 客户端。 -->
+    <!-- Spring AI 防腐层（#145）：按能力提供文字生成、改写、向量化、重排、连通测试，上下文不接触 Spring AI 的类型。 -->
 
     <dependencies>
         <dependency>
@@ -31,6 +31,16 @@
         <dependency>
             <groupId>org.springframework.ai</groupId>
             <artifactId>spring-ai-openai</artifactId>
+        </dependency>
+        <!-- ChatClient、结构化输出（#145：Spring AI 只在防腐层 rag-ai 里用）。 -->
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-client-chat</artifactId>
+        </dependency>
+        <!-- 问题改写用框架的 RewriteQueryTransformer（原来在 rag-answering，#145 收进防腐层）。 -->
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-rag</artifactId>
         </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>

@@ -1,7 +1,8 @@
 package com.liming.rag.answering.application.ask;
 
-import com.liming.rag.ai.ChatGateway;
+import com.liming.rag.ai.QueryRewriting;
 import com.liming.rag.ai.RerankClient;
+import com.liming.rag.ai.TextGeneration;
 import com.liming.rag.answering.application.AnsweringException;
 import com.liming.rag.answering.application.AnsweringProperties;
 import com.liming.rag.answering.domain.CitationParser;
@@ -18,11 +19,6 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.function.Consumer;
-import org.springframework.ai.document.Document;
-import org.springframework.ai.rag.Query;
-import org.springframework.ai.rag.generation.augmentation.QueryAugmenter;
-import org.springframework.ai.rag.postretrieval.document.DocumentPostProcessor;
-import org.springframework.ai.rag.retrieval.search.DocumentRetriever;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.core.task.AsyncTaskExecutor;
 import org.springframework.stereotype.Service;
@@ -30,8 +26,9 @@ import org.springframework.stereotype.Service;
 /**
  * 带引用的问答：混合检索 → 重排 → 相关度门槛 → 生成 → 引用校验。
  *
- * <p>检索、重排、拼证据用 Spring AI 模块化 RAG 的接口（{@link DocumentRetriever}、{@link DocumentPostProcessor}、
- * {@link QueryAugmenter}），编排和拒答规则在这里，见 D-020。
+ * <p>检索（{@link EvidenceRetriever}）、重排（{@link EvidenceReranker}）、拼证据（{@link EvidencePrompt}）各是一步，
+ * 编排和拒答规则在这里（D-020）。模型能力经 rag-ai 的防腐层使用：生成用 {@link TextGeneration}，低分改写用
+ * {@link QueryRewriting}；这里不接触 Spring AI 的类型（#145）。
  *
  * <p>三道拒答关口：没有检索结果、重排后都低于门槛、模型回答 NO_ANSWER 或没有有效引用。
  * 重排后都低于门槛时，先把问题改写一次再检索（{@link LowRelevanceRecovery}，可用 {@code rag.answering.rewrite-on-low-relevance} 关闭）。
@@ -64,11 +61,10 @@ public class AnswerService {
             List<String> searchQueries, String history) {
     }
 
-    private final DocumentRetriever retriever;
-    private final DocumentPostProcessor reranker;
-    private final QueryAugmenter augmenter = new NumberedEvidenceAugmenter();
+    private final EvidenceRetriever retriever;
+    private final EvidenceReranker reranker;
     private final LowRelevanceRecovery recovery;
-    private final ChatGateway chat;
+    private final TextGeneration chat;
     private final AnsweringSettings settings;
     private final String system;
     private final QueryExpansion expansion;
@@ -79,13 +75,14 @@ public class AnswerService {
     /**
      * @param executor Spring 管理的虚拟线程执行器（{@code applicationTaskExecutor}），停机时等正在跑的任务做完（#135）
      */
-    AnswerService(KnowledgeSearch search, RerankClient rerank, ChatGateway chat, AnsweringProperties properties,
-            AnsweringSettings settings, @Qualifier("applicationTaskExecutor") AsyncTaskExecutor executor) {
+    AnswerService(KnowledgeSearch search, RerankClient rerank, TextGeneration chat, QueryRewriting rewriting,
+            AnsweringProperties properties, AnsweringSettings settings,
+            @Qualifier("applicationTaskExecutor") AsyncTaskExecutor executor) {
         var pack = settings.pack();
-        this.retriever = new KnowledgeDocumentRetriever(search, properties.candidates());
-        this.reranker = new RerankPostProcessor(rerank);
+        this.retriever = new EvidenceRetriever(search, properties.candidates());
+        this.reranker = new EvidenceReranker(rerank);
         this.recovery = new LowRelevanceRecovery(retriever, reranker,
-                new LowRelevanceRewriter(chat, properties.rewriteTimeout(), pack, executor),
+                new LowRelevanceRewriter(rewriting, properties.rewriteTimeout(), pack, executor),
                 properties.rewriteMinRelevance());
         this.chat = chat;
         this.settings = settings;
@@ -139,18 +136,19 @@ public class AnswerService {
         onStatus.accept(SEARCHING_STATUS);
         var searchTexts = request.searchQueries() == null || request.searchQueries().isEmpty() ? List.of(text)
                 : request.searchQueries();
-        var queries = expandedQueries(request, searchTexts);
+        var original = new SearchRequest(searchTexts.getFirst(), request.tenantId(), request.userId(),
+                request.knowledgeBaseIds());
+        var queries = searchTexts.stream().map(searchText -> original.withText(expansion.expand(searchText))).toList();
         var candidates = union(queries.stream().map(retriever::retrieve).toList());
         clock.retrieved();
         if (candidates.isEmpty()) {
             return finish(refusal(RefusalReason.NO_EVIDENCE, null), clock, null);
         }
         // 低分改写针对没扩展的问题：改写本身会补类别，扩展词混在问题里反而干扰改写。
-        var ranking = rank(queries, candidates, AnswerContext.query(searchTexts.getFirst(), request.tenantId(),
-                request.userId(), request.knowledgeBaseIds()), clock, onStatus);
+        var ranking = rank(queries, candidates, original, clock, onStatus);
         var ranked = ranking.ranked();
         var rewrite = ranking.rewrite();
-        double topRelevance = ranked.getFirst().getScore();
+        double topRelevance = ranked.getFirst().score();
         var evidence = evidence(ranked);
         if (evidence.isEmpty()) {
             return finish(refusal(RefusalReason.LOW_RELEVANCE, topRelevance), clock, rewrite);
@@ -160,22 +158,13 @@ public class AnswerService {
         }
         onStatus.accept(GENERATING_STATUS);
         // 证据可能来自规划或改写后的检索，但回答针对员工原来的问题。
-        var asked = AnswerContext.query(text, request.tenantId(), request.userId(), request.knowledgeBaseIds(),
-                request.history());
-        return finish(generate(asked, evidence, topRelevance, clock, onDelta, stop), clock, rewrite);
-    }
-
-    /** 每个检索词按行业词表扩展后各成一个检索请求。 */
-    private List<Query> expandedQueries(AskRequest request, List<String> searchTexts) {
-        return searchTexts.stream()
-                .map(searchText -> AnswerContext.query(expansion.expand(searchText), request.tenantId(),
-                        request.userId(), request.knowledgeBaseIds()))
-                .toList();
+        var prompt = EvidencePrompt.user(text, evidence, request.history());
+        return finish(generate(prompt, evidence, topRelevance, clock, onDelta, stop), clock, rewrite);
     }
 
     /** 重排候选；没有够分的证据且开了低分改写时，改写问题再检索、重排一次（{@link LowRelevanceRecovery}）。 */
-    private LowRelevanceRecovery.Result rank(List<Query> queries, List<Document> candidates, Query original,
-            StageClock clock, Consumer<String> onStatus) {
+    private LowRelevanceRecovery.Result rank(List<SearchRequest> queries, List<Evidence> candidates,
+            SearchRequest original, StageClock clock, Consumer<String> onStatus) {
         var ranked = rerank(queries, candidates);
         clock.reranked();
         if (evidence(ranked).isEmpty() && rewriteOnLowRelevance) {
@@ -194,35 +183,33 @@ public class AnswerService {
     }
 
     /** 合并几个检索词的候选，同一分块只留第一次出现的。 */
-    private static List<Document> union(List<List<Document>> results) {
-        var seen = new LinkedHashMap<Object, Document>();
-        results.forEach(documents -> documents.forEach(
-                document -> seen.putIfAbsent(document.getMetadata().get(Evidence.CHUNK_ID), document)));
+    private static List<Evidence> union(List<List<Evidence>> results) {
+        var seen = new LinkedHashMap<Long, Evidence>();
+        results.forEach(found -> found.forEach(evidence -> seen.putIfAbsent(evidence.chunkId(), evidence)));
         return List.copyOf(seen.values());
     }
 
     /** 每条资料对每个检索词各重排一次，取最高分；同分时保持候选顺序。 */
-    private List<Document> rerank(List<Query> queries, List<Document> candidates) {
+    private List<Evidence> rerank(List<SearchRequest> queries, List<Evidence> candidates) {
         if (queries.size() == 1) {
-            return reranker.process(queries.getFirst(), candidates);
+            return reranker.rerank(queries.getFirst().text(), candidates);
         }
-        var best = new LinkedHashMap<Object, Document>();
-        candidates.forEach(document -> best.put(document.getMetadata().get(Evidence.CHUNK_ID), null));
+        var best = new LinkedHashMap<Long, Evidence>();
+        candidates.forEach(evidence -> best.put(evidence.chunkId(), null));
         for (var query : queries) {
-            for (var scored : reranker.process(query, candidates)) {
-                best.merge(scored.getMetadata().get(Evidence.CHUNK_ID), scored,
-                        (current, next) -> current == null || next.getScore() > current.getScore() ? next : current);
+            for (var scored : reranker.rerank(query.text(), candidates)) {
+                best.merge(scored.chunkId(), scored,
+                        (current, next) -> current == null || next.score() > current.score() ? next : current);
             }
         }
-        var merged = new ArrayList<Document>(best.values());
-        merged.sort(Comparator.comparingDouble(Document::getScore).reversed());
+        var merged = new ArrayList<Evidence>(best.values());
+        merged.sort(Comparator.comparingDouble(Evidence::score).reversed());
         return merged;
     }
 
     /** 生成并校验引用：模型拒答、去掉标记后为空或没有有效引用都按拒答处理。 */
-    private AskResult generate(Query query, List<Document> evidence, double topRelevance, StageClock clock,
+    private AskResult generate(String prompt, List<Evidence> evidence, double topRelevance, StageClock clock,
             Consumer<String> onDelta, CompletionStage<?> stop) {
-        var prompt = augmenter.augment(query, evidence).text();
         var gate = new NoAnswerGate(onDelta, clock::firstToken);
         var raw = chat.stream(system, prompt, gate, stop).strip();
         gate.flush();
@@ -237,7 +224,7 @@ public class AnswerService {
             return refusal(RefusalReason.UNCITED, topRelevance);
         }
         var citations = parsed.cited().stream()
-                .map(index -> Evidence.citation(index, evidence.get(index - 1)))
+                .map(index -> evidence.get(index - 1).citation(index))
                 .toList();
         return AskResult.answered(parsed.text(), citations, topRelevance);
     }
@@ -248,9 +235,9 @@ public class AnswerService {
     }
 
     /** 重排后达到门槛的前几条。 */
-    private List<Document> evidence(List<Document> ranked) {
+    private List<Evidence> evidence(List<Evidence> ranked) {
         return ranked.stream()
-                .filter(document -> document.getScore() >= minRelevance)
+                .filter(evidence -> evidence.score() >= minRelevance)
                 .limit(evidenceLimit)
                 .toList();
     }

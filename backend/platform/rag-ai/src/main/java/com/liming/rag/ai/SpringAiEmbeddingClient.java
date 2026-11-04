@@ -2,14 +2,15 @@ package com.liming.rag.ai;
 
 import java.util.ArrayList;
 import java.util.List;
+import io.micrometer.observation.ObservationRegistry;
 import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.ai.openai.OpenAiEmbeddingModel;
 import org.springframework.ai.openai.OpenAiEmbeddingOptions;
 
 /**
- * 通过 Spring AI 调用 OpenAI 兼容的嵌入接口（默认硅基流动 BAAI/bge-m3）。
+ * 通过 Spring AI 调用 OpenAI 兼容的嵌入接口（默认硅基流动 BAAI/bge-m3），带上观测注册表，框架自带的观测由 Actuator 汇总成指标（#145）。
  *
- * <p>入库在后台进行，不阻塞请求，所以遇到限流（429）和服务端错误时按退避重试 {@value #MAX_RETRIES} 次；
+ * <p>入库在后台进行，不阻塞请求，所以遇到限流（429）和服务端错误时由 OpenAI SDK 按退避重试 {@value #MAX_RETRIES} 次；
  * 仍失败时文档标记为失败并给出原因，由管理员重新上传。
  */
 final class SpringAiEmbeddingClient implements EmbeddingClient {
@@ -19,7 +20,7 @@ final class SpringAiEmbeddingClient implements EmbeddingClient {
     private final EmbeddingModel model;
     private final int batchSize;
 
-    SpringAiEmbeddingClient(AiProperties properties) {
+    SpringAiEmbeddingClient(AiProperties properties, ObservationRegistry observations) {
         var options = OpenAiEmbeddingOptions.builder()
                 .baseUrl(properties.baseUrl())
                 .apiKey(properties.requireApiKey())
@@ -27,7 +28,7 @@ final class SpringAiEmbeddingClient implements EmbeddingClient {
                 .timeout(properties.timeout())
                 .maxRetries(MAX_RETRIES)
                 .build();
-        this.model = OpenAiEmbeddingModel.builder().options(options).build();
+        this.model = OpenAiEmbeddingModel.builder().options(options).observationRegistry(observations).build();
         this.batchSize = Math.max(1, properties.embedding().batchSize());
     }
 

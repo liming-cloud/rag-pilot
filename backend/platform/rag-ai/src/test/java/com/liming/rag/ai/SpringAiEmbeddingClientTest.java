@@ -43,10 +43,26 @@ class SpringAiEmbeddingClientTest {
             var properties = new AiProperties("http://127.0.0.1:" + server.getAddress().getPort() + "/v1", "test-key",
                     Duration.ofSeconds(5), new AiProperties.Embedding("openai", "BAAI/bge-m3", 16), null, null);
 
-            var vectors = new SpringAiEmbeddingClient(properties).embed(List.of("临期商品"));
+            var observed = Collections.synchronizedList(new java.util.ArrayList<String>());
+            var registry = io.micrometer.observation.ObservationRegistry.create();
+            registry.observationConfig().observationHandler(new io.micrometer.observation.ObservationHandler<>() {
+                @Override
+                public boolean supportsContext(io.micrometer.observation.Observation.Context context) {
+                    return true;
+                }
+
+                @Override
+                public void onStop(io.micrometer.observation.Observation.Context context) {
+                    observed.add(context.getName());
+                }
+            });
+
+            var vectors = new SpringAiEmbeddingClient(properties, registry).embed(List.of("临期商品"));
 
             assertThat(vectors).hasSize(1);
             assertThat(calls).hasValue(2);
+            // 向量化也留下 Spring AI 的观测（#145），由 Actuator 汇总成指标。
+            assertThat(observed).contains("gen_ai.client.operation");
         } finally {
             server.stop(0);
         }

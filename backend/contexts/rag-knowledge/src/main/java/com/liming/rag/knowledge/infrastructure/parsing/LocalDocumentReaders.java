@@ -11,7 +11,6 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import java.util.Set;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -29,8 +28,6 @@ import org.apache.poi.xwpf.usermodel.XWPFDocument;
 import org.apache.poi.xwpf.usermodel.XWPFParagraph;
 import org.apache.poi.xwpf.usermodel.XWPFTable;
 import org.apache.poi.xwpf.usermodel.XWPFTableCell;
-import org.springframework.ai.document.Document;
-import org.springframework.ai.document.DocumentReader;
 import org.springframework.stereotype.Component;
 
 /**
@@ -56,24 +53,22 @@ final class LocalDocumentReaders implements DocumentReaders {
     }
 
     @Override
-    public DocumentReader forFile(String filename, byte[] content) {
+    public String read(String filename, byte[] content) {
         var dot = filename.lastIndexOf('.');
         var extension = dot < 0 ? "" : filename.substring(dot + 1).toLowerCase(Locale.ROOT);
         if (!supports(extension)) {
             throw new IllegalArgumentException("不支持的文件类型：" + filename);
         }
-        return () -> {
-            var text = switch (extension) {
-                case "pdf" -> pdf(content);
-                case "docx" -> word(content);
-                case "xlsx", "xls" -> excel(content);
-                default -> utf8(content);
-            };
-            if (text.isBlank()) {
-                throw new DocumentParseException("文件里没有可检索的文字", null);
-            }
-            return List.of(new Document(text, Map.of(FILENAME, filename)));
+        var text = switch (extension) {
+            case "pdf" -> pdf(content);
+            case "docx" -> word(content);
+            case "xlsx", "xls" -> excel(content);
+            default -> utf8(content);
         };
+        if (text.isBlank()) {
+            throw new DocumentParseException("文件里没有可检索的文字", null);
+        }
+        return text;
     }
 
     private static String utf8(byte[] content) {

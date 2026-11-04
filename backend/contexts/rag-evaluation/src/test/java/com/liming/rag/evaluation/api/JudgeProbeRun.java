@@ -1,7 +1,8 @@
-package com.liming.rag.ai;
+package com.liming.rag.evaluation.api;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.liming.rag.ai.ModelCallException;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;

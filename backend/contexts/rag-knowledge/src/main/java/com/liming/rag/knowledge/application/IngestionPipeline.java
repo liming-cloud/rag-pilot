@@ -8,7 +8,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionOperations;
 
 /**
- * 入库管道，按 Spring AI 的 ETL 接口组织：读取（{@link DocumentReaders}）→ 分块（{@link HeadingChunker}）
+ * 入库管道：读取（{@link DocumentReaders}）→ 分块（{@link HeadingChunker}）
  * → 向量化并写入（{@link ChunkWriter}）。文件读不出来、模型调用失败时，文档标为失败并记下原因。
  */
 @Component
@@ -33,11 +33,11 @@ class IngestionPipeline {
     /** 在后台线程运行，不在数据库事务里；只有最后写入时开一个短事务。 */
     void run(Document document, byte[] content) {
         try {
-            var chunks = chunker.apply(readers.forFile(document.filename(), content).get());
+            var chunks = chunker.chunk(document.filename(), readers.read(document.filename(), content));
             if (chunks.isEmpty()) {
                 fail(document, "文件里没有可检索的文字");
             } else {
-                new ChunkWriter(documents, embeddings, transactions, remover, document).accept(chunks);
+                new ChunkWriter(documents, embeddings, transactions, remover, document).write(chunks);
             }
         } catch (DocumentParseException | ModelCallException e) {
             fail(document, e.getMessage());

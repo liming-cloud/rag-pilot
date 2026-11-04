@@ -58,12 +58,9 @@ class LocalDocumentReadersTest {
     }
 
     @Test
-    @DisplayName("文本：按 UTF-8 读取；不是 UTF-8 或没有文字时给出原因；元数据带文件名")
+    @DisplayName("文本：按 UTF-8 读取；不是 UTF-8 或没有文字时给出原因")
     void readsPlainText() {
-        var document = readers.forFile("收银.md", "# 收银\n\n交班清点备用金。".getBytes(StandardCharsets.UTF_8)).get()
-                .getFirst();
-        assertThat(document.getText()).contains("# 收银");
-        assertThat(document.getMetadata()).containsEntry(DocumentReaders.FILENAME, "收银.md");
+        assertThat(text("收银.md", "# 收银\n\n交班清点备用金。".getBytes(StandardCharsets.UTF_8))).contains("# 收银");
 
         assertThatThrownBy(() -> text("旧编码.txt", new byte[] {(byte) 0xC1, (byte) 0xD9, (byte) 0xC6}))
                 .isInstanceOf(DocumentParseException.class).hasMessageContaining("UTF-8");
@@ -121,7 +118,7 @@ class LocalDocumentReadersTest {
     }
 
     private String text(String filename, byte[] content) {
-        return readers.forFile(filename, content).get().getFirst().getText();
+        return readers.read(filename, content);
     }
 
     static byte[] word() throws IOException {

@@ -19,11 +19,12 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-class SpringAiChatGatewayTest {
+class SpringAiTextGenerationTest {
 
     private final AtomicInteger calls = new AtomicInteger();
     private final List<String> models = Collections.synchronizedList(new ArrayList<>());
     private final List<String> paths = Collections.synchronizedList(new ArrayList<>());
+    private final List<String> bodies = Collections.synchronizedList(new ArrayList<>());
     private final java.util.Map<ModelUsage, ModelRoute> overrides = new java.util.concurrent.ConcurrentHashMap<>();
     private HttpServer server;
 
@@ -43,7 +44,7 @@ class SpringAiChatGatewayTest {
         overrides.put(ModelUsage.LIGHT, databaseRoute("db-light"));
         gateway.stream("系统", "问题", delta -> {
         });
-        gateway.complete("系统", "标题", new ChatGateway.Limits(16, List.of(), ChatGateway.Tier.LIGHT));
+        gateway.complete("系统", "标题", new TextGeneration.Limits(16, List.of(), TextGeneration.Tier.LIGHT));
 
         assertThat(awaitModels(3)).containsExactly("m", "db-answer", "db-light");
         assertThat(paths).containsExactly("/v1/chat/completions", "/db/v1/chat/completions",
@@ -168,10 +169,80 @@ class SpringAiChatGatewayTest {
         start((call, model) -> new Reply(0, 200, "标题"));
         var gateway = gateway(null, null, "light-m");
 
-        assertThat(gateway.complete("系统", "问题", new ChatGateway.Limits(32, List.of("\n"), ChatGateway.Tier.LIGHT)))
+        assertThat(gateway.complete("系统", "问题", new TextGeneration.Limits(32, List.of("\n"), TextGeneration.Tier.LIGHT)))
                 .isEqualTo("标题");
-        assertThat(gateway.complete("系统", "问题", new ChatGateway.Limits(32, List.of("\n")))).isEqualTo("标题");
+        assertThat(gateway.complete("系统", "问题", new TextGeneration.Limits(32, List.of("\n")))).isEqualTo("标题");
         assertThat(awaitModels(2)).containsExactly("light-m", "m");
+    }
+
+    /** 结构化输出的目标类型：模型按字段输出 JSON，由框架解析（#145）。 */
+    record Plan(boolean smallTalk, List<String> queries) {
+    }
+
+    @Test
+    @DisplayName("结构化输出：模型按字段输出 JSON，解析成调用方给的类型；用回答模型（#145）")
+    void parsesStructuredOutput() throws Exception {
+        start((call, model) -> new Reply(0, 200, "{\"smallTalk\":false,\"queries\":[\"B 的保修期多久\"]}"));
+        var generation = gateway(null);
+
+        var plan = generation.structured("系统", "问题", Plan.class, new TextGeneration.Limits(96, List.of()));
+
+        assertThat(plan).isEqualTo(new Plan(false, List.of("B 的保修期多久")));
+        assertThat(awaitModels(1)).containsExactly("m");
+    }
+
+    @Test
+    @DisplayName("模型输出不是约定的 JSON 时抛 ModelCallException，由调用方退回默认做法")
+    void rejectsMalformedStructuredOutput() throws Exception {
+        start((call, model) -> new Reply(0, 200, "检索：B 的保修期多久"));
+        var generation = gateway(null);
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> generation.structured("系统", "问题", Plan.class,
+                new TextGeneration.Limits(96, List.of()))).isInstanceOf(ModelCallException.class);
+    }
+
+    @Test
+    @DisplayName("每次调用都留下 Spring AI 的观测：ChatClient 一层、模型调用一层（带模型名），供 /actuator/metrics 统计（#145）")
+    void recordsSpringAiObservations() throws Exception {
+        start((call, model) -> new Reply(0, 200, "回答"));
+        var names = Collections.synchronizedList(new ArrayList<String>());
+        var registry = io.micrometer.observation.ObservationRegistry.create();
+        registry.observationConfig().observationHandler(new io.micrometer.observation.ObservationHandler<>() {
+            @Override
+            public boolean supportsContext(io.micrometer.observation.Observation.Context context) {
+                return true;
+            }
+
+            @Override
+            public void onStop(io.micrometer.observation.Observation.Context context) {
+                names.add(context.getName() + " " + context.getLowCardinalityKeyValues().stream()
+                        .filter(keyValue -> keyValue.getKey().equals("gen_ai.request.model"))
+                        .map(io.micrometer.common.KeyValue::getValue).findFirst().orElse(""));
+            }
+        });
+        var generation = gateway(null, null, null, registry);
+
+        generation.complete("系统", "问题", new TextGeneration.Limits(16, List.of()));
+        generation.stream("系统", "问题", delta -> {
+        });
+
+        assertThat(names).contains("gen_ai.client.operation m", "spring.ai.chat.client ");
+        assertThat(names.stream().filter(name -> name.startsWith("gen_ai.client.operation"))).hasSize(2);
+    }
+
+    @Test
+    @DisplayName("提示词和资料里的花括号、尖括号原样发给模型，不当作模板占位符（资料原文、员工的问题都可能带）")
+    void sendsBracesVerbatim() throws Exception {
+        start((call, model) -> new Reply(0, 200, "回答"));
+        var generation = gateway(null);
+
+        generation.complete("规则 {role} <x>", "资料：价格 {原价} 与 {} 和 }{", new TextGeneration.Limits(16, List.of()));
+        generation.stream("规则 {role}", "资料 {a}", delta -> {
+        });
+
+        assertThat(bodies).hasSize(2);
+        assertThat(bodies.getFirst()).contains("规则 {role} <x>", "资料：价格 {原价} 与 {} 和 }{");
+        assertThat(bodies.get(1)).contains("规则 {role}", "资料 {a}");
     }
 
     private static final Pattern MODEL = Pattern.compile("\"model\"\\s*:\\s*\"([^\"]+)\"");
@@ -186,6 +257,7 @@ class SpringAiChatGatewayTest {
         com.sun.net.httpserver.HttpHandler handler = exchange -> {
             paths.add(exchange.getRequestURI().getPath());
             var request = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+            bodies.add(request);
             var matcher = MODEL.matcher(request);
             var model = matcher.find() ? matcher.group(1) : "";
             models.add(model);
@@ -215,7 +287,7 @@ class SpringAiChatGatewayTest {
     private static void respondWhole(HttpExchange exchange, Reply reply) throws IOException {
         try (exchange) {
             var body = ("{\"id\":\"c\",\"object\":\"chat.completion\",\"created\":1,\"model\":\"m\",\"choices\":[{\"index\":0,"
-                    + "\"message\":{\"role\":\"assistant\",\"content\":\"" + reply.text() + "\"},\"finish_reason\":\"stop\"}]}")
+                    + "\"message\":{\"role\":\"assistant\",\"content\":\"" + reply.text().replace("\"", "\\\"") + "\"},\"finish_reason\":\"stop\"}]}")
                     .getBytes(StandardCharsets.UTF_8);
             exchange.getResponseHeaders().add("Content-Type", "application/json");
             exchange.sendResponseHeaders(200, body.length);
@@ -252,19 +324,25 @@ class SpringAiChatGatewayTest {
         }
     }
 
-    private SpringAiChatGateway gateway(Duration hedgeAfter) {
+    private SpringAiTextGeneration gateway(Duration hedgeAfter) {
         return gateway(hedgeAfter, null);
     }
 
-    private SpringAiChatGateway gateway(Duration hedgeAfter, String hedgeModel) {
+    private SpringAiTextGeneration gateway(Duration hedgeAfter, String hedgeModel) {
         return gateway(hedgeAfter, hedgeModel, null);
     }
 
-    private SpringAiChatGateway gateway(Duration hedgeAfter, String hedgeModel, String lightModel) {
+    private SpringAiTextGeneration gateway(Duration hedgeAfter, String hedgeModel, String lightModel) {
+        return gateway(hedgeAfter, hedgeModel, lightModel, io.micrometer.observation.ObservationRegistry.NOOP);
+    }
+
+    private SpringAiTextGeneration gateway(Duration hedgeAfter, String hedgeModel, String lightModel,
+            io.micrometer.observation.ObservationRegistry registry) {
         var properties = new AiProperties("http://127.0.0.1:" + server.getAddress().getPort() + "/v1", "test-key",
                 Duration.ofSeconds(10), null, null,
                 new AiProperties.Chat("openai", "m", 0.1, 256, hedgeAfter, hedgeModel, lightModel));
-        return new SpringAiChatGateway(properties, TestRoutes.of(properties, overrides));
+        return new SpringAiTextGeneration(properties, new OpenAiChatModels(properties, registry),
+                TestRoutes.of(properties, overrides));
     }
 
     private ModelRoute databaseRoute(String model) {

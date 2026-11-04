@@ -3,7 +3,8 @@ package com.liming.rag.answering.application.ask;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.liming.rag.ai.ChatGateway;
+import com.liming.rag.ai.QueryRewriting;
+import com.liming.rag.ai.TextGeneration;
 import com.liming.rag.answering.application.AnsweringException;
 import com.liming.rag.answering.application.AnsweringProperties;
 import com.liming.rag.answering.application.TestExecutor;
@@ -34,7 +35,7 @@ class AnswerServiceTest {
         return new AnswerService(query -> hits, (query, documents) -> scores, (system, user) -> {
             prompts.add(user);
             return reply;
-        }, new AnsweringProperties(30, 8, 0.3, false, 0.03, Duration.ofSeconds(3)), TestSettings.RETAIL,
+        }, (instructions, question) -> "", new AnsweringProperties(30, 8, 0.3, false, 0.03, Duration.ofSeconds(3)), TestSettings.RETAIL,
                 TestExecutor.VIRTUAL);
     }
 
@@ -63,7 +64,7 @@ class AnswerServiceTest {
             systems.add(system);
             prompts.add(user);
             return "在 03 号货架[1]。";
-        }, new AnsweringProperties(30, 8, 0.3, false, 0.03, Duration.ofSeconds(3)), TestSettings.RETAIL,
+        }, (instructions, question) -> "", new AnsweringProperties(30, 8, 0.3, false, 0.03, Duration.ofSeconds(3)), TestSettings.RETAIL,
                 TestExecutor.VIRTUAL)
                 .ask(TENANT, USER, List.of(1L), "便当饭团晚上几点得撤下来啊");
 
@@ -78,7 +79,7 @@ class AnswerServiceTest {
     void refusesWithConfiguredMessage() {
         var settings = new TestSettings(TestSettings.RETAIL_PACK, "资料里没有依据，请联系总部。");
         var answer = new AnswerService(query -> List.of(), (query, documents) -> List.of(), (system, user) -> "x",
-                new AnsweringProperties(30, 8, 0.3, false, 0.03, Duration.ofSeconds(3)), settings, TestExecutor.VIRTUAL)
+                (instructions, question) -> "", new AnsweringProperties(30, 8, 0.3, false, 0.03, Duration.ofSeconds(3)), settings, TestExecutor.VIRTUAL)
                 .ask(TENANT, USER, List.of(1L), "问");
 
         assertThat(answer.refused()).isTrue();
@@ -179,7 +180,7 @@ class AnswerServiceTest {
     }
 
     private AnswerService streaming(List<String> pieces, double score) {
-        ChatGateway chat = new ChatGateway() {
+        TextGeneration chat = new TextGeneration() {
             @Override
             public String complete(String systemPrompt, String userMessage) {
                 return String.join("", pieces);
@@ -192,7 +193,7 @@ class AnswerServiceTest {
             }
         };
         return new AnswerService(query -> List.of(SHELF), (query, documents) -> List.of(score), chat,
-                new AnsweringProperties(30, 8, 0.3, false, 0.03, Duration.ofSeconds(3)), TestSettings.RETAIL,
+                (instructions, question) -> "", new AnsweringProperties(30, 8, 0.3, false, 0.03, Duration.ofSeconds(3)), TestSettings.RETAIL,
                 TestExecutor.VIRTUAL);
     }
 
@@ -204,30 +205,28 @@ class AnswerServiceTest {
         return rewriting(rewritten, enabled, 0.05, 0);
     }
 
-    /** 改写时传给模型的输出上限，用来核对改写调用确实单独限了长度。 */
-    private final List<ChatGateway.Limits> rewriteLimits = new ArrayList<>();
+    /** 交给改写能力的规则和原问题；输出上限由 rag-ai 的改写能力限定（SpringAiQueryRewritingTest）。 */
+    private final List<List<String>> rewriteCalls = new ArrayList<>();
 
     /**
      * 改写场景：只有问题里出现“货架”时重排才给高分，原问题得 {@code originalScore}；改写器把口语问题改成规范说法，
      * 耗时 {@code delayMillis}。回答时用员工原来的问题，证据来自改写后的检索。
      */
     private AnswerService rewriting(String rewritten, boolean enabled, double originalScore, long delayMillis) {
-        ChatGateway chat = new ChatGateway() {
+        QueryRewriting rewriting = (instructions, question) -> {
+            prompts.add(question);
+            rewriteCalls.add(List.of(instructions, question));
+            try {
+                Thread.sleep(delayMillis);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+            return rewritten;
+        };
+        TextGeneration chat = new TextGeneration() {
             @Override
             public String complete(String systemPrompt, String userMessage) {
-                throw new AssertionError("改写应当带输出上限调用");
-            }
-
-            @Override
-            public String complete(String systemPrompt, String userMessage, Limits limits) {
-                prompts.add(userMessage);
-                rewriteLimits.add(limits);
-                try {
-                    Thread.sleep(delayMillis);
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                }
-                return rewritten;
+                throw new AssertionError("改写应当经改写能力，不经文字生成");
             }
 
             @Override
@@ -238,22 +237,20 @@ class AnswerServiceTest {
             }
         };
         return new AnswerService(query -> List.of(SHELF),
-                (query, documents) -> List.of(query.contains("货架") ? 0.9 : originalScore), chat,
+                (query, documents) -> List.of(query.contains("货架") ? 0.9 : originalScore), chat, rewriting,
                 new AnsweringProperties(30, 8, 0.3, enabled, 0.03, Duration.ofMillis(300)), TestSettings.RETAIL,
                 TestExecutor.VIRTUAL);
     }
 
     @Test
-    @DisplayName("改写单独限制输出长度、遇换行停止；分段记下模型改写、重新检索、重新重排的耗时；开始改写时发状态提示")
+    @DisplayName("改写把行业包加内核的规则和员工原来的问题交给改写能力；分段记下模型改写、重新检索、重新重排的耗时；开始改写时发状态提示")
     void limitsRewriteAndTracesStages() {
         var statuses = new ArrayList<String>();
         var answer = rewriting("青柚气泡水放在哪个货架？", true).ask(TENANT, USER, List.of(), "青柚放哪了", delta -> {
         }, statuses::add);
 
-        assertThat(rewriteLimits).singleElement().satisfies(limits -> {
-            assertThat(limits.maxTokens()).isEqualTo(64);
-            assertThat(limits.stop()).containsExactly("\n");
-        });
+        assertThat(rewriteCalls).singleElement()
+                .isEqualTo(List.of(LowRelevanceRewriter.system(TestSettings.RETAIL_PACK), "青柚放哪了"));
         assertThat(answer.rewrite().outcome()).isEqualTo(AskResult.Rewrite.Outcome.REWRITTEN);
         assertThat(answer.rewrite().outputChars()).isEqualTo("青柚气泡水放在哪个货架？".length());
         assertThat(answer.rewrite().modelMillis()).isNotNull();
@@ -327,7 +324,7 @@ class AnswerServiceTest {
 
     /** 追问场景：检索词含“冷冻”时检索到冷冻柜的资料，含“冷柜”时检索到货架资料；重排只给和检索词对得上的资料高分。 */
     private AnswerService followUp(List<String> retrieved) {
-        ChatGateway chat = new ChatGateway() {
+        TextGeneration chat = new TextGeneration() {
             @Override
             public String complete(String systemPrompt, String userMessage) {
                 throw new AssertionError("生成应当走流式");
@@ -345,7 +342,7 @@ class AnswerServiceTest {
             return query.text().contains("冷冻") ? List.of(FROZEN) : List.of(SHELF);
         }, (query, documents) -> documents.stream()
                 .map(document -> (query.contains("冷冻") == document.contains("冷冻")) ? 0.9 : 0.05).toList(),
-                chat, new AnsweringProperties(30, 8, 0.3, false, 0.03, Duration.ofSeconds(3)), TestSettings.RETAIL,
+                chat, (instructions, question) -> "", new AnsweringProperties(30, 8, 0.3, false, 0.03, Duration.ofSeconds(3)), TestSettings.RETAIL,
                 TestExecutor.VIRTUAL);
     }
 
@@ -400,7 +397,7 @@ class AnswerServiceTest {
         var answer = new AnswerService(query -> List.of(listed), (query, documents) -> List.of(0.9), (system, user) -> {
             prompts.add(user);
             return "差额超过 20 元须填写说明单[1]。";
-        }, new AnsweringProperties(30, 8, 0.3, false, 0.03, Duration.ofSeconds(3)), TestSettings.RETAIL,
+        }, (instructions, question) -> "", new AnsweringProperties(30, 8, 0.3, false, 0.03, Duration.ofSeconds(3)), TestSettings.RETAIL,
                 TestExecutor.VIRTUAL).ask(TENANT, USER, List.of(), "差额多少要写说明");
 
         assertThat(prompts.getFirst()).contains("交班时双方清点钱箱。\n差额超过 20 元").doesNotContain("2. 差额");

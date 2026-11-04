@@ -9,80 +9,90 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.UserMessage;
-import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.Prompt;
-import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.ai.openai.OpenAiChatOptions;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
-/** 通过 Spring AI 调用 OpenAI 兼容的对话接口。不重试，失败直接告诉用户稍后再问（流式生成的备用请求见 {@link #stream}）。 */
-final class SpringAiChatGateway implements ChatGateway {
+/**
+ * 用 Spring AI 的 {@link ChatClient} 调用 OpenAI 兼容的对话接口（#145）。不重试，失败直接告诉用户稍后再问（流式生成的备用请求见
+ * {@link #stream}）。模型和 ChatClient 都带上观测注册表，框架自带的观测（{@code spring.ai.chat.client}、
+ * {@code gen_ai.client.operation}、token 用量）由 Actuator 汇总成指标；提示词和回答原文不进观测。
+ *
+ * <p>提示词按消息整段交给 ChatClient，不走它的模板渲染：资料原文和员工的问题里可能有花括号。
+ */
+final class SpringAiTextGeneration implements TextGeneration {
 
-    private static final Logger log = LoggerFactory.getLogger(SpringAiChatGateway.class);
+    private static final Logger log = LoggerFactory.getLogger(SpringAiTextGeneration.class);
 
-    /** 不需要密钥的服务（如内网自建的 vLLM）也要给 OpenAI 客户端一个值。 */
-    private static final String NO_KEY = "EMPTY";
-
-    private final AiProperties properties;
+    private final OpenAiChatModels models;
     private final ModelRoutes routes;
     private final Duration hedgeAfter;
-    /** 按地址和密钥缓存客户端：换模型只换调用选项，换服务商才新建客户端。 */
-    private final Map<String, ChatModel> models = new ConcurrentHashMap<>();
+    /** 按地址和密钥缓存 ChatClient，与 {@link OpenAiChatModels} 的模型一一对应。 */
+    private final Map<String, ChatClient> clients = new ConcurrentHashMap<>();
 
-    SpringAiChatGateway(AiProperties properties, ModelRoutes routes) {
-        properties.requireApiKey();
-        this.properties = properties;
+    SpringAiTextGeneration(AiProperties properties, OpenAiChatModels models, ModelRoutes routes) {
+        this.models = models;
         this.routes = routes;
         this.hedgeAfter = properties.chat().hedgeAfter();
     }
 
-    /** 每次调用都按当前配置取服务商和模型，管理端保存后下一次请求就生效（D-043）。 */
     private OpenAiChatOptions options(ModelRoute route) {
-        return OpenAiChatOptions.builder()
-                .baseUrl(route.baseUrl())
-                .apiKey(route.apiKey() == null ? NO_KEY : route.apiKey())
-                .model(route.model())
-                .temperature(properties.chat().temperature())
-                .maxTokens(properties.chat().maxTokens())
-                .timeout(properties.timeout())
-                .maxRetries(0)
-                .build();
+        return models.options(route);
     }
 
-    private ChatModel model(ModelRoute route) {
-        return models.computeIfAbsent(route.baseUrl() + "\n" + route.apiKey(),
-                key -> OpenAiChatModel.builder().options(options(route)).build());
+    /** Spring AI 2.0 不会把单次调用的选项和默认选项合并（调用带了选项就只用它），所以从默认选项复制一份再改限制。 */
+    private OpenAiChatOptions limited(ModelRoute route, Limits limits) {
+        return options(route).mutate().maxTokens(limits.maxTokens()).stop(limits.stop()).build();
+    }
+
+    private ChatClient client(ModelRoute route) {
+        return clients.computeIfAbsent(route.baseUrl() + "\n" + route.apiKey(),
+                key -> ChatClient.create(models.model(route), models.observations()));
+    }
+
+    private ModelRoute route(Limits limits) {
+        return routes.resolve(limits.tier() == Tier.LIGHT ? ModelUsage.LIGHT : ModelUsage.ANSWER);
     }
 
     @Override
     public String complete(String systemPrompt, String userMessage) {
         var route = routes.resolve(ModelUsage.ANSWER);
+        return call(route, prompt(systemPrompt, userMessage, options(route)));
+    }
+
+    @Override
+    public String complete(String systemPrompt, String userMessage, Limits limits) {
+        var route = route(limits);
+        return call(route, prompt(systemPrompt, userMessage, limited(route, limits)));
+    }
+
+    private String call(ModelRoute route, Prompt prompt) {
         try {
-            var response = model(route).call(prompt(systemPrompt, userMessage, options(route)));
-            var text = response.getResult().getOutput().getText();
+            var text = client(route).prompt(prompt).call().content();
             return text == null ? "" : text;
         } catch (RuntimeException e) {
             throw unavailable(e);
         }
     }
 
-    /**
-     * Spring AI 2.0 不会把单次调用的选项和默认选项合并（调用带了选项就只用它），所以从默认选项复制一份再改限制。
-     */
+    /** 由 Spring AI 的结构化输出转换器在提示词末尾附上 JSON 格式要求，并把回复解析成 {@code type}。 */
     @Override
-    public String complete(String systemPrompt, String userMessage, Limits limits) {
-        var route = routes.resolve(limits.tier() == Tier.LIGHT ? ModelUsage.LIGHT : ModelUsage.ANSWER);
-        var limited = options(route).mutate().maxTokens(limits.maxTokens()).stop(limits.stop()).build();
+    public <T> T structured(String systemPrompt, String userMessage, Class<T> type, Limits limits) {
+        var route = route(limits);
+        T result;
         try {
-            var response = model(route).call(prompt(systemPrompt, userMessage, limited));
-            var text = response.getResult().getOutput().getText();
-            return text == null ? "" : text;
+            result = client(route).prompt(prompt(systemPrompt, userMessage, limited(route, limits))).call().entity(type);
         } catch (RuntimeException e) {
-            throw unavailable(e);
+            throw new ModelCallException("模型没有按约定的格式回复", e);
         }
+        if (result == null) {
+            throw new ModelCallException("模型没有按约定的格式回复");
+        }
+        return result;
     }
 
     /**
@@ -101,13 +111,12 @@ final class SpringAiChatGateway implements ChatGateway {
     @Override
     public String stream(String systemPrompt, String userMessage, Consumer<String> onDelta, CompletionStage<?> stop) {
         var answer = routes.resolve(ModelUsage.ANSWER);
-        var main = deltas(model(answer), prompt(systemPrompt, userMessage, options(answer)));
+        var main = deltas(answer, prompt(systemPrompt, userMessage, options(answer)));
         var deltas = hedgeAfter == null ? main
                 : Flux.firstWithValue(main, Mono.delay(hedgeAfter)
                         .map(tick -> routes.resolve(ModelUsage.HEDGE))
                         .doOnNext(hedge -> log.info("对话模型 {} 内没出首字，发出备用请求（{}）", hedgeAfter, hedge.model()))
-                        .flatMapMany(hedge -> deltas(model(hedge),
-                                prompt(systemPrompt, userMessage, options(hedge)))));
+                        .flatMapMany(hedge -> deltas(hedge, prompt(systemPrompt, userMessage, options(hedge)))));
         var text = new StringBuilder();
         try {
             // suppressCancel：流正常结束时 takeUntilOther 会取消这个 Mono，不能连带把停止信号也取消掉，
@@ -123,10 +132,8 @@ final class SpringAiChatGateway implements ChatGateway {
     }
 
     /** 只保留有文字的片段，这样“先出字”指的是真正的首字，而不是只带角色的空片段。 */
-    private static Flux<String> deltas(ChatModel model, Prompt prompt) {
-        return model.stream(prompt)
-                .mapNotNull(response -> response.getResult() == null ? null : response.getResult().getOutput().getText())
-                .filter(delta -> !delta.isEmpty());
+    private Flux<String> deltas(ModelRoute route, Prompt prompt) {
+        return client(route).prompt(prompt).stream().content().filter(delta -> !delta.isEmpty());
     }
 
     private static Prompt prompt(String systemPrompt, String userMessage, OpenAiChatOptions options) {

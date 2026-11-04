@@ -6,7 +6,7 @@ import java.util.regex.Pattern;
  * 本地确定性“对话模型”：摘出用户消息里第 1 条资料的第一句话并标注 [1]；没有资料时回复 NO_ANSWER。
  * 只用于测试和离线开发，约定的资料格式见 rag-answering 的提示词。
  */
-final class ExtractiveChatGateway implements ChatGateway {
+final class ExtractiveTextGeneration implements TextGeneration {
 
     private static final Pattern FIRST_EVIDENCE = Pattern.compile("^\\[1\\][^\\n]*\\n([^\\n]+)", Pattern.MULTILINE);
 

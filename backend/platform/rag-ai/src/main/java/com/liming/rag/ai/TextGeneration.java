@@ -1,11 +1,16 @@
 package com.liming.rag.ai;
 
+import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.CompletionStage;
 import java.util.function.Consumer;
 
-/** 对话模型：给定系统提示和用户消息，返回完整回复文本。 */
-public interface ChatGateway {
+/**
+ * 文字生成能力（Spring AI 防腐层，#145）：一次性生成、流式生成（可停止、带备用请求）、结构化输出。上下文只依赖这个接口，
+ * 不接触 Spring AI 的类型；实现内部用 Spring AI 的 {@code ChatClient}，并留下框架自带的观测（耗时、token 用量）。
+ * 提示词是调用方的策略，这里只负责怎么调用模型。
+ */
+public interface TextGeneration {
 
     String complete(String systemPrompt, String userMessage);
 
@@ -34,6 +39,26 @@ public interface ChatGateway {
     /** 带输出限制的生成；默认忽略限制，供不支持的本地实现使用。 */
     default String complete(String systemPrompt, String userMessage, Limits limits) {
         return complete(systemPrompt, userMessage);
+    }
+
+    /**
+     * 结构化输出：要求模型按 {@code type}（record）的字段输出 JSON，解析后返回；按 {@code limits} 的用途选模型。
+     * 本地确定性实现不支持，抛 {@link ModelCallException}，调用方应退回不依赖模型的做法。
+     *
+     * @throws ModelCallException 模型不可用，或输出不是约定的 JSON
+     */
+    default <T> T structured(String systemPrompt, String userMessage, Class<T> type, Limits limits) {
+        throw new ModelCallException("本地模型实现不支持结构化输出");
+    }
+
+    /**
+     * 指定服务商和模型、不走管理端路由的文字生成（#145），只支持一次性生成。评测里的评判模型用：温度 0，失败重试一次。
+     *
+     * @param apiKey 只从环境变量读取，不进日志
+     * @throws IllegalStateException 没有密钥
+     */
+    static TextGeneration fixed(String baseUrl, String apiKey, String model, Duration timeout, int maxTokens) {
+        return new FixedTextGeneration(baseUrl, apiKey, model, timeout, maxTokens);
     }
 
     /**

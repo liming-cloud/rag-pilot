@@ -1,6 +1,6 @@
 package com.liming.rag.answering.application.conversation;
 
-import com.liming.rag.ai.ChatGateway;
+import com.liming.rag.ai.TextGeneration;
 import com.liming.rag.ai.ModelCallException;
 import com.liming.rag.answering.application.AnsweringProperties;
 import com.liming.rag.answering.application.ask.AnswerPrompt;
@@ -50,22 +50,22 @@ public class ConversationAskService {
             """;
     static final int MAX_TITLE_CHARS = 16;
 
-    private static final ChatGateway.Limits SMALL_TALK_LIMITS =
-            new ChatGateway.Limits(48, List.of("\n"), ChatGateway.Tier.LIGHT);
-    private static final ChatGateway.Limits TITLE_LIMITS =
-            new ChatGateway.Limits(32, List.of("\n"), ChatGateway.Tier.LIGHT);
+    private static final TextGeneration.Limits SMALL_TALK_LIMITS =
+            new TextGeneration.Limits(48, List.of("\n"), TextGeneration.Tier.LIGHT);
+    private static final TextGeneration.Limits TITLE_LIMITS =
+            new TextGeneration.Limits(32, List.of("\n"), TextGeneration.Tier.LIGHT);
     private static final Pattern DIGITS = Pattern.compile("\\d");
 
     private final ConversationService conversations;
     private final AnswerService answers;
-    private final ChatGateway chat;
+    private final TextGeneration chat;
     private final SearchPlanner planner;
     private final TurnStops stops;
     private final AnsweringProperties.Conversation settings;
     /** 标题在后台生成，不占回答的时间；停机时等它写完（#135）。 */
     private final AsyncTaskExecutor background;
 
-    ConversationAskService(ConversationService conversations, AnswerService answers, ChatGateway chat, TurnStops stops,
+    ConversationAskService(ConversationService conversations, AnswerService answers, TextGeneration chat, TurnStops stops,
             AnsweringProperties properties, @Qualifier("applicationTaskExecutor") AsyncTaskExecutor background) {
         this.conversations = conversations;
         this.answers = answers;

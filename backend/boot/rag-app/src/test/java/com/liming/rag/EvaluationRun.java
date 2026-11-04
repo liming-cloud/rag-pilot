@@ -3,7 +3,7 @@ package com.liming.rag;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.fail;
 
-import com.liming.rag.ai.AnswerJudge;
+import com.liming.rag.evaluation.api.AnswerJudge;
 import com.liming.rag.ai.EmbeddingClient;
 import com.liming.rag.ai.ModelCallException;
 import com.liming.rag.evaluation.api.EvalCase;

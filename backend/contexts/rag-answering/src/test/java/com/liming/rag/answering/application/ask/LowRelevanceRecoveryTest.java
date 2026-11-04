@@ -4,19 +4,19 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.liming.rag.answering.application.TestExecutor;
 import com.liming.rag.answering.application.TestSettings;
+import com.liming.rag.knowledge.api.SearchHit;
+import com.liming.rag.shared.TenantId;
+import com.liming.rag.shared.UserId;
 import com.liming.rag.answering.application.ask.AskResult.Rewrite.Outcome;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.springframework.ai.document.Document;
-import org.springframework.ai.rag.Query;
 
 class LowRelevanceRecoveryTest {
 
-    private static final Query ORIGINAL = new Query("饮料放哪");
+    private static final SearchRequest ORIGINAL = new SearchRequest("饮料放哪", new TenantId(1), new UserId(7), List.of());
     private final List<String> statuses = new ArrayList<>();
 
     @Test
@@ -24,7 +24,7 @@ class LowRelevanceRecoveryTest {
     void adoptsBetterResult() {
         var result = recovery("青柚气泡水在哪个货架", 0.9).recover(ORIGINAL, ranked(0.1), new StageClock(), statuses::add);
 
-        assertThat(result.ranked().getFirst().getScore()).isEqualTo(0.9);
+        assertThat(result.ranked().getFirst().score()).isEqualTo(0.9);
         assertThat(result.rewrite().outcome()).isEqualTo(Outcome.REWRITTEN);
         assertThat(result.rewrite().question()).isEqualTo("青柚气泡水在哪个货架");
         assertThat(statuses).containsExactly(LowRelevanceRecovery.REWRITING_STATUS);
@@ -52,18 +52,15 @@ class LowRelevanceRecoveryTest {
 
     /** 改写模型固定回 {@code rewritten}；改写后的问题重新检索、重排后得到 {@code rewrittenScore}。 */
     private static LowRelevanceRecovery recovery(String rewritten, double rewrittenScore) {
-        var rewriter = new LowRelevanceRewriter((system, user) -> rewritten, Duration.ofSeconds(1),
+        var rewriter = new LowRelevanceRewriter((instructions, question) -> rewritten, Duration.ofSeconds(1),
                 TestSettings.RETAIL_PACK, TestExecutor.VIRTUAL);
-        return new LowRelevanceRecovery(query -> List.of(document(0)),
-                (query, documents) -> query.text().equals(ORIGINAL.text()) ? documents : ranked(rewrittenScore),
-                rewriter, 0.03);
+        return new LowRelevanceRecovery(new EvidenceRetriever(query -> List.of(HIT), 30),
+                new EvidenceReranker((query, texts) -> List.of(rewrittenScore)), rewriter, 0.03);
     }
 
-    private static List<Document> ranked(double score) {
-        return List.of(document(score));
-    }
+    private static final SearchHit HIT = new SearchHit(1, 1, "商品陈列.txt", "", "青柚气泡水在 03 号货架。", 0);
 
-    private static Document document(double score) {
-        return Document.builder().id("chunk-1").text("青柚气泡水在 03 号货架。").metadata(Map.of()).score(score).build();
+    private static List<Evidence> ranked(double score) {
+        return List.of(Evidence.of(HIT).withScore(score));
     }
 }

@@ -19,6 +19,11 @@
             <groupId>${project.groupId}</groupId>
             <artifactId>rag-shared</artifactId>
         </dependency>
+        <!-- 评判模型经 rag-ai 的文字生成调用（#145：评判规则在这里，模型调用在防腐层）。 -->
+        <dependency>
+            <groupId>${project.groupId}</groupId>
+            <artifactId>rag-ai</artifactId>
+        </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>
@@ -27,6 +32,12 @@
         <dependency>
             <groupId>org.assertj</groupId>
             <artifactId>assertj-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- 评判自检读样本文件（JudgeProbeRun）。 -->
+        <dependency>
+            <groupId>tools.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
             <scope>test</scope>
         </dependency>
     </dependencies>
