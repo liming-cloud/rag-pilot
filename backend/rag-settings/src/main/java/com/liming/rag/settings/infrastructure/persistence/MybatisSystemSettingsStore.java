@@ -2,9 +2,7 @@ package com.liming.rag.settings.infrastructure.persistence;
 
 import com.liming.rag.settings.application.SettingKey;
 import com.liming.rag.settings.application.SystemSettingsStore;
-import java.sql.Timestamp;
 import java.time.OffsetDateTime;
-import java.time.ZoneId;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
@@ -24,10 +22,10 @@ class MybatisSystemSettingsStore implements SystemSettingsStore {
     public Map<SettingKey, Saved> all() {
         var saved = new EnumMap<SettingKey, Saved>(SettingKey.class);
         for (var row : mapper.all()) {
-            var key = SettingKey.valueOf((String) row.get("setting_key"));
-            var text = (String) row.get("value");
+            var key = SettingKey.valueOf(row.settingKey);
+            var text = row.value;
             List<String> value = !key.list() ? List.of(text) : text.isEmpty() ? List.of() : text.lines().toList();
-            saved.put(key, new Saved(key, value, (String) row.get("updated_by_name"), time(row.get("updated_at"))));
+            saved.put(key, new Saved(key, value, row.updatedByName, row.updatedAt));
         }
         return saved;
     }
@@ -43,10 +41,4 @@ class MybatisSystemSettingsStore implements SystemSettingsStore {
         mapper.delete(key.name());
     }
 
-    /** 以 Map 读取时 timestamptz 是 java.sql.Timestamp，换成带时区的时间。 */
-    private static OffsetDateTime time(Object value) {
-        return value instanceof Timestamp timestamp
-                ? timestamp.toInstant().atZone(ZoneId.systemDefault()).toOffsetDateTime()
-                : (OffsetDateTime) value;
-    }
 }

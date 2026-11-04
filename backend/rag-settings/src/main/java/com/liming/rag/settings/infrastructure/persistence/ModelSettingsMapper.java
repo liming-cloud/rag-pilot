@@ -2,7 +2,6 @@ package com.liming.rag.settings.infrastructure.persistence;
 
 import java.time.OffsetDateTime;
 import java.util.List;
-import java.util.Map;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
@@ -10,7 +9,7 @@ import org.apache.ibatis.annotations.Param;
 @Mapper
 interface ModelSettingsMapper {
 
-    List<Map<String, Object>> providers(@Param("id") Long id);
+    List<ModelProviderDO> providers(@Param("id") Long id);
 
     boolean providerNameTaken(@Param("name") String name, @Param("exceptId") Long exceptId);
 
@@ -22,13 +21,13 @@ interface ModelSettingsMapper {
 
     void deleteProvider(@Param("id") long id);
 
-    List<Map<String, Object>> purposes(@Param("purpose") String purpose);
+    List<ModelPurposeDO> purposes(@Param("purpose") String purpose);
 
     void savePurpose(@Param("purpose") String purpose, @Param("providerId") Long providerId,
             @Param("model") String model, @Param("updatedByName") String updatedByName,
             @Param("updatedAt") OffsetDateTime updatedAt);
 
-    List<Map<String, Object>> changes(@Param("id") Long id, @Param("offset") long offset, @Param("size") int size);
+    List<ModelChangeDO> changes(@Param("id") Long id, @Param("offset") long offset, @Param("size") int size);
 
     long countChanges();
 
