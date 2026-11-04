@@ -2,8 +2,8 @@ package com.liming.rag;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.liming.rag.answering.application.AskResult;
-import com.liming.rag.answering.application.AnswerLogService;
+import com.liming.rag.answering.application.ask.AskResult;
+import com.liming.rag.answering.application.review.AnswerLogService;
 import com.liming.rag.answering.domain.RefusalReason;
 import com.liming.rag.shared.TenantId;
 import com.liming.rag.shared.UserId;

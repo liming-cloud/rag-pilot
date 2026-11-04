@@ -2,7 +2,7 @@ package com.liming.rag.answering.web;
 
 import cn.dev33.satoken.annotation.SaCheckLogin;
 import cn.dev33.satoken.annotation.SaCheckPermission;
-import com.liming.rag.answering.application.ConversationAskService;
+import com.liming.rag.answering.application.conversation.ConversationAskService;
 import com.liming.rag.identity.api.CurrentUser;
 import com.liming.rag.identity.api.IdentityPermissions;
 import java.util.Map;

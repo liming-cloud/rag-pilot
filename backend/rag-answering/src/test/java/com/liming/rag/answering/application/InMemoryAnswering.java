@@ -2,6 +2,11 @@ package com.liming.rag.answering.application;
 
 import com.liming.rag.ai.EmbeddingClient;
 import com.liming.rag.ai.ModelCallException;
+import com.liming.rag.answering.application.insight.AnswerStatistics;
+import com.liming.rag.answering.application.insight.GapRecords;
+import com.liming.rag.answering.application.insight.UsageStats;
+import com.liming.rag.answering.application.review.AnswerReview;
+import com.liming.rag.answering.application.review.AnswerReviews;
 import com.liming.rag.answering.domain.AnswerRecord;
 import com.liming.rag.answering.domain.AnswerRecordRepository;
 import com.liming.rag.answering.domain.Conversation;
@@ -34,29 +39,29 @@ import java.util.concurrent.atomic.AtomicLong;
  * answering 应用服务单元测试用的内存实现：会话（带版本号和主线末尾，口径同 {@code MybatisConversationRepository}）、
  * 回答记录、管理端和统计的查询端口、knowledge 的授权与引用原文、identity 的账号目录和嵌入模型。
  */
-final class InMemoryAnswering {
+public final class InMemoryAnswering {
 
-    static final TenantId TENANT = new TenantId(1);
+    public static final TenantId TENANT = new TenantId(1);
 
-    final Conversations conversations = new Conversations();
-    final Records records = new Records();
-    final Reviews reviews = new Reviews();
-    final Gaps gaps = new Gaps();
-    final Statistics statistics = new Statistics();
-    final Access access = new Access();
-    final Directory users = new Directory();
-    final Embeddings embeddings = new Embeddings();
+    public final Conversations conversations = new Conversations();
+    public final Records records = new Records();
+    public final Reviews reviews = new Reviews();
+    public final Gaps gaps = new Gaps();
+    public final Statistics statistics = new Statistics();
+    public final Access access = new Access();
+    public final Directory users = new Directory();
+    public final Embeddings embeddings = new Embeddings();
 
     /** 会话和轮次；保存时按版本号判断并发修改。 */
-    static final class Conversations implements ConversationRepository {
+    public static final class Conversations implements ConversationRepository {
 
-        final Map<Long, Conversation> rows = new LinkedHashMap<>();
-        final Map<Long, ConversationTurn> turns = new LinkedHashMap<>();
-        final Set<Long> superseded = new HashSet<>();
+        public final Map<Long, Conversation> rows = new LinkedHashMap<>();
+        public final Map<Long, ConversationTurn> turns = new LinkedHashMap<>();
+        public final Set<Long> superseded = new HashSet<>();
         private final AtomicLong ids = new AtomicLong(10);
         private final AtomicLong turnIds = new AtomicLong(1000);
         /** 模拟别的操作抢先改过会话：下几次更新时版本不一致。 */
-        int staleUpdates;
+        public int staleUpdates;
 
         @Override
         public Conversation save(Conversation conversation) {
@@ -129,11 +134,11 @@ final class InMemoryAnswering {
     }
 
     /** 回答记录：按聚合存，评价和处理状态分开保存，口径同 {@code MybatisAnswerRecordRepository}。 */
-    static final class Records implements AnswerRecordRepository {
+    public static final class Records implements AnswerRecordRepository {
 
-        final Map<Long, AnswerRecord> rows = new LinkedHashMap<>();
+        public final Map<Long, AnswerRecord> rows = new LinkedHashMap<>();
         private final AtomicLong ids = new AtomicLong(200);
-        int reviewSaves;
+        public int reviewSaves;
 
         @Override
         public AnswerRecord add(AnswerRecord record) {
@@ -172,7 +177,7 @@ final class InMemoryAnswering {
                     record.resolutionNote(), record.resolvedBy()));
         }
 
-        int batchSaves;
+        public int batchSaves;
 
         @Override
         public void saveReviews(Collection<AnswerRecord> records) {
@@ -189,12 +194,12 @@ final class InMemoryAnswering {
     }
 
     /** 管理端的回答记录查询：记下查询条件，返回测试给出的行。 */
-    static final class Reviews implements AnswerReviews {
+    public static final class Reviews implements AnswerReviews {
 
-        AnswerReview.Query query;
-        List<AnswerReview> rows = List.of();
-        OffsetDateTime from;
-        OffsetDateTime to;
+        public AnswerReview.Query query;
+        public List<AnswerReview> rows = List.of();
+        public OffsetDateTime from;
+        public OffsetDateTime to;
 
         @Override
         public Paged<AnswerReview> page(TenantId tenantId, AnswerReview.Query query) {
@@ -211,10 +216,10 @@ final class InMemoryAnswering {
     }
 
     /** 知识缺口的原始记录：测试给出，按时间倒序（与 SQL 一致）。 */
-    static final class Gaps implements GapRecords {
+    public static final class Gaps implements GapRecords {
 
-        List<GapRecord> rows = List.of();
-        long total = -1;
+        public List<GapRecord> rows = List.of();
+        public long total = -1;
 
         @Override
         public List<GapRecord> list(TenantId tenantId, OffsetDateTime from, OffsetDateTime to, int limit) {
@@ -228,10 +233,10 @@ final class InMemoryAnswering {
     }
 
     /** 使用统计：记下查询的日期范围，返回空的统计。 */
-    static final class Statistics implements AnswerStatistics {
+    public static final class Statistics implements AnswerStatistics {
 
-        final List<LocalDate[]> usageCalls = new ArrayList<>();
-        final List<LocalDate[]> totalsCalls = new ArrayList<>();
+        public final List<LocalDate[]> usageCalls = new ArrayList<>();
+        public final List<LocalDate[]> totalsCalls = new ArrayList<>();
 
         @Override
         public UsageStats usage(TenantId tenantId, LocalDate from, LocalDate to, ZoneId zone) {
@@ -251,20 +256,20 @@ final class InMemoryAnswering {
     }
 
     /** knowledge 的授权和引用原文：每个账号能访问哪些库，哪些分块的原文还有权查看。 */
-    static final class Access implements KnowledgeAccess, KnowledgeSearch {
+    public static final class Access implements KnowledgeAccess, KnowledgeSearch {
 
-        final Map<Long, List<KnowledgeBaseRef>> accessible = new HashMap<>();
-        final Map<Long, String> names = new HashMap<>();
-        final Map<Long, String> excerpts = new HashMap<>();
+        public final Map<Long, List<KnowledgeBaseRef>> accessible = new HashMap<>();
+        public final Map<Long, String> names = new HashMap<>();
+        public final Map<Long, String> excerpts = new HashMap<>();
 
-        Access grant(long userId, long knowledgeBaseId, String name) {
+        public Access grant(long userId, long knowledgeBaseId, String name) {
             names.put(knowledgeBaseId, name);
             accessible.computeIfAbsent(userId, key -> new ArrayList<>()).add(new KnowledgeBaseRef(knowledgeBaseId,
                     name));
             return this;
         }
 
-        void revoke(long userId, long knowledgeBaseId) {
+        public void revoke(long userId, long knowledgeBaseId) {
             accessible.getOrDefault(userId, new ArrayList<>()).removeIf(ref -> ref.id() == knowledgeBaseId);
         }
 
@@ -303,9 +308,9 @@ final class InMemoryAnswering {
     }
 
     /** identity 的账号目录：显示名。 */
-    static final class Directory implements UserDirectory {
+    public static final class Directory implements UserDirectory {
 
-        final Map<Long, String> names = new HashMap<>();
+        public final Map<Long, String> names = new HashMap<>();
 
         @Override
         public boolean exists(TenantId tenantId, UserId userId) {
@@ -337,13 +342,13 @@ final class InMemoryAnswering {
     }
 
     /** 嵌入模型：按测试给的“话题”生成向量，同一话题的问题向量相同；也可以模拟模型不可用。 */
-    static final class Embeddings implements EmbeddingClient {
+    public static final class Embeddings implements EmbeddingClient {
 
-        final Map<String, float[]> topics = new LinkedHashMap<>();
-        boolean unavailable;
-        int calls;
+        public final Map<String, float[]> topics = new LinkedHashMap<>();
+        public boolean unavailable;
+        public int calls;
 
-        Embeddings topic(String keyword, float... vector) {
+        public Embeddings topic(String keyword, float... vector) {
             topics.put(keyword, vector);
             return this;
         }

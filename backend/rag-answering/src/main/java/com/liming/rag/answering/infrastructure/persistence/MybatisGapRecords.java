@@ -1,6 +1,6 @@
 package com.liming.rag.answering.infrastructure.persistence;
 
-import com.liming.rag.answering.application.GapRecords;
+import com.liming.rag.answering.application.insight.GapRecords;
 import com.liming.rag.shared.TenantId;
 import java.sql.Timestamp;
 import java.time.OffsetDateTime;

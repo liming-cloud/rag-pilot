@@ -6,8 +6,8 @@ import static org.mockito.Mockito.when;
 
 import com.liming.rag.ai.EmbeddingClient;
 import com.liming.rag.ai.ModelCallException;
-import com.liming.rag.answering.application.AskResult;
-import com.liming.rag.answering.application.AnswerLogService;
+import com.liming.rag.answering.application.ask.AskResult;
+import com.liming.rag.answering.application.review.AnswerLogService;
 import com.liming.rag.answering.domain.Citation;
 import com.liming.rag.answering.domain.RefusalReason;
 import com.liming.rag.shared.TenantId;

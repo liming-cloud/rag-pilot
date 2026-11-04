@@ -2,8 +2,8 @@ package com.liming.rag;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.liming.rag.answering.application.ConversationAskService;
-import com.liming.rag.answering.application.ConversationRetention;
+import com.liming.rag.answering.application.conversation.ConversationAskService;
+import com.liming.rag.answering.application.conversation.ConversationRetention;
 import com.liming.rag.answering.domain.ConversationTurn;
 import com.liming.rag.shared.BusinessException;
 import com.liming.rag.shared.TenantId;

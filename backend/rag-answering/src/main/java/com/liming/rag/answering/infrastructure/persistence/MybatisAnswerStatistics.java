@@ -1,7 +1,7 @@
 package com.liming.rag.answering.infrastructure.persistence;
 
-import com.liming.rag.answering.application.AnswerStatistics;
-import com.liming.rag.answering.application.UsageStats;
+import com.liming.rag.answering.application.insight.AnswerStatistics;
+import com.liming.rag.answering.application.insight.UsageStats;
 import com.liming.rag.shared.TenantId;
 import java.sql.Date;
 import java.time.LocalDate;
