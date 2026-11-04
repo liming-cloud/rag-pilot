@@ -1,5 +1,7 @@
-package com.liming.rag.ai;
+package com.liming.rag.knowledge.infrastructure.parsing;
 
+import com.liming.rag.knowledge.application.DocumentParseException;
+import com.liming.rag.knowledge.application.DocumentReaders;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -26,6 +28,7 @@ import org.apache.poi.xwpf.usermodel.XWPFTable;
 import org.apache.poi.xwpf.usermodel.XWPFTableCell;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.document.DocumentReader;
+import org.springframework.stereotype.Component;
 
 /**
  * 本地读取 TXT / Markdown（UTF-8）、PDF（PDFBox）、Word .docx 和 Excel .xlsx / .xls（POI），不调用外部服务。
@@ -34,6 +37,7 @@ import org.springframework.ai.document.DocumentReader;
  * 一行一条，检索时每条都带着列名。Excel 每个可见工作表一节，规则同 Word 表格，单元格按 Excel 里显示的样子输出。
  * PDF 没有可靠的标题信息，只按阅读顺序提取文字。
  */
+@Component
 final class LocalDocumentReaders implements DocumentReaders {
 
     /** 中文 Word 的内置标题样式名是“heading 1”，样式 ID 可能是“Heading1”或“1”；自定义样式常叫“标题 1”。 */

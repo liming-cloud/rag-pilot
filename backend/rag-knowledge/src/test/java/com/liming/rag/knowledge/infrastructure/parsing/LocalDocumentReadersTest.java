@@ -1,8 +1,10 @@
-package com.liming.rag.ai;
+package com.liming.rag.knowledge.infrastructure.parsing;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.liming.rag.knowledge.application.DocumentParseException;
+import com.liming.rag.knowledge.application.DocumentReaders;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -21,7 +23,7 @@ import org.apache.poi.xwpf.usermodel.XWPFDocument;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-class DocumentReadersTest {
+class LocalDocumentReadersTest {
 
     private final DocumentReaders readers = new LocalDocumentReaders();
 

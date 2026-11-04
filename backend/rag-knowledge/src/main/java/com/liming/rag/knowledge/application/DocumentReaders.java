@@ -1,9 +1,10 @@
-package com.liming.rag.ai;
+package com.liming.rag.knowledge.application;
 
 import org.springframework.ai.document.DocumentReader;
 
 /**
- * 按文件类型创建 Spring AI 的 {@link DocumentReader}。读出一个 Document，正文用 Markdown 标题（{@code #}）
+ * 入库管道的读取端口（D-019、D-020）：按文件类型创建 Spring AI 的 {@link DocumentReader}，本地解析，不调用外部服务，
+ * 实现在 {@code infrastructure.parsing}。读出一个 Document，正文用 Markdown 标题（{@code #}）
  * 表示章节，供标题感知分块使用；元数据里带 {@link #FILENAME}。
  */
 public interface DocumentReaders {

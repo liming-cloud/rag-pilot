@@ -1,4 +1,4 @@
-package com.liming.rag.ai;
+package com.liming.rag.knowledge.application;
 
 import com.liming.rag.shared.BusinessException;
 import com.liming.rag.shared.ErrorKind;

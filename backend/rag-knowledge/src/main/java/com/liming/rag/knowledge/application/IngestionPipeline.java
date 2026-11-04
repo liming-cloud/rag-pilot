@@ -1,7 +1,5 @@
 package com.liming.rag.knowledge.application;
 
-import com.liming.rag.ai.DocumentParseException;
-import com.liming.rag.ai.DocumentReaders;
 import com.liming.rag.ai.EmbeddingClient;
 import com.liming.rag.ai.ModelCallException;
 import com.liming.rag.knowledge.domain.Document;
