@@ -13,6 +13,7 @@ import com.liming.rag.answering.application.insight.GapRecords.GapRecord;
 import com.liming.rag.answering.domain.AnswerRecord;
 import com.liming.rag.answering.domain.RefusalReason;
 import com.liming.rag.shared.UserId;
+import java.time.Clock;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
@@ -32,7 +33,7 @@ class KnowledgeGapServiceTest {
     private final InMemoryAnswering fixture = new InMemoryAnswering();
     private final KnowledgeGapService service = new KnowledgeGapService(fixture.gaps, fixture.records,
             fixture.embeddings, fixture.users, fixture.access, TestSettings.RETAIL,
-            new AnsweringProperties(30, 8, 0.3, false, 0.03, Duration.ofSeconds(3)));
+            new AnsweringProperties(30, 8, 0.3, false, 0.03, Duration.ofSeconds(3)), Clock.systemUTC());
 
     {
         fixture.users.names.put(7L, "店员小王");

@@ -83,8 +83,8 @@ public final class Conversation implements AggregateRoot {
     /**
      * @throws IllegalArgumentException 一个知识库都没选
      */
-    public static Conversation start(TenantId tenantId, UserId owner, List<Long> knowledgeBaseIds) {
-        return new Conversation(null, tenantId, owner, 0, NEW_TITLE, TitleSource.NEW, knowledgeBaseIds, Instant.now(),
+    public static Conversation start(TenantId tenantId, UserId owner, List<Long> knowledgeBaseIds, Instant at) {
+        return new Conversation(null, tenantId, owner, 0, NEW_TITLE, TitleSource.NEW, knowledgeBaseIds, at,
                 null);
     }
 

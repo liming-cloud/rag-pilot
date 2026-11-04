@@ -12,6 +12,7 @@ import com.liming.rag.knowledge.api.KnowledgeAccess;
 import com.liming.rag.settings.api.StatsZone;
 import com.liming.rag.shared.TenantId;
 import com.liming.rag.shared.UserId;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
@@ -53,9 +54,10 @@ public class KnowledgeGapService {
     private final KnowledgeAccess access;
     private final StatsZone zones;
     private final AnsweringProperties properties;
+    private final Clock clock;
 
     KnowledgeGapService(GapRecords gapRecords, AnswerRecordRepository records, EmbeddingClient embeddings,
-            UserDirectory users, KnowledgeAccess access, StatsZone zones, AnsweringProperties properties) {
+            UserDirectory users, KnowledgeAccess access, StatsZone zones, AnsweringProperties properties, Clock clock) {
         this.gapRecords = gapRecords;
         this.records = records;
         this.embeddings = embeddings;
@@ -63,6 +65,7 @@ public class KnowledgeGapService {
         this.access = access;
         this.zones = zones;
         this.properties = properties;
+        this.clock = clock;
     }
 
     /** SEMANTIC：按向量相似度归类；TEXT：嵌入模型不可用，退回按原文分组。 */
@@ -113,7 +116,7 @@ public class KnowledgeGapService {
             default -> throw invalid("处理状态只能是 open 或 all");
         };
         var zone = zones.statsZone();
-        var today = LocalDate.now(zone);
+        var today = LocalDate.now(clock.withZone(zone));
         var report = report(tenantId, today.minusDays(days - 1L), today, zone);
         if (!openOnly) {
             return report;

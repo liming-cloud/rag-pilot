@@ -12,6 +12,7 @@ import com.liming.rag.answering.application.ask.AskResult;
 import com.liming.rag.answering.domain.AnswerRecord;
 import com.liming.rag.answering.domain.RefusalReason;
 import com.liming.rag.shared.UserId;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
@@ -30,7 +31,7 @@ class AnswerLogServiceTest {
 
     private final InMemoryAnswering fixture = new InMemoryAnswering();
     private final AnswerLogService service = new AnswerLogService(fixture.records, fixture.reviews, fixture.users,
-            fixture.access, TestSettings.RETAIL);
+            fixture.access, TestSettings.RETAIL, Clock.systemUTC());
 
     {
         fixture.access.grant(7, 1, "门店规范").grant(7, 2, "商品知识");

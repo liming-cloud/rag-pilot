@@ -13,6 +13,7 @@ import com.liming.rag.answering.domain.Citation;
 import com.liming.rag.answering.domain.Conversation;
 import com.liming.rag.answering.domain.ConversationTurn;
 import com.liming.rag.shared.UserId;
+import java.time.Clock;
 import java.util.List;
 import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
 import org.junit.jupiter.api.DisplayName;
@@ -29,9 +30,9 @@ class ConversationServiceTest {
 
     private final InMemoryAnswering fixture = new InMemoryAnswering();
     private final AnswerLogService log = new AnswerLogService(fixture.records, fixture.reviews, fixture.users,
-            fixture.access, TestSettings.RETAIL);
+            fixture.access, TestSettings.RETAIL, Clock.systemUTC());
     private final ConversationService service = new ConversationService(fixture.conversations, fixture.records,
-            fixture.access, fixture.access, log);
+            fixture.access, fixture.access, log, Clock.systemUTC());
 
     {
         fixture.access.grant(7, STORE, "门店规范").grant(7, GOODS, "商品知识").grant(8, STORE, "门店规范");

@@ -8,6 +8,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.liming.rag.identity.api.IdentityPermissions;
 import com.liming.rag.shared.ErrorKind;
 import com.liming.rag.shared.UserId;
+import java.time.Clock;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -19,7 +20,7 @@ class AccountAdminServiceTest {
 
     private final IdentityFixture fixture = new IdentityFixture();
     private final AccountAdminService service = new AccountAdminService(fixture.store, fixture.store, fixture.access,
-            fixture.sessions, fixture.passwords);
+            fixture.sessions, fixture.passwords, Clock.systemUTC());
 
     @Test
     @DisplayName("新建账号：去掉首尾空格，密码只存摘要，带上角色")

@@ -9,6 +9,7 @@ import com.liming.rag.identity.api.UserDirectory;
 import com.liming.rag.shared.TenantId;
 import com.liming.rag.shared.UserId;
 import java.net.URI;
+import java.time.Clock;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -36,14 +37,16 @@ public class ModelSettingsService implements ModelRouting {
     private final KeyCipher cipher;
     private final UserDirectory users;
     private final TransactionOperations transactions;
+    private final Clock clock;
 
     ModelSettingsService(ModelSettingsStore store, ModelProbe probe, KeyCipher cipher, UserDirectory users,
-            TransactionOperations transactions) {
+            TransactionOperations transactions, Clock clock) {
         this.store = store;
         this.probe = probe;
         this.cipher = cipher;
         this.users = users;
         this.transactions = transactions;
+        this.clock = clock;
     }
 
     /** 一个用途当前的配置，给界面显示。 */
@@ -172,9 +175,9 @@ public class ModelSettingsService implements ModelRouting {
                 .map(UserDirectory.UserSummary::displayName).orElse("账号 " + actor.value());
         return transactions.execute(status -> {
             var before = view(usage);
-            store.savePurpose(new PurposeSetting(usage, providerId, model, actorName, OffsetDateTime.now()));
+            store.savePurpose(new PurposeSetting(usage, providerId, model, actorName, OffsetDateTime.now(clock)));
             store.insertChange(new ModelChange(null, usage, before.providerName(), before.model(), providerId,
-                    providerName(providerId), model, actor.value(), actorName, OffsetDateTime.now(), restoredFrom));
+                    providerName(providerId), model, actor.value(), actorName, OffsetDateTime.now(clock), restoredFrom));
             return view(usage);
         });
     }

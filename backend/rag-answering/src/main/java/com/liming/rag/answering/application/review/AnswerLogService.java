@@ -10,6 +10,7 @@ import com.liming.rag.knowledge.api.KnowledgeAccess;
 import com.liming.rag.settings.api.StatsZone;
 import com.liming.rag.shared.TenantId;
 import com.liming.rag.shared.UserId;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Locale;
@@ -30,14 +31,16 @@ public class AnswerLogService {
     private final UserDirectory users;
     private final KnowledgeAccess access;
     private final StatsZone zones;
+    private final Clock clock;
 
     public AnswerLogService(AnswerRecordRepository records, AnswerReviews reviews, UserDirectory users,
-            KnowledgeAccess access, StatsZone zones) {
+            KnowledgeAccess access, StatsZone zones, Clock clock) {
         this.records = records;
         this.reviews = reviews;
         this.users = users;
         this.access = access;
         this.zones = zones;
+        this.clock = clock;
     }
 
     /**
@@ -59,7 +62,7 @@ public class AnswerLogService {
         }
         var zone = zones.statsZone();
         var since = days == null ? null
-                : LocalDate.now(zone).minusDays(days - 1L).atStartOfDay(zone).toOffsetDateTime();
+                : LocalDate.now(clock.withZone(zone)).minusDays(days - 1L).atStartOfDay(zone).toOffsetDateTime();
         var trimmed = keyword == null || keyword.isBlank() ? null : keyword.strip();
         var found = reviews.page(tenantId, new AnswerReview.Query(parsedFilter, parsedStatus, since, trimmed,
                 new Paged.Request(page, size)));

@@ -7,7 +7,6 @@ import java.time.OffsetDateTime;
 import java.util.Collection;
 import java.util.List;
 import java.util.Locale;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,12 +24,6 @@ public class AccountAdminService {
     private final Sessions sessions;
     private final PasswordHasher passwords;
     private final Clock clock;
-
-    @Autowired
-    AccountAdminService(Accounts accounts, Roles roles, AccessService access, Sessions sessions,
-            PasswordHasher passwords) {
-        this(accounts, roles, access, sessions, passwords, Clock.systemUTC());
-    }
 
     AccountAdminService(Accounts accounts, Roles roles, AccessService access, Sessions sessions,
             PasswordHasher passwords, Clock clock) {

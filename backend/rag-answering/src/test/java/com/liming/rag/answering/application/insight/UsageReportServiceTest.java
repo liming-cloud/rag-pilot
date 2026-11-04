@@ -9,6 +9,7 @@ import com.liming.rag.answering.application.AnsweringProperties;
 import com.liming.rag.answering.application.InMemoryAnswering;
 import com.liming.rag.answering.application.TestSettings;
 import com.liming.rag.answering.application.review.AnswerReview;
+import java.time.Clock;
 import java.time.DayOfWeek;
 import java.time.Duration;
 import java.time.LocalDate;
@@ -27,9 +28,9 @@ class UsageReportServiceTest {
     private final InMemoryAnswering fixture = new InMemoryAnswering();
     private final KnowledgeGapService gaps = new KnowledgeGapService(fixture.gaps, fixture.records, fixture.embeddings,
             fixture.users, fixture.access, TestSettings.RETAIL,
-            new AnsweringProperties(30, 8, 0.3, false, 0.03, Duration.ofSeconds(3)));
+            new AnsweringProperties(30, 8, 0.3, false, 0.03, Duration.ofSeconds(3)), Clock.systemUTC());
     private final UsageReportService service = new UsageReportService(fixture.statistics, fixture.reviews, gaps,
-            fixture.users, TestSettings.RETAIL);
+            fixture.users, TestSettings.RETAIL, Clock.systemUTC());
 
     @Test
     @DisplayName("最近 N 天：含今天，默认 30 天；1 到 90 天之外是 INVALID；不和上一段对比")

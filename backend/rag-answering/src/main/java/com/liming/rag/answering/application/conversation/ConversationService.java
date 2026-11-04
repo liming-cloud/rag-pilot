@@ -12,6 +12,7 @@ import com.liming.rag.knowledge.api.KnowledgeAccess;
 import com.liming.rag.knowledge.api.KnowledgeSearch;
 import com.liming.rag.shared.TenantId;
 import com.liming.rag.shared.UserId;
+import java.time.Clock;
 import java.util.HashMap;
 import java.time.Instant;
 import java.util.List;
@@ -35,14 +36,16 @@ public class ConversationService {
     private final KnowledgeAccess access;
     private final KnowledgeSearch search;
     private final AnswerLogService log;
+    private final Clock clock;
 
     ConversationService(ConversationRepository conversations, AnswerRecordRepository answers, KnowledgeAccess access,
-            KnowledgeSearch search, AnswerLogService log) {
+            KnowledgeSearch search, AnswerLogService log, Clock clock) {
         this.conversations = conversations;
         this.answers = answers;
         this.access = access;
         this.search = search;
         this.log = log;
+        this.clock = clock;
     }
 
     @Transactional(readOnly = true)
@@ -62,7 +65,7 @@ public class ConversationService {
             throw invalid("你还没有可用的知识库，请联系管理员授权");
         }
         var chosen = access.scope(tenantId, userId, knowledgeBaseIds);
-        var saved = conversations.save(Conversation.start(tenantId, userId, chosen.isEmpty() ? accessible : chosen));
+        var saved = conversations.save(Conversation.start(tenantId, userId, chosen.isEmpty() ? accessible : chosen, clock.instant()));
         return summary(saved);
     }
 
@@ -165,7 +168,7 @@ public class ConversationService {
         var conversation = owned(tenantId, userId, id);
         var recorded = answer == null ? null
                 : log.recordSearched(tenantId, userId, question, answer, knowledgeBaseIds);
-        var now = Instant.now();
+        var now = clock.instant();
         Long parent;
         try {
             parent = conversation.appendTurn(turnId, replacesTurnId, question, now);

@@ -4,7 +4,6 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.util.List;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -23,11 +22,6 @@ public class AuthService {
     private final Clock clock;
     /** 用户名不存在时也比对一次摘要，避免从响应时间判断账号是否存在。 */
     private final String dummyHash;
-
-    @Autowired
-    AuthService(Accounts accounts, Roles roles, AccessService access, Sessions sessions, PasswordHasher passwords) {
-        this(accounts, roles, access, sessions, passwords, Clock.systemUTC());
-    }
 
     AuthService(Accounts accounts, Roles roles, AccessService access, Sessions sessions, PasswordHasher passwords,
             Clock clock) {

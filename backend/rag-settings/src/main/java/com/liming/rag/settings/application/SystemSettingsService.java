@@ -6,6 +6,7 @@ import com.liming.rag.settings.api.IndustryPack;
 import com.liming.rag.settings.api.StatsZone;
 import com.liming.rag.shared.TenantId;
 import com.liming.rag.shared.UserId;
+import java.time.Clock;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.util.Arrays;
@@ -52,14 +53,16 @@ public class SystemSettingsService implements AnsweringSettings, StatsZone {
     private final IndustryPack pack;
     private final SettingsProperties.Branding branding;
     private final ZoneId statsZone;
+    private final Clock clock;
 
-    SystemSettingsService(SystemSettingsStore store, UserDirectory users, SettingsProperties properties) {
+    SystemSettingsService(SystemSettingsStore store, UserDirectory users, SettingsProperties properties, Clock clock) {
         this.store = store;
         this.users = users;
         this.file = IndustryPackFile.load(properties.industryPack());
         this.pack = file.pack(properties.industryPack());
         this.branding = properties.branding();
         this.statsZone = ZoneId.of(properties.statsZone());
+        this.clock = clock;
     }
 
     @Override
@@ -110,7 +113,7 @@ public class SystemSettingsService implements AnsweringSettings, StatsZone {
         });
         var actorName = users.summaries(tenantId, List.of(actor.value())).values().stream().findFirst()
                 .map(UserDirectory.UserSummary::displayName).orElse("账号 " + actor.value());
-        store.save(key, value.stream().map(String::strip).toList(), actor.value(), actorName, OffsetDateTime.now());
+        store.save(key, value.stream().map(String::strip).toList(), actor.value(), actorName, OffsetDateTime.now(clock));
         return item(store.all(), key);
     }
 

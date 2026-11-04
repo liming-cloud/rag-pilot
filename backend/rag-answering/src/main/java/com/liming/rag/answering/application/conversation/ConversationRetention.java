@@ -2,6 +2,7 @@ package com.liming.rag.answering.application.conversation;
 
 import com.liming.rag.answering.application.AnsweringProperties;
 import com.liming.rag.answering.domain.ConversationRepository;
+import java.time.Clock;
 import java.time.Instant;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -20,17 +21,19 @@ public class ConversationRetention {
 
     private final ConversationRepository conversations;
     private final AnsweringProperties.Conversation settings;
+    private final Clock clock;
 
-    ConversationRetention(ConversationRepository conversations, AnsweringProperties properties) {
+    ConversationRetention(ConversationRepository conversations, AnsweringProperties properties, Clock clock) {
         this.conversations = conversations;
         this.settings = properties.conversation();
+        this.clock = clock;
     }
 
     /** 每天凌晨 3 点（服务器时区）清理一次，返回删除的会话数。 */
     @Scheduled(cron = "0 0 3 * * *")
     @Transactional
     public int purge() {
-        int deleted = conversations.deleteInactiveSince(Instant.now().minus(settings.retention()));
+        int deleted = conversations.deleteInactiveSince(clock.instant().minus(settings.retention()));
         if (deleted > 0) {
             LOG.info("清理了 {} 个超过保留期的会话", deleted);
         }

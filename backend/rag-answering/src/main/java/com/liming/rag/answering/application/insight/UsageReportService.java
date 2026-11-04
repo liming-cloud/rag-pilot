@@ -6,6 +6,7 @@ import com.liming.rag.answering.application.review.AnswerReviews;
 import com.liming.rag.identity.api.UserDirectory;
 import com.liming.rag.settings.api.StatsZone;
 import com.liming.rag.shared.TenantId;
+import java.time.Clock;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -39,14 +40,16 @@ public class UsageReportService {
     private final KnowledgeGapService gaps;
     private final UserDirectory users;
     private final StatsZone zones;
+    private final Clock clock;
 
     UsageReportService(AnswerStatistics statistics, AnswerReviews reviews, KnowledgeGapService gaps,
-            UserDirectory users, StatsZone zones) {
+            UserDirectory users, StatsZone zones, Clock clock) {
         this.statistics = statistics;
         this.reviews = reviews;
         this.gaps = gaps;
         this.users = users;
         this.zones = zones;
+        this.clock = clock;
     }
 
     /** 统计的时间段：第一天、最后一天（都含）；按周时 {@code week} 为 true。 */
@@ -103,7 +106,7 @@ public class UsageReportService {
     }
 
     Period period(Integer days, String week, ZoneId zone) {
-        var today = LocalDate.now(zone);
+        var today = LocalDate.now(clock.withZone(zone));
         if (days != null && week != null) {
             throw invalid("最近几天和按周只能选一个");
         }

@@ -4,7 +4,6 @@ import com.liming.rag.knowledge.domain.Validity;
 import com.liming.rag.settings.api.StatsZone;
 import java.time.Clock;
 import java.time.LocalDate;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 /**
@@ -17,11 +16,6 @@ public class DocumentCalendar {
     private final StatsZone zone;
     private final KnowledgeProperties properties;
     private final Clock clock;
-
-    @Autowired
-    DocumentCalendar(StatsZone zone, KnowledgeProperties properties) {
-        this(zone, properties, Clock.systemUTC());
-    }
 
     DocumentCalendar(StatsZone zone, KnowledgeProperties properties, Clock clock) {
         this.zone = zone;
