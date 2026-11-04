@@ -58,7 +58,7 @@ class ConversationTurnController {
         var pending = turns.start(currentUser.tenantId(), currentUser.userId(), conversationId, request.question(),
                 request.replacesTurnId());
         // 员工断开后不再发送，但不中断生成（D-036）。
-        var channel = new SseChannel(SseChannel.OnDisconnect.CONTINUE);
+        var channel = new SseChannel();
         channel.send("turn", Map.of("id", pending.turnId()));
         streams.execute(() -> channel.run(events -> events.send("done", turns.run(pending,
                 new ConversationAskService.Events(status -> events.send("status", Map.of("text", status)),

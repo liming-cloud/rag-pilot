@@ -82,6 +82,79 @@ class LocalDocumentReadersTest {
                 .isInstanceOf(DocumentParseException.class).hasMessageContaining("损坏");
     }
 
+    @Test
+    @DisplayName("不支持的类型、没有扩展名直接拒绝；扩展名不分大小写（#145 C8）")
+    void rejectsUnsupportedTypes() {
+        assertThat(readers.supports("docx")).isTrue();
+        assertThat(readers.supports("doc")).isFalse();
+        assertThatThrownBy(() -> text("旧版.doc", new byte[] {1})).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> text("没有扩展名", new byte[] {1})).isInstanceOf(IllegalArgumentException.class);
+        assertThat(text("规范.MD", "# 收银".getBytes(StandardCharsets.UTF_8))).isEqualTo("# 收银");
+    }
+
+    @Test
+    @DisplayName("Word：普通样式、没有样式定义的数字样式 ID 按正文；空段落跳过；表格空单元格跳过、没有表头的列只写值、只有表头的表格不输出（#145 C8）")
+    void handlesWordEdgeCases() throws IOException {
+        try (var document = new XWPFDocument(); var out = new ByteArrayOutputStream()) {
+            var normal = document.createParagraph();
+            normal.setStyle("Normal");
+            normal.createRun().setText("正文段落");
+            document.createParagraph().createRun().setText("   ");
+            var heading3 = document.createParagraph();
+            heading3.setStyle("3");
+            heading3.createRun().setText("样式表里没有定义的 3 号样式");
+            var table = document.createTable(2, 3);
+            table.getRow(0).getCell(0).setText("商品");
+            table.getRow(0).getCell(1).setText("");
+            table.getRow(1).getCell(0).setText("青柚气泡水");
+            table.getRow(1).getCell(1).setText("冷柜第二层");
+            table.getRow(1).getCell(2).setText("");
+            var headerOnly = document.createTable(1, 1);
+            headerOnly.getRow(0).getCell(0).setText("只有表头");
+            document.write(out);
+
+            var text = text("边界.docx", out.toByteArray());
+
+            assertThat(text).contains("正文段落\n").contains("\n样式表里没有定义的 3 号样式\n").doesNotContain("#")
+                    .contains("商品：青柚气泡水；冷柜第二层\n").doesNotContain("只有表头").doesNotContain("；；");
+        }
+    }
+
+    @Test
+    @DisplayName("Excel：有密码保护时提示去掉密码；只有表头的工作表不输出；旧版 .xls 损坏时给出原因（#145 C8）")
+    void handlesExcelEdgeCases() throws Exception {
+        assertThatThrownBy(() -> text("加密.xlsx", encryptedExcel()))
+                .isInstanceOf(DocumentParseException.class).hasMessageContaining("密码");
+        assertThatThrownBy(() -> text("损坏.xls", "not a xls".getBytes(StandardCharsets.UTF_8)))
+                .isInstanceOf(DocumentParseException.class).hasMessageContaining("损坏");
+
+        try (var workbook = new XSSFWorkbook(); var out = new ByteArrayOutputStream()) {
+            workbook.createSheet("只有表头").createRow(0).createCell(0).setCellValue("商品");
+            var sheet = workbook.createSheet("价目表");
+            sheet.createRow(0).createCell(0).setCellValue("商品");
+            sheet.createRow(1).createCell(0).setCellValue("海盐苏打");
+            workbook.write(out);
+
+            assertThat(text("两个表.xlsx", out.toByteArray())).doesNotContain("## 只有表头").contains("## 价目表\n")
+                    .contains("商品：海盐苏打");
+        }
+    }
+
+    /** 用密码加密的 .xlsx（POI 的 agile 加密，Excel 2010 以后的默认方式）。 */
+    private static byte[] encryptedExcel() throws Exception {
+        var plain = excel(new XSSFWorkbook());
+        try (var fs = new org.apache.poi.poifs.filesystem.POIFSFileSystem(); var out = new ByteArrayOutputStream()) {
+            var info = new org.apache.poi.poifs.crypt.EncryptionInfo(org.apache.poi.poifs.crypt.EncryptionMode.agile);
+            var encryptor = info.getEncryptor();
+            encryptor.confirmPassword("门店密码");
+            try (var stream = encryptor.getDataStream(fs)) {
+                stream.write(plain);
+            }
+            fs.writeFilesystem(out);
+            return out.toByteArray();
+        }
+    }
+
     /** 价目表：表头、两行数据、中间一个空行；另有一个隐藏的草稿表。 */
     static byte[] excel(Workbook workbook) throws IOException {
         try (workbook; var out = new ByteArrayOutputStream()) {

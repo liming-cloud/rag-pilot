@@ -33,6 +33,9 @@ class OpenAiCompatibleProbeTest {
         reply("/missing/v1/chat/completions", 404, "{\"error\":{\"message\":\"Model does not exist.\"}}");
         reply("/missing/v1/models", 404, "not found");
         reply("/denied/v1/chat/completions", 401, "{\"error\":{\"message\":\"Invalid token sk-secret\"}}");
+        reply("/broken/v1/chat/completions", 500, "<html>Internal Server Error</html>");
+        reply("/verbose/v1/chat/completions", 400, "{\"message\":\"" + "长".repeat(500) + "\"}");
+        reply("/empty/v1/models", 200, "{\"data\":[{\"id\":\"\"}]}");
         server.start();
         var properties = new AiProperties(url("ok"), "env-key", Duration.ofSeconds(10),
                 new AiProperties.Embedding("openai", "BAAI/bge-m3", 16), new AiProperties.Rerank("openai", "rr"),
@@ -73,6 +76,16 @@ class OpenAiCompatibleProbeTest {
     }
 
     @Test
+    @DisplayName("服务商的错误不是 JSON 时只给状态码；说明太长时截断（#145 C8）")
+    void handlesUnreadableRejections() {
+        assertThat(probe.probe(ModelUsage.ANSWER, new ModelRoute(url("broken"), "k", "m")).message())
+                .isEqualTo("服务商返回 500");
+        var verbose = probe.probe(ModelUsage.ANSWER, new ModelRoute(url("verbose"), "k", "m")).message();
+        assertThat(verbose).startsWith("服务商返回 400：长").endsWith("…");
+        assertThat(verbose.length()).isLessThan(300);
+    }
+
+    @Test
     @DisplayName("连不上时不抛异常，说明检查地址和网络")
     void reportsUnreachable() throws IOException {
         int closedPort;
@@ -94,6 +107,10 @@ class OpenAiCompatibleProbeTest {
         assertThat(probe.models(url("ok"), null)).containsExactly("A-model", "b-model");
         assertThatThrownBy(() -> probe.models(url("missing"), null))
                 .isInstanceOf(ModelCallException.class).hasMessageContaining("请手动填写模型名称");
+        assertThatThrownBy(() -> probe.models(url("empty"), null)).as("列表里没有可用的名字")
+                .isInstanceOf(ModelCallException.class).hasMessageContaining("请手动填写模型名称");
+        assertThatThrownBy(() -> probe.models("not a url", null))
+                .isInstanceOf(ModelCallException.class).hasMessageContaining("地址格式不对");
     }
 
     @Test
