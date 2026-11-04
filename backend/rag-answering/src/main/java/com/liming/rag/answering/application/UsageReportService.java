@@ -1,7 +1,7 @@
 package com.liming.rag.answering.application;
 
 import com.liming.rag.identity.api.UserDirectory;
-import com.liming.rag.settings.api.AnsweringSettings;
+import com.liming.rag.settings.api.StatsZone;
 import com.liming.rag.shared.TenantId;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
@@ -35,15 +35,15 @@ public class UsageReportService {
     private final AnswerReviews reviews;
     private final KnowledgeGapService gaps;
     private final UserDirectory users;
-    private final AnsweringSettings settings;
+    private final StatsZone zones;
 
     UsageReportService(AnswerStatistics statistics, AnswerReviews reviews, KnowledgeGapService gaps,
-            UserDirectory users, AnsweringSettings settings) {
+            UserDirectory users, StatsZone zones) {
         this.statistics = statistics;
         this.reviews = reviews;
         this.gaps = gaps;
         this.users = users;
-        this.settings = settings;
+        this.zones = zones;
     }
 
     /** 统计的时间段：第一天、最后一天（都含）；按周时 {@code week} 为 true。 */
@@ -58,7 +58,7 @@ public class UsageReportService {
      * @throws AnsweringException 参数不合法
      */
     public UsageStats usage(TenantId tenantId, Integer days, String week) {
-        var zone = settings.statsZone();
+        var zone = zones.statsZone();
         var period = period(days, week, zone);
         var stats = statistics.usage(tenantId, period.from(), period.to(), zone);
         UsageStats.Totals previous = null;
@@ -80,7 +80,7 @@ public class UsageReportService {
      */
     @Transactional(readOnly = true)
     public Export export(TenantId tenantId, Integer days, String week) {
-        var zone = settings.statsZone();
+        var zone = zones.statsZone();
         var period = period(days, week, zone);
         var rows = reviews.between(tenantId, period.from().atStartOfDay(zone).toOffsetDateTime(),
                 period.to().plusDays(1).atStartOfDay(zone).toOffsetDateTime(), MAX_EXPORT_ROWS);

@@ -1,7 +1,7 @@
 package com.liming.rag.knowledge.application;
 
 import com.liming.rag.knowledge.domain.Validity;
-import com.liming.rag.settings.api.AnsweringSettings;
+import com.liming.rag.settings.api.StatsZone;
 import java.time.Clock;
 import java.time.LocalDate;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -14,23 +14,23 @@ import org.springframework.stereotype.Component;
 @Component
 public class DocumentCalendar {
 
-    private final AnsweringSettings settings;
+    private final StatsZone zone;
     private final KnowledgeProperties properties;
     private final Clock clock;
 
     @Autowired
-    DocumentCalendar(AnsweringSettings settings, KnowledgeProperties properties) {
-        this(settings, properties, Clock.systemUTC());
+    DocumentCalendar(StatsZone zone, KnowledgeProperties properties) {
+        this(zone, properties, Clock.systemUTC());
     }
 
-    DocumentCalendar(AnsweringSettings settings, KnowledgeProperties properties, Clock clock) {
-        this.settings = settings;
+    DocumentCalendar(StatsZone zone, KnowledgeProperties properties, Clock clock) {
+        this.zone = zone;
         this.properties = properties;
         this.clock = clock;
     }
 
     public LocalDate today() {
-        return LocalDate.now(clock.withZone(settings.statsZone()));
+        return LocalDate.now(clock.withZone(zone.statsZone()));
     }
 
     public int warningDays() {

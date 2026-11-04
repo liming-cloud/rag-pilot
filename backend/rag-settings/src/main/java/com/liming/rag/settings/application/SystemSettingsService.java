@@ -3,6 +3,7 @@ package com.liming.rag.settings.application;
 import com.liming.rag.identity.api.UserDirectory;
 import com.liming.rag.settings.api.AnsweringSettings;
 import com.liming.rag.settings.api.IndustryPack;
+import com.liming.rag.settings.api.StatsZone;
 import com.liming.rag.shared.TenantId;
 import com.liming.rag.shared.UserId;
 import java.time.OffsetDateTime;
@@ -18,7 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
  * 都没有时用内核默认值。每次读都查一次库，保存后不用重启。同时给问答提供行业包、拒答话术和统计时区。
  */
 @Service
-public class SystemSettingsService implements AnsweringSettings {
+public class SystemSettingsService implements AnsweringSettings, StatsZone {
 
     /** 当前值来自哪里。 */
     public enum Source {

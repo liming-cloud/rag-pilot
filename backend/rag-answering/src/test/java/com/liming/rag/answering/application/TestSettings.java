@@ -2,11 +2,12 @@ package com.liming.rag.answering.application;
 
 import com.liming.rag.settings.api.AnsweringSettings;
 import com.liming.rag.settings.api.IndustryPack;
+import com.liming.rag.settings.api.StatsZone;
 import java.time.ZoneId;
 import java.util.List;
 
 /** 测试用的系统设置：新零售行业包的内容，与 industry-packs/retail/pack.yml 一致（IndustryPackFileTest 核对文件本身）。 */
-final class TestSettings implements AnsweringSettings {
+final class TestSettings implements AnsweringSettings, StatsZone {
 
     static final IndustryPack RETAIL_PACK = new IndustryPack("retail", "新零售",
             "你是连锁门店的运营助手，回答门店员工的问题。", "临期商品提前三天下架[2]。",

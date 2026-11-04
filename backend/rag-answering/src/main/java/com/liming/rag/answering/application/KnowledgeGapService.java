@@ -7,7 +7,7 @@ import com.liming.rag.answering.domain.AnswerRecord;
 import com.liming.rag.answering.domain.AnswerRecordRepository;
 import com.liming.rag.identity.api.UserDirectory;
 import com.liming.rag.knowledge.api.KnowledgeAccess;
-import com.liming.rag.settings.api.AnsweringSettings;
+import com.liming.rag.settings.api.StatsZone;
 import com.liming.rag.shared.TenantId;
 import com.liming.rag.shared.UserId;
 import java.time.LocalDate;
@@ -49,17 +49,17 @@ public class KnowledgeGapService {
     private final EmbeddingClient embeddings;
     private final UserDirectory users;
     private final KnowledgeAccess access;
-    private final AnsweringSettings settings;
+    private final StatsZone zones;
     private final AnsweringProperties properties;
 
     KnowledgeGapService(GapRecords gapRecords, AnswerRecordRepository records, EmbeddingClient embeddings,
-            UserDirectory users, KnowledgeAccess access, AnsweringSettings settings, AnsweringProperties properties) {
+            UserDirectory users, KnowledgeAccess access, StatsZone zones, AnsweringProperties properties) {
         this.gapRecords = gapRecords;
         this.records = records;
         this.embeddings = embeddings;
         this.users = users;
         this.access = access;
-        this.settings = settings;
+        this.zones = zones;
         this.properties = properties;
     }
 
@@ -110,7 +110,7 @@ public class KnowledgeGapService {
             case "all" -> false;
             default -> throw invalid("处理状态只能是 open 或 all");
         };
-        var zone = settings.statsZone();
+        var zone = zones.statsZone();
         var today = LocalDate.now(zone);
         var report = report(tenantId, today.minusDays(days - 1L), today, zone);
         if (!openOnly) {

@@ -272,6 +272,15 @@ final class InMemoryAnswering {
         }
 
         @Override
+        public List<Long> scope(TenantId tenantId, UserId userId, Collection<Long> requested) {
+            var ids = accessible(tenantId, userId).stream().map(KnowledgeBaseRef::id).toList();
+            if (requested == null || requested.isEmpty()) {
+                return ids;
+            }
+            return requested.stream().distinct().filter(ids::contains).toList();
+        }
+
+        @Override
         public Map<Long, String> names(TenantId tenantId, Collection<Long> knowledgeBaseIds) {
             var result = new HashMap<Long, String>();
             knowledgeBaseIds.stream().filter(names::containsKey).forEach(id -> result.put(id, names.get(id)));

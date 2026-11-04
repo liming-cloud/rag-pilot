@@ -21,6 +21,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Collectors;
 import org.springframework.context.event.EventListener;
 import org.springframework.dao.DuplicateKeyException;
@@ -88,6 +89,16 @@ public class KnowledgeBaseService implements KnowledgeAccess {
         return listAccessible(tenantId, userId).stream()
                 .map(knowledgeBase -> new KnowledgeBaseRef(knowledgeBase.id(), knowledgeBase.name()))
                 .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<Long> scope(TenantId tenantId, UserId userId, Collection<Long> requested) {
+        var accessible = accessible(tenantId, userId).stream().map(KnowledgeBaseRef::id).toList();
+        if (requested == null || requested.isEmpty()) {
+            return accessible;
+        }
+        return requested.stream().filter(Objects::nonNull).distinct().filter(accessible::contains).toList();
     }
 
     @Override

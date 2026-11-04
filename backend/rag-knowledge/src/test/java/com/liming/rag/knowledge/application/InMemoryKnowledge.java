@@ -9,8 +9,7 @@ import com.liming.rag.knowledge.domain.DocumentStatus;
 import com.liming.rag.knowledge.domain.KnowledgeBase;
 import com.liming.rag.knowledge.domain.KnowledgeBaseRepository;
 import com.liming.rag.knowledge.domain.Validity;
-import com.liming.rag.settings.api.AnsweringSettings;
-import com.liming.rag.settings.api.IndustryPack;
+import com.liming.rag.settings.api.StatsZone;
 import com.liming.rag.shared.TenantId;
 import com.liming.rag.shared.UserId;
 import java.time.Clock;
@@ -52,22 +51,7 @@ final class InMemoryKnowledge {
     final DocumentCalendar calendar = calendar();
 
     private static DocumentCalendar calendar() {
-        AnsweringSettings settings = new AnsweringSettings() {
-            @Override
-            public IndustryPack pack() {
-                throw new UnsupportedOperationException();
-            }
-
-            @Override
-            public String refusalMessage() {
-                throw new UnsupportedOperationException();
-            }
-
-            @Override
-            public ZoneId statsZone() {
-                return ZoneId.of("Asia/Shanghai");
-            }
-        };
+        StatsZone settings = () -> ZoneId.of("Asia/Shanghai");
         var properties = new KnowledgeProperties(new KnowledgeProperties.Ingestion(2),
                 new KnowledgeProperties.Storage("./data"), 30);
         return new DocumentCalendar(settings, properties,

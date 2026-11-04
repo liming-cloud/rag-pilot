@@ -7,7 +7,6 @@ import com.liming.rag.answering.domain.Conversation;
 import com.liming.rag.answering.domain.ConversationRepository;
 import com.liming.rag.answering.domain.ConversationTurn;
 import com.liming.rag.knowledge.api.KnowledgeAccess;
-import com.liming.rag.knowledge.api.KnowledgeBaseRef;
 import com.liming.rag.knowledge.api.KnowledgeSearch;
 import com.liming.rag.shared.TenantId;
 import com.liming.rag.shared.UserId;
@@ -56,12 +55,11 @@ public class ConversationService {
      */
     @Transactional
     public ConversationViews.Summary create(TenantId tenantId, UserId userId, List<Long> knowledgeBaseIds) {
-        var accessible = accessibleIds(tenantId, userId);
+        var accessible = access.scope(tenantId, userId, null);
         if (accessible.isEmpty()) {
             throw invalid("你还没有可用的知识库，请联系管理员授权");
         }
-        var chosen = knowledgeBaseIds == null ? List.<Long>of()
-                : knowledgeBaseIds.stream().filter(accessible::contains).toList();
+        var chosen = access.scope(tenantId, userId, knowledgeBaseIds);
         var saved = conversations.save(Conversation.start(tenantId, userId, chosen.isEmpty() ? accessible : chosen));
         return summary(saved);
     }
@@ -69,7 +67,7 @@ public class ConversationService {
     @Transactional(readOnly = true)
     public ConversationViews.Detail detail(TenantId tenantId, UserId userId, long id) {
         var conversation = owned(tenantId, userId, id);
-        var accessible = accessibleIds(tenantId, userId);
+        var accessible = access.scope(tenantId, userId, null);
         var names = new HashMap<>(access.names(tenantId, conversation.knowledgeBaseIds()));
         var options = conversation.knowledgeBaseIds().stream()
                 .filter(names::containsKey)
@@ -103,8 +101,9 @@ public class ConversationService {
                 conversation.rename(userId, title);
             }
             if (knowledgeBaseIds != null) {
-                var accessible = accessibleIds(tenantId, userId);
-                conversation.selectKnowledgeBases(userId, knowledgeBaseIds.stream().filter(accessible::contains).toList());
+                // 一个都没点名时交给聚合拒绝，不能当成“全部已授权的库”。
+                conversation.selectKnowledgeBases(userId, knowledgeBaseIds.isEmpty() ? List.of()
+                        : access.scope(tenantId, userId, knowledgeBaseIds));
             }
         } catch (IllegalArgumentException e) {
             throw invalid(e.getMessage());
@@ -141,8 +140,7 @@ public class ConversationService {
                 .map(turn -> new ConversationHistory.Entry(turn.question(),
                         turn.answerRecordId() == null ? null : recorded.get(turn.answerRecordId())))
                 .toList();
-        var accessible = accessibleIds(tenantId, userId);
-        var effective = conversation.knowledgeBaseIds().stream().filter(accessible::contains).toList();
+        var effective = access.scope(tenantId, userId, conversation.knowledgeBaseIds());
         return new TurnContext(conversation.titleSource() == Conversation.TitleSource.NEW, entries, effective);
     }
 
@@ -225,10 +223,6 @@ public class ConversationService {
             throw notFound();
         }
         return conversation;
-    }
-
-    List<Long> accessibleIds(TenantId tenantId, UserId userId) {
-        return access.accessible(tenantId, userId).stream().map(KnowledgeBaseRef::id).toList();
     }
 
     /** 引用原文按当前授权补上；授权已收回或文档已删时为 null。 */

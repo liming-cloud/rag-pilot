@@ -5,8 +5,7 @@ import com.liming.rag.answering.domain.AnswerRecord;
 import com.liming.rag.answering.domain.AnswerRecordRepository;
 import com.liming.rag.identity.api.UserDirectory;
 import com.liming.rag.knowledge.api.KnowledgeAccess;
-import com.liming.rag.knowledge.api.KnowledgeBaseRef;
-import com.liming.rag.settings.api.AnsweringSettings;
+import com.liming.rag.settings.api.StatsZone;
 import com.liming.rag.shared.TenantId;
 import com.liming.rag.shared.UserId;
 import java.time.LocalDate;
@@ -28,15 +27,15 @@ public class AnswerLogService {
     private final AnswerReviews reviews;
     private final UserDirectory users;
     private final KnowledgeAccess access;
-    private final AnsweringSettings settings;
+    private final StatsZone zones;
 
     AnswerLogService(AnswerRecordRepository records, AnswerReviews reviews, UserDirectory users,
-            KnowledgeAccess access, AnsweringSettings settings) {
+            KnowledgeAccess access, StatsZone zones) {
         this.records = records;
         this.reviews = reviews;
         this.users = users;
         this.access = access;
-        this.settings = settings;
+        this.zones = zones;
     }
 
     /**
@@ -56,7 +55,7 @@ public class AnswerLogService {
         if (days != null && (days < 1 || days > MAX_STATS_DAYS)) {
             throw invalid("天数只能是 1 到 " + MAX_STATS_DAYS + " 天");
         }
-        var zone = settings.statsZone();
+        var zone = zones.statsZone();
         var since = days == null ? null
                 : LocalDate.now(zone).minusDays(days - 1L).atStartOfDay(zone).toOffsetDateTime();
         var trimmed = keyword == null || keyword.isBlank() ? null : keyword.strip();
@@ -121,10 +120,7 @@ public class AnswerLogService {
      */
     @Transactional
     public Answer record(TenantId tenantId, UserId asker, String question, Answer answer, List<Long> requested) {
-        var accessible = access.accessible(tenantId, asker).stream().map(KnowledgeBaseRef::id).toList();
-        var searched = requested == null || requested.isEmpty() ? accessible
-                : requested.stream().distinct().filter(accessible::contains).toList();
-        return recordSearched(tenantId, asker, question, answer, searched);
+        return recordSearched(tenantId, asker, question, answer, access.scope(tenantId, asker, requested));
     }
 
     /**

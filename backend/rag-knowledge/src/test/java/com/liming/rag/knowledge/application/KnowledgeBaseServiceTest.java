@@ -84,6 +84,22 @@ class KnowledgeBaseServiceTest {
     }
 
     @Test
+    @DisplayName("实际检索的范围：点名的库里有权访问的（保持顺序、去重）；没点名时是全部有权访问的库")
+    void resolvesScope() {
+        var store = service.create(TENANT, ADMIN, "门店规范").id();
+        var goods = service.create(TENANT, ADMIN, "商品知识").id();
+        var manager = service.create(TENANT, ADMIN, "店长手册").id();
+        service.grant(TENANT, ADMIN, store, STAFF);
+        service.grantRole(TENANT, ADMIN, goods, STORE_ROLE);
+
+        assertThat(service.scope(TENANT, STAFF, null)).containsExactly(store, goods);
+        assertThat(service.scope(TENANT, STAFF, List.of())).containsExactly(store, goods);
+        assertThat(service.scope(TENANT, STAFF, List.of(goods, manager, goods, store))).containsExactly(goods, store);
+        assertThat(service.scope(TENANT, STAFF, List.of(manager))).isEmpty();
+        assertThat(service.scope(TENANT, OUTSIDER, null)).isEmpty();
+    }
+
+    @Test
     @DisplayName("管理范围：只能管理自己能访问的库，超级管理员能管理本租户全部的库；别的租户的库一律不存在")
     void managesOnlyAccessibleKnowledgeBases() {
         var kb = service.create(TENANT, ADMIN, "门店规范");
