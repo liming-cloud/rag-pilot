@@ -11,7 +11,7 @@ import { DEFAULT_BRANDING } from "@/lib/branding";
 import { accountName, currentIdentity, forbidden } from "./identity";
 
 /**
- * 系统设置的假接口（#122、D-045）。示例数据与 backend/rag-settings 的 industry-packs/retail/pack.yml 一致；契约与后端一致：界面保存过的以数据库为准，没保存过时品牌用环境变量
+ * 系统设置的假接口（#122、D-045）。示例数据与 backend/contexts/rag-settings 的 industry-packs/retail/pack.yml 一致；契约与后端一致：界面保存过的以数据库为准，没保存过时品牌用环境变量
  * （没设时用内核默认值），问答页文案、推荐问题、拒答话术用行业包；提示词角色、改写提示、行业词表只读。
  *
  * 地址后加 ?brand=retail 模拟部署时用环境变量设了新零售的品牌，加 ?brand=default 换回内核默认；选择记在

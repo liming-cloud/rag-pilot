@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.liming.rag</groupId>
+        <artifactId>rag-pilot</artifactId>
+        <version>0.1.0-SNAPSHOT</version>
+        <relativePath>../../pom.xml</relativePath>
+    </parent>
+
+    <!-- 上下文层：各业务上下文，只依赖平台层的能力接口和彼此的 api 包；不直接依赖 Spring AI（AGENTS.md“框架选用”）。 -->
+    <artifactId>rag-contexts</artifactId>
+    <packaging>pom</packaging>
+
+    <modules>
+        <module>rag-identity</module>
+        <module>rag-settings</module>
+        <module>rag-knowledge</module>
+        <module>rag-answering</module>
+        <module>rag-evaluation</module>
+    </modules>
+</project>

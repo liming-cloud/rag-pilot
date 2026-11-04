@@ -12,14 +12,9 @@
     <name>rag-pilot</name>
 
     <modules>
-        <module>backend/rag-shared</module>
-        <module>backend/rag-ai</module>
-        <module>backend/rag-identity</module>
-        <module>backend/rag-knowledge</module>
-        <module>backend/rag-answering</module>
-        <module>backend/rag-evaluation</module>
-        <module>backend/rag-settings</module>
-        <module>backend/rag-app</module>
+        <module>backend/platform</module>
+        <module>backend/contexts</module>
+        <module>backend/boot</module>
     </modules>
 
     <properties>

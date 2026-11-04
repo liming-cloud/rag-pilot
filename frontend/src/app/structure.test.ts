@@ -70,7 +70,7 @@ export function productNameProblems(file: string, source: string): string[] {
  * 通用内核 + 行业包（D-045）：行业内容只写在后端的行业包里，前端非测试、非 mocks/ 的代码（含注释）里不出现任何行业包的
  * 行业标志词和词表里的词。后端主代码由 KernelNeutralityTest 用同一份行业包检查。
  */
-const PACKS = path.resolve(src, "../../backend/rag-settings/src/main/resources/industry-packs");
+const PACKS = path.resolve(src, "../../backend/contexts/rag-settings/src/main/resources/industry-packs");
 
 /** 从 pack.yml 里取出行业标志词和词表；这些列表在行业包里用 [a, b] 的写法。 */
 export function industryWordsOf(yaml: string): string[] {

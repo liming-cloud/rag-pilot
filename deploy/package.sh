@@ -20,7 +20,7 @@ stage="$(mktemp -d)"
 trap 'rm -rf "$stage"' EXIT
 
 echo "==> 编译后端 jar"
-(cd "$repo" && ./mvnw -B -ntp -q -pl backend/rag-app -am package -DskipTests)
+(cd "$repo" && ./mvnw -B -ntp -q -pl backend/boot/rag-app -am package -DskipTests)
 
 echo "==> 构建前端（版本号 $version 写进管理端左下角）"
 (cd "$repo/frontend" && npm ci --no-audit --no-fund --loglevel=error && VITE_APP_VERSION="$version" npm run build)
@@ -29,7 +29,7 @@ dir="$stage/$name"
 mkdir -p "$dir/app" "$dir/web"
 cp "$source_dir"/{compose.yml,README.md,.env.example,.dockerignore,app.Dockerfile,web.Dockerfile,nginx.conf} "$dir/"
 cp "$source_dir"/{lib.sh,build.sh,install.sh,backup.sh,restore.sh,upgrade.sh,verify.sh} "$dir/"
-cp "$repo/backend/rag-app/target/rag-app.jar" "$dir/app/"
+cp "$repo/backend/boot/rag-app/target/rag-app.jar" "$dir/app/"
 cp -R "$repo/frontend/dist" "$dir/web/dist"
 cat > "$dir/release.env" <<ENV
 # 这个部署目录的版本（D-048），由打包脚本生成，不要修改。

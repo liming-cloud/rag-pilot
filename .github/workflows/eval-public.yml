@@ -92,7 +92,7 @@ jobs:
           EVAL_MIN_RELEVANCE: ${{ inputs.min_relevance }}
           RAG_REWRITE_MIN_RELEVANCE: ${{ inputs.rewrite_min_relevance }}
         run: >
-          ./mvnw -B -ntp verify -pl backend/rag-app -am
+          ./mvnw -B -ntp verify -pl backend/boot/rag-app -am
           -Dtest.groups=eval -Dtest.excludedGroups=none
           -Dtest=EvaluationRun -Dsurefire.failIfNoSpecifiedTests=false
       - name: 保存报告
@@ -100,5 +100,5 @@ jobs:
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: eval-public-report
-          path: backend/rag-app/target/eval-report.md
+          path: backend/boot/rag-app/target/eval-report.md
           if-no-files-found: ignore

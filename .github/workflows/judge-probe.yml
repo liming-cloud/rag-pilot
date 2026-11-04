@@ -14,8 +14,8 @@ on:
   # 改了评判提示词或自检样本时自动跑一次默认评判模型（免费模型，约 1 分钟）。
   pull_request:
     paths:
-      - backend/rag-ai/src/main/java/com/liming/rag/ai/OpenAiCompatibleJudge.java
-      - backend/rag-ai/src/test/java/com/liming/rag/ai/JudgeProbeRun.java
+      - backend/platform/rag-ai/src/main/java/com/liming/rag/ai/OpenAiCompatibleJudge.java
+      - backend/platform/rag-ai/src/test/java/com/liming/rag/ai/JudgeProbeRun.java
       - scripts/eval/judge_probe.py
       - .github/workflows/judge-probe.yml
 
@@ -55,6 +55,6 @@ jobs:
           EVAL_JUDGE_PROBE: ${{ runner.temp }}/judge-probe.json
           EVAL_JUDGE_MODEL: ${{ inputs.judge_model || 'THUDM/GLM-4-9B-0414' }}
         run: >
-          ./mvnw -B -ntp verify -pl backend/rag-ai -am
+          ./mvnw -B -ntp verify -pl backend/platform/rag-ai -am
           -Dtest.groups=eval -Dtest.excludedGroups=none
           -Dtest=JudgeProbeRun -Dsurefire.failIfNoSpecifiedTests=false
