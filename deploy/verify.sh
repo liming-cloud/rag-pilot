@@ -102,6 +102,16 @@ for _ in $(seq 1 60); do
 done
 grep -q '"filename":"deploy-verify.txt"' <<<"$documents" && grep -q '"status":"READY"' <<<"$documents" \
   && ok "文档已入库" || fail "文档没有入库：$documents"
+# 安全响应头（#145 C3）：页面和接口都要带上。
+for path in / /api/auth/branding; do
+  headers="$(curl -sS -o /dev/null -D - --max-time 30 "$WEB_URL$path" | tr -d '\r')"
+  if grep -qi "^content-security-policy: .*script-src 'self'" <<<"$headers" && grep -qi '^x-content-type-options: nosniff' <<<"$headers" \
+    && grep -qi '^x-frame-options: deny' <<<"$headers"; then
+    ok "$path 带安全响应头"
+  else
+    fail "$path 缺少安全响应头"
+  fi
+done
 api GET "/api/knowledge-bases/$kb/search?q=%E5%86%B7%E6%9F%9C%E9%99%A4%E9%9C%9C"
 grep -q 'deploy-verify.txt' <<<"$RESPONSE" && ok "检索能找到文档" || fail "检索没有找到文档：$RESPONSE"
 ask_in_conversation "$kb" "冷柜什么时候除霜"

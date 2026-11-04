@@ -3,3 +3,4 @@
 !app/rag-app.jar
 !web/dist
 !nginx.conf
+!security-headers.conf

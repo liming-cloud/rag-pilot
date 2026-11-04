@@ -27,7 +27,7 @@ echo "==> 构建前端（版本号 $version 写进管理端左下角）"
 
 dir="$stage/$name"
 mkdir -p "$dir/app" "$dir/web"
-cp "$source_dir"/{compose.yml,README.md,.env.example,.dockerignore,app.Dockerfile,web.Dockerfile,nginx.conf} "$dir/"
+cp "$source_dir"/{compose.yml,README.md,.env.example,.dockerignore,app.Dockerfile,web.Dockerfile,nginx.conf,security-headers.conf} "$dir/"
 cp "$source_dir"/{lib.sh,build.sh,install.sh,backup.sh,restore.sh,upgrade.sh,verify.sh} "$dir/"
 cp "$repo/backend/boot/rag-app/target/rag-app.jar" "$dir/app/"
 cp -R "$repo/frontend/dist" "$dir/web/dist"
