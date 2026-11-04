@@ -326,11 +326,13 @@ class EvaluationRun {
                     : item.get("expectedDocument") instanceof String one ? List.of(one) : List.<String>of();
             @SuppressWarnings("unchecked")
             var history = (List<String>) item.get("history");
+            @SuppressWarnings("unchecked")
+            var forbidden = (List<String>) item.get("forbidden");
             var evalCase = new EvalCase((String) item.get("id"), (String) item.get("question"),
                     EvalCase.Kind.valueOf(((String) item.get("kind")).toUpperCase(Locale.ROOT)),
                     documents, keywords, Boolean.TRUE.equals(item.get("restricted")),
                     (String) item.get("style"), (String) item.get("referenceAnswer"), history,
-                    (String) item.get("searchAs"));
+                    (String) item.get("searchAs"), forbidden);
             // 从回答记录导出的草稿题要先人工标注，没标完就跑会让指标失真。
             if (evalCase.kind() == EvalCase.Kind.ANSWERABLE && (evalCase.expectedDocuments().isEmpty()
                     || evalCase.keywords().isEmpty() && evalCase.referenceAnswer() == null)) {

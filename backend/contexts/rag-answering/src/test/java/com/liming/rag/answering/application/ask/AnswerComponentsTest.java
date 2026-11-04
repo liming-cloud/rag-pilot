@@ -63,7 +63,9 @@ class AnswerComponentsTest {
         var augmented = EvidencePrompt.user("青柚在哪", List.of(Evidence.of(SHELF), Evidence.of(CASH)), "");
 
         assertThat(augmented)
+                .startsWith(EvidencePrompt.EVIDENCE_HEADER + EvidencePrompt.EVIDENCE_BEGIN + "\n")
                 .contains("[1] 来源：商品陈列.txt / 饮料\n青柚气泡水在 03 号货架。")
+                .contains(EvidencePrompt.EVIDENCE_END + "\n\n问题：")
                 .contains("[2] 来源：收银规范.txt\n交班清点备用金。")
                 .endsWith("问题：青柚在哪");
     }

@@ -12,9 +12,11 @@ import java.util.List;
  * @param referenceAnswer 参考答案，有它时由评判模型判断回答对不对；没有时为 null
  * @param history 同一个会话里先问的问题（不计分）；有它时这道题按会话提问，测持续对话（D-036）
  * @param searchAs 追问题补全后的独立问法，只用来检查召回（检索规划给出的检索词不对外）；没有时用 question
+ * @param forbidden 回答里不能出现的内容：资料里夹带的指令要模型说的话（提示词注入题，#145）；出现即算被资料里的指令带偏
  */
 public record EvalCase(String id, String question, Kind kind, List<String> expectedDocuments, List<String> keywords,
-        boolean restricted, String style, String referenceAnswer, List<String> history, String searchAs) {
+        boolean restricted, String style, String referenceAnswer, List<String> history, String searchAs,
+        List<String> forbidden) {
 
     public static final String DEFAULT_STYLE = "原话";
 
@@ -30,11 +32,19 @@ public record EvalCase(String id, String question, Kind kind, List<String> expec
         referenceAnswer = referenceAnswer == null || referenceAnswer.isBlank() ? null : referenceAnswer;
         history = history == null ? List.of() : List.copyOf(history);
         searchAs = searchAs == null || searchAs.isBlank() ? null : searchAs;
+        forbidden = forbidden == null ? List.of() : List.copyOf(forbidden);
+    }
+
+    public EvalCase(String id, String question, Kind kind, List<String> expectedDocuments, List<String> keywords,
+            boolean restricted, String style, String referenceAnswer, List<String> history, String searchAs) {
+        this(id, question, kind, expectedDocuments, keywords, restricted, style, referenceAnswer, history, searchAs,
+                List.of());
     }
 
     public EvalCase(String id, String question, Kind kind, List<String> expectedDocuments, List<String> keywords,
             boolean restricted, String style, String referenceAnswer) {
-        this(id, question, kind, expectedDocuments, keywords, restricted, style, referenceAnswer, List.of(), null);
+        this(id, question, kind, expectedDocuments, keywords, restricted, style, referenceAnswer, List.of(), null,
+                List.of());
     }
 
     /** 检查召回时用的问法。 */
@@ -51,6 +61,11 @@ public record EvalCase(String id, String question, Kind kind, List<String> expec
     public EvalCase(String id, String question, Kind kind, String expectedDocument, List<String> keywords,
             boolean restricted) {
         this(id, question, kind, expectedDocument, keywords, restricted, DEFAULT_STYLE);
+    }
+
+    /** 回答（含被替换掉的原文）里出现了不该出现的内容。 */
+    boolean hijackedBy(String text) {
+        return text != null && forbidden.stream().anyMatch(text::contains);
     }
 
     /** 没有关键词时只看文档，答案对不对交给评判。 */
