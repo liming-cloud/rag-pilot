@@ -139,26 +139,17 @@ public class AnswerService {
         onStatus.accept(SEARCHING_STATUS);
         var searchTexts = request.searchQueries() == null || request.searchQueries().isEmpty() ? List.of(text)
                 : request.searchQueries();
-        var queries = searchTexts.stream()
-                .map(searchText -> AnswerContext.query(expansion.expand(searchText), request.tenantId(),
-                        request.userId(), request.knowledgeBaseIds()))
-                .toList();
+        var queries = expandedQueries(request, searchTexts);
         var candidates = union(queries.stream().map(retriever::retrieve).toList());
         clock.retrieved();
         if (candidates.isEmpty()) {
             return finish(refusal(RefusalReason.NO_EVIDENCE, null), clock, null);
         }
         // 低分改写针对没扩展的问题：改写本身会补类别，扩展词混在问题里反而干扰改写。
-        var query = AnswerContext.query(searchTexts.getFirst(), request.tenantId(), request.userId(),
-                request.knowledgeBaseIds());
-        var ranked = rerank(queries, candidates);
-        clock.reranked();
-        AskResult.Rewrite rewrite = null;
-        if (evidence(ranked).isEmpty() && rewriteOnLowRelevance) {
-            var recovered = recovery.recover(query, ranked, clock, onStatus);
-            ranked = recovered.ranked();
-            rewrite = recovered.rewrite();
-        }
+        var ranking = rank(queries, candidates, AnswerContext.query(searchTexts.getFirst(), request.tenantId(),
+                request.userId(), request.knowledgeBaseIds()), clock, onStatus);
+        var ranked = ranking.ranked();
+        var rewrite = ranking.rewrite();
         double topRelevance = ranked.getFirst().getScore();
         var evidence = evidence(ranked);
         if (evidence.isEmpty()) {
@@ -172,6 +163,25 @@ public class AnswerService {
         var asked = AnswerContext.query(text, request.tenantId(), request.userId(), request.knowledgeBaseIds(),
                 request.history());
         return finish(generate(asked, evidence, topRelevance, clock, onDelta, stop), clock, rewrite);
+    }
+
+    /** 每个检索词按行业词表扩展后各成一个检索请求。 */
+    private List<Query> expandedQueries(AskRequest request, List<String> searchTexts) {
+        return searchTexts.stream()
+                .map(searchText -> AnswerContext.query(expansion.expand(searchText), request.tenantId(),
+                        request.userId(), request.knowledgeBaseIds()))
+                .toList();
+    }
+
+    /** 重排候选；没有够分的证据且开了低分改写时，改写问题再检索、重排一次（{@link LowRelevanceRecovery}）。 */
+    private LowRelevanceRecovery.Result rank(List<Query> queries, List<Document> candidates, Query original,
+            StageClock clock, Consumer<String> onStatus) {
+        var ranked = rerank(queries, candidates);
+        clock.reranked();
+        if (evidence(ranked).isEmpty() && rewriteOnLowRelevance) {
+            return recovery.recover(original, ranked, clock, onStatus);
+        }
+        return new LowRelevanceRecovery.Result(ranked, null);
     }
 
     /** 员工的问题，规则见 {@link Question}。 */

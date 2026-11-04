@@ -20,7 +20,10 @@ import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.encryption.InvalidPasswordException;
 import org.apache.pdfbox.text.PDFTextStripper;
 import org.apache.poi.EncryptedDocumentException;
+import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.DataFormatter;
+import org.apache.poi.ss.usermodel.FormulaEvaluator;
+import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.WorkbookFactory;
 import org.apache.poi.xwpf.usermodel.XWPFDocument;
 import org.apache.poi.xwpf.usermodel.XWPFParagraph;
@@ -128,18 +131,7 @@ final class LocalDocumentReaders implements DocumentReaders {
                     continue;
                 }
                 var sheet = workbook.getSheetAt(i);
-                var rows = new ArrayList<List<String>>();
-                for (var row : sheet) {
-                    var cells = IntStream.range(0, Math.max(row.getLastCellNum(), 0))
-                            .mapToObj(c -> {
-                                var cell = row.getCell(c);
-                                return cell == null ? "" : formatter.formatCellValue(cell, evaluator).replaceAll("\\s+", " ").strip();
-                            })
-                            .toList();
-                    if (cells.stream().anyMatch(cell -> !cell.isEmpty())) {
-                        rows.add(cells);
-                    }
-                }
+                var rows = rows(sheet, formatter, evaluator);
                 if (rows.size() > 1) {
                     text.append("\n## ").append(sheet.getSheetName()).append('\n');
                     rows(rows, text);
@@ -151,6 +143,24 @@ final class LocalDocumentReaders implements DocumentReaders {
         } catch (IOException | RuntimeException e) {
             throw new DocumentParseException("文件已损坏或不是有效的 Excel 文件（.xlsx / .xls）", e);
         }
+    }
+
+    /** 工作表里有内容的行，每格换成单行文字。 */
+    private static List<List<String>> rows(Sheet sheet, DataFormatter formatter, FormulaEvaluator evaluator) {
+        var rows = new ArrayList<List<String>>();
+        for (var row : sheet) {
+            var cells = IntStream.range(0, Math.max(row.getLastCellNum(), 0))
+                    .mapToObj(c -> cellText(row.getCell(c), formatter, evaluator))
+                    .toList();
+            if (cells.stream().anyMatch(cell -> !cell.isEmpty())) {
+                rows.add(cells);
+            }
+        }
+        return rows;
+    }
+
+    private static String cellText(Cell cell, DataFormatter formatter, FormulaEvaluator evaluator) {
+        return cell == null ? "" : formatter.formatCellValue(cell, evaluator).replaceAll("\\s+", " ").strip();
     }
 
     private static void paragraph(XWPFDocument document, XWPFParagraph paragraph, StringBuilder text) {

@@ -83,10 +83,23 @@ final class SearchPlanner {
         } catch (ExecutionException e) {
             return fallback(question, Outcome.FAILED, start);
         }
+        return parse(reply, question, start);
+    }
+
+    /** 只有一行“不需要检索”时是寒暄；否则取“检索：”开头的行，没有可用的检索词时退回原问题。 */
+    private static Plan parse(String reply, String question, long start) {
         var lines = (reply == null ? "" : reply).lines().map(String::strip).filter(line -> !line.isEmpty()).toList();
         if (lines.size() == 1 && lines.getFirst().replaceAll("[。.！!]", "").equals(NO_SEARCH)) {
             return new Plan(List.of(), true, Outcome.PLANNED, millisSince(start));
         }
+        var queries = queries(lines);
+        if (queries.isEmpty()) {
+            return fallback(question, Outcome.FAILED, start);
+        }
+        return new Plan(queries, false, Outcome.PLANNED, millisSince(start));
+    }
+
+    private static List<String> queries(List<String> lines) {
         var queries = new LinkedHashSet<String>();
         for (var line : lines) {
             if (queries.size() == MAX_QUERIES) {
@@ -99,10 +112,7 @@ final class SearchPlanner {
                 }
             }
         }
-        if (queries.isEmpty()) {
-            return fallback(question, Outcome.FAILED, start);
-        }
-        return new Plan(List.copyOf(queries), false, Outcome.PLANNED, millisSince(start));
+        return List.copyOf(queries);
     }
 
     private static Plan fallback(String question, Outcome outcome, long start) {

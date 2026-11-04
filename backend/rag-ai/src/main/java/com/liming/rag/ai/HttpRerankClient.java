@@ -39,6 +39,14 @@ final class HttpRerankClient implements RerankClient {
         }
         // 每次按当前配置取服务商和模型，管理端保存后下一次请求就生效（D-043）。
         var route = routes.resolve(ModelUsage.RERANK);
+        var response = send(request(route, query, documents));
+        if (response.statusCode() / 100 != 2) {
+            throw new ModelCallException("重排失败：模型服务返回 HTTP " + response.statusCode());
+        }
+        return scores(response.body(), documents.size());
+    }
+
+    private HttpRequest request(ModelRoute route, String query, List<String> documents) {
         var body = new LinkedHashMap<String, Object>();
         body.put("model", route.model());
         body.put("query", query);
@@ -51,23 +59,26 @@ final class HttpRerankClient implements RerankClient {
         if (route.apiKey() != null) {
             builder.header("Authorization", "Bearer " + route.apiKey());
         }
-        var request = builder.POST(HttpRequest.BodyPublishers.ofString(json.writeValueAsString(body))).build();
-        HttpResponse<String> response;
+        return builder.POST(HttpRequest.BodyPublishers.ofString(json.writeValueAsString(body))).build();
+    }
+
+    private HttpResponse<String> send(HttpRequest request) {
         try {
-            response = http.send(request, HttpResponse.BodyHandlers.ofString());
+            return http.send(request, HttpResponse.BodyHandlers.ofString());
         } catch (java.io.IOException e) {
             throw new ModelCallException("重排失败：重排模型服务暂时不可用，请稍后重试", e);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new ModelCallException("重排被中断", e);
         }
-        if (response.statusCode() / 100 != 2) {
-            throw new ModelCallException("重排失败：模型服务返回 HTTP " + response.statusCode());
-        }
-        var scores = new ArrayList<>(Collections.nCopies(documents.size(), 0.0));
-        for (var result : json.readTree(response.body()).path("results")) {
+    }
+
+    /** 按序号放回原来的顺序；没给分的文档记 0 分。 */
+    private List<Double> scores(String body, int size) {
+        var scores = new ArrayList<>(Collections.nCopies(size, 0.0));
+        for (var result : json.readTree(body).path("results")) {
             int index = result.path("index").asInt(-1);
-            if (index < 0 || index >= documents.size()) {
+            if (index < 0 || index >= size) {
                 throw new ModelCallException("重排失败：模型返回了越界的序号");
             }
             scores.set(index, result.path("relevance_score").asDouble());

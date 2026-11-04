@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.springframework.dao.DuplicateKeyException;
@@ -97,34 +98,46 @@ public class AccountImportService {
         for (var row : rows) {
             var messages = new ArrayList<String>();
             var earlier = firstLine.putIfAbsent(row.username(), row.line());
-            var usernameProblem = AccountRules.usernameProblem(row.username());
-            if (usernameProblem != null) {
-                messages.add(usernameProblem);
-            } else if (earlier != null) {
-                messages.add("与第 " + earlier + " 行的用户名重复");
-            } else if (existing.contains(row.username())) {
-                messages.add("用户名已存在");
-            }
-            var displayNameProblem = AccountRules.displayNameProblem(row.displayName());
-            if (displayNameProblem != null) {
-                messages.add(displayNameProblem);
-            }
-            if (row.roleNames().isEmpty()) {
-                messages.add("至少要有一个角色");
-            }
-            for (var name : row.roleNames()) {
-                var role = byName.get(name);
-                var problem = role == null ? "没有叫“" + name + "”的角色" : rules.assignProblem(role);
-                if (problem != null) {
-                    messages.add(problem);
-                }
-            }
+            addIfPresent(messages, usernameProblem(row.username(), earlier, existing));
+            addIfPresent(messages, AccountRules.displayNameProblem(row.displayName()));
+            messages.addAll(roleProblems(row.roleNames(), byName, rules));
             if (password != null && password.equalsIgnoreCase(row.username())) {
                 messages.add("初始密码不能与用户名相同");
             }
             messages.forEach(message -> problems.add(new Problem(row.line(), message)));
         }
         return problems;
+    }
+
+    /** 用户名本身的规则优先；合规时再看是否与前面的行重复、是否已有同名账号。 */
+    private static String usernameProblem(String username, Integer earlierLine, Set<String> existing) {
+        var problem = AccountRules.usernameProblem(username);
+        if (problem != null) {
+            return problem;
+        }
+        if (earlierLine != null) {
+            return "与第 " + earlierLine + " 行的用户名重复";
+        }
+        return existing.contains(username) ? "用户名已存在" : null;
+    }
+
+    private static List<String> roleProblems(List<String> roleNames, Map<String, Role> byName,
+            AssignmentRules rules) {
+        if (roleNames.isEmpty()) {
+            return List.of("至少要有一个角色");
+        }
+        var problems = new ArrayList<String>();
+        for (var name : roleNames) {
+            var role = byName.get(name);
+            addIfPresent(problems, role == null ? "没有叫“" + name + "”的角色" : rules.assignProblem(role));
+        }
+        return problems;
+    }
+
+    private static void addIfPresent(List<String> messages, String message) {
+        if (message != null) {
+            messages.add(message);
+        }
     }
 
     private Map<String, Role> rolesByName(TenantId tenantId) {

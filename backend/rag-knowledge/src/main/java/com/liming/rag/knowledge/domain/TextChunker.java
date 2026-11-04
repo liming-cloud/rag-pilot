@@ -61,8 +61,7 @@ public final class TextChunker {
 
     private static List<Section> sections(String title, String text) {
         var result = new ArrayList<Section>();
-        var headings = new ArrayList<String>();
-        var levels = new ArrayList<Integer>();
+        var headings = new HeadingPath(title);
         var paragraphs = new ArrayList<String>();
         var paragraph = new StringBuilder();
         String path = title;
@@ -71,14 +70,7 @@ public final class TextChunker {
             if (heading.matches()) {
                 flushParagraph(paragraph, paragraphs);
                 addSection(result, path, paragraphs);
-                int level = heading.group(1).length();
-                while (!levels.isEmpty() && levels.getLast() >= level) {
-                    levels.removeLast();
-                    headings.removeLast();
-                }
-                levels.add(level);
-                headings.add(heading.group(2).strip());
-                path = title + " > " + String.join(" > ", headings);
+                path = headings.enter(heading.group(1).length(), heading.group(2).strip());
             } else if (line.isBlank()) {
                 flushParagraph(paragraph, paragraphs);
             } else {
@@ -91,6 +83,28 @@ public final class TextChunker {
         flushParagraph(paragraph, paragraphs);
         addSection(result, path, paragraphs);
         return result;
+    }
+
+    /** 当前所在的标题层级：进入一个标题时，先退出同级和更深的标题。 */
+    private static final class HeadingPath {
+
+        private final String title;
+        private final List<String> headings = new ArrayList<>();
+        private final List<Integer> levels = new ArrayList<>();
+
+        HeadingPath(String title) {
+            this.title = title;
+        }
+
+        String enter(int level, String heading) {
+            while (!levels.isEmpty() && levels.getLast() >= level) {
+                levels.removeLast();
+                headings.removeLast();
+            }
+            levels.add(level);
+            headings.add(heading);
+            return title + " > " + String.join(" > ", headings);
+        }
     }
 
     private static void flushParagraph(StringBuilder paragraph, List<String> paragraphs) {
