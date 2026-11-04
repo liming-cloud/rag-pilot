@@ -5,7 +5,6 @@ import static com.liming.rag.knowledge.application.InMemoryKnowledge.TENANT;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.liming.rag.identity.api.RoleDeleted;
 import com.liming.rag.knowledge.api.KnowledgeBaseRef;
 import com.liming.rag.knowledge.api.SearchHit;
 import com.liming.rag.knowledge.api.SearchQuery;
@@ -20,7 +19,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.DuplicateKeyException;
 
-/** 知识库与授权（D-038、D-041）：建库、可访问的库、管理范围、授权给账号和角色。 */
+/** 知识库（D-038、D-041）：建库、可访问的库、管理范围、列表与检索调试；授权的增减见 {@link KnowledgeGrantServiceTest}。 */
 class KnowledgeBaseServiceTest {
 
     private static final UserId ADMIN = new UserId(1);
@@ -35,7 +34,9 @@ class KnowledgeBaseServiceTest {
             fixture.users, fixture.calendar, query -> {
                 searched.add(query);
                 return List.of(new SearchHit(1, 2, "doc", "doc", "text", 0.5));
-            }, fixture.audit);
+            });
+    private final KnowledgeGrantService grants = new KnowledgeGrantService(service, fixture.knowledgeBases,
+            fixture.users, fixture.audit);
 
     {
         fixture.users.user(1, "管理员").user(2, "店员", STORE_ROLE).user(3, "外人").user(9, "超级管理员");
@@ -73,8 +74,8 @@ class KnowledgeBaseServiceTest {
         var direct = service.create(TENANT, ADMIN, "直接授权库");
         var byRole = service.create(TENANT, ADMIN, "角色授权库");
         service.create(TENANT, ADMIN, "未授权库");
-        service.grant(TENANT, ADMIN, direct.id(), STAFF);
-        service.grantRole(TENANT, ADMIN, byRole.id(), STORE_ROLE);
+        grants.grant(TENANT, ADMIN, direct.id(), STAFF);
+        grants.grantRole(TENANT, ADMIN, byRole.id(), STORE_ROLE);
 
         assertThat(service.accessible(TENANT, STAFF)).containsExactly(
                 new KnowledgeBaseRef(direct.id(), "直接授权库"), new KnowledgeBaseRef(byRole.id(), "角色授权库"));
@@ -88,8 +89,8 @@ class KnowledgeBaseServiceTest {
         var store = service.create(TENANT, ADMIN, "门店规范").id();
         var goods = service.create(TENANT, ADMIN, "商品知识").id();
         var manager = service.create(TENANT, ADMIN, "店长手册").id();
-        service.grant(TENANT, ADMIN, store, STAFF);
-        service.grantRole(TENANT, ADMIN, goods, STORE_ROLE);
+        grants.grant(TENANT, ADMIN, store, STAFF);
+        grants.grantRole(TENANT, ADMIN, goods, STORE_ROLE);
 
         assertThat(service.scope(TENANT, STAFF, null)).containsExactly(store, goods);
         assertThat(service.scope(TENANT, STAFF, List.of())).containsExactly(store, goods);
@@ -108,60 +109,6 @@ class KnowledgeBaseServiceTest {
         assertReason(() -> service.getManageable(TENANT, OUTSIDER, kb.id()), KnowledgeException.Reason.NOT_FOUND);
         assertReason(() -> service.getManageable(OTHER_TENANT, SUPER, kb.id()), KnowledgeException.Reason.NOT_FOUND);
         assertReason(() -> service.getManageable(TENANT, SUPER, 999), KnowledgeException.Reason.NOT_FOUND);
-    }
-
-    @Test
-    @DisplayName("授权给账号：账号要存在；不能管理这个库的人授权按库不存在处理，什么都不写")
-    void grantsToExistingAccountsOnly() {
-        var kb = service.create(TENANT, ADMIN, "门店规范");
-
-        assertReason(() -> service.grant(TENANT, ADMIN, kb.id(), new UserId(404)), KnowledgeException.Reason.NOT_FOUND);
-        assertReason(() -> service.grant(TENANT, OUTSIDER, kb.id(), OUTSIDER), KnowledgeException.Reason.NOT_FOUND);
-        service.grant(TENANT, ADMIN, kb.id(), STAFF);
-
-        assertThat(service.members(TENANT, ADMIN, kb.id())).extracting(KnowledgeBaseService.Member::userId)
-                .containsExactly(ADMIN.value(), STAFF.value());
-        assertThat(service.members(TENANT, ADMIN, kb.id())).extracting(KnowledgeBaseService.Member::displayName)
-                .containsExactly("管理员", "店员");
-        assertThat(fixture.audited).as("只有成功的授权记审计（#145 C2）").singleElement()
-                .satisfies(entry -> assertThat(entry).startsWith("KB_MEMBER_GRANTED 知识库“门店规范”授权给账号 "));
-    }
-
-    @Test
-    @DisplayName("撤销授权：不能撤销自己；撤销别人后对方立即访问不到")
-    void revokesOthersButNotSelf() {
-        var kb = service.create(TENANT, ADMIN, "门店规范");
-        service.grant(TENANT, ADMIN, kb.id(), STAFF);
-
-        assertReason(() -> service.revoke(TENANT, ADMIN, kb.id(), ADMIN), KnowledgeException.Reason.INVALID);
-        service.revoke(TENANT, ADMIN, kb.id(), STAFF);
-
-        assertThat(service.accessible(TENANT, STAFF)).isEmpty();
-        assertThat(service.accessible(TENANT, ADMIN)).extracting(KnowledgeBaseRef::id).containsExactly(kb.id());
-        assertThat(fixture.audited).extracting(entry -> entry.split(" ")[0])
-                .as("撤销自己失败不记").containsExactly("KB_MEMBER_GRANTED", "KB_MEMBER_REVOKED");
-    }
-
-    @Test
-    @DisplayName("授权给角色：角色要存在；收回后属于这个角色的账号访问不到；角色删除时一并收回")
-    void grantsAndRevokesRoles() {
-        var kb = service.create(TENANT, ADMIN, "门店规范");
-
-        assertReason(() -> service.grantRole(TENANT, ADMIN, kb.id(), 404), KnowledgeException.Reason.NOT_FOUND);
-        service.grantRole(TENANT, ADMIN, kb.id(), STORE_ROLE);
-        assertThat(service.roleGrants(TENANT, ADMIN, kb.id())).containsExactly(STORE_ROLE);
-        assertThat(service.accessible(TENANT, STAFF)).hasSize(1);
-
-        service.revokeRole(TENANT, ADMIN, kb.id(), STORE_ROLE);
-        assertThat(service.accessible(TENANT, STAFF)).isEmpty();
-
-        service.grantRole(TENANT, ADMIN, kb.id(), STORE_ROLE);
-        service.on(new RoleDeleted(TENANT, STORE_ROLE));
-        assertThat(service.roleGrants(TENANT, ADMIN, kb.id())).isEmpty();
-        assertThat(fixture.audited).as("角色删除时的收回由删除角色那条审计记录覆盖").containsExactly(
-                "KB_ROLE_GRANTED 知识库“门店规范”授权给角色 #" + STORE_ROLE,
-                "KB_ROLE_REVOKED 知识库“门店规范”收回角色 #" + STORE_ROLE + " 的授权",
-                "KB_ROLE_GRANTED 知识库“门店规范”授权给角色 #" + STORE_ROLE);
     }
 
     @Test

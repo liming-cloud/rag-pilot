@@ -6,6 +6,7 @@ import com.liming.rag.ai.ModelProbe;
 import com.liming.rag.identity.api.CurrentUser;
 import com.liming.rag.settings.api.SettingsPermissions;
 import com.liming.rag.settings.application.ModelChange;
+import com.liming.rag.settings.application.ModelProviderService;
 import com.liming.rag.settings.application.ModelSettingsService;
 import com.liming.rag.settings.application.ModelSettingsService.ProviderView;
 import com.liming.rag.settings.application.ModelSettingsService.PurposeView;
@@ -83,10 +84,12 @@ class ModelSettingsController {
     }
 
     private final ModelSettingsService settings;
+    private final ModelProviderService providers;
     private final CurrentUser currentUser;
 
-    ModelSettingsController(ModelSettingsService settings, CurrentUser currentUser) {
+    ModelSettingsController(ModelSettingsService settings, ModelProviderService providers, CurrentUser currentUser) {
         this.settings = settings;
+        this.providers = providers;
         this.currentUser = currentUser;
     }
 
@@ -139,20 +142,20 @@ class ModelSettingsController {
     @PostMapping("/api/model-providers")
     @ResponseStatus(HttpStatus.CREATED)
     ProviderResponse createProvider(@RequestBody ProviderRequest request) {
-        return ProviderResponse.of(settings.createProvider(request.name(), request.baseUrl(), request.apiKey()));
+        return ProviderResponse.of(providers.createProvider(request.name(), request.baseUrl(), request.apiKey()));
     }
 
     @SaCheckPermission(SettingsPermissions.MODEL_UPDATE)
     @PatchMapping("/api/model-providers/{id}")
     ProviderResponse updateProvider(@PathVariable long id, @RequestBody ProviderRequest request) {
-        return ProviderResponse.of(settings.updateProvider(id, request.name(), request.baseUrl(), request.apiKey()));
+        return ProviderResponse.of(providers.updateProvider(id, request.name(), request.baseUrl(), request.apiKey()));
     }
 
     @SaCheckPermission(SettingsPermissions.MODEL_UPDATE)
     @DeleteMapping("/api/model-providers/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     void deleteProvider(@PathVariable long id) {
-        settings.deleteProvider(id);
+        providers.deleteProvider(id);
     }
 
     private static String sourceOf(boolean fromDatabase) {

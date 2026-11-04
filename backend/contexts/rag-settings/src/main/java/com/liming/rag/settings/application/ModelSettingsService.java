@@ -16,7 +16,6 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import org.jspecify.annotations.Nullable;
-import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionOperations;
@@ -81,7 +80,7 @@ public class ModelSettingsService implements ModelRouting {
         var purposes = Arrays.stream(ModelUsage.values()).map(this::view).toList();
         var environment = probe.environment(ModelUsage.ANSWER);
         var providers = new ArrayList<ProviderView>();
-        providers.add(new ProviderView(null, environmentName(), environment.baseUrl(), last4(environment.apiKey()),
+        providers.add(new ProviderView(null, environmentName(), environment.baseUrl(), ModelProviderService.last4(environment.apiKey()),
                 false, usedBy(purposes, null)));
         for (var provider : store.providers()) {
             providers.add(new ProviderView(provider.id(), provider.name(), provider.baseUrl(), provider.apiKeyLast4(),
@@ -125,48 +124,6 @@ public class ModelSettingsService implements ModelRouting {
     @Transactional(readOnly = true)
     public Paged<ModelChange> changes(int page, int size) {
         return store.changes(new Paged.Request(page, size));
-    }
-
-    @Transactional
-    public ProviderView createProvider(String name, String baseUrl, String apiKey) {
-        var checkedName = checkName(name, null);
-        var checkedUrl = checkBaseUrl(baseUrl);
-        var key = SettingsInputs.blankToNull(apiKey);
-        ModelProvider created;
-        try {
-            created = store.insertProvider(new ModelProvider(null, checkedName, checkedUrl, encrypt(key), last4(key)));
-        } catch (DuplicateKeyException e) {
-            // 查重之后、插入之前别人添加了同名服务商：靠唯一约束兜底（#135）。
-            throw nameTaken(checkedName);
-        }
-        return new ProviderView(created.id(), created.name(), created.baseUrl(), created.apiKeyLast4(), true,
-                List.of());
-    }
-
-    /** {@code apiKey} 为空表示不改密钥。改了地址或密钥，正在用它的用途下一次请求就生效。 */
-    @Transactional
-    public ProviderView updateProvider(long id, String name, String baseUrl, String apiKey) {
-        var existing = store.provider(id).orElseThrow(() -> notFound("服务商不存在"));
-        var key = SettingsInputs.blankToNull(apiKey);
-        var updated = new ModelProvider(id, checkName(name, id), checkBaseUrl(baseUrl), encrypt(key),
-                key == null ? existing.apiKeyLast4() : last4(key));
-        try {
-            store.updateProvider(updated);
-        } catch (DuplicateKeyException e) {
-            throw nameTaken(updated.name());
-        }
-        var purposes = Arrays.stream(ModelUsage.values()).map(this::view).toList();
-        return new ProviderView(id, updated.name(), updated.baseUrl(), updated.apiKeyLast4(), true,
-                usedBy(purposes, id));
-    }
-
-    @Transactional
-    public void deleteProvider(long id) {
-        store.provider(id).orElseThrow(() -> notFound("服务商不存在"));
-        if (store.purposes().stream().anyMatch(setting -> Long.valueOf(id).equals(setting.providerId()))) {
-            throw new SettingsException(SettingsException.Reason.CONFLICT, "还有用途在用这个服务商，先换掉才能删除");
-        }
-        store.deleteProvider(id);
     }
 
     private PurposeView apply(TenantId tenantId, UserId actor, ModelUsage usage, @Nullable Long providerId, String model,
@@ -232,47 +189,12 @@ public class ModelSettingsService implements ModelRouting {
                 .toList();
     }
 
-    private byte[] encrypt(String key) {
-        return key == null ? null : cipher.encrypt(key);
-    }
-
-    private String checkName(String name, @Nullable Long exceptId) {
-        var trimmed = name == null ? "" : name.strip();
-        if (trimmed.isEmpty() || trimmed.length() > 30) {
-            throw invalid("服务商名称必须是 1 到 30 个字符");
-        }
-        if (store.providerNameTaken(trimmed, exceptId)) {
-            throw nameTaken(trimmed);
-        }
-        return trimmed;
-    }
-
-    private static String checkBaseUrl(String baseUrl) {
-        var trimmed = baseUrl == null ? "" : baseUrl.strip().replaceAll("/+$", "");
-        if (!trimmed.matches("https?://\\S+") || trimmed.length() > 300) {
-            throw invalid("地址要以 http:// 或 https:// 开头，填到 /v1 为止");
-        }
-        return trimmed;
-    }
-
     private static String checkModel(String model) {
         var trimmed = model == null ? "" : model.strip();
         if (trimmed.isEmpty() || trimmed.length() > MAX_MODEL_LENGTH) {
             throw invalid("模型名称必须是 1 到 " + MAX_MODEL_LENGTH + " 个字符");
         }
         return trimmed;
-    }
-
-    /** 界面只显示后 4 位；太短的密钥（不到 8 位）连后 4 位也不显示，免得露出大半。 */
-    private static String last4(String key) {
-        if (key == null || key.isBlank()) {
-            return null;
-        }
-        return key.length() < 8 ? "••" : key.substring(key.length() - 4);
-    }
-
-    private static SettingsException nameTaken(String name) {
-        return new SettingsException(SettingsException.Reason.CONFLICT, "已有同名服务商：" + name);
     }
 
     private static SettingsException invalid(String message) {

@@ -10,7 +10,8 @@ import com.liming.rag.knowledge.api.SearchHit;
 import com.liming.rag.knowledge.application.DocumentCalendar;
 import com.liming.rag.knowledge.application.DocumentIngestionService;
 import com.liming.rag.knowledge.application.KnowledgeBaseService;
-import com.liming.rag.knowledge.application.KnowledgeBaseService.Member;
+import com.liming.rag.knowledge.application.KnowledgeGrantService;
+import com.liming.rag.knowledge.application.KnowledgeGrantService.Member;
 import com.liming.rag.knowledge.application.KnowledgeQueries;
 import com.liming.rag.knowledge.application.KnowledgeQueries.DocumentRow;
 import com.liming.rag.knowledge.application.KnowledgeQueries.KnowledgeBaseSummary;
@@ -60,13 +61,15 @@ class KnowledgeBaseController {
     }
 
     private final KnowledgeBaseService knowledgeBases;
+    private final KnowledgeGrantService grants;
     private final DocumentIngestionService ingestion;
     private final DocumentCalendar calendar;
     private final CurrentUser currentUser;
 
-    KnowledgeBaseController(KnowledgeBaseService knowledgeBases, DocumentIngestionService ingestion,
-            DocumentCalendar calendar, CurrentUser currentUser) {
+    KnowledgeBaseController(KnowledgeBaseService knowledgeBases, KnowledgeGrantService grants,
+            DocumentIngestionService ingestion, DocumentCalendar calendar, CurrentUser currentUser) {
         this.knowledgeBases = knowledgeBases;
+        this.grants = grants;
         this.ingestion = ingestion;
         this.calendar = calendar;
         this.currentUser = currentUser;
@@ -187,27 +190,27 @@ class KnowledgeBaseController {
     @SaCheckPermission(KnowledgePermissions.KB_GRANT)
     @GetMapping("/{knowledgeBaseId}/members")
     List<Member> members(@PathVariable long knowledgeBaseId) {
-        return knowledgeBases.members(currentUser.tenantId(), currentUser.userId(), knowledgeBaseId);
+        return grants.members(currentUser.tenantId(), currentUser.userId(), knowledgeBaseId);
     }
 
     @SaCheckPermission(KnowledgePermissions.KB_GRANT)
     @PutMapping("/{knowledgeBaseId}/members/{userId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     void grant(@PathVariable long knowledgeBaseId, @PathVariable long userId) {
-        knowledgeBases.grant(currentUser.tenantId(), currentUser.userId(), knowledgeBaseId, new UserId(userId));
+        grants.grant(currentUser.tenantId(), currentUser.userId(), knowledgeBaseId, new UserId(userId));
     }
 
     @SaCheckPermission(KnowledgePermissions.KB_GRANT)
     @DeleteMapping("/{knowledgeBaseId}/members/{userId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     void revoke(@PathVariable long knowledgeBaseId, @PathVariable long userId) {
-        knowledgeBases.revoke(currentUser.tenantId(), currentUser.userId(), knowledgeBaseId, new UserId(userId));
+        grants.revoke(currentUser.tenantId(), currentUser.userId(), knowledgeBaseId, new UserId(userId));
     }
 
     @SaCheckPermission(KnowledgePermissions.KB_GRANT)
     @GetMapping("/{knowledgeBaseId}/role-grants")
     List<RoleGrantView> roleGrants(@PathVariable long knowledgeBaseId) {
-        return knowledgeBases.roleGrants(currentUser.tenantId(), currentUser.userId(), knowledgeBaseId).stream()
+        return grants.roleGrants(currentUser.tenantId(), currentUser.userId(), knowledgeBaseId).stream()
                 .map(RoleGrantView::new).toList();
     }
 
@@ -215,14 +218,14 @@ class KnowledgeBaseController {
     @PutMapping("/{knowledgeBaseId}/role-grants/{roleId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     void grantRole(@PathVariable long knowledgeBaseId, @PathVariable long roleId) {
-        knowledgeBases.grantRole(currentUser.tenantId(), currentUser.userId(), knowledgeBaseId, roleId);
+        grants.grantRole(currentUser.tenantId(), currentUser.userId(), knowledgeBaseId, roleId);
     }
 
     @SaCheckPermission(KnowledgePermissions.KB_GRANT)
     @DeleteMapping("/{knowledgeBaseId}/role-grants/{roleId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     void revokeRole(@PathVariable long knowledgeBaseId, @PathVariable long roleId) {
-        knowledgeBases.revokeRole(currentUser.tenantId(), currentUser.userId(), knowledgeBaseId, roleId);
+        grants.revokeRole(currentUser.tenantId(), currentUser.userId(), knowledgeBaseId, roleId);
     }
 
 }

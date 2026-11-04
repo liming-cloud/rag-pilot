@@ -20,7 +20,11 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.transaction.support.TransactionOperations;
 
-/** 模型管理的规则（D-043）：测通才保存、每次保存记变更、恢复、在用的服务商不能删、路由按当前配置。 */
+/**
+ * 模型管理的规则（D-043）：测通才保存、每次保存记变更、恢复、在用的服务商不能删、路由按当前配置。
+ * 服务商的增删改在 {@link ModelProviderService}（#145 拆出）；它和用途配置互相关联（在用的不能删、改密钥后路由跟着变），
+ * 所以两者放在同一组测试里一起验证。
+ */
 class ModelSettingsServiceTest {
 
     private static final TenantId TENANT = new TenantId(1);
@@ -31,6 +35,8 @@ class ModelSettingsServiceTest {
     private final ModelSettingsService service = new ModelSettingsService(store, probe,
             new KeyCipher(new SettingsProperties(KeyCipherTest.MASTER_KEY)), new FakeUsers(),
             TransactionOperations.withoutTransaction(), Clock.systemUTC());
+    private final ModelProviderService providers = new ModelProviderService(store,
+            new KeyCipher(new SettingsProperties(KeyCipherTest.MASTER_KEY)));
 
     @Test
     @DisplayName("没在界面配置过时全部用环境变量，路由返回空")
@@ -49,7 +55,7 @@ class ModelSettingsServiceTest {
     @Test
     @DisplayName("测通才保存：保存后路由打到新服务商、带解密后的密钥，并记一条从环境变量换过来的变更")
     void savesAfterProbe() {
-        var provider = service.createProvider("DeepSeek 官方", "https://api.deepseek.com/v1/", "sk-deepseek-abcd");
+        var provider = providers.createProvider("DeepSeek 官方", "https://api.deepseek.com/v1/", "sk-deepseek-abcd");
 
         var saved = service.save(TENANT, ADMIN, ModelUsage.ANSWER, provider.id(), " deepseek-chat ");
 
@@ -80,7 +86,7 @@ class ModelSettingsServiceTest {
     @Test
     @DisplayName("恢复到某条记录之后的配置，记一条“恢复”；服务商删了的记录不能恢复")
     void restores() {
-        var provider = service.createProvider("自建", "http://10.0.0.8:8000/v1", null);
+        var provider = providers.createProvider("自建", "http://10.0.0.8:8000/v1", null);
         service.save(TENANT, ADMIN, ModelUsage.LIGHT, provider.id(), "qwen-small");
         service.save(TENANT, ADMIN, ModelUsage.LIGHT, null, "env-other");
         long first = store.changes.getFirst().id();
@@ -93,25 +99,25 @@ class ModelSettingsServiceTest {
         assertThat(service.override(ModelUsage.LIGHT).orElseThrow().apiKey()).isNull();
 
         service.save(TENANT, ADMIN, ModelUsage.LIGHT, null, "env-other");
-        service.deleteProvider(provider.id());
+        providers.deleteProvider(provider.id());
         assertThatThrownBy(() -> service.restore(TENANT, ADMIN, first)).hasMessageContaining("已被删除");
     }
 
     @Test
     @DisplayName("服务商：名称不能重复、地址要以 http(s) 开头、在用的不能删；密钥只显示后 4 位，太短的不显示")
     void providerRules() {
-        var provider = service.createProvider("硅基流动", "https://api.siliconflow.cn/v1", "sk-silicon-wxyz");
+        var provider = providers.createProvider("硅基流动", "https://api.siliconflow.cn/v1", "sk-silicon-wxyz");
         assertThat(provider.apiKeyLast4()).isEqualTo("wxyz");
         assertThat(store.providers.get(provider.id()).apiKeyCipher()).isNotNull();
-        assertThat(service.createProvider("短密钥", "http://a/v1", "abc").apiKeyLast4()).isEqualTo("••");
+        assertThat(providers.createProvider("短密钥", "http://a/v1", "abc").apiKeyLast4()).isEqualTo("••");
 
-        assertThatThrownBy(() -> service.createProvider("硅基流动", "https://x/v1", null)).hasMessageContaining("同名");
-        assertThatThrownBy(() -> service.createProvider("坏地址", "ftp://x", null)).hasMessageContaining("http://");
+        assertThatThrownBy(() -> providers.createProvider("硅基流动", "https://x/v1", null)).hasMessageContaining("同名");
+        assertThatThrownBy(() -> providers.createProvider("坏地址", "ftp://x", null)).hasMessageContaining("http://");
 
         service.save(TENANT, ADMIN, ModelUsage.RERANK, provider.id(), "bge-reranker");
-        assertThatThrownBy(() -> service.deleteProvider(provider.id())).hasMessageContaining("先换掉才能删除");
+        assertThatThrownBy(() -> providers.deleteProvider(provider.id())).hasMessageContaining("先换掉才能删除");
 
-        var renamed = service.updateProvider(provider.id(), "硅基流动 2", "https://api.siliconflow.cn/v1", "");
+        var renamed = providers.updateProvider(provider.id(), "硅基流动 2", "https://api.siliconflow.cn/v1", "");
         assertThat(renamed.apiKeyLast4()).as("留空不改密钥").isEqualTo("wxyz");
         assertThat(service.override(ModelUsage.RERANK).orElseThrow().apiKey()).isEqualTo("sk-silicon-wxyz");
     }
@@ -119,12 +125,14 @@ class ModelSettingsServiceTest {
     @Test
     @DisplayName("没设主密钥时不能保存密钥，不需要密钥的服务商照常能加")
     void masterKeyMissing() {
-        var withoutKey = new ModelSettingsService(store, probe, new KeyCipher(new SettingsProperties("")),
-                new FakeUsers(), TransactionOperations.withoutTransaction(), Clock.systemUTC());
+        var noKey = new KeyCipher(new SettingsProperties(""));
+        var withoutKey = new ModelSettingsService(store, probe, noKey, new FakeUsers(),
+                TransactionOperations.withoutTransaction(), Clock.systemUTC());
+        var providersWithoutKey = new ModelProviderService(store, noKey);
 
-        assertThatThrownBy(() -> withoutKey.createProvider("云服务", "https://x/v1", "sk-1234567890"))
+        assertThatThrownBy(() -> providersWithoutKey.createProvider("云服务", "https://x/v1", "sk-1234567890"))
                 .hasMessageContaining("RAG_MASTER_KEY");
-        assertThat(withoutKey.createProvider("内网", "http://10.0.0.8/v1", null).apiKeyLast4()).isNull();
+        assertThat(providersWithoutKey.createProvider("内网", "http://10.0.0.8/v1", null).apiKeyLast4()).isNull();
         assertThat(withoutKey.overview().masterKeyConfigured()).isFalse();
     }
 

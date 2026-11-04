@@ -31,7 +31,7 @@ class DocumentIngestionServiceTest {
     private final InMemoryKnowledge fixture = new InMemoryKnowledge();
     private final List<Object> events = new ArrayList<>();
     private final KnowledgeBaseService knowledgeBases = new KnowledgeBaseService(fixture.knowledgeBases,
-            fixture.queries, fixture.users, fixture.calendar, query -> List.of(), fixture.audit);
+            fixture.queries, fixture.users, fixture.calendar, query -> List.of());
     private final DocumentIngestionService service = new DocumentIngestionService(knowledgeBases,
             fixture.documents, fixture.files, events::add, new DocumentRemover(fixture.documents, fixture.files),
             fixture.calendar, fixture.audit);

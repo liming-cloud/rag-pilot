@@ -1,9 +1,6 @@
 package com.liming.rag.knowledge.application;
 
-import com.liming.rag.identity.api.AuditTrail;
-import com.liming.rag.identity.api.RoleDeleted;
 import com.liming.rag.identity.api.UserDirectory;
-import com.liming.rag.identity.api.UserDirectory.UserSummary;
 import com.liming.rag.knowledge.api.KnowledgeAccess;
 import com.liming.rag.knowledge.api.KnowledgeBaseRef;
 import com.liming.rag.knowledge.api.KnowledgeSearch;
@@ -26,13 +23,13 @@ import java.util.Objects;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.context.event.EventListener;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 知识库与授权。能访问一个库 = 直接授权给本人，或授权给本人所属的某个角色（D-038）；授权的增减规则在
+ * 知识库：建库、管理端列表和文档列表、检索调试，以及“能访问哪些库”（{@link KnowledgeAccess}）。授权的增减在
+ * {@link KnowledgeGrantService}（#145 按用例拆开）。能访问一个库 = 直接授权给本人，或授权给本人所属的某个角色（D-038）；授权的增减规则在
  * {@link KnowledgeBase} 聚合上。管理端也只能管理自己能访问的库（D-017），超级管理员例外：能看到并授权本租户全部的库，
  * 但检索同样按授权过滤。“能不能访问”的口径只在检索 SQL 的 {@code ChunkSearchMapper.accessibleKnowledgeBases} 一处，
  * 这里经 {@link KnowledgeQueries} 用它。
@@ -44,24 +41,18 @@ public class KnowledgeBaseService implements KnowledgeAccess {
 
 
     private final KnowledgeBaseRepository knowledgeBases;
-    private final AuditTrail audit;
     private final KnowledgeQueries queries;
     private final UserDirectory users;
     private final DocumentCalendar calendar;
     private final KnowledgeSearch search;
 
     public KnowledgeBaseService(KnowledgeBaseRepository knowledgeBases, KnowledgeQueries queries,
-            UserDirectory users, DocumentCalendar calendar, KnowledgeSearch search, AuditTrail audit) {
-        this.audit = audit;
+            UserDirectory users, DocumentCalendar calendar, KnowledgeSearch search) {
         this.knowledgeBases = knowledgeBases;
         this.queries = queries;
         this.users = users;
         this.calendar = calendar;
         this.search = search;
-    }
-
-    /** 直接授权的账号：用户名和显示名一起给出。账号已被删除时只有 id。 */
-    public record Member(long userId, String username, String displayName) {
     }
 
     /** 建库，建库的人自动获得直接授权。 */
@@ -189,85 +180,6 @@ public class KnowledgeBaseService implements KnowledgeAccess {
             int limit) {
         getManageable(tenantId, actor, knowledgeBaseId);
         return search.search(new SearchQuery(tenantId, actor, List.of(knowledgeBaseId), question, limit));
-    }
-
-    @Transactional
-    public void grant(TenantId tenantId, UserId actor, long knowledgeBaseId, UserId userId) {
-        var knowledgeBase = getManageable(tenantId, actor, knowledgeBaseId);
-        if (!users.exists(tenantId, userId)) {
-            throw new KnowledgeException(KnowledgeException.Reason.NOT_FOUND, "账号不存在");
-        }
-        knowledgeBase.grant(userId);
-        knowledgeBases.save(knowledgeBase);
-        audit(tenantId, actor, "KB_MEMBER_GRANTED", knowledgeBase, "知识库“" + knowledgeBase.name() + "”授权给账号 "
-                + username(tenantId, userId));
-    }
-
-    /** 不能撤销自己，规则见 {@link KnowledgeBase#revoke}。 */
-    @Transactional
-    public void revoke(TenantId tenantId, UserId actor, long knowledgeBaseId, UserId userId) {
-        var knowledgeBase = getManageable(tenantId, actor, knowledgeBaseId);
-        try {
-            knowledgeBase.revoke(actor, userId);
-        } catch (IllegalArgumentException e) {
-            throw new KnowledgeException(KnowledgeException.Reason.INVALID, e.getMessage());
-        }
-        knowledgeBases.save(knowledgeBase);
-        audit(tenantId, actor, "KB_MEMBER_REVOKED", knowledgeBase, "知识库“" + knowledgeBase.name() + "”撤销账号 "
-                + username(tenantId, userId) + " 的授权");
-    }
-
-    @Transactional(readOnly = true)
-    public List<Member> members(TenantId tenantId, UserId actor, long knowledgeBaseId) {
-        var ids = getManageable(tenantId, actor, knowledgeBaseId).members().stream().map(UserId::value).toList();
-        var summaries = users.summaries(tenantId, ids);
-        return ids.stream().map(id -> {
-            var summary = summaries.get(id);
-            return summary == null ? new Member(id, null, null)
-                    : new Member(id, summary.username(), summary.displayName());
-        }).toList();
-    }
-
-    @Transactional(readOnly = true)
-    public List<Long> roleGrants(TenantId tenantId, UserId actor, long knowledgeBaseId) {
-        return List.copyOf(getManageable(tenantId, actor, knowledgeBaseId).roleGrants());
-    }
-
-    /** 授权给角色：属于这个角色的账号立即能检索到这个库。 */
-    @Transactional
-    public void grantRole(TenantId tenantId, UserId actor, long knowledgeBaseId, long roleId) {
-        var knowledgeBase = getManageable(tenantId, actor, knowledgeBaseId);
-        if (!users.roleExists(tenantId, roleId)) {
-            throw new KnowledgeException(KnowledgeException.Reason.NOT_FOUND, "角色不存在");
-        }
-        knowledgeBase.grantRole(roleId);
-        knowledgeBases.save(knowledgeBase);
-        audit(tenantId, actor, "KB_ROLE_GRANTED", knowledgeBase, "知识库“" + knowledgeBase.name() + "”授权给角色 #" + roleId);
-    }
-
-    /** 收回角色授权：属于这个角色、又没有其他途径获得授权的账号立即检索不到。 */
-    @Transactional
-    public void revokeRole(TenantId tenantId, UserId actor, long knowledgeBaseId, long roleId) {
-        var knowledgeBase = getManageable(tenantId, actor, knowledgeBaseId);
-        knowledgeBase.revokeRole(roleId);
-        knowledgeBases.save(knowledgeBase);
-        audit(tenantId, actor, "KB_ROLE_REVOKED", knowledgeBase, "知识库“" + knowledgeBase.name() + "”收回角色 #" + roleId
-                + " 的授权");
-    }
-
-    private void audit(TenantId tenantId, UserId actor, String action, KnowledgeBase knowledgeBase, String detail) {
-        audit.record(tenantId, actor, action, "KNOWLEDGE_BASE", String.valueOf(knowledgeBase.id()), detail);
-    }
-
-    private String username(TenantId tenantId, UserId userId) {
-        var summary = users.summaries(tenantId, List.of(userId.value())).get(userId.value());
-        return summary == null ? "#" + userId.value() : summary.username();
-    }
-
-    /** 角色被删除时一并收回授权给它的库，在删除角色的事务里执行。 */
-    @EventListener
-    void on(RoleDeleted event) {
-        knowledgeBases.removeGrantsOfRole(event.tenantId(), event.roleId());
     }
 
     private static Validity.State parseValidity(String validity) {
