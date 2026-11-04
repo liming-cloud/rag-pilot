@@ -14,6 +14,9 @@ import org.apache.ibatis.annotations.Param;
 @Mapper
 interface ChunkSearchMapper {
 
+    /** 当前事务里打开 pgvector 的迭代扫描（只在本事务内有效）。 */
+    void enableIterativeScan();
+
     List<Long> nearest(@Param("tenantId") long tenantId, @Param("userId") long userId,
             @Param("roleIds") List<Long> roleIds, @Param("knowledgeBaseIds") List<Long> knowledgeBaseIds,
             @Param("today") LocalDate today, @Param("vector") String vector, @Param("limit") int limit);

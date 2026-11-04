@@ -30,17 +30,29 @@
           AND (expires_on IS NULL OR expires_on &gt;= #{today})
     </sql>
 
+    <!--
+      #145：HNSW 先扫索引再按 WHERE 过滤，可访问的资料只占一小部分时剩下的远少于 limit（pgvector 文档“Filtering”）。
+      迭代扫描在不够时继续往下扫（上限 hnsw.max_scan_tuples）；relaxed_order 的结果可能略微乱序，所以用物化 CTE 再按距离排一次
+      （pgvector 文档“Iterative Index Scans”的写法，distance + 0 防止 PostgreSQL 17 起把排序推回索引）。SET LOCAL 只在当前事务有效。
+    -->
+    <update id="enableIterativeScan">
+        SET LOCAL hnsw.iterative_scan = relaxed_order
+    </update>
+
     <select id="nearest" resultType="long">
-        SELECT id FROM chunk
-        WHERE tenant_id = #{tenantId}
-          AND knowledge_base_id IN (<include refid="accessibleKnowledgeBases"/>)
-          <if test="knowledgeBaseIds != null and !knowledgeBaseIds.isEmpty()">
-            AND knowledge_base_id IN <foreach collection="knowledgeBaseIds" item="kb" open="(" separator="," close=")">#{kb}</foreach>
-          </if>
-          AND document_id IN (<include refid="currentDocuments"/>)
-          AND embedding IS NOT NULL
-        ORDER BY embedding &lt;=&gt; CAST(#{vector} AS vector)
-        LIMIT #{limit}
+        WITH relaxed AS MATERIALIZED (
+            SELECT id, embedding &lt;=&gt; CAST(#{vector} AS vector) AS distance FROM chunk
+            WHERE tenant_id = #{tenantId}
+              AND knowledge_base_id IN (<include refid="accessibleKnowledgeBases"/>)
+              <if test="knowledgeBaseIds != null and !knowledgeBaseIds.isEmpty()">
+                AND knowledge_base_id IN <foreach collection="knowledgeBaseIds" item="kb" open="(" separator="," close=")">#{kb}</foreach>
+              </if>
+              AND document_id IN (<include refid="currentDocuments"/>)
+              AND embedding IS NOT NULL
+            ORDER BY distance
+            LIMIT #{limit}
+        )
+        SELECT id FROM relaxed ORDER BY distance + 0
     </select>
 
     <select id="keyword" resultType="long">
