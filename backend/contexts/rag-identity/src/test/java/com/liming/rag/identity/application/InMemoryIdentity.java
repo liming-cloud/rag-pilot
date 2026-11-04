@@ -71,14 +71,26 @@ final class InMemoryIdentity implements Accounts, Roles {
     }
 
     @Override
-    public void recordFailedLogin(long id, int failedAttempts, OffsetDateTime lockedUntil) {
-        update(id, a -> new Account(a.id(), a.tenantId(), a.username(), a.displayName(), a.passwordHash(),
-                a.enabled(), a.mustChangePassword(), failedAttempts, lockedUntil));
+    public synchronized int incrementFailedLogins(long id) {
+        var updated = find(id).orElseThrow().failedAttempts() + 1;
+        seedFailedLogins(id, updated, find(id).orElseThrow().lockedUntil());
+        return updated;
+    }
+
+    @Override
+    public void lock(long id, OffsetDateTime until) {
+        seedFailedLogins(id, 0, until);
     }
 
     @Override
     public void clearFailedLogins(long id) {
-        recordFailedLogin(id, 0, null);
+        seedFailedLogins(id, 0, null);
+    }
+
+    /** 测试里直接设失败计数和锁定（不经端口）。 */
+    void seedFailedLogins(long id, int failedAttempts, OffsetDateTime lockedUntil) {
+        update(id, a -> new Account(a.id(), a.tenantId(), a.username(), a.displayName(), a.passwordHash(),
+                a.enabled(), a.mustChangePassword(), failedAttempts, lockedUntil));
     }
 
     @Override

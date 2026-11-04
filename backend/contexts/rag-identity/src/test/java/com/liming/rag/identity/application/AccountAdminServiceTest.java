@@ -122,7 +122,7 @@ class AccountAdminServiceTest {
     @DisplayName("重置密码后必须先改密码，并清掉锁定；解锁清掉失败计数")
     void resetPasswordAndUnlock() {
         var staff = fixture.account("staff01", fixture.staffRole);
-        fixture.store.recordFailedLogin(staff.value(), 0, java.time.OffsetDateTime.now().plusMinutes(10));
+        fixture.store.seedFailedLogins(staff.value(), 0, java.time.OffsetDateTime.now().plusMinutes(10));
 
         service.resetPassword(TENANT, fixture.admin, staff, "temp-password");
 
@@ -132,7 +132,7 @@ class AccountAdminServiceTest {
         assertThat(fixture.passwords.matches("temp-password", reset.passwordHash())).isTrue();
         assertThat(fixture.sessions.kickedOut).as("重置密码后对方已登录的会话失效").containsExactly(staff.value());
 
-        fixture.store.recordFailedLogin(staff.value(), 3, java.time.OffsetDateTime.now().plusMinutes(10));
+        fixture.store.seedFailedLogins(staff.value(), 3, java.time.OffsetDateTime.now().plusMinutes(10));
         service.unlock(TENANT, staff);
         assertThat(fixture.get(staff).failedAttempts()).isZero();
         assertThat(fixture.get(staff).lockedUntil()).isNull();

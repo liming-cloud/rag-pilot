@@ -20,6 +20,9 @@ public interface AppUserMapper extends BaseMapper<AppUserDO> {
 
     void updatePassword(@Param("id") long id, @Param("passwordHash") String passwordHash,
             @Param("mustChangePassword") boolean mustChangePassword);
+    /** 失败次数原子加一，返回加一后的次数。 */
+    int incrementFailedLogins(@Param("id") long id);
+
 
     void updateFailedLogins(@Param("id") long id, @Param("failedAttempts") int failedAttempts,
             @Param("lockedUntil") OffsetDateTime lockedUntil);

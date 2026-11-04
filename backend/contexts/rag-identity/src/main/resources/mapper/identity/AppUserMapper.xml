@@ -37,6 +37,11 @@
         WHERE id = #{id}
     </update>
 
+    <!-- 原子加一（#145 C4）：同时发来的多次错误都会累计；INSERT/UPDATE … RETURNING 要用 select 取回结果，每次都执行。 -->
+    <select id="incrementFailedLogins" resultType="int" flushCache="true" useCache="false">
+        UPDATE app_user SET failed_attempts = failed_attempts + 1 WHERE id = #{id} RETURNING failed_attempts
+    </select>
+
     <update id="updateFailedLogins">
         UPDATE app_user SET failed_attempts = #{failedAttempts}, locked_until = #{lockedUntil}
         WHERE id = #{id}

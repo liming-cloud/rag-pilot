@@ -284,6 +284,31 @@ class RbacTests {
     }
 
     @Test
+    @DisplayName("同时发来的多次错误密码也会累计并锁定，不能靠并发绕过（#145 C4）")
+    void locksUnderConcurrentWrongPasswords() throws Exception {
+        String root = rootToken();
+        createUser(root, "lock02", TestLogin.staffRoleId(http));
+        var start = new java.util.concurrent.CountDownLatch(1);
+        try (var executor = java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor()) {
+            var attempts = new java.util.ArrayList<java.util.concurrent.Future<?>>();
+            for (int i = 0; i < 12; i++) {
+                attempts.add(executor.submit(() -> {
+                    start.await();
+                    return rawLogin("lock02", "wrong-password").getStatusCode();
+                }));
+            }
+            start.countDown();
+            for (var attempt : attempts) {
+                attempt.get();
+            }
+        }
+
+        var afterwards = rawLogin("lock02", "member-password");
+        assertThat(afterwards.getBody()).as("并发输错 12 次后，密码对了也应因锁定登不上").containsEntry("code", "IDENTITY_LOCKED");
+        assertThat(afterwards.getBody()).doesNotContainKey("token");
+    }
+
+    @Test
     @DisplayName("账号列表按关键词、角色、状态筛选并分页；每页最多 100 条")
     void pagesUsers() {
         String root = rootToken();

@@ -34,20 +34,9 @@ final class AccountRules {
     }
 
     /**
-     * 又输错一次之后的状态：到上限时锁定（计数清零、记下锁到什么时候），否则计数加一。
-     *
-     * @param lockedUntil 锁到什么时候；没锁时为 null
+     * 又输错一次、连续错误累计到 {@code attempts} 次之后：到上限时锁到什么时候，没到时为 null。
      */
-    record FailedLogin(int failedAttempts, OffsetDateTime lockedUntil) {
-
-        boolean locked() {
-            return lockedUntil != null;
-        }
-    }
-
-    static FailedLogin failedLogin(Account account, OffsetDateTime now) {
-        int attempts = account.failedAttempts() + 1;
-        return attempts >= MAX_FAILED_ATTEMPTS ? new FailedLogin(0, now.plus(LOCK_DURATION))
-                : new FailedLogin(attempts, null);
+    static OffsetDateTime lockedUntil(int attempts, OffsetDateTime now) {
+        return attempts >= MAX_FAILED_ATTEMPTS ? now.plus(LOCK_DURATION) : null;
     }
 }

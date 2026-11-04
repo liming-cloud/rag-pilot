@@ -50,9 +50,12 @@ public class AuthService {
             throw locked(account.lockedUntil(), now);
         }
         if (!matches) {
-            var failed = AccountRules.failedLogin(account, now);
-            accounts.recordFailedLogin(account.id(), failed.failedAttempts(), failed.lockedUntil());
-            throw failed.locked() ? locked(failed.lockedUntil(), now) : badCredentials();
+            var lockedUntil = AccountRules.lockedUntil(accounts.incrementFailedLogins(account.id()), now);
+            if (lockedUntil == null) {
+                throw badCredentials();
+            }
+            accounts.lock(account.id(), lockedUntil);
+            throw locked(lockedUntil, now);
         }
         if (!account.enabled()) {
             throw badCredentials();

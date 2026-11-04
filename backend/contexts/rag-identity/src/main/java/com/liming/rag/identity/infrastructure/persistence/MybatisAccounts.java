@@ -88,8 +88,13 @@ class MybatisAccounts implements Accounts {
     }
 
     @Override
-    public void recordFailedLogin(long id, int failedAttempts, OffsetDateTime lockedUntil) {
-        mapper.updateFailedLogins(id, failedAttempts, lockedUntil);
+    public int incrementFailedLogins(long id) {
+        return mapper.incrementFailedLogins(id);
+    }
+
+    @Override
+    public void lock(long id, OffsetDateTime until) {
+        mapper.updateFailedLogins(id, 0, until);
     }
 
     @Override

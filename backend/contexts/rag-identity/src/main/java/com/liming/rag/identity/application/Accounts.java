@@ -32,8 +32,14 @@ public interface Accounts {
     /** 换密码，同时清掉登录失败计数和锁定。 */
     void setPassword(long id, String passwordHash, boolean mustChangePassword);
 
-    /** 记一次密码错误；{@code lockedUntil} 不为 null 时锁定并把计数清零。 */
-    void recordFailedLogin(long id, int failedAttempts, OffsetDateTime lockedUntil);
+    /**
+     * 记一次密码错误：在数据库里原子地加一，返回加一后的次数。同时发来的多次错误都会累计（#145 C4，原来读出后整值写回，
+     * 并发时计数不涨，锁定能被绕过）。
+     */
+    int incrementFailedLogins(long id);
+
+    /** 锁定到 {@code until}，并把失败计数清零。 */
+    void lock(long id, OffsetDateTime until);
 
     /** 登录成功或管理员解锁：清掉失败计数和锁定。 */
     void clearFailedLogins(long id);
