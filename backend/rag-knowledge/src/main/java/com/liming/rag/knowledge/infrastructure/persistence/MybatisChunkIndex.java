@@ -36,13 +36,8 @@ class MybatisChunkIndex implements ChunkIndex {
     @Override
     public List<SearchHit> load(TenantId tenantId, List<Long> chunkIds) {
         return mapper.load(tenantId.value(), chunkIds).stream()
-                .map(row -> new SearchHit(
-                        ((Number) row.get("chunk_id")).longValue(),
-                        ((Number) row.get("document_id")).longValue(),
-                        (String) row.get("document_name"),
-                        (String) row.get("heading_path"),
-                        (String) row.get("content"),
-                        0))
+                .map(row -> new SearchHit(row.chunkId, row.documentId, row.documentName, row.headingPath,
+                        row.content, 0))
                 .toList();
     }
 
@@ -51,7 +46,7 @@ class MybatisChunkIndex implements ChunkIndex {
         var contents = new HashMap<Long, String>();
         for (var row : mapper.accessibleContents(grantee.tenantId().value(), grantee.userId().value(),
                 grantee.roleIds(), chunkIds)) {
-            contents.put(((Number) row.get("chunk_id")).longValue(), (String) row.get("content"));
+            contents.put(row.chunkId, row.content);
         }
         return contents;
     }

@@ -2,7 +2,6 @@ package com.liming.rag.knowledge.infrastructure.persistence;
 
 import java.time.LocalDate;
 import java.util.List;
-import java.util.Map;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
@@ -23,9 +22,9 @@ interface ChunkSearchMapper {
             @Param("roleIds") List<Long> roleIds, @Param("knowledgeBaseIds") List<Long> knowledgeBaseIds,
             @Param("today") LocalDate today, @Param("text") String text, @Param("limit") int limit);
 
-    List<Map<String, Object>> load(@Param("tenantId") long tenantId, @Param("chunkIds") List<Long> chunkIds);
+    List<ChunkHitDO> load(@Param("tenantId") long tenantId, @Param("chunkIds") List<Long> chunkIds);
 
     /** 按分块取原文，和两条召回 SQL 一样只在授权给用户本人或其角色的知识库里查。 */
-    List<Map<String, Object>> accessibleContents(@Param("tenantId") long tenantId, @Param("userId") long userId,
+    List<ChunkHitDO> accessibleContents(@Param("tenantId") long tenantId, @Param("userId") long userId,
             @Param("roleIds") List<Long> roleIds, @Param("chunkIds") List<Long> chunkIds);
 }
