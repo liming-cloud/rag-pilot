@@ -1,6 +1,5 @@
 package com.liming.rag.identity.application;
 
-import cn.dev33.satoken.secure.BCrypt;
 import com.liming.rag.shared.TenantId;
 import com.liming.rag.shared.UserId;
 import java.util.List;
@@ -15,6 +14,8 @@ final class IdentityFixture {
 
     final InMemoryIdentity store = new InMemoryIdentity();
     final AccessService access = new AccessService(store, store, TestCatalog.REGISTRY);
+    final FakeSessions sessions = new FakeSessions();
+    final PlainPasswordHasher passwords = new PlainPasswordHasher();
     final Role superRole;
     final Role adminRole;
     final Role staffRole;
@@ -31,7 +32,7 @@ final class IdentityFixture {
 
     UserId account(String username, Role... roles) {
         var created = store.insert(new Account(null, TENANT, username, username,
-                BCrypt.hashpw(PASSWORD, BCrypt.gensalt(4)), true, false, 0, null));
+                passwords.hash(PASSWORD), true, false, 0, null));
         store.setUserRoles(created.id(), List.of(roles).stream().map(Role::id).toList());
         return new UserId(created.id());
     }

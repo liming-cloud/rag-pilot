@@ -4,7 +4,6 @@ import static com.liming.rag.identity.application.IdentityFixture.TENANT;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import cn.dev33.satoken.secure.BCrypt;
 import com.liming.rag.identity.application.AccountImportService.Problem;
 import com.liming.rag.identity.application.AccountImportService.Row;
 import java.util.List;
@@ -17,7 +16,7 @@ class AccountImportServiceTest {
 
     private final IdentityFixture fixture = new IdentityFixture();
     private final AccountImportService service = new AccountImportService(fixture.store, fixture.store,
-            fixture.access);
+            fixture.access, fixture.passwords);
 
     private static Row row(int line, String username, String displayName, String... roles) {
         return new Row(line, username, displayName, List.of(roles));
@@ -34,7 +33,7 @@ class AccountImportServiceTest {
         var first = fixture.store.findByUsername("new01").orElseThrow();
         assertThat(first.displayName()).isEqualTo("新员工一");
         assertThat(first.mustChangePassword()).isTrue();
-        assertThat(BCrypt.checkpw("Welcome-2026", first.passwordHash())).isTrue();
+        assertThat(fixture.passwords.matches("Welcome-2026", first.passwordHash())).isTrue();
         assertThat(fixture.store.rolesOf(first.id())).containsExactly(fixture.staffRole);
         var second = fixture.store.findByUsername("new02").orElseThrow();
         assertThat(second.mustChangePassword()).isTrue();

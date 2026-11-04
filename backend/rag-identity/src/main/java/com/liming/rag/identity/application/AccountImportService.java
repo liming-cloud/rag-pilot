@@ -1,6 +1,5 @@
 package com.liming.rag.identity.application;
 
-import cn.dev33.satoken.secure.BCrypt;
 import com.liming.rag.shared.TenantId;
 import com.liming.rag.shared.UserId;
 import java.util.ArrayList;
@@ -27,11 +26,13 @@ public class AccountImportService {
     private final Accounts accounts;
     private final Roles roles;
     private final AccessService access;
+    private final PasswordHasher passwords;
 
-    AccountImportService(Accounts accounts, Roles roles, AccessService access) {
+    AccountImportService(Accounts accounts, Roles roles, AccessService access, PasswordHasher passwords) {
         this.accounts = accounts;
         this.roles = roles;
         this.access = access;
+        this.passwords = passwords;
     }
 
     /** 文件里的一行；line 是文件里的行号（表头是第 1 行），用于报错定位。 */
@@ -57,7 +58,7 @@ public class AccountImportService {
 
     /**
      * 导入：重新预检（含初始密码与各用户名的规则），有问题时一条都不写入。同一批账号的初始密码相同，
-     * 只算一次哈希（BCrypt 每次几十毫秒，500 行逐个算要半分钟）；首次登录必须改密码，改后各自不同。
+     * 只算一次摘要（BCrypt 每次几十毫秒，500 行逐个算要半分钟）；首次登录必须改密码，改后各自不同。
      *
      * @return 导入的账号数
      */
@@ -73,7 +74,7 @@ public class AccountImportService {
                     + " 行有问题，请重新检查后再导入");
         }
         var byName = rolesByName(tenantId);
-        var hash = BCrypt.hashpw(password, BCrypt.gensalt());
+        var hash = passwords.hash(password);
         try {
             for (var row : rows) {
                 var created = accounts.insert(new Account(null, tenantId, row.username(), row.displayName(), hash,
@@ -96,15 +97,17 @@ public class AccountImportService {
         for (var row : rows) {
             var messages = new ArrayList<String>();
             var earlier = firstLine.putIfAbsent(row.username(), row.line());
-            if (!AccountAdminService.USERNAME.matcher(row.username()).matches()) {
-                messages.add("用户名必须是 3 到 50 个字母、数字或 _ . -");
+            var usernameProblem = AccountRules.usernameProblem(row.username());
+            if (usernameProblem != null) {
+                messages.add(usernameProblem);
             } else if (earlier != null) {
                 messages.add("与第 " + earlier + " 行的用户名重复");
             } else if (existing.contains(row.username())) {
                 messages.add("用户名已存在");
             }
-            if (row.displayName().isEmpty() || row.displayName().length() > 50) {
-                messages.add("显示名必须是 1 到 50 个字符");
+            var displayNameProblem = AccountRules.displayNameProblem(row.displayName());
+            if (displayNameProblem != null) {
+                messages.add(displayNameProblem);
             }
             if (row.roleNames().isEmpty()) {
                 messages.add("至少要有一个角色");

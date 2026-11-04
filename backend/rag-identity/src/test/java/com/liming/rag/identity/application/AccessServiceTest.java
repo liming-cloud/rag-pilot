@@ -20,14 +20,14 @@ class AccessServiceTest {
         var manager = fixture.role("店长", TestCatalog.ANSWER_VIEW, "legacy:old");
         var user = fixture.account("zhang", fixture.staffRole, manager);
 
-        assertThat(access.getPermissionList(user.value(), "login"))
+        assertThat(access.permissionsOf(user.value()))
                 .containsExactly(TestCatalog.CHAT_USE, TestCatalog.ANSWER_VIEW);
     }
 
     @Test
     @DisplayName("超级管理员拥有清单里的全部权限点")
     void superAdminHasAll() {
-        assertThat(access.getPermissionList(fixture.superAdmin.value(), "login"))
+        assertThat(access.permissionsOf(fixture.superAdmin.value()))
                 .containsExactlyElementsOf(TestCatalog.REGISTRY.all());
         assertThat(access.isSuperAdmin(TENANT, fixture.superAdmin)).isTrue();
         assertThat(access.isSuperAdmin(TENANT, fixture.admin)).isFalse();
@@ -38,13 +38,13 @@ class AccessServiceTest {
     void inactiveAccountsHaveNothing() {
         var staff = fixture.account("staff01", fixture.staffRole);
         fixture.store.setPassword(staff.value(), "hash", true);
-        assertThat(access.getPermissionList(staff.value(), "login")).isEmpty();
+        assertThat(access.permissionsOf(staff.value())).isEmpty();
 
         fixture.store.setPassword(staff.value(), "hash", false);
-        assertThat(access.getPermissionList(staff.value(), "login")).containsExactly(TestCatalog.CHAT_USE);
+        assertThat(access.permissionsOf(staff.value())).containsExactly(TestCatalog.CHAT_USE);
 
         fixture.store.setEnabled(staff.value(), false);
-        assertThat(access.getPermissionList(staff.value(), "login")).isEmpty();
+        assertThat(access.permissionsOf(staff.value())).isEmpty();
         assertThat(access.roleIds(TENANT, staff)).isEmpty();
         assertThat(access.exists(TENANT, staff)).isFalse();
     }
@@ -60,7 +60,7 @@ class AccessServiceTest {
         fixture.store.update(new Role(manager.id(), TENANT, "店长", null,
                 java.util.Set.of(TestCatalog.ANSWER_VIEW, TestCatalog.STATS_VIEW)));
 
-        assertThat(access.getPermissionList(user.value(), "login"))
+        assertThat(access.permissionsOf(user.value()))
                 .isEqualTo(List.of(TestCatalog.ANSWER_VIEW, TestCatalog.STATS_VIEW));
     }
 }

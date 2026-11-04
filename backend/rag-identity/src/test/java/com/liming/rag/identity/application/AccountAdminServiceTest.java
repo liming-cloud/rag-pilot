@@ -5,7 +5,6 @@ import static com.liming.rag.identity.application.IdentityFixture.TENANT;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import cn.dev33.satoken.secure.BCrypt;
 import com.liming.rag.identity.api.IdentityPermissions;
 import com.liming.rag.shared.ErrorKind;
 import com.liming.rag.shared.UserId;
@@ -19,10 +18,11 @@ import org.junit.jupiter.params.provider.CsvSource;
 class AccountAdminServiceTest {
 
     private final IdentityFixture fixture = new IdentityFixture();
-    private final AccountAdminService service = new AccountAdminService(fixture.store, fixture.store, fixture.access);
+    private final AccountAdminService service = new AccountAdminService(fixture.store, fixture.store, fixture.access,
+            fixture.sessions, fixture.passwords);
 
     @Test
-    @DisplayName("新建账号：去掉首尾空格，密码只存 BCrypt 摘要，带上角色")
+    @DisplayName("新建账号：去掉首尾空格，密码只存摘要，带上角色")
     void createsAccount() {
         var created = service.create(TENANT, fixture.admin, "  staff01 ", " 店员小王 ", "staff-password",
                 List.of(fixture.staffRole.id()));
@@ -31,7 +31,8 @@ class AccountAdminServiceTest {
         assertThat(account.username()).isEqualTo("staff01");
         assertThat(account.displayName()).isEqualTo("店员小王");
         assertThat(account.passwordHash()).isNotEqualTo("staff-password");
-        assertThat(BCrypt.checkpw("staff-password", account.passwordHash())).isTrue();
+        assertThat(account.passwordHash()).isNotEqualTo("staff-password");
+        assertThat(fixture.passwords.matches("staff-password", account.passwordHash())).isTrue();
         assertThat(created.roles()).containsExactly(fixture.staffRole);
         assertThat(fixture.store.rolesOf(account.id())).containsExactly(fixture.staffRole);
     }
@@ -104,6 +105,9 @@ class AccountAdminServiceTest {
 
         // 超级管理员可以管理其他管理员。
         assertThat(service.setEnabled(TENANT, fixture.superAdmin, otherAdmin, false).account().enabled()).isFalse();
+        assertThat(fixture.sessions.kickedOut).as("停用时踢掉它所有已登录的会话").containsExactly(otherAdmin.value());
+        service.setEnabled(TENANT, fixture.superAdmin, otherAdmin, true);
+        assertThat(fixture.sessions.kickedOut).as("启用时不踢").hasSize(1);
     }
 
     @Test
@@ -124,7 +128,8 @@ class AccountAdminServiceTest {
         var reset = fixture.get(staff);
         assertThat(reset.mustChangePassword()).isTrue();
         assertThat(reset.lockedUntil()).isNull();
-        assertThat(BCrypt.checkpw("temp-password", reset.passwordHash())).isTrue();
+        assertThat(fixture.passwords.matches("temp-password", reset.passwordHash())).isTrue();
+        assertThat(fixture.sessions.kickedOut).as("重置密码后对方已登录的会话失效").containsExactly(staff.value());
 
         fixture.store.recordFailedLogin(staff.value(), 3, java.time.OffsetDateTime.now().plusMinutes(10));
         service.unlock(TENANT, staff);

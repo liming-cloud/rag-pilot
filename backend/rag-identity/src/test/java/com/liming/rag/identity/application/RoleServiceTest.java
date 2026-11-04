@@ -34,7 +34,7 @@ class RoleServiceTest {
     @Test
     @DisplayName("给角色的权限点不能超出自己的，也不能是清单外的")
     void cannotGrantBeyondOwn() {
-        var admin = fixture.access.getPermissionList(fixture.admin.value(), "login");
+        var admin = fixture.access.permissionsOf(fixture.admin.value());
         assertThat(admin).doesNotContain(TestCatalog.MODEL_VIEW);
 
         assertThatThrownBy(() -> service.create(TENANT, fixture.admin, "模型员", List.of(TestCatalog.MODEL_VIEW)))

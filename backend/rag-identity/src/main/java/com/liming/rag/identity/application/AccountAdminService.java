@@ -1,7 +1,5 @@
 package com.liming.rag.identity.application;
 
-import cn.dev33.satoken.secure.BCrypt;
-import cn.dev33.satoken.stp.StpUtil;
 import com.liming.rag.shared.TenantId;
 import com.liming.rag.shared.UserId;
 import java.time.Clock;
@@ -9,7 +7,6 @@ import java.time.OffsetDateTime;
 import java.util.Collection;
 import java.util.List;
 import java.util.Locale;
-import java.util.regex.Pattern;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
@@ -22,22 +19,26 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class AccountAdminService {
 
-    static final Pattern USERNAME = Pattern.compile("[A-Za-z0-9_.-]{3,50}");
-
     private final Accounts accounts;
     private final Roles roles;
     private final AccessService access;
+    private final Sessions sessions;
+    private final PasswordHasher passwords;
     private final Clock clock;
 
     @Autowired
-    AccountAdminService(Accounts accounts, Roles roles, AccessService access) {
-        this(accounts, roles, access, Clock.systemUTC());
+    AccountAdminService(Accounts accounts, Roles roles, AccessService access, Sessions sessions,
+            PasswordHasher passwords) {
+        this(accounts, roles, access, sessions, passwords, Clock.systemUTC());
     }
 
-    AccountAdminService(Accounts accounts, Roles roles, AccessService access, Clock clock) {
+    AccountAdminService(Accounts accounts, Roles roles, AccessService access, Sessions sessions,
+            PasswordHasher passwords, Clock clock) {
         this.accounts = accounts;
         this.roles = roles;
         this.access = access;
+        this.sessions = sessions;
+        this.passwords = passwords;
         this.clock = clock;
     }
 
@@ -61,11 +62,12 @@ public class AccountAdminService {
             String password, Collection<Long> roleIds) {
         var name = username == null ? "" : username.strip();
         var display = displayName == null ? "" : displayName.strip();
-        if (!USERNAME.matcher(name).matches()) {
-            throw invalid("用户名必须是 3 到 50 个字母、数字或 _ . -");
+        var problem = AccountRules.usernameProblem(name);
+        if (problem == null) {
+            problem = AccountRules.displayNameProblem(display);
         }
-        if (display.isEmpty() || display.length() > 50) {
-            throw invalid("显示名必须是 1 到 50 个字符");
+        if (problem != null) {
+            throw invalid(problem);
         }
         PasswordRules.check(name, password);
         var assigned = rolesIn(tenantId, roleIds);
@@ -76,7 +78,7 @@ public class AccountAdminService {
         Account created;
         try {
             created = accounts.insert(new Account(null, tenantId, name, display,
-                    BCrypt.hashpw(password, BCrypt.gensalt()), true, false, 0, null));
+                    passwords.hash(password), true, false, 0, null));
         } catch (DuplicateKeyException e) {
             // 查重之后、插入之前别人用了这个用户名：靠唯一约束兜底（#135）。
             throw usernameTaken(name);
@@ -95,7 +97,7 @@ public class AccountAdminService {
         access.rulesFor(actor).checkManageable(roles.rolesOf(account.id()));
         accounts.setEnabled(account.id(), enabled);
         if (!enabled) {
-            StpUtil.logout(account.id());
+            sessions.logoutAll(account.id());
         }
         return managed(withEnabled(account, enabled), roles.rolesOf(account.id()));
     }
@@ -118,8 +120,8 @@ public class AccountAdminService {
         var account = find(tenantId, target);
         access.rulesFor(actor).checkManageable(roles.rolesOf(account.id()));
         PasswordRules.check(account.username(), password);
-        accounts.setPassword(account.id(), BCrypt.hashpw(password, BCrypt.gensalt()), true);
-        StpUtil.logout(account.id());
+        accounts.setPassword(account.id(), passwords.hash(password), true);
+        sessions.logoutAll(account.id());
     }
 
     /** 手动解锁连续输错被锁的账号。 */
