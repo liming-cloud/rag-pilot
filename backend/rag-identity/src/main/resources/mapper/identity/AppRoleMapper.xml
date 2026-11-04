@@ -9,7 +9,7 @@
     </sql>
 
     <!-- 内置角色在前（超级管理员、管理员、员工），其余按创建顺序。 -->
-    <select id="list" resultType="map">
+    <select id="list" resultType="com.liming.rag.identity.infrastructure.persistence.RoleDO">
         SELECT <include refid="roleColumns"/>
         FROM app_role r
         WHERE r.tenant_id = #{tenantId}
@@ -18,7 +18,7 @@
         ORDER BY CASE r.builtin WHEN 'SUPER_ADMIN' THEN 0 WHEN 'ADMIN' THEN 1 WHEN 'STAFF' THEN 2 ELSE 3 END, r.id
     </select>
 
-    <select id="rolesOfUsers" resultType="map">
+    <select id="rolesOfUsers" resultType="com.liming.rag.identity.infrastructure.persistence.RoleDO">
         SELECT ur.user_id, <include refid="roleColumns"/>
         FROM app_user_role ur JOIN app_role r ON r.id = ur.role_id
         WHERE ur.user_id IN <foreach collection="userIds" item="id" open="(" separator="," close=")">#{id}</foreach>
@@ -51,7 +51,7 @@
         SELECT EXISTS (SELECT 1 FROM app_role WHERE tenant_id = #{tenantId} AND name = #{name})
     </select>
 
-    <select id="userCounts" resultType="map">
+    <select id="userCounts" resultType="com.liming.rag.identity.infrastructure.persistence.RoleUserCountDO">
         SELECT ur.role_id, count(*) AS users
         FROM app_user_role ur JOIN app_role r ON r.id = ur.role_id
         WHERE r.tenant_id = #{tenantId}

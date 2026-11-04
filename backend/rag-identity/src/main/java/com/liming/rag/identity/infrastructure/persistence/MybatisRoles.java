@@ -70,7 +70,7 @@ class MybatisRoles implements Roles {
     @Override
     public Map<Long, Long> userCounts(TenantId tenantId) {
         return mapper.userCounts(tenantId.value()).stream().collect(Collectors.toMap(
-                row -> ((Number) row.get("role_id")).longValue(), row -> ((Number) row.get("users")).longValue()));
+                row -> row.roleId, row -> row.users));
     }
 
     @Override
@@ -84,7 +84,7 @@ class MybatisRoles implements Roles {
             return Map.of();
         }
         return mapper.rolesOfUsers(userIds).stream().collect(Collectors.groupingBy(
-                row -> ((Number) row.get("user_id")).longValue(), LinkedHashMap::new,
+                row -> row.userId, LinkedHashMap::new,
                 Collectors.mapping(MybatisRoles::toRole, Collectors.toList())));
     }
 
@@ -101,11 +101,9 @@ class MybatisRoles implements Roles {
         }
     }
 
-    private static Role toRole(Map<String, Object> row) {
-        var builtin = (String) row.get("builtin");
-        var permissions = (String) row.get("permissions");
-        return new Role(((Number) row.get("id")).longValue(), new TenantId(((Number) row.get("tenant_id")).longValue()),
-                (String) row.get("name"), builtin == null ? null : Role.BuiltIn.valueOf(builtin),
-                permissions == null ? Set.of() : Set.of(permissions.split(SEPARATOR)));
+    private static Role toRole(RoleDO row) {
+        return new Role(row.id, new TenantId(row.tenantId), row.name,
+                row.builtin == null ? null : Role.BuiltIn.valueOf(row.builtin),
+                row.permissions == null ? Set.of() : Set.of(row.permissions.split(SEPARATOR)));
     }
 }
