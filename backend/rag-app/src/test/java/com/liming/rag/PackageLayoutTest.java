@@ -9,7 +9,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.liming.rag.ai.PublicImplementation;
 import com.liming.rag.archfixture.api.ApiLeaksDomain;
 import com.liming.rag.archfixture.application.ApplicationUsesInfrastructure;
+import com.liming.rag.archfixture.application.ApplicationUsesSaToken;
+import com.liming.rag.archfixture.domain.DomainOutsideCore;
 import com.liming.rag.archfixture.domain.DomainUsesSpring;
+import com.liming.rag.archfixture.web.WebUsesDomain;
 import com.liming.rag.archfixture.web.WebUsesInfrastructure;
 import com.liming.rag.knowledge.StrayAtModuleRoot;
 import com.tngtech.archunit.core.domain.JavaClasses;
@@ -43,6 +46,16 @@ class PackageLayoutTest {
                     + "|.*\\.(application|infrastructure|web)\\..*"))
             .as("domain 只依赖 JDK、rag-shared 和本模块的 domain、api，不依赖框架和其他层");
 
+    static final ArchRule DOMAIN_ONLY_IN_CORE = classes()
+            .that().resideInAPackage("com.liming.rag..domain..")
+            .should().resideInAnyPackage("com.liming.rag.knowledge.domain..", "com.liming.rag.answering.domain..")
+            .as("domain 包只在核心上下文 knowledge、answering；其他上下文按普通 Service 实现，不建聚合（#136）");
+
+    static final ArchRule APPLICATION_NOT_ON_SA_TOKEN = noClasses()
+            .that().resideInAnyPackage("..application..", "..domain..")
+            .should().dependOnClassesThat().resideInAPackage("cn.dev33.satoken..")
+            .as("application、domain 不依赖 Sa-Token：会话、密码摘要经 identity 的 Sessions、PasswordHasher 端口（#136）");
+
     static final ArchRule APPLICATION_NOT_ON_ADAPTERS = noClasses()
             .that().resideInAPackage("..application..")
             .should().dependOnClassesThat().resideInAnyPackage("..infrastructure..", "..web..")
@@ -52,6 +65,11 @@ class PackageLayoutTest {
             .that().resideInAPackage("..web..")
             .should().dependOnClassesThat().resideInAPackage("..infrastructure..")
             .as("web 不依赖 infrastructure，经 application 调用");
+
+    static final ArchRule WEB_NOT_ON_DOMAIN = noClasses()
+            .that().resideInAPackage("..web..")
+            .should().dependOnClassesThat().resideInAPackage("..domain..")
+            .as("web 不依赖 domain：Controller 用 application 和 api 的类型，聚合不出应用层（#136）");
 
     static final ArchRule API_SELF_CONTAINED = noClasses()
             .that().resideInAPackage("..api..")
@@ -68,8 +86,9 @@ class PackageLayoutTest {
             .should().beAssignableTo(Record.class)
             .as("技术模块（shared、ai）对外只公开接口、record、枚举和异常，实现类包内可见");
 
-    static final List<ArchRule> RULES = List.of(CONTEXT_CLASSES_IN_LAYERS, DOMAIN_IS_PURE,
-            APPLICATION_NOT_ON_ADAPTERS, WEB_NOT_ON_INFRASTRUCTURE, API_SELF_CONTAINED,
+    static final List<ArchRule> RULES = List.of(CONTEXT_CLASSES_IN_LAYERS, DOMAIN_IS_PURE, DOMAIN_ONLY_IN_CORE,
+            APPLICATION_NOT_ON_SA_TOKEN,
+            APPLICATION_NOT_ON_ADAPTERS, WEB_NOT_ON_INFRASTRUCTURE, WEB_NOT_ON_DOMAIN, API_SELF_CONTAINED,
             TECH_MODULES_EXPOSE_CONTRACTS_ONLY);
 
     @Test
@@ -87,8 +106,11 @@ class PackageLayoutTest {
     void rulesCatchViolations() {
         assertViolates(CONTEXT_CLASSES_IN_LAYERS, StrayAtModuleRoot.class);
         assertViolates(DOMAIN_IS_PURE, DomainUsesSpring.class);
+        assertViolates(DOMAIN_ONLY_IN_CORE, DomainOutsideCore.class);
+        assertViolates(APPLICATION_NOT_ON_SA_TOKEN, ApplicationUsesSaToken.class);
         assertViolates(APPLICATION_NOT_ON_ADAPTERS, ApplicationUsesInfrastructure.class);
         assertViolates(WEB_NOT_ON_INFRASTRUCTURE, WebUsesInfrastructure.class);
+        assertViolates(WEB_NOT_ON_DOMAIN, WebUsesDomain.class, com.liming.rag.archfixture.domain.FixtureAggregate.class);
         assertViolates(API_SELF_CONTAINED, ApiLeaksDomain.class);
         assertViolates(TECH_MODULES_EXPOSE_CONTRACTS_ONLY, PublicImplementation.class);
     }

@@ -1,14 +1,29 @@
 package com.liming.rag.knowledge.application;
 
+import com.liming.rag.knowledge.api.KnowledgeBaseRef;
 import com.liming.rag.knowledge.domain.Document;
 import com.liming.rag.knowledge.domain.DocumentStatus;
 import com.liming.rag.knowledge.domain.Validity;
 import com.liming.rag.shared.TenantId;
 import java.time.LocalDate;
+import java.time.OffsetDateTime;
+import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 
-/** 管理端列表的查询端口（D-039）：分页、筛选，带上列表要显示的统计，不加载聚合。 */
+/** 只读查询端口（D-039）：管理端列表的分页、筛选和统计，以及可访问的库、库名，都不加载聚合。 */
 public interface KnowledgeQueries {
+
+    /**
+     * 授权给他本人或其角色的库，按创建顺序。口径与检索共用 {@code ChunkSearchMapper.accessibleKnowledgeBases}。
+     */
+    List<KnowledgeBaseRef> accessible(Grantee grantee);
+
+    /** 这个库是否授权给了他本人或其角色，口径同 {@link #accessible}。 */
+    boolean isAccessible(Grantee grantee, long knowledgeBaseId);
+
+    /** 本租户里这些库的名称，不检查授权；不存在的 id 不返回。 */
+    Map<Long, String> names(TenantId tenantId, Collection<Long> knowledgeBaseIds);
 
     /**
      * 知识库列表，按创建顺序。
@@ -55,7 +70,19 @@ public interface KnowledgeQueries {
             LocalDate expiresOn, Validity.State validity) {
     }
 
-    /** 文档和它要替换的旧版本的文件名（分页后旧版本不一定在同一页）。 */
-    record DocumentRow(Document document, String replacesFilename) {
+    /**
+     * 文档列表的一行（#136）：管理端要显示的字段，不带聚合。{@code replacesFilename} 是要替换的旧版本的文件名
+     * （分页后旧版本不一定在同一页）；{@code validity} 是按部署的统计时区算好的有效期状态，前端不自己比较日期（D-046）。
+     */
+    record DocumentRow(long id, String filename, DocumentStatus status, String error, int chunkCount, long sizeBytes,
+            OffsetDateTime createdAt, Long replacesDocumentId, String replacesFilename, LocalDate effectiveFrom,
+            LocalDate expiresOn, Validity.State validity) {
+
+        public static DocumentRow of(Document document, String replacesFilename, Validity.State state) {
+            var validity = document.validity();
+            return new DocumentRow(document.id(), document.filename(), document.status(), document.error(),
+                    document.chunkCount(), document.sizeBytes(), document.createdAt(), document.replacesDocumentId(),
+                    replacesFilename, validity.effectiveFrom(), validity.expiresOn(), state);
+        }
     }
 }

@@ -1,13 +1,12 @@
 package com.liming.rag.identity.application;
 
-import cn.dev33.satoken.secure.BCrypt;
 import com.liming.rag.shared.TenantId;
 import com.liming.rag.shared.UserId;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.springframework.dao.DuplicateKeyException;
@@ -28,11 +27,13 @@ public class AccountImportService {
     private final Accounts accounts;
     private final Roles roles;
     private final AccessService access;
+    private final PasswordHasher passwords;
 
-    AccountImportService(Accounts accounts, Roles roles, AccessService access) {
+    AccountImportService(Accounts accounts, Roles roles, AccessService access, PasswordHasher passwords) {
         this.accounts = accounts;
         this.roles = roles;
         this.access = access;
+        this.passwords = passwords;
     }
 
     /** 文件里的一行；line 是文件里的行号（表头是第 1 行），用于报错定位。 */
@@ -58,7 +59,7 @@ public class AccountImportService {
 
     /**
      * 导入：重新预检（含初始密码与各用户名的规则），有问题时一条都不写入。同一批账号的初始密码相同，
-     * 只算一次哈希（BCrypt 每次几十毫秒，500 行逐个算要半分钟）；首次登录必须改密码，改后各自不同。
+     * 只算一次摘要（BCrypt 每次几十毫秒，500 行逐个算要半分钟）；首次登录必须改密码，改后各自不同。
      *
      * @return 导入的账号数
      */
@@ -74,7 +75,7 @@ public class AccountImportService {
                     + " 行有问题，请重新检查后再导入");
         }
         var byName = rolesByName(tenantId);
-        var hash = BCrypt.hashpw(password, BCrypt.gensalt());
+        var hash = passwords.hash(password);
         try {
             for (var row : rows) {
                 var created = accounts.insert(new Account(null, tenantId, row.username(), row.displayName(), hash,
@@ -89,7 +90,7 @@ public class AccountImportService {
     }
 
     private List<Problem> problems(TenantId tenantId, UserId actor, List<Row> rows, String password) {
-        var rules = rulesFor(actor);
+        var rules = access.rulesFor(actor);
         var byName = rolesByName(tenantId);
         var existing = accounts.existingUsernames(rows.stream().map(Row::username).toList());
         var firstLine = new HashMap<String, Integer>();
@@ -97,26 +98,9 @@ public class AccountImportService {
         for (var row : rows) {
             var messages = new ArrayList<String>();
             var earlier = firstLine.putIfAbsent(row.username(), row.line());
-            if (!AccountAdminService.USERNAME.matcher(row.username()).matches()) {
-                messages.add("用户名必须是 3 到 50 个字母、数字或 _ . -");
-            } else if (earlier != null) {
-                messages.add("与第 " + earlier + " 行的用户名重复");
-            } else if (existing.contains(row.username())) {
-                messages.add("用户名已存在");
-            }
-            if (row.displayName().isEmpty() || row.displayName().length() > 50) {
-                messages.add("显示名必须是 1 到 50 个字符");
-            }
-            if (row.roleNames().isEmpty()) {
-                messages.add("至少要有一个角色");
-            }
-            for (var name : row.roleNames()) {
-                var role = byName.get(name);
-                var problem = role == null ? "没有叫“" + name + "”的角色" : rules.assignProblem(role);
-                if (problem != null) {
-                    messages.add(problem);
-                }
-            }
+            addIfPresent(messages, usernameProblem(row.username(), earlier, existing));
+            addIfPresent(messages, AccountRules.displayNameProblem(row.displayName()));
+            messages.addAll(roleProblems(row.roleNames(), byName, rules));
             if (password != null && password.equalsIgnoreCase(row.username())) {
                 messages.add("初始密码不能与用户名相同");
             }
@@ -125,16 +109,40 @@ public class AccountImportService {
         return problems;
     }
 
+    /** 用户名本身的规则优先；合规时再看是否与前面的行重复、是否已有同名账号。 */
+    private static String usernameProblem(String username, Integer earlierLine, Set<String> existing) {
+        var problem = AccountRules.usernameProblem(username);
+        if (problem != null) {
+            return problem;
+        }
+        if (earlierLine != null) {
+            return "与第 " + earlierLine + " 行的用户名重复";
+        }
+        return existing.contains(username) ? "用户名已存在" : null;
+    }
+
+    private static List<String> roleProblems(List<String> roleNames, Map<String, Role> byName,
+            AssignmentRules rules) {
+        if (roleNames.isEmpty()) {
+            return List.of("至少要有一个角色");
+        }
+        var problems = new ArrayList<String>();
+        for (var name : roleNames) {
+            var role = byName.get(name);
+            addIfPresent(problems, role == null ? "没有叫“" + name + "”的角色" : rules.assignProblem(role));
+        }
+        return problems;
+    }
+
+    private static void addIfPresent(List<String> messages, String message) {
+        if (message != null) {
+            messages.add(message);
+        }
+    }
+
     private Map<String, Role> rolesByName(TenantId tenantId) {
         return roles.list(tenantId).stream()
                 .collect(Collectors.toMap(Role::name, Function.identity(), (first, second) -> first));
-    }
-
-    private AssignmentRules rulesFor(UserId actor) {
-        var account = accounts.find(actor.value())
-                .orElseThrow(() -> new IdentityException(IdentityException.Reason.NOT_FOUND, "账号不存在"));
-        return new AssignmentRules(new LinkedHashSet<>(access.permissionsOf(account)),
-                access.superAdmin(account.id()));
     }
 
     private static void checkSize(List<Row> rows) {

@@ -1,6 +1,7 @@
 package com.liming.rag.identity.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.catchThrowable;
 
 import com.liming.rag.shared.ErrorKind;
@@ -13,13 +14,14 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
- * 登录失败与锁定。登录成功和会话由 Sa-Token 管理，在 rag-app 的 AuthTests 里验证；这里只测不依赖会话的规则。
+ * 登录、退出、改自己的密码，以及登录失败与锁定。会话用内存实现；Sa-Token 的会话和令牌在 rag-app 的 AuthTests 里验证。
  */
 class AuthServiceTest {
 
     private final IdentityFixture fixture = new IdentityFixture();
     private final MutableClock clock = new MutableClock();
-    private final AuthService auth = new AuthService(fixture.store, fixture.store, fixture.access, clock);
+    private final AuthService auth = new AuthService(fixture.store, fixture.store, fixture.access,
+            fixture.sessions, fixture.passwords, clock);
 
     @Test
     @DisplayName("用户名不存在、密码错误、账号停用都给同一个提示")
@@ -56,6 +58,40 @@ class AuthServiceTest {
         clock.advance(Duration.ofMinutes(6));
         assertThat(catchLogin("staff01", "wrong-password")).hasMessage("用户名或密码错误");
         assertThat(fixture.get(staff).failedAttempts()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("登录成功：经会话端口登录并记下租户，清掉之前的失败计数，返回权限点")
+    void signsInAndClearsFailures() {
+        var staff = fixture.account("staff01", fixture.staffRole);
+        catchLogin("staff01", "wrong-password");
+
+        var signIn = auth.login(" staff01 ", IdentityFixture.PASSWORD);
+
+        assertThat(signIn.token()).isEqualTo("token-" + staff.value());
+        assertThat(fixture.sessions.currentTenant).isEqualTo(IdentityFixture.TENANT);
+        assertThat(fixture.get(staff).failedAttempts()).isZero();
+        assertThat(signIn.user().permissions()).containsExactly(TestCatalog.CHAT_USE);
+        assertThat(auth.me().account().id()).isEqualTo(staff.value());
+        auth.logout();
+        assertThat(fixture.sessions.currentLogouts).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("改自己的密码：旧密码不对时拒绝；改完不再要求先改密码，新密码按规则校验")
+    void changesOwnPassword() {
+        var staff = fixture.account("staff01", fixture.staffRole);
+        fixture.store.setPassword(staff.value(), fixture.passwords.hash(IdentityFixture.PASSWORD), true);
+        auth.login("staff01", IdentityFixture.PASSWORD);
+
+        assertThatThrownBy(() -> auth.changePassword("wrong-password", "brand-new-password"))
+                .isInstanceOf(IdentityException.class).hasMessage("当前密码不对");
+        assertThatThrownBy(() -> auth.changePassword(IdentityFixture.PASSWORD, "staff01"))
+                .isInstanceOf(IdentityException.class);
+        auth.changePassword(IdentityFixture.PASSWORD, "brand-new-password");
+
+        assertThat(fixture.get(staff).mustChangePassword()).isFalse();
+        assertThat(fixture.passwords.matches("brand-new-password", fixture.get(staff).passwordHash())).isTrue();
     }
 
     private Throwable catchLogin(String username, String password) {

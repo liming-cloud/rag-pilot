@@ -44,11 +44,6 @@ class AiConfiguration {
         };
     }
 
-    @Bean
-    DocumentReaders documentReaders() {
-        return new LocalDocumentReaders();
-    }
-
     private static IllegalStateException unknown(String capability, String value, String allowed) {
         return new IllegalStateException("rag.ai." + capability + ".provider 只能是 " + allowed + "，当前为：" + value);
     }

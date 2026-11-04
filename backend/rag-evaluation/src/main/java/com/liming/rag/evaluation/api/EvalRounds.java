@@ -131,6 +131,18 @@ public record EvalRounds(List<EvalReport> rounds) {
         var text = new StringBuilder("## 评测结果：多轮汇总\n\n");
         text.append("共 ").append(rounds.size()).append(" 轮，每轮 ").append(rounds.getFirst().cases())
                 .append(" 题。同一份代码连续运行，看各项指标的均值和波动范围；目标值见 README。\n\n");
+        appendMetrics(text);
+        appendRounds(text);
+        appendStability(text);
+        text.append(thresholdSection());
+        for (int i = 0; i < rounds.size(); i++) {
+            text.append("\n<details><summary>第 ").append(i + 1).append(" 轮明细</summary>\n\n")
+                    .append(rounds.get(i).toMarkdown()).append("\n</details>\n");
+        }
+        return text.toString();
+    }
+
+    private void appendMetrics(StringBuilder text) {
         text.append("| 指标 | 均值 | 最小 | 最大 | 目标 |\n| --- | --- | --- | --- | --- |\n");
         percentRow(text, "检索召回 Recall@10", recallAt10(), "≥ 85%");
         percentRow(text, "引用正确率", citationAccuracy(), "≥ 90%");
@@ -140,7 +152,9 @@ public record EvalRounds(List<EvalReport> rounds) {
         row(text, "检索或引用过期资料（各轮合计）", String.valueOf(staleHits()), "", "", "0");
         millisRow(text, "检索延迟 p95", searchP95Millis(), "< 800 ms");
         millisRow(text, "首字延迟 p95（流式）", firstTokenP95Millis(), "参考（D-030）");
+    }
 
+    private void appendRounds(StringBuilder text) {
         text.append("\n### 每轮\n\n| 轮 | 召回 | 引用正确 | 拒答正确 | 误拒 | 越权 | 首字 p95 |\n")
                 .append("| --- | --- | --- | --- | --- | --- | --- |\n");
         for (int i = 0; i < rounds.size(); i++) {
@@ -149,7 +163,9 @@ public record EvalRounds(List<EvalReport> rounds) {
                     percent(report.refusalAccuracy()), percent(report.falseRefusalRate()),
                     String.valueOf(report.leaks()), report.firstTokenP95Millis() + " ms");
         }
+    }
 
+    private void appendStability(StringBuilder text) {
         text.append("\n### 逐题稳定性\n\n");
         var stable = stableFailures();
         text.append("稳定失败（").append(rounds.size()).append(" / ").append(rounds.size()).append(" 轮）：")
@@ -159,12 +175,6 @@ public record EvalRounds(List<EvalReport> rounds) {
                 .map(id -> id + "（" + counts.get(id) + " / " + rounds.size() + " 轮）")
                 .toList();
         text.append("偶发失败：").append(flaky.isEmpty() ? "无" : String.join("、", flaky)).append("。\n");
-        text.append(thresholdSection());
-        for (int i = 0; i < rounds.size(); i++) {
-            text.append("\n<details><summary>第 ").append(i + 1).append(" 轮明细</summary>\n\n")
-                    .append(rounds.get(i).toMarkdown()).append("\n</details>\n");
-        }
-        return text.toString();
     }
 
     private String thresholdSection() {

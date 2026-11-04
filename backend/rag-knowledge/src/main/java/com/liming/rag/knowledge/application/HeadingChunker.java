@@ -1,6 +1,5 @@
 package com.liming.rag.knowledge.application;
 
-import com.liming.rag.ai.DocumentReaders;
 import com.liming.rag.knowledge.domain.Chunk;
 import com.liming.rag.knowledge.domain.TextChunker;
 import java.util.List;

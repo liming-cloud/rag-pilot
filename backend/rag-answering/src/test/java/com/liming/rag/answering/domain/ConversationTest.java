@@ -17,7 +17,7 @@ class ConversationTest {
     private static final UserId OTHER = new UserId(8);
 
     private static Conversation started() {
-        return Conversation.start(TENANT, OWNER, List.of(3L, 4L));
+        return Conversation.start(TENANT, OWNER, List.of(3L, 4L), Instant.now());
     }
 
     @Test
@@ -28,7 +28,7 @@ class ConversationTest {
         assertThat(conversation.title()).isEqualTo("新对话");
         assertThat(conversation.titleSource()).isEqualTo(Conversation.TitleSource.NEW);
         assertThat(conversation.knowledgeBaseIds()).containsExactly(3L, 4L);
-        assertThatThrownBy(() -> Conversation.start(TENANT, OWNER, List.of())).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> Conversation.start(TENANT, OWNER, List.of(), Instant.now())).isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test

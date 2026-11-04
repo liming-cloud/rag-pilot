@@ -50,67 +50,19 @@ public record EvalReport(int cases, double recallAt10, double citationAccuracy, 
      */
     public static EvalReport of(List<EvalOutcome> outcomes, Set<String> restrictedDocuments,
             Set<String> staleDocuments, List<String> unavailable) {
-        var answerable = outcomes.stream().filter(o -> o.evalCase().kind() == Kind.ANSWERABLE).toList();
-        var unanswerable = outcomes.stream().filter(o -> o.evalCase().kind() == Kind.UNANSWERABLE).toList();
+        var answerable = ofKind(outcomes, Kind.ANSWERABLE);
+        var unanswerable = ofKind(outcomes, Kind.UNANSWERABLE);
         var answered = answerable.stream().filter(o -> !o.refused()).toList();
-        var failures = new ArrayList<String>();
-        var failedCases = new LinkedHashSet<String>();
-
-        Predicate<EvalOutcome> recalled = EvalReport::recalled;
-        Predicate<EvalOutcome> citedCorrectly = EvalReport::citedCorrectly;
-        Predicate<EvalOutcome> leaked = touches(restrictedDocuments);
-        Predicate<EvalOutcome> stale = touches(staleDocuments);
-
-        for (var o : answerable) {
-            if (!recalled.test(o)) {
-                failures.add(o.evalCase().id() + "：前 10 条没有召回预期分块");
-                failedCases.add(o.evalCase().id());
-            }
-            if (o.refused()) {
-                failures.add(o.evalCase().id() + "：误拒（" + o.refusalReason() + "）"
-                        + (o.discardedReply() == null ? "" : "，模型原文：" + cell(o.discardedReply())));
-                failedCases.add(o.evalCase().id());
-            } else if (!citedCorrectly.test(o)) {
-                failures.add(o.evalCase().id() + "：引用或答案不对，引用了 " + o.citedDocuments());
-                failedCases.add(o.evalCase().id());
-            }
-            if (!o.refused() && o.judgement() != null && !CORRECT.equals(o.judgement().verdict())) {
-                failures.add(o.evalCase().id() + "：答案" + verdictLabel(o.judgement().verdict()) + "（"
-                        + o.judgement().reason() + "）");
-                failedCases.add(o.evalCase().id());
-            }
-        }
-        for (var o : unanswerable) {
-            if (!o.refused()) {
-                failures.add(o.evalCase().id() + "：应拒答却回答了");
-                failedCases.add(o.evalCase().id());
-            }
-        }
-        for (var o : outcomes) {
-            if (o.evalCase().kind() == Kind.SMALL_TALK && !harmlessSmallTalk(o)) {
-                failures.add(o.evalCase().id() + "：寒暄回复带了引用或数字");
-                failedCases.add(o.evalCase().id());
-            }
-        }
-        int leaks = 0;
-        for (var o : outcomes) {
-            if (leaked.test(o)) {
-                leaks++;
-                failures.add(o.evalCase().id() + "：越权泄漏");
-                failedCases.add(o.evalCase().id());
-            }
-        }
-        int staleHits = 0;
-        for (var o : outcomes) {
-            if (stale.test(o)) {
-                staleHits++;
-                failures.add(o.evalCase().id() + "：检索或引用了已失效、未生效的资料");
-                failedCases.add(o.evalCase().id());
-            }
-        }
+        var failures = new Failures();
+        answerable.forEach(failures::checkAnswerable);
+        unanswerable.stream().filter(o -> !o.refused()).forEach(o -> failures.add(o, "应拒答却回答了"));
+        ofKind(outcomes, Kind.SMALL_TALK).stream().filter(o -> !harmlessSmallTalk(o))
+                .forEach(o -> failures.add(o, "寒暄回复带了引用或数字"));
+        int leaks = failures.addEach(outcomes, touches(restrictedDocuments), "越权泄漏");
+        int staleHits = failures.addEach(outcomes, touches(staleDocuments), "检索或引用了已失效、未生效的资料");
         return new EvalReport(outcomes.size(),
-                ratio(answerable, recalled),
-                ratio(answered, citedCorrectly),
+                ratio(answerable, EvalReport::recalled),
+                ratio(answered, EvalReport::citedCorrectly),
                 ratio(unanswerable, EvalOutcome::refused),
                 ratio(answerable, EvalOutcome::refused),
                 leaks,
@@ -118,10 +70,48 @@ public record EvalReport(int cases, double recallAt10, double citationAccuracy, 
                 p95(outcomes.stream().map(EvalOutcome::searchMillis).toList()),
                 p95(outcomes.stream().map(EvalOutcome::firstEventMillis).toList()),
                 p95(outcomes.stream().map(EvalOutcome::askMillis).toList()),
-                List.copyOf(failures),
+                List.copyOf(failures.messages),
                 List.copyOf(outcomes),
-                List.copyOf(failedCases),
+                List.copyOf(failures.cases),
                 List.copyOf(unavailable));
+    }
+
+    private static List<EvalOutcome> ofKind(List<EvalOutcome> outcomes, Kind kind) {
+        return outcomes.stream().filter(o -> o.evalCase().kind() == kind).toList();
+    }
+
+    /** 未通过的原因（按检查的先后）和未通过的题（去重、保持出现顺序）。 */
+    private static final class Failures {
+
+        private final List<String> messages = new ArrayList<>();
+        private final Set<String> cases = new LinkedHashSet<>();
+
+        void add(EvalOutcome o, String reason) {
+            messages.add(o.evalCase().id() + "：" + reason);
+            cases.add(o.evalCase().id());
+        }
+
+        /** 每道命中的题记一条，返回命中的题数。 */
+        int addEach(List<EvalOutcome> outcomes, Predicate<EvalOutcome> hit, String reason) {
+            var hits = outcomes.stream().filter(hit).toList();
+            hits.forEach(o -> add(o, reason));
+            return hits.size();
+        }
+
+        void checkAnswerable(EvalOutcome o) {
+            if (!recalled(o)) {
+                add(o, "前 10 条没有召回预期分块");
+            }
+            if (o.refused()) {
+                add(o, "误拒（" + o.refusalReason() + "）"
+                        + (o.discardedReply() == null ? "" : "，模型原文：" + cell(o.discardedReply())));
+            } else if (!citedCorrectly(o)) {
+                add(o, "引用或答案不对，引用了 " + o.citedDocuments());
+            }
+            if (!o.refused() && o.judgement() != null && !CORRECT.equals(o.judgement().verdict())) {
+                add(o, "答案" + verdictLabel(o.judgement().verdict()) + "（" + o.judgement().reason() + "）");
+            }
+        }
     }
 
     private static final String CORRECT = "CORRECT";
@@ -198,13 +188,30 @@ public record EvalReport(int cases, double recallAt10, double citationAccuracy, 
                     .append(String.join("、", unavailable))
                     .append(credible() ? "。\n\n" : "。超过 5%，这次结果不可信。\n\n");
         }
+        appendMetrics(text);
+        appendLatency(text);
+        appendRewrites(text);
+        appendJudgements(text);
+        appendSmallTalk(text);
+        appendStyles(text);
+        appendRelevance(text);
+        text.append("\n### 未通过的题\n\n");
+        if (failures.isEmpty()) {
+            text.append("无。\n");
+        }
+        failures.forEach(failure -> text.append("- ").append(failure).append('\n'));
+        appendDetails(text);
+        return text.toString();
+    }
+
+    private void appendMetrics(StringBuilder text) {
         text.append("| 指标 | 结果 | 目标 |\n| --- | --- | --- |\n");
         row(text, "检索召回 Recall@10", percent(recallAt10), "≥ 85%");
         row(text, "引用正确率", percent(citationAccuracy), "≥ 90%");
         row(text, "拒答正确率", percent(refusalAccuracy), "≥ 90%");
         row(text, "误拒率", percent(falseRefusalRate), "越低越好");
-        var multiDocument = outcomes.stream()
-                .filter(o -> o.evalCase().kind() == Kind.ANSWERABLE && o.evalCase().expectedDocuments().size() > 1)
+        var multiDocument = ofKind(outcomes, Kind.ANSWERABLE).stream()
+                .filter(o -> o.evalCase().expectedDocuments().size() > 1)
                 .toList();
         if (!multiDocument.isEmpty()) {
             row(text, "多篇原文全部召回", percent(ratio(multiDocument, EvalReport::recalledAll)), "—");
@@ -214,6 +221,9 @@ public record EvalReport(int cases, double recallAt10, double citationAccuracy, 
         row(text, "检索延迟 p95", searchP95Millis + " ms", "< 800 ms");
         row(text, "首字延迟 p95（流式）", firstTokenP95Millis + " ms", "参考（D-030）");
         row(text, "整段回答 p95（流式）", askP95Millis + " ms", "—");
+    }
+
+    private void appendLatency(StringBuilder text) {
         text.append("\n### 首字延迟拆分（服务端各阶段 p95）\n\n");
         text.append("首字延迟 ≈ 检索 + 重排 + 模型首字 + 网络。\n\n| 阶段 | p95 |\n| --- | --- |\n");
         row(text, "检索（问题向量化 + 混合检索）", stageP95(EvalOutcome.Stages::retrievalMillis));
@@ -233,46 +243,61 @@ public record EvalReport(int cases, double recallAt10, double citationAccuracy, 
                 .toList();
         text.append("\n首字超过 3 s 的题 ").append(slow.size()).append(" / ").append(outcomes.size())
                 .append(slow.isEmpty() ? "。" : "：" + String.join("、", slow)).append('\n');
+    }
+
+    private void appendRewrites(StringBuilder text) {
         var attempted = outcomes.stream().filter(o -> o.rewrite() != null).toList();
         var rewritten = attempted.stream().filter(o -> "REWRITTEN".equals(o.rewrite().outcome())).toList();
+        long rescued = rewritten.stream()
+                .filter(o -> o.evalCase().kind() == Kind.ANSWERABLE && citedCorrectly(o)).count();
+        long risky = rewritten.stream().filter(o -> o.evalCase().kind() == Kind.UNANSWERABLE && !o.refused()).count();
+        int longest = attempted.stream().mapToInt(o -> o.rewrite().outputChars()).max().orElse(0);
         text.append("\n### 低分改写\n\n");
         text.append("重排最高分低于门槛时改写问题再检索一次。走到低分改写 ").append(attempted.size()).append(" 题：")
                 .append("低于下限跳过 ").append(countOutcome(attempted, "SKIPPED_BELOW_FLOOR")).append(" 题，")
                 .append("超时 ").append(countOutcome(attempted, "TIMED_OUT")).append(" 题，")
                 .append("没给出有效改写 ").append(countOutcome(attempted, "NO_CHANGE")).append(" 题，")
                 .append("已改写 ").append(rewritten.size()).append(" 题；")
-                .append("可回答题救回 ").append(rewritten.stream()
-                        .filter(o -> o.evalCase().kind() == Kind.ANSWERABLE && citedCorrectly(o)).count()).append(" 题，")
-                .append("应拒答题被改写后回答了 ").append(rewritten.stream()
-                        .filter(o -> o.evalCase().kind() == Kind.UNANSWERABLE && !o.refused()).count())
-                .append(" 题。改写输出最长 ").append(attempted.stream().mapToInt(o -> o.rewrite().outputChars()).max()
-                        .orElse(0)).append(" 字。“救回”指改写后给出了正确回答。\n");
+                .append("可回答题救回 ").append(rescued).append(" 题，")
+                .append("应拒答题被改写后回答了 ").append(risky)
+                .append(" 题。改写输出最长 ").append(longest).append(" 字。“救回”指改写后给出了正确回答。\n");
+    }
+
+    private void appendJudgements(StringBuilder text) {
         var judged = outcomes.stream().filter(o -> !o.refused() && o.judgement() != null).toList();
-        if (!judged.isEmpty()) {
-            text.append("\n### 答案评判\n\n");
-            text.append("评判模型对照参考答案判断回答，只统计给出了回答的题。答案评判 ").append(judged.size()).append(" 题：")
-                    .append(verdictCount(judged, CORRECT, "正确")).append("，")
-                    .append(verdictCount(judged, "PARTIAL", "部分正确")).append("，")
-                    .append(verdictCount(judged, "WRONG", "错误")).append("。\n");
+        if (judged.isEmpty()) {
+            return;
         }
-        var smallTalk = outcomes.stream().filter(o -> o.evalCase().kind() == Kind.SMALL_TALK).toList();
+        text.append("\n### 答案评判\n\n");
+        text.append("评判模型对照参考答案判断回答，只统计给出了回答的题。答案评判 ").append(judged.size()).append(" 题：")
+                .append(verdictCount(judged, CORRECT, "正确")).append("，")
+                .append(verdictCount(judged, "PARTIAL", "部分正确")).append("，")
+                .append(verdictCount(judged, "WRONG", "错误")).append("。\n");
+    }
+
+    private void appendSmallTalk(StringBuilder text) {
+        var smallTalk = ofKind(outcomes, Kind.SMALL_TALK);
         if (!smallTalk.isEmpty()) {
             text.append("\n### 寒暄\n\n寒暄题 ").append(smallTalk.size()).append(" 道：回复不带引用、不含数字的 ")
                     .append(smallTalk.stream().filter(EvalReport::harmlessSmallTalk).count()).append(" 道。\n");
         }
+    }
+
+    private void appendStyles(StringBuilder text) {
         text.append("\n### 按问法统计（可回答题）\n\n| 问法 | 题数 | 召回 | 引用正确 | 误拒 |\n| --- | --- | --- | --- | --- |\n");
-        var byStyle = outcomes.stream()
-                .filter(o -> o.evalCase().kind() == Kind.ANSWERABLE)
+        var byStyle = ofKind(outcomes, Kind.ANSWERABLE).stream()
                 .collect(Collectors.groupingBy(o -> o.evalCase().style(), LinkedHashMap::new, Collectors.toList()));
         byStyle.forEach((style, group) -> row(text, style, String.valueOf(group.size()),
                 percent(ratio(group, EvalReport::recalled)),
                 percent(ratio(group.stream().filter(o -> !o.refused()).toList(), EvalReport::citedCorrectly)),
                 percent(ratio(group, EvalOutcome::refused))));
+    }
+
+    private void appendRelevance(StringBuilder text) {
         text.append("\n### 重排最高分分布（用于校准拒答门槛）\n\n");
         text.append("| 题型 | 最低 | 中位 | 最高 |\n| --- | --- | --- | --- |\n");
         for (var kind : Kind.values()) {
-            var scores = outcomes.stream()
-                    .filter(o -> o.evalCase().kind() == kind)
+            var scores = ofKind(outcomes, kind).stream()
                     .map(EvalOutcome::topRelevance)
                     .filter(Objects::nonNull)
                     .sorted(Comparator.naturalOrder())
@@ -282,11 +307,9 @@ public record EvalReport(int cases, double recallAt10, double citationAccuracy, 
                         fmt(scores.get(scores.size() / 2)), fmt(scores.getLast()));
             }
         }
-        text.append("\n### 未通过的题\n\n");
-        if (failures.isEmpty()) {
-            text.append("无。\n");
-        }
-        failures.forEach(failure -> text.append("- ").append(failure).append('\n'));
+    }
+
+    private void appendDetails(StringBuilder text) {
         text.append("\n<details><summary>逐题明细</summary>\n\n| 题 | 拒答 | 最高分 | 首字 | 改写为 | 引用 | 评判 | 回答 |\n| --- | --- | --- | --- | --- | --- | --- | --- |\n");
         for (var o : outcomes) {
             row(text, o.evalCase().id(), o.refused() ? "是（" + o.refusalReason() + "）" : "否",
@@ -297,7 +320,7 @@ public record EvalReport(int cases, double recallAt10, double citationAccuracy, 
                     o.discardedReply() != null ? "被替换的原文：" + cell(o.discardedReply())
                             : o.answer() == null ? "" : cell(o.answer()));
         }
-        return text.append("\n</details>\n").toString();
+        text.append("\n</details>\n");
     }
 
     private String stageP95(Function<EvalOutcome.Stages, Long> stage) {

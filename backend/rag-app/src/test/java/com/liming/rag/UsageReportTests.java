@@ -2,9 +2,10 @@ package com.liming.rag;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.liming.rag.answering.api.Answer;
-import com.liming.rag.answering.api.Citation;
-import com.liming.rag.answering.application.AnswerLogService;
+import com.liming.rag.answering.application.ask.AskResult;
+import com.liming.rag.answering.application.review.AnswerLogService;
+import com.liming.rag.answering.domain.Citation;
+import com.liming.rag.answering.domain.RefusalReason;
 import com.liming.rag.shared.TenantId;
 import com.liming.rag.shared.UserId;
 import java.time.LocalDate;
@@ -99,7 +100,7 @@ class UsageReportTests {
     void exportsCsv() {
         TestLogin.asAdmin(http);
         long id = log.record(TENANT, new UserId(1), "=SUM(A1) 怎么算, \"折扣\"",
-                Answer.refused(Answer.RefusalReason.NO_EVIDENCE, null, "拒答")).id();
+                AskResult.refused(RefusalReason.NO_EVIDENCE, null, "拒答")).id();
 
         var response = http.getForEntity("/api/answers/stats/export?days=7", byte[].class);
 
@@ -130,8 +131,8 @@ class UsageReportTests {
 
     /** 在指定时间记一条问答。 */
     private void at(java.time.ZonedDateTime time, String question, boolean refused) {
-        var answer = refused ? Answer.refused(Answer.RefusalReason.NO_EVIDENCE, null, "拒答")
-                : Answer.answered("答案", List.of(), 0.9);
+        var answer = refused ? AskResult.refused(RefusalReason.NO_EVIDENCE, null, "拒答")
+                : AskResult.answered("答案", List.of(), 0.9);
         long id = log.record(TENANT, new UserId(1), question, answer).id();
         jdbc.update("UPDATE answer_record SET created_at = ? WHERE id = ?", time.toOffsetDateTime(), id);
     }

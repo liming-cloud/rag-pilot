@@ -7,6 +7,7 @@ import com.liming.rag.identity.api.UserDirectory;
 import com.liming.rag.settings.application.SystemSettingsService.Source;
 import com.liming.rag.shared.TenantId;
 import com.liming.rag.shared.UserId;
+import java.time.Clock;
 import java.time.OffsetDateTime;
 import java.util.Collection;
 import java.util.EnumMap;
@@ -25,7 +26,7 @@ class SystemSettingsServiceTest {
 
     private SystemSettingsService service(String pack, SettingsProperties.Branding branding) {
         return new SystemSettingsService(store, new OneUser(),
-                new SettingsProperties("", pack, branding, "Asia/Shanghai"));
+                new SettingsProperties("", pack, branding, "Asia/Shanghai"), Clock.systemUTC());
     }
 
     private SystemSettingsService retail() {

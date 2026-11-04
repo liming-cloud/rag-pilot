@@ -3,8 +3,7 @@ package com.liming.rag.knowledge.application;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.liming.rag.knowledge.domain.Validity;
-import com.liming.rag.settings.api.AnsweringSettings;
-import com.liming.rag.settings.api.IndustryPack;
+import com.liming.rag.settings.api.StatsZone;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -17,22 +16,7 @@ import org.junit.jupiter.api.Test;
 class DocumentCalendarTest {
 
     private static DocumentCalendar calendar(String instant, String zone) {
-        AnsweringSettings settings = new AnsweringSettings() {
-            @Override
-            public IndustryPack pack() {
-                throw new UnsupportedOperationException();
-            }
-
-            @Override
-            public String refusalMessage() {
-                throw new UnsupportedOperationException();
-            }
-
-            @Override
-            public ZoneId statsZone() {
-                return ZoneId.of(zone);
-            }
-        };
+        StatsZone settings = () -> ZoneId.of(zone);
         var properties = new KnowledgeProperties(new KnowledgeProperties.Ingestion(2),
                 new KnowledgeProperties.Storage("./data"), 30);
         return new DocumentCalendar(settings, properties, Clock.fixed(Instant.parse(instant), ZoneOffset.UTC));

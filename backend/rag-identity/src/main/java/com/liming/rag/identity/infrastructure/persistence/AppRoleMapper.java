@@ -2,7 +2,6 @@ package com.liming.rag.identity.infrastructure.persistence;
 
 import java.util.Collection;
 import java.util.List;
-import java.util.Map;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
@@ -13,10 +12,10 @@ import org.apache.ibatis.annotations.Param;
 @Mapper
 interface AppRoleMapper {
 
-    List<Map<String, Object>> list(@Param("tenantId") long tenantId, @Param("id") Long id,
+    List<RoleDO> list(@Param("tenantId") long tenantId, @Param("id") Long id,
             @Param("builtin") String builtin);
 
-    List<Map<String, Object>> rolesOfUsers(@Param("userIds") Collection<Long> userIds);
+    List<RoleDO> rolesOfUsers(@Param("userIds") Collection<Long> userIds);
 
     long insert(@Param("tenantId") long tenantId, @Param("name") String name, @Param("builtin") String builtin);
 
@@ -30,7 +29,7 @@ interface AppRoleMapper {
 
     boolean existsByName(@Param("tenantId") long tenantId, @Param("name") String name);
 
-    List<Map<String, Object>> userCounts(@Param("tenantId") long tenantId);
+    List<RoleUserCountDO> userCounts(@Param("tenantId") long tenantId);
 
     List<Long> userIds(@Param("roleId") long roleId);
 

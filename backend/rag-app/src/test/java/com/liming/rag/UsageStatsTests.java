@@ -2,9 +2,10 @@ package com.liming.rag;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.liming.rag.answering.api.Answer;
-import com.liming.rag.answering.api.Citation;
-import com.liming.rag.answering.application.AnswerLogService;
+import com.liming.rag.answering.application.ask.AskResult;
+import com.liming.rag.answering.application.review.AnswerLogService;
+import com.liming.rag.answering.domain.Citation;
+import com.liming.rag.answering.domain.RefusalReason;
 import com.liming.rag.shared.TenantId;
 import com.liming.rag.shared.UserId;
 import java.time.LocalDate;
@@ -55,20 +56,20 @@ class UsageStatsTests {
         TestLogin.asAdmin(http);
         var guide = new Citation(1, 1, 1, "临期与报损管理.md", "临期", "摘录");
         var shelf = new Citation(2, 2, 2, "陈列规范.md", "陈列", "摘录");
-        long liked = log.record(TENANT, new UserId(1), "临期商品打几折", Answer.answered("七折[1]", List.of(guide), 0.9)).id();
+        long liked = log.record(TENANT, new UserId(1), "临期商品打几折", AskResult.answered("七折[1]", List.of(guide), 0.9)).id();
         long disliked = log.record(TENANT, new UserId(2), "临期怎么贴标签",
-                Answer.answered("贴黄标[1][2]", List.of(guide, shelf), 0.8)).id();
-        log.record(TENANT, new UserId(2), "门店几点打烊", Answer.refused(Answer.RefusalReason.LOW_RELEVANCE, 0.01, "拒答"));
-        log.record(TENANT, new UserId(3), "门店几点打烊", Answer.refused(Answer.RefusalReason.LOW_RELEVANCE, 0.02, "拒答"));
+                AskResult.answered("贴黄标[1][2]", List.of(guide, shelf), 0.8)).id();
+        log.record(TENANT, new UserId(2), "门店几点打烊", AskResult.refused(RefusalReason.LOW_RELEVANCE, 0.01, "拒答"));
+        log.record(TENANT, new UserId(3), "门店几点打烊", AskResult.refused(RefusalReason.LOW_RELEVANCE, 0.02, "拒答"));
         long resolved = log.record(TENANT, new UserId(3), "餐补怎么报",
-                Answer.refused(Answer.RefusalReason.NO_EVIDENCE, null, "拒答")).id();
+                AskResult.refused(RefusalReason.NO_EVIDENCE, null, "拒答")).id();
         log.rate(TENANT, new UserId(1), liked, "UP", null);
         log.rate(TENANT, new UserId(2), disliked, "DOWN", "不对");
         log.markReview(TENANT, new UserId(1), resolved, "RESOLVED", "已补文档");
         // 范围外的旧记录和别的租户的记录都不算。
-        long old = log.record(TENANT, new UserId(1), "很久以前的问题", Answer.refused(Answer.RefusalReason.NO_EVIDENCE, null, "拒答")).id();
+        long old = log.record(TENANT, new UserId(1), "很久以前的问题", AskResult.refused(RefusalReason.NO_EVIDENCE, null, "拒答")).id();
         jdbc.update("UPDATE answer_record SET created_at = now() - interval '40 days' WHERE id = ?", old);
-        log.record(new TenantId(2), new UserId(9), "别的租户", Answer.refused(Answer.RefusalReason.NO_EVIDENCE, null, "拒答"));
+        log.record(new TenantId(2), new UserId(9), "别的租户", AskResult.refused(RefusalReason.NO_EVIDENCE, null, "拒答"));
 
         var response = http.getForEntity("/api/answers/stats?days=30", Map.class);
 

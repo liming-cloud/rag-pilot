@@ -1,42 +1,37 @@
 package com.liming.rag.identity.application;
 
-import cn.dev33.satoken.secure.BCrypt;
-import cn.dev33.satoken.stp.StpUtil;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.util.List;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 登录、退出、当前用户和改自己的密码。会话由 Sa-Token 管理（试点存内存，见 D-005）；租户在登录时写进会话。
- * 同一账号连续输错 5 次密码锁 15 分钟，按账号锁、不按 IP 锁（网点常共用网络，D-038）。
+ * 登录、退出、当前用户和改自己的密码。会话经 {@link Sessions}（Sa-Token，试点存内存，D-005），租户在登录时写进会话。
+ * 连续输错密码的锁定规则见 {@link AccountRules}（D-038）。
  */
 @Service
 public class AuthService {
 
-    static final int MAX_FAILED_ATTEMPTS = 5;
-    static final Duration LOCK_DURATION = Duration.ofMinutes(15);
-    /** 用户名不存在时也做一次 BCrypt 比对，避免从响应时间判断账号是否存在。 */
-    private static final String DUMMY_HASH = BCrypt.hashpw("dummy-password", BCrypt.gensalt());
-
     private final Accounts accounts;
     private final Roles roles;
     private final AccessService access;
+    private final Sessions sessions;
+    private final PasswordHasher passwords;
     private final Clock clock;
+    /** 用户名不存在时也比对一次摘要，避免从响应时间判断账号是否存在。 */
+    private final String dummyHash;
 
-    @Autowired
-    AuthService(Accounts accounts, Roles roles, AccessService access) {
-        this(accounts, roles, access, Clock.systemUTC());
-    }
-
-    AuthService(Accounts accounts, Roles roles, AccessService access, Clock clock) {
+    AuthService(Accounts accounts, Roles roles, AccessService access, Sessions sessions, PasswordHasher passwords,
+            Clock clock) {
         this.accounts = accounts;
         this.roles = roles;
         this.access = access;
+        this.sessions = sessions;
+        this.passwords = passwords;
         this.clock = clock;
+        this.dummyHash = passwords.hash("dummy-password");
     }
 
     /**
@@ -45,8 +40,7 @@ public class AuthService {
      */
     public SignIn login(String username, String password) {
         var found = accounts.findByUsername(username == null ? "" : username.strip());
-        boolean matches = BCrypt.checkpw(password == null ? "" : password,
-                found.map(Account::passwordHash).orElse(DUMMY_HASH));
+        boolean matches = passwords.matches(password, found.map(Account::passwordHash).orElse(dummyHash));
         if (found.isEmpty()) {
             throw badCredentials();
         }
@@ -56,14 +50,9 @@ public class AuthService {
             throw locked(account.lockedUntil(), now);
         }
         if (!matches) {
-            int attempts = account.failedAttempts() + 1;
-            if (attempts >= MAX_FAILED_ATTEMPTS) {
-                var until = now.plus(LOCK_DURATION);
-                accounts.recordFailedLogin(account.id(), 0, until);
-                throw locked(until, now);
-            }
-            accounts.recordFailedLogin(account.id(), attempts, null);
-            throw badCredentials();
+            var failed = AccountRules.failedLogin(account, now);
+            accounts.recordFailedLogin(account.id(), failed.failedAttempts(), failed.lockedUntil());
+            throw failed.locked() ? locked(failed.lockedUntil(), now) : badCredentials();
         }
         if (!account.enabled()) {
             throw badCredentials();
@@ -71,13 +60,11 @@ public class AuthService {
         if (account.failedAttempts() > 0 || account.lockedUntil() != null) {
             accounts.clearFailedLogins(account.id());
         }
-        StpUtil.login(account.id());
-        StpUtil.getSession().set(AccessService.TENANT_KEY, account.tenantId().value());
-        return new SignIn(StpUtil.getTokenValue(), me(account));
+        return new SignIn(sessions.login(account.id(), account.tenantId()), me(account));
     }
 
     public void logout() {
-        StpUtil.logout();
+        sessions.logoutCurrent();
     }
 
     public Me me() {
@@ -88,15 +75,15 @@ public class AuthService {
     @Transactional
     public void changePassword(String oldPassword, String newPassword) {
         var account = current();
-        if (!BCrypt.checkpw(oldPassword == null ? "" : oldPassword, account.passwordHash())) {
+        if (!passwords.matches(oldPassword, account.passwordHash())) {
             throw new IdentityException(IdentityException.Reason.INVALID, "当前密码不对");
         }
         PasswordRules.check(account.username(), newPassword);
-        accounts.setPassword(account.id(), BCrypt.hashpw(newPassword, BCrypt.gensalt()), false);
+        accounts.setPassword(account.id(), passwords.hash(newPassword), false);
     }
 
     private Account current() {
-        return accounts.find(StpUtil.getLoginIdAsLong()).orElseThrow(AuthService::badCredentials);
+        return accounts.find(sessions.currentAccountId()).orElseThrow(AuthService::badCredentials);
     }
 
     private Me me(Account account) {
@@ -111,7 +98,7 @@ public class AuthService {
     private static IdentityException locked(OffsetDateTime until, OffsetDateTime now) {
         long minutes = Math.max(1, (Duration.between(now, until).toSeconds() + 59) / 60);
         return new IdentityException(IdentityException.Reason.LOCKED,
-                "密码连续输错 " + MAX_FAILED_ATTEMPTS + " 次，账号已锁定，请 " + minutes + " 分钟后再试或联系管理员解锁");
+                "密码连续输错 " + AccountRules.MAX_FAILED_ATTEMPTS + " 次，账号已锁定，请 " + minutes + " 分钟后再试或联系管理员解锁");
     }
 
     public record SignIn(String token, Me user) {

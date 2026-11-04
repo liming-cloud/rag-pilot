@@ -6,11 +6,7 @@ import com.liming.rag.settings.application.ModelProvider;
 import com.liming.rag.settings.application.ModelSettingsStore;
 import com.liming.rag.settings.application.Paged;
 import com.liming.rag.settings.application.PurposeSetting;
-import java.sql.Timestamp;
-import java.time.OffsetDateTime;
-import java.time.ZoneId;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import org.springframework.stereotype.Repository;
 
@@ -92,32 +88,18 @@ class MybatisModelSettingsStore implements ModelSettingsStore {
                 change.changedByName(), change.changedAt(), change.restoredFrom());
     }
 
-    private static ModelProvider toProvider(Map<String, Object> row) {
-        return new ModelProvider(number(row.get("id")), (String) row.get("name"), (String) row.get("base_url"),
-                (byte[]) row.get("api_key_cipher"), (String) row.get("api_key_last4"));
+    private static ModelProvider toProvider(ModelProviderDO row) {
+        return new ModelProvider(row.id, row.name, row.baseUrl, row.apiKeyCipher, row.apiKeyLast4);
     }
 
-    private static PurposeSetting toPurpose(Map<String, Object> row) {
-        return new PurposeSetting(ModelUsage.valueOf((String) row.get("purpose")), number(row.get("provider_id")),
-                (String) row.get("model"), (String) row.get("updated_by_name"), timestamp(row.get("updated_at")));
+    private static PurposeSetting toPurpose(ModelPurposeDO row) {
+        return new PurposeSetting(ModelUsage.valueOf(row.purpose), row.providerId, row.model, row.updatedByName,
+                row.updatedAt);
     }
 
-    private static ModelChange toChange(Map<String, Object> row) {
-        return new ModelChange(number(row.get("id")), ModelUsage.valueOf((String) row.get("purpose")),
-                (String) row.get("before_provider_name"), (String) row.get("before_model"),
-                number(row.get("after_provider_id")), (String) row.get("after_provider_name"),
-                (String) row.get("after_model"), number(row.get("changed_by")), (String) row.get("changed_by_name"),
-                timestamp(row.get("changed_at")), number(row.get("restored_from")));
-    }
-
-    private static Long number(Object value) {
-        return value == null ? null : ((Number) value).longValue();
-    }
-
-    /** 以 Map 读取时 timestamptz 是 java.sql.Timestamp，换成带时区的时间。 */
-    private static OffsetDateTime timestamp(Object value) {
-        return value instanceof Timestamp timestamp
-                ? OffsetDateTime.ofInstant(timestamp.toInstant(), ZoneId.systemDefault())
-                : (OffsetDateTime) value;
+    private static ModelChange toChange(ModelChangeDO row) {
+        return new ModelChange(row.id, ModelUsage.valueOf(row.purpose), row.beforeProviderName, row.beforeModel,
+                row.afterProviderId, row.afterProviderName, row.afterModel, row.changedBy, row.changedByName,
+                row.changedAt, row.restoredFrom);
     }
 }

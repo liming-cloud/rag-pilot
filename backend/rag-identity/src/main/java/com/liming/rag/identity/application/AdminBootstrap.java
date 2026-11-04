@@ -1,7 +1,5 @@
 package com.liming.rag.identity.application;
 
-import cn.dev33.satoken.secure.BCrypt;
-import cn.dev33.satoken.stp.StpUtil;
 import com.liming.rag.shared.TenantId;
 import java.util.List;
 import org.slf4j.Logger;
@@ -25,11 +23,16 @@ class AdminBootstrap implements ApplicationRunner {
     private final RoleService roleService;
     private final TenantId tenant;
     private final IdentityProperties.Admin admin;
+    private final Sessions sessions;
+    private final PasswordHasher passwords;
 
-    AdminBootstrap(Accounts accounts, Roles roles, RoleService roleService, IdentityProperties properties) {
+    AdminBootstrap(Accounts accounts, Roles roles, RoleService roleService, IdentityProperties properties,
+            Sessions sessions, PasswordHasher passwords) {
         this.accounts = accounts;
         this.roles = roles;
         this.roleService = roleService;
+        this.sessions = sessions;
+        this.passwords = passwords;
         this.tenant = new TenantId(properties.admin().tenantId());
         this.admin = properties.admin();
     }
@@ -53,7 +56,7 @@ class AdminBootstrap implements ApplicationRunner {
         }
         PasswordRules.check(admin.username(), admin.password());
         var created = accounts.insert(new Account(null, tenant, admin.username(), "超级管理员",
-                BCrypt.hashpw(admin.password(), BCrypt.gensalt()), true, false, 0, null));
+                passwords.hash(admin.password()), true, false, 0, null));
         roles.setUserRoles(created.id(), List.of(superRole.id()));
         log.info("已创建超级管理员 {}", admin.username());
     }
@@ -66,9 +69,9 @@ class AdminBootstrap implements ApplicationRunner {
         }
         var account = accounts.find(superAdmins.getFirst()).orElseThrow();
         PasswordRules.check(account.username(), admin.resetPassword());
-        accounts.setPassword(account.id(), BCrypt.hashpw(admin.resetPassword(), BCrypt.gensalt()), false);
+        accounts.setPassword(account.id(), passwords.hash(admin.resetPassword()), false);
         accounts.setEnabled(account.id(), true);
-        StpUtil.logout(account.id());
+        sessions.logoutAll(account.id());
         log.warn("已按 RAG_ADMIN_RESET_PASSWORD 重置超级管理员 {} 的密码并解锁；请删掉这个环境变量后重启",
                 account.username());
     }

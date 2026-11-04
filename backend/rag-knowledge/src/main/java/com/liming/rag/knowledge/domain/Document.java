@@ -49,17 +49,11 @@ public final class Document implements AggregateRoot {
         this.validity = Objects.requireNonNull(validity, "有效期不能为空");
     }
 
-    /** 接收一份新上传的文件，进入解析状态。 */
-    public static Document received(TenantId tenantId, long knowledgeBaseId, String filename, String mediaType,
-            String sha256, long sizeBytes) {
-        return received(tenantId, knowledgeBaseId, filename, mediaType, sha256, sizeBytes, null, Validity.ALWAYS);
-    }
-
-    /** 接收一份文件；{@code replacesDocumentId} 不为空时是它的新版本，解析成功后替换它。 */
-    public static Document received(TenantId tenantId, long knowledgeBaseId, String filename, String mediaType,
-            String sha256, long sizeBytes, Long replacesDocumentId, Validity validity) {
-        return new Document(null, tenantId, knowledgeBaseId, filename, mediaType, sha256, sizeBytes,
-                DocumentStatus.PARSING, null, 0, null, replacesDocumentId, validity);
+    /** 接收一份上传的文件，进入解析状态；{@code replacesDocumentId} 不为空时是它的新版本，解析成功后替换它。 */
+    public static Document received(TenantId tenantId, long knowledgeBaseId, UploadedFile file, Long replacesDocumentId,
+            Validity validity) {
+        return new Document(null, tenantId, knowledgeBaseId, file.filename(), file.mediaType(), file.sha256(),
+                file.sizeBytes(), DocumentStatus.PARSING, null, 0, null, replacesDocumentId, validity);
     }
 
     /** 仓储从数据库恢复聚合时使用，不做状态校验。 */

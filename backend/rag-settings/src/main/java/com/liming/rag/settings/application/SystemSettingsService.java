@@ -3,8 +3,10 @@ package com.liming.rag.settings.application;
 import com.liming.rag.identity.api.UserDirectory;
 import com.liming.rag.settings.api.AnsweringSettings;
 import com.liming.rag.settings.api.IndustryPack;
+import com.liming.rag.settings.api.StatsZone;
 import com.liming.rag.shared.TenantId;
 import com.liming.rag.shared.UserId;
+import java.time.Clock;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.util.Arrays;
@@ -18,7 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
  * 都没有时用内核默认值。每次读都查一次库，保存后不用重启。同时给问答提供行业包、拒答话术和统计时区。
  */
 @Service
-public class SystemSettingsService implements AnsweringSettings {
+public class SystemSettingsService implements AnsweringSettings, StatsZone {
 
     /** 当前值来自哪里。 */
     public enum Source {
@@ -51,14 +53,16 @@ public class SystemSettingsService implements AnsweringSettings {
     private final IndustryPack pack;
     private final SettingsProperties.Branding branding;
     private final ZoneId statsZone;
+    private final Clock clock;
 
-    SystemSettingsService(SystemSettingsStore store, UserDirectory users, SettingsProperties properties) {
+    SystemSettingsService(SystemSettingsStore store, UserDirectory users, SettingsProperties properties, Clock clock) {
         this.store = store;
         this.users = users;
         this.file = IndustryPackFile.load(properties.industryPack());
         this.pack = file.pack(properties.industryPack());
         this.branding = properties.branding();
         this.statsZone = ZoneId.of(properties.statsZone());
+        this.clock = clock;
     }
 
     @Override
@@ -98,24 +102,33 @@ public class SystemSettingsService implements AnsweringSettings {
                 item(saved, SettingKey.SUGGESTED_QUESTIONS).value());
     }
 
-    /** 保存一项；文字去掉首尾空格，推荐问题去掉每条的首尾空格、保持顺序。不合格时抛 INVALID。 */
+    /** 按接口传来的原始值保存：{@code key} 是设置项的名字，{@code value} 文字项是字符串、推荐问题是字符串数组。 */
     @Transactional
-    public Item save(TenantId tenantId, UserId actor, SettingKey key, List<String> value) {
+    public Item save(TenantId tenantId, UserId actor, String key, Object value) {
+        var settingKey = SettingsInputs.key(key);
+        return save(tenantId, actor, settingKey, SettingsInputs.value(settingKey, value));
+    }
+
+    /** 保存一项；文字去掉首尾空格，推荐问题去掉每条的首尾空格、保持顺序。不合格时抛 INVALID。 */
+    Item save(TenantId tenantId, UserId actor, SettingKey key, List<String> value) {
         if (value == null) {
             throw invalid(key, "不能为空");
         }
         SettingRules.problem(key, value).ifPresent(problem -> {
             throw invalid(key, problem);
         });
-        var actorName = users.summaries(tenantId, List.of(actor.value())).values().stream().findFirst()
-                .map(UserDirectory.UserSummary::displayName).orElse("账号 " + actor.value());
-        store.save(key, value.stream().map(String::strip).toList(), actor.value(), actorName, OffsetDateTime.now());
+        store.save(key, value.stream().map(String::strip).toList(), actor.value(),
+                SettingsInputs.actorName(users, tenantId, actor), OffsetDateTime.now(clock));
         return item(store.all(), key);
     }
 
     /** 删掉界面保存的值，回到部署配置、行业包或内核的默认值。没保存过时什么也不做。 */
     @Transactional
-    public Item restore(SettingKey key) {
+    public Item restore(String key) {
+        return restore(SettingsInputs.key(key));
+    }
+
+    Item restore(SettingKey key) {
         store.delete(key);
         return item(store.all(), key);
     }

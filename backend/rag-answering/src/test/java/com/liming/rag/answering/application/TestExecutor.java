@@ -4,9 +4,9 @@ import org.springframework.core.task.AsyncTaskExecutor;
 import org.springframework.core.task.SimpleAsyncTaskExecutor;
 
 /** 测试用的虚拟线程执行器，代替生产环境里 Spring 管理的 {@code applicationTaskExecutor}。 */
-final class TestExecutor {
+public final class TestExecutor {
 
-    static final AsyncTaskExecutor VIRTUAL = virtual();
+    public static final AsyncTaskExecutor VIRTUAL = virtual();
 
     private TestExecutor() {
     }

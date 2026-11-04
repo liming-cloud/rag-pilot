@@ -5,13 +5,26 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.liming.rag.shared.TenantId;
 import com.liming.rag.shared.UserId;
+import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 class AnswerRecordTest {
 
     private static final UserId ASKER = new UserId(7);
-    private final AnswerRecord record = AnswerRecord.restore(1, new TenantId(1), ASKER, null, null);
+    private final AnswerRecord record = AnswerRecord.record(new TenantId(1), ASKER, " 青柚在哪？ ",
+            new AnswerRecord.Reply("A 区[1]。", false, null, List.of(new Citation(1, 100, 50, "陈列规范", "陈列规范", null)),
+                    0.9, null), List.of(3L)).withId(1);
+
+    @Test
+    @DisplayName("新记录：问题去掉首尾空格，带上回答、引用和检索范围；还没有评价，待处理")
+    void recordsAnswer() {
+        assertThat(record.question()).isEqualTo("青柚在哪？");
+        assertThat(record.reply().citations()).hasSize(1);
+        assertThat(record.knowledgeBaseIds()).containsExactly(3L);
+        assertThat(record.rating()).isNull();
+        assertThat(record.reviewStatus()).isEqualTo(AnswerRecord.ReviewStatus.OPEN);
+    }
 
     @Test
     @DisplayName("提问人可以评价、改评价、撤销；留言去掉首尾空白，空留言记为没有留言")

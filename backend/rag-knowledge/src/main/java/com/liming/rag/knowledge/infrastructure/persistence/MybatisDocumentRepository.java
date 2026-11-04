@@ -112,7 +112,7 @@ class MybatisDocumentRepository implements DocumentRepository {
                 .stream().map(MybatisDocumentRepository::toDomain).toList();
     }
 
-    private static Document toDomain(DocumentDO row) {
+    static Document toDomain(DocumentDO row) {
         return Document.restore(row.getId(), new TenantId(row.getTenantId()), row.getKnowledgeBaseId(),
                 row.getFilename(), row.getMediaType(), row.getSha256(), row.getSizeBytes(),
                 DocumentStatus.valueOf(row.getStatus()), row.getError(), row.getChunkCount(), row.getCreatedAt(),

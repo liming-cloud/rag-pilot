@@ -9,6 +9,7 @@ import com.liming.rag.ai.ModelUsage;
 import com.liming.rag.identity.api.UserDirectory;
 import com.liming.rag.shared.TenantId;
 import com.liming.rag.shared.UserId;
+import java.time.Clock;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashMap;
@@ -29,7 +30,7 @@ class ModelSettingsServiceTest {
     private final FakeProbe probe = new FakeProbe();
     private final ModelSettingsService service = new ModelSettingsService(store, probe,
             new KeyCipher(new SettingsProperties(KeyCipherTest.MASTER_KEY)), new FakeUsers(),
-            TransactionOperations.withoutTransaction());
+            TransactionOperations.withoutTransaction(), Clock.systemUTC());
 
     @Test
     @DisplayName("没在界面配置过时全部用环境变量，路由返回空")
@@ -119,7 +120,7 @@ class ModelSettingsServiceTest {
     @DisplayName("没设主密钥时不能保存密钥，不需要密钥的服务商照常能加")
     void masterKeyMissing() {
         var withoutKey = new ModelSettingsService(store, probe, new KeyCipher(new SettingsProperties("")),
-                new FakeUsers(), TransactionOperations.withoutTransaction());
+                new FakeUsers(), TransactionOperations.withoutTransaction(), Clock.systemUTC());
 
         assertThatThrownBy(() -> withoutKey.createProvider("云服务", "https://x/v1", "sk-1234567890"))
                 .hasMessageContaining("RAG_MASTER_KEY");

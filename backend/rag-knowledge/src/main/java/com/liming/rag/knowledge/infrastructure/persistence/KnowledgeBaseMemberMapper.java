@@ -16,6 +16,10 @@ interface KnowledgeBaseMemberMapper {
 
     List<Long> members(@Param("tenantId") long tenantId, @Param("knowledgeBaseId") long knowledgeBaseId);
 
+    /** 这个库是否授权给了用户本人或其角色，口径同 {@link #accessible}。 */
+    boolean isAccessible(@Param("tenantId") long tenantId, @Param("userId") long userId,
+            @Param("roleIds") List<Long> roleIds, @Param("knowledgeBaseId") long knowledgeBaseId);
+
     /** 授权给用户本人或其角色的知识库，过滤条件与检索共用 ChunkSearchMapper 的 accessibleKnowledgeBases。 */
     List<KnowledgeBaseDO> accessible(@Param("tenantId") long tenantId, @Param("userId") long userId,
             @Param("roleIds") List<Long> roleIds);

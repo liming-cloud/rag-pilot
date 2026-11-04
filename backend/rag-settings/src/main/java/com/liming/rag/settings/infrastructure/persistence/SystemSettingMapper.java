@@ -2,7 +2,6 @@ package com.liming.rag.settings.infrastructure.persistence;
 
 import java.time.OffsetDateTime;
 import java.util.List;
-import java.util.Map;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
@@ -10,7 +9,7 @@ import org.apache.ibatis.annotations.Param;
 @Mapper
 interface SystemSettingMapper {
 
-    List<Map<String, Object>> all();
+    List<SystemSettingDO> all();
 
     void save(@Param("key") String key, @Param("value") String value, @Param("updatedBy") long updatedBy,
             @Param("updatedByName") String updatedByName, @Param("updatedAt") OffsetDateTime updatedAt);

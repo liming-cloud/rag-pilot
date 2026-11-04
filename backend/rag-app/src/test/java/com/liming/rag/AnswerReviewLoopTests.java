@@ -2,8 +2,9 @@ package com.liming.rag;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.liming.rag.answering.api.Answer;
-import com.liming.rag.answering.application.AnswerLogService;
+import com.liming.rag.answering.application.ask.AskResult;
+import com.liming.rag.answering.application.review.AnswerLogService;
+import com.liming.rag.answering.domain.RefusalReason;
 import com.liming.rag.shared.TenantId;
 import com.liming.rag.shared.UserId;
 import java.nio.charset.StandardCharsets;
@@ -66,8 +67,8 @@ class AnswerReviewLoopTests {
     @DisplayName("回答记录保存改写后的问题，列表里能看到")
     void storesRewrittenQuestion() {
         // 本地确定性模型不会真的改写，这里直接写入一条带改写结果的记录。
-        var answer = Answer.refused(Answer.RefusalReason.LOW_RELEVANCE, 0.01, "拒答").withRewrite(new Answer.Rewrite(
-                Answer.Rewrite.Outcome.REWRITTEN, "临期商品打几折？", 9, 800L, 100L, 200L));
+        var answer = AskResult.refused(RefusalReason.LOW_RELEVANCE, 0.01, "拒答").withRewrite(new AskResult.Rewrite(
+                AskResult.Rewrite.Outcome.REWRITTEN, "临期商品打几折？", 9, 800L, 100L, 200L));
         long id = log.record(new TenantId(1), new UserId(1), "临其商品打几着", answer).id();
 
         var record = review("refused", false).stream().filter(item -> ((Number) item.get("id")).longValue() == id)
@@ -79,7 +80,7 @@ class AnswerReviewLoopTests {
     @DisplayName("标记已处理后默认不再显示，可以包含已处理查看或重新打开；处理说明不超过 500 字；店员不能处理")
     void resolvesAndReopens() {
         long id = log.record(new TenantId(1), new UserId(1), "门店几点打烊",
-                Answer.refused(Answer.RefusalReason.LOW_RELEVANCE, 0.0, "拒答")).id();
+                AskResult.refused(RefusalReason.LOW_RELEVANCE, 0.0, "拒答")).id();
 
         assertThat(markReview(id, Map.of("status", "RESOLVED", "note", "已上传营业时间规定"), null))
                 .isEqualTo(HttpStatus.NO_CONTENT);
@@ -105,10 +106,10 @@ class AnswerReviewLoopTests {
         var tenant = new TenantId(1);
         for (int i = 0; i < 3; i++) {
             log.record(tenant, new UserId(1), "分页测试：冷柜第 " + i + " 层放什么",
-                    Answer.refused(Answer.RefusalReason.LOW_RELEVANCE, 0.0, "拒答"));
+                    AskResult.refused(RefusalReason.LOW_RELEVANCE, 0.0, "拒答"));
         }
         long old = log.record(tenant, new UserId(1), "分页测试：去年的问题",
-                Answer.refused(Answer.RefusalReason.LOW_RELEVANCE, 0.0, "拒答")).id();
+                AskResult.refused(RefusalReason.LOW_RELEVANCE, 0.0, "拒答")).id();
         jdbc.update("update answer_record set created_at = now() - interval '40 days' where id = ?", old);
 
         var first = page("/api/answers?filter=refused&status=all&keyword=分页测试&page=1&size=2");

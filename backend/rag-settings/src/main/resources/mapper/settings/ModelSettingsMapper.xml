@@ -2,7 +2,7 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.liming.rag.settings.infrastructure.persistence.ModelSettingsMapper">
 
-    <select id="providers" resultType="map">
+    <select id="providers" resultType="com.liming.rag.settings.infrastructure.persistence.ModelProviderDO">
         SELECT id, name, base_url, api_key_cipher, api_key_last4 FROM model_provider
         <if test="id != null">WHERE id = #{id}</if>
         ORDER BY id
@@ -31,7 +31,7 @@
         DELETE FROM model_provider WHERE id = #{id}
     </delete>
 
-    <select id="purposes" resultType="map">
+    <select id="purposes" resultType="com.liming.rag.settings.infrastructure.persistence.ModelPurposeDO">
         SELECT purpose, provider_id, model, updated_by_name, updated_at FROM model_purpose
         <if test="purpose != null">WHERE purpose = #{purpose}</if>
     </select>
@@ -44,7 +44,7 @@
             updated_by_name = EXCLUDED.updated_by_name, updated_at = EXCLUDED.updated_at
     </insert>
 
-    <select id="changes" resultType="map">
+    <select id="changes" resultType="com.liming.rag.settings.infrastructure.persistence.ModelChangeDO">
         SELECT id, purpose, before_provider_name, before_model, after_provider_id, after_provider_name, after_model,
                changed_by, changed_by_name, changed_at, restored_from
         FROM model_change

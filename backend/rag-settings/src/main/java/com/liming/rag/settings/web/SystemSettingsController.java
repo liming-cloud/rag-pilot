@@ -3,16 +3,14 @@ package com.liming.rag.settings.web;
 import cn.dev33.satoken.annotation.SaCheckLogin;
 import cn.dev33.satoken.annotation.SaCheckPermission;
 import com.liming.rag.identity.api.CurrentUser;
-import com.liming.rag.identity.api.Permissions;
+import com.liming.rag.identity.api.IdentityPermissions;
 import com.liming.rag.settings.api.IndustryPack;
-import com.liming.rag.settings.application.SettingKey;
-import com.liming.rag.settings.application.SettingsException;
+import com.liming.rag.settings.api.SettingsPermissions;
 import com.liming.rag.settings.application.SystemSettingsService;
 import com.liming.rag.settings.application.SystemSettingsService.ChatTexts;
 import com.liming.rag.settings.application.SystemSettingsService.Item;
 import java.time.OffsetDateTime;
 import java.util.List;
-import java.util.Locale;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -57,7 +55,7 @@ class SystemSettingsController {
         this.currentUser = currentUser;
     }
 
-    @SaCheckPermission(Permissions.SETTING_VIEW)
+    @SaCheckPermission(SettingsPermissions.SETTING_VIEW)
     @GetMapping("/api/settings")
     SettingsView overview() {
         var overview = settings.overview();
@@ -66,42 +64,22 @@ class SystemSettingsController {
     }
 
     /** 问答页的输入框占位、空状态说明和推荐问题。 */
-    @SaCheckPermission(Permissions.CHAT_USE)
+    @SaCheckPermission(IdentityPermissions.CHAT_USE)
     @GetMapping("/api/settings/chat")
     ChatTexts chat() {
         return settings.chatTexts();
     }
 
-    @SaCheckPermission(Permissions.SETTING_UPDATE)
+    @SaCheckPermission(SettingsPermissions.SETTING_UPDATE)
     @PutMapping("/api/settings/{key}")
     ItemView save(@PathVariable String key, @RequestBody SaveRequest request) {
-        var settingKey = key(key);
-        return ItemView.of(settings.save(currentUser.tenantId(), currentUser.userId(), settingKey,
-                value(settingKey, request == null ? null : request.value())));
+        return ItemView.of(settings.save(currentUser.tenantId(), currentUser.userId(), key,
+                request == null ? null : request.value()));
     }
 
-    @SaCheckPermission(Permissions.SETTING_UPDATE)
+    @SaCheckPermission(SettingsPermissions.SETTING_UPDATE)
     @DeleteMapping("/api/settings/{key}")
     ItemView restore(@PathVariable String key) {
-        return ItemView.of(settings.restore(key(key)));
-    }
-
-    private static SettingKey key(String value) {
-        try {
-            return SettingKey.valueOf(value == null ? "" : value.toUpperCase(Locale.ROOT));
-        } catch (IllegalArgumentException e) {
-            throw new SettingsException(SettingsException.Reason.NOT_FOUND, "没有这项设置");
-        }
-    }
-
-    /** 文字项要字符串，推荐问题要字符串数组；格式不对时按不合格处理。 */
-    private static List<String> value(SettingKey key, Object value) {
-        if (!key.list() && value instanceof String text) {
-            return List.of(text);
-        }
-        if (key.list() && value instanceof List<?> items && items.stream().allMatch(String.class::isInstance)) {
-            return items.stream().map(String.class::cast).toList();
-        }
-        throw new SettingsException(SettingsException.Reason.INVALID, "设置值的格式不对");
+        return ItemView.of(settings.restore(key));
     }
 }

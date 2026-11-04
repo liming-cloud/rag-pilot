@@ -9,6 +9,7 @@ import com.liming.rag.identity.api.UserDirectory;
 import com.liming.rag.shared.TenantId;
 import com.liming.rag.shared.UserId;
 import java.net.URI;
+import java.time.Clock;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -36,14 +37,16 @@ public class ModelSettingsService implements ModelRouting {
     private final KeyCipher cipher;
     private final UserDirectory users;
     private final TransactionOperations transactions;
+    private final Clock clock;
 
     ModelSettingsService(ModelSettingsStore store, ModelProbe probe, KeyCipher cipher, UserDirectory users,
-            TransactionOperations transactions) {
+            TransactionOperations transactions, Clock clock) {
         this.store = store;
         this.probe = probe;
         this.cipher = cipher;
         this.users = users;
         this.transactions = transactions;
+        this.clock = clock;
     }
 
     /** 一个用途当前的配置，给界面显示。 */
@@ -88,9 +91,10 @@ public class ModelSettingsService implements ModelRouting {
                 probe.embeddingDimensions());
     }
 
-    /** 只测试，不保存。 */
-    public ModelProbe.ProbeResult test(ModelUsage usage, Long providerId, String model) {
-        return probe.probe(usage, route(usage, providerId, checkModel(model)));
+    /** 只测试，不保存；{@code usage} 是用途的名字。 */
+    public ModelProbe.ProbeResult test(String usage, Long providerId, String model) {
+        var parsed = SettingsInputs.usage(usage);
+        return probe.probe(parsed, route(parsed, providerId, checkModel(model)));
     }
 
     /** 服务商提供的模型，用来在界面上选。 */
@@ -99,8 +103,12 @@ public class ModelSettingsService implements ModelRouting {
         return probe.models(route.baseUrl(), route.apiKey());
     }
 
-    /** 先测连通，通了才保存并记一条变更，下一次请求就用新模型。 */
-    public PurposeView save(TenantId tenantId, UserId actor, ModelUsage usage, Long providerId, String model) {
+    /** 先测连通，通了才保存并记一条变更，下一次请求就用新模型；{@code usage} 是用途的名字。 */
+    public PurposeView save(TenantId tenantId, UserId actor, String usage, Long providerId, String model) {
+        return save(tenantId, actor, SettingsInputs.usage(usage), providerId, model);
+    }
+
+    PurposeView save(TenantId tenantId, UserId actor, ModelUsage usage, Long providerId, String model) {
         return apply(tenantId, actor, usage, providerId, checkModel(model), null);
     }
 
@@ -122,7 +130,7 @@ public class ModelSettingsService implements ModelRouting {
     public ProviderView createProvider(String name, String baseUrl, String apiKey) {
         var checkedName = checkName(name, null);
         var checkedUrl = checkBaseUrl(baseUrl);
-        var key = blankToNull(apiKey);
+        var key = SettingsInputs.blankToNull(apiKey);
         ModelProvider created;
         try {
             created = store.insertProvider(new ModelProvider(null, checkedName, checkedUrl, encrypt(key), last4(key)));
@@ -138,7 +146,7 @@ public class ModelSettingsService implements ModelRouting {
     @Transactional
     public ProviderView updateProvider(long id, String name, String baseUrl, String apiKey) {
         var existing = store.provider(id).orElseThrow(() -> notFound("服务商不存在"));
-        var key = blankToNull(apiKey);
+        var key = SettingsInputs.blankToNull(apiKey);
         var updated = new ModelProvider(id, checkName(name, id), checkBaseUrl(baseUrl), encrypt(key),
                 key == null ? existing.apiKeyLast4() : last4(key));
         try {
@@ -168,13 +176,12 @@ public class ModelSettingsService implements ModelRouting {
             throw new SettingsException(SettingsException.Reason.UNREACHABLE,
                     "连通测试没通过，没有" + (restoredFrom == null ? "保存" : "恢复") + "：" + result.message());
         }
-        var actorName = users.summaries(tenantId, List.of(actor.value())).values().stream().findFirst()
-                .map(UserDirectory.UserSummary::displayName).orElse("账号 " + actor.value());
+        var actorName = SettingsInputs.actorName(users, tenantId, actor);
         return transactions.execute(status -> {
             var before = view(usage);
-            store.savePurpose(new PurposeSetting(usage, providerId, model, actorName, OffsetDateTime.now()));
+            store.savePurpose(new PurposeSetting(usage, providerId, model, actorName, OffsetDateTime.now(clock)));
             store.insertChange(new ModelChange(null, usage, before.providerName(), before.model(), providerId,
-                    providerName(providerId), model, actor.value(), actorName, OffsetDateTime.now(), restoredFrom));
+                    providerName(providerId), model, actor.value(), actorName, OffsetDateTime.now(clock), restoredFrom));
             return view(usage);
         });
     }
@@ -261,10 +268,6 @@ public class ModelSettingsService implements ModelRouting {
             return null;
         }
         return key.length() < 8 ? "••" : key.substring(key.length() - 4);
-    }
-
-    private static String blankToNull(String value) {
-        return value == null || value.isBlank() ? null : value.strip();
     }
 
     private static SettingsException nameTaken(String name) {

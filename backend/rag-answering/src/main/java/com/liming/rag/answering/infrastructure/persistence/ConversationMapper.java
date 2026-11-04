@@ -2,7 +2,6 @@ package com.liming.rag.answering.infrastructure.persistence;
 
 import java.time.OffsetDateTime;
 import java.util.List;
-import java.util.Map;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
@@ -20,9 +19,9 @@ interface ConversationMapper {
             @Param("knowledgeBaseIds") Long[] knowledgeBaseIds, @Param("lastAskedAt") OffsetDateTime lastAskedAt,
             @Param("lastTurnId") Long lastTurnId);
 
-    Map<String, Object> find(@Param("tenantId") long tenantId, @Param("id") long id);
+    ConversationDO find(@Param("tenantId") long tenantId, @Param("id") long id);
 
-    List<Map<String, Object>> listOwned(@Param("tenantId") long tenantId, @Param("userId") long userId);
+    List<ConversationDO> listOwned(@Param("tenantId") long tenantId, @Param("userId") long userId);
 
     void delete(@Param("tenantId") long tenantId, @Param("id") long id);
 
@@ -37,5 +36,5 @@ interface ConversationMapper {
             @Param("status") String status, @Param("answerRecordId") Long answerRecordId,
             @Param("knowledgeBaseIds") Long[] knowledgeBaseIds, @Param("askedAt") OffsetDateTime askedAt);
 
-    List<Map<String, Object>> mainLine(@Param("conversationId") long conversationId);
+    List<ConversationTurnDO> mainLine(@Param("conversationId") long conversationId);
 }
