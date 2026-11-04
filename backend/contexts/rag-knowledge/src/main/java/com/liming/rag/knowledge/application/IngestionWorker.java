@@ -3,15 +3,19 @@ package com.liming.rag.knowledge.application;
 import com.liming.rag.knowledge.domain.DocumentRepository;
 import com.liming.rag.knowledge.domain.DocumentStatus;
 import com.liming.rag.shared.TenantId;
+import java.time.Clock;
+import java.time.OffsetDateTime;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.DisposableBean;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionalEventListener;
 
@@ -33,11 +37,14 @@ public class IngestionWorker implements DisposableBean {
     /** 正在排队或处理的文档，避免启动恢复和上传事件把同一份文档提交两次。 */
     private final Set<Long> inFlight = ConcurrentHashMap.newKeySet();
 
+    private final Clock clock;
+
     IngestionWorker(DocumentRepository documents, FileStorage storage, IngestionPipeline pipeline,
-            KnowledgeProperties properties) {
+            KnowledgeProperties properties, Clock clock) {
         this.documents = documents;
         this.storage = storage;
         this.pipeline = pipeline;
+        this.clock = clock;
         this.executor = Executors.newFixedThreadPool(properties.ingestion().concurrency(), Thread.ofVirtual().name("ingestion-", 0).factory());
     }
 
@@ -50,6 +57,17 @@ public class IngestionWorker implements DisposableBean {
     @EventListener(ApplicationReadyEvent.class)
     public void resumePending() {
         documents.listParsing().forEach(document -> submit(document.tenantId(), document.id()));
+    }
+
+    /** 模型暂时不可用而失败、到了自动重试时间的文档回到“解析中”重新排队（#145 A9）。每分钟检查一次。 */
+    @Scheduled(initialDelay = 1, fixedDelay = 1, timeUnit = TimeUnit.MINUTES)
+    public void retryDue() {
+        for (var document : documents.listDueForRetry(OffsetDateTime.now(clock))) {
+            document.reprocess();
+            documents.save(document);
+            log.info("文档 {} 第 {} 次处理（模型暂时不可用后自动重试）", document.id(), document.attempts());
+            submit(document.tenantId(), document.id());
+        }
     }
 
     private void submit(TenantId tenantId, long documentId) {

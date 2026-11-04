@@ -7,6 +7,7 @@ import com.liming.rag.knowledge.domain.DocumentRepository;
 import com.liming.rag.knowledge.domain.DocumentStatus;
 import com.liming.rag.knowledge.domain.Validity;
 import com.liming.rag.shared.TenantId;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.stereotype.Repository;
@@ -38,6 +39,9 @@ class MybatisDocumentRepository implements DocumentRepository {
         row.setReplacesDocumentId(document.replacesDocumentId());
         row.setEffectiveFrom(document.validity().effectiveFrom());
         row.setExpiresOn(document.validity().expiresOn());
+        row.setReprocessable(document.reprocessable());
+        row.setRetryAt(document.retryAt());
+        row.setAttempts(document.attempts());
         if (row.getId() == null) {
             documents.insert(row);
             document.assignId(row.getId());
@@ -67,10 +71,11 @@ class MybatisDocumentRepository implements DocumentRepository {
     }
 
     @Override
-    public boolean existsInKnowledgeBase(long knowledgeBaseId, String sha256) {
-        return documents.exists(new LambdaQueryWrapper<DocumentDO>()
-                .eq(DocumentDO::getKnowledgeBaseId, knowledgeBaseId)
-                .eq(DocumentDO::getSha256, sha256));
+    public Optional<Document> findInKnowledgeBase(long knowledgeBaseId, String sha256) {
+        return Optional.ofNullable(documents.selectOne(new LambdaQueryWrapper<DocumentDO>()
+                        .eq(DocumentDO::getKnowledgeBaseId, knowledgeBaseId)
+                        .eq(DocumentDO::getSha256, sha256)))
+                .map(MybatisDocumentRepository::toDomain);
     }
 
     @Override
@@ -112,10 +117,20 @@ class MybatisDocumentRepository implements DocumentRepository {
                 .stream().map(MybatisDocumentRepository::toDomain).toList();
     }
 
+    @Override
+    public List<Document> listDueForRetry(OffsetDateTime now) {
+        return documents.selectList(new LambdaQueryWrapper<DocumentDO>()
+                        .eq(DocumentDO::getStatus, DocumentStatus.FAILED.name())
+                        .le(DocumentDO::getRetryAt, now)
+                        .orderByAsc(DocumentDO::getId))
+                .stream().map(MybatisDocumentRepository::toDomain).toList();
+    }
+
     static Document toDomain(DocumentDO row) {
         return Document.restore(row.getId(), new TenantId(row.getTenantId()), row.getKnowledgeBaseId(),
                 row.getFilename(), row.getMediaType(), row.getSha256(), row.getSizeBytes(),
                 DocumentStatus.valueOf(row.getStatus()), row.getError(), row.getChunkCount(), row.getCreatedAt(),
-                row.getReplacesDocumentId(), new Validity(row.getEffectiveFrom(), row.getExpiresOn()));
+                row.getReplacesDocumentId(), new Validity(row.getEffectiveFrom(), row.getExpiresOn()),
+                new Document.Retry(Boolean.TRUE.equals(row.getReprocessable()), row.getRetryAt(), row.getAttempts()));
     }
 }

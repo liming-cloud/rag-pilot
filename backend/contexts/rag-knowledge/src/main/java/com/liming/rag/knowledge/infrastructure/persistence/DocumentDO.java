@@ -31,6 +31,11 @@ public class DocumentDO {
     private LocalDate effectiveFrom;
     @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private LocalDate expiresOn;
+    private Boolean reprocessable;
+    /** 重新处理后要清空，所以 null 也要写入。 */
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
+    private OffsetDateTime retryAt;
+    private Integer attempts;
     /** 由数据库默认值生成。 */
     @TableField(insertStrategy = FieldStrategy.NEVER, updateStrategy = FieldStrategy.NEVER)
     private OffsetDateTime createdAt;
@@ -145,5 +150,29 @@ public class DocumentDO {
 
     public void setExpiresOn(LocalDate expiresOn) {
         this.expiresOn = expiresOn;
+    }
+
+    public Boolean getReprocessable() {
+        return reprocessable;
+    }
+
+    public void setReprocessable(Boolean reprocessable) {
+        this.reprocessable = reprocessable;
+    }
+
+    public OffsetDateTime getRetryAt() {
+        return retryAt;
+    }
+
+    public void setRetryAt(OffsetDateTime retryAt) {
+        this.retryAt = retryAt;
+    }
+
+    public Integer getAttempts() {
+        return attempts;
+    }
+
+    public void setAttempts(Integer attempts) {
+        this.attempts = attempts;
     }
 }

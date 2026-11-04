@@ -4,6 +4,7 @@ import com.liming.rag.identity.api.AuditTrail;
 import com.liming.rag.knowledge.application.KnowledgeQueries.DocumentRow;
 import com.liming.rag.knowledge.domain.Document;
 import com.liming.rag.knowledge.domain.DocumentRepository;
+import com.liming.rag.knowledge.domain.DocumentStatus;
 import com.liming.rag.knowledge.domain.UploadedFile;
 import com.liming.rag.knowledge.domain.Validity;
 import com.liming.rag.shared.TenantId;
@@ -47,7 +48,7 @@ public class DocumentIngestionService {
      * 上传一份文档；{@code replacesDocumentId} 不为空时作为该文档的新版本，解析成功后替换它，失败时旧版本保留。
      * 有效期（D-046）：日期为 yyyy-MM-dd，空串表示不限；不传（null）时新文档长期有效，新版本继承旧版本的失效日期。
      *
-     * <p>格式不支持、重复上传会直接拒绝；返回的文档状态是“解析中”。内容问题（编码不对、没有文字、文件损坏）在后台处理时
+     * <p>格式不支持、重复上传会直接拒绝；同一个库里同一份文件之前处理失败的，删掉失败的那条再传。返回的文档状态是“解析中”。内容问题（编码不对、没有文字、文件损坏）在后台处理时
      * 发现，保存为失败文档，让管理员在列表里看到原因。
      *
      * @param actor 操作人：只能往自己能管理的库里上传（#135）
@@ -63,8 +64,13 @@ public class DocumentIngestionService {
         var inheritedExpiry = previous == null ? null : previous.validity().expiresOn();
         var validity = validity(date(effectiveFrom, null), date(expiresOn, inheritedExpiry));
         var file = uploaded(filename, content);
-        if (documents.existsInKnowledgeBase(knowledgeBase.id(), file.sha256())) {
-            throw duplicate(filename);
+        var existing = documents.findInKnowledgeBase(knowledgeBase.id(), file.sha256());
+        if (existing.isPresent()) {
+            if (existing.get().status() != DocumentStatus.FAILED) {
+                throw duplicate(filename);
+            }
+            // 处理失败的记录不占位，重传同一份文件时替换它（#145 A9）。
+            remover.remove(tenantId, existing.get().id());
         }
 
         storage.store(tenantId, file.sha256(), content);
@@ -82,6 +88,26 @@ public class DocumentIngestionService {
                     "知识库“" + knowledgeBase.name() + "”上传 " + file.filename() + " 替换 " + previous.filename());
         }
         // 解析、分块、向量化在事务提交后由后台完成，上传请求只返回“解析中”的文档。
+        events.publishEvent(new DocumentReceived(tenantId, document.id()));
+        return row(document);
+    }
+
+    /**
+     * 重新处理（doc:upload）：因模型暂时不可用而失败的文档回到“解析中”，事务提交后由后台再处理一遍（#145 A9）。
+     *
+     * @throws KnowledgeException 库不存在或操作人不能管理它、文档不在这个知识库里时为 NOT_FOUND；
+     *         文档不是因模型暂时不可用而失败时为 CONFLICT
+     */
+    @Transactional
+    public DocumentRow reprocess(TenantId tenantId, UserId actor, long knowledgeBaseId, long documentId) {
+        knowledgeBases.getManageable(tenantId, actor, knowledgeBaseId);
+        var document = inKnowledgeBase(tenantId, knowledgeBaseId, documentId, "文档不存在");
+        if (!document.reprocessable()) {
+            throw new KnowledgeException(KnowledgeException.Reason.CONFLICT,
+                    "只有因模型暂时不可用而失败的文档才能重新处理；文件本身有问题时请改好后重新上传");
+        }
+        document.reprocess();
+        documents.save(document);
         events.publishEvent(new DocumentReceived(tenantId, document.id()));
         return row(document);
     }

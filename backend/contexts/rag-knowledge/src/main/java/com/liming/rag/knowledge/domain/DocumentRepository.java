@@ -1,6 +1,7 @@
 package com.liming.rag.knowledge.domain;
 
 import com.liming.rag.shared.TenantId;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -13,7 +14,8 @@ public interface DocumentRepository {
     /** 分块与向量一一对应，按顺序写入。 */
     void saveChunks(Document document, List<Chunk> chunks, List<float[]> embeddings);
 
-    boolean existsInKnowledgeBase(long knowledgeBaseId, String sha256);
+    /** 同一个库里同一份文件的文档（库内按内容唯一）。 */
+    Optional<Document> findInKnowledgeBase(long knowledgeBaseId, String sha256);
 
     List<Document> list(TenantId tenantId, long knowledgeBaseId);
 
@@ -27,4 +29,7 @@ public interface DocumentRepository {
 
     /** 所有租户里还在解析中的文档，应用启动时据此恢复未完成的入库。 */
     List<Document> listParsing();
+
+    /** 所有租户里到了自动重试时间（{@code retryAt <= now}）的失败文档。 */
+    List<Document> listDueForRetry(OffsetDateTime now);
 }

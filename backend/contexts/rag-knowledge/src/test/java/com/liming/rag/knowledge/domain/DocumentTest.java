@@ -39,4 +39,38 @@ class DocumentTest {
     void readyNeedsChunks() {
         assertThatThrownBy(() -> received().markReady(0)).isInstanceOf(IllegalStateException.class);
     }
+
+    @Test
+    @DisplayName("模型暂时不可用导致的失败：10 分钟后自动重试一次，可以重新处理；重试后再失败不再自动重试")
+    void modelUnavailableIsRetryable() {
+        var now = java.time.OffsetDateTime.parse("2026-11-04T10:00:00Z");
+        var document = received();
+        document.markModelUnavailable("向量化失败：嵌入模型服务暂时不可用，请稍后重试", now);
+        assertThat(document.status()).isEqualTo(DocumentStatus.FAILED);
+        assertThat(document.reprocessable()).isTrue();
+        assertThat(document.retryAt()).isEqualTo(now.plusMinutes(10));
+
+        document.reprocess();
+        assertThat(document.status()).isEqualTo(DocumentStatus.PARSING);
+        assertThat(document.error()).isNull();
+        assertThat(document.retryAt()).isNull();
+        assertThat(document.attempts()).isEqualTo(2);
+
+        document.markModelUnavailable("向量化失败：嵌入模型服务暂时不可用，请稍后重试", now.plusMinutes(11));
+        assertThat(document.retryAt()).as("只自动重试一次").isNull();
+        assertThat(document.reprocessable()).as("仍可手动重新处理").isTrue();
+    }
+
+    @Test
+    @DisplayName("文件内容的问题不能重新处理，要改好文件重新上传；解析中、已就绪的也不能")
+    void contentFailureIsNotReprocessable() {
+        var document = received();
+        assertThat(document.reprocessable()).isFalse();
+        assertThatThrownBy(document::reprocess).isInstanceOf(IllegalStateException.class);
+
+        document.markFailed("文件里没有可检索的文字");
+        assertThat(document.reprocessable()).isFalse();
+        assertThat(document.retryAt()).isNull();
+        assertThatThrownBy(document::reprocess).isInstanceOf(IllegalStateException.class);
+    }
 }

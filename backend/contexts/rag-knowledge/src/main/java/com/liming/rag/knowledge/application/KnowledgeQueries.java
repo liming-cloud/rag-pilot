@@ -76,13 +76,14 @@ public interface KnowledgeQueries {
      */
     record DocumentRow(long id, String filename, DocumentStatus status, String error, int chunkCount, long sizeBytes,
             OffsetDateTime createdAt, Long replacesDocumentId, String replacesFilename, LocalDate effectiveFrom,
-            LocalDate expiresOn, Validity.State validity) {
+            LocalDate expiresOn, Validity.State validity, boolean reprocessable, OffsetDateTime retryAt) {
 
         public static DocumentRow of(Document document, String replacesFilename, Validity.State state) {
             var validity = document.validity();
             return new DocumentRow(document.id(), document.filename(), document.status(), document.error(),
                     document.chunkCount(), document.sizeBytes(), document.createdAt(), document.replacesDocumentId(),
-                    replacesFilename, validity.effectiveFrom(), validity.expiresOn(), state);
+                    replacesFilename, validity.effectiveFrom(), validity.expiresOn(), state, document.reprocessable(),
+                    document.retryAt());
         }
     }
 }

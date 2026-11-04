@@ -149,6 +149,45 @@ class DocumentIngestionServiceTest {
     }
 
     @Test
+    @DisplayName("处理失败的文档不占位：重传同一份文件时替换失败的那条；没失败的仍是 CONFLICT")
+    void reuploadReplacesFailedDocument() {
+        var failed = service.ingest(TENANT, ADMIN, kb, "收银规范.txt", TEXT, null, null, null);
+        fixture.documents.rows.get(failed.id()).markFailed("文件里没有可检索的文字");
+
+        var retried = committedReturning(() -> service.ingest(TENANT, ADMIN, kb, "收银规范-改.txt", TEXT, null, null, null));
+
+        assertThat(fixture.documents.rows).containsOnlyKeys(retried.id());
+        assertThat(retried.status()).isEqualTo(DocumentStatus.PARSING);
+        assertThat(fixture.files.has(TENANT, fixture.documents.rows.get(retried.id()).sha256()))
+                .as("新记录还用着这份文件").isTrue();
+        assertReason(() -> service.ingest(TENANT, ADMIN, kb, "收银规范.txt", TEXT, null, null, null),
+                KnowledgeException.Reason.CONFLICT);
+    }
+
+    @Test
+    @DisplayName("重新处理：模型暂时不可用而失败的文档回到解析中并重新排队；内容有问题的是 CONFLICT；不能管理的库按不存在处理")
+    void reprocessesModelFailures() {
+        var document = service.ingest(TENANT, ADMIN, kb, "收银规范.txt", TEXT, null, null, null);
+        fixture.documents.rows.get(document.id()).markModelUnavailable("向量化失败：嵌入模型服务暂时不可用，请稍后重试",
+                java.time.OffsetDateTime.parse("2026-11-04T10:00:00Z"));
+        events.clear();
+
+        var row = service.reprocess(TENANT, ADMIN, kb, document.id());
+
+        assertThat(row.status()).isEqualTo(DocumentStatus.PARSING);
+        assertThat(row.reprocessable()).isFalse();
+        assertThat(events).containsExactly(new DocumentReceived(TENANT, document.id()));
+        assertReason(() -> service.reprocess(TENANT, ADMIN, kb, document.id()), KnowledgeException.Reason.CONFLICT);
+
+        var broken = service.ingest(TENANT, ADMIN, kb, "坏.txt", "坏".getBytes(StandardCharsets.UTF_8), null, null,
+                null);
+        fixture.documents.rows.get(broken.id()).markFailed("文件里没有可检索的文字");
+        assertReason(() -> service.reprocess(TENANT, ADMIN, kb, broken.id()), KnowledgeException.Reason.CONFLICT);
+        assertReason(() -> service.reprocess(TENANT, OUTSIDER, kb, broken.id()), KnowledgeException.Reason.NOT_FOUND);
+        assertThat(fixture.documents.rows.get(broken.id()).status()).isEqualTo(DocumentStatus.FAILED);
+    }
+
+    @Test
     @DisplayName("删除：文档和分块一起删；租户里没有别的文档用到这份原始文件时才删文件")
     void deletesDocumentAndUnreferencedFile() {
         var shared = service.ingest(TENANT, ADMIN, kb, "共用.txt", TEXT, null, null, null);
@@ -206,10 +245,18 @@ class DocumentIngestionServiceTest {
 
     /** 模拟事务提交：原始文件在提交后才删（见 DocumentRemover）。 */
     private static void committed(Runnable action) {
+        committedReturning(() -> {
+            action.run();
+            return null;
+        });
+    }
+
+    private static <T> T committedReturning(java.util.function.Supplier<T> action) {
         TransactionSynchronizationManager.initSynchronization();
         try {
-            action.run();
+            var result = action.get();
             TransactionSynchronizationManager.getSynchronizations().forEach(TransactionSynchronization::afterCommit);
+            return result;
         } finally {
             TransactionSynchronizationManager.clearSynchronization();
         }

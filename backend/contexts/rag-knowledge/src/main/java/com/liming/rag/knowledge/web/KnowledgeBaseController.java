@@ -162,6 +162,13 @@ class KnowledgeBaseController {
                 documentId, request.effectiveFrom(), request.expiresOn());
     }
 
+    /** 重新处理因模型暂时不可用而失败的文档（#145 A9）；和上传是同一件事，用上传的权限点。 */
+    @SaCheckPermission(KnowledgePermissions.DOC_UPLOAD)
+    @PostMapping("/{knowledgeBaseId}/documents/{documentId}/reprocess")
+    DocumentRow reprocess(@PathVariable long knowledgeBaseId, @PathVariable long documentId) {
+        return ingestion.reprocess(currentUser.tenantId(), currentUser.userId(), knowledgeBaseId, documentId);
+    }
+
     @SaCheckPermission(KnowledgePermissions.DOC_DELETE)
     @DeleteMapping("/{knowledgeBaseId}/documents/{documentId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)

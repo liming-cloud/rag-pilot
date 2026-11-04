@@ -152,9 +152,10 @@ final class InMemoryKnowledge {
         }
 
         @Override
-        public boolean existsInKnowledgeBase(long knowledgeBaseId, String sha256) {
+        public Optional<Document> findInKnowledgeBase(long knowledgeBaseId, String sha256) {
             return rows.values().stream()
-                    .anyMatch(doc -> doc.knowledgeBaseId() == knowledgeBaseId && doc.sha256().equals(sha256));
+                    .filter(doc -> doc.knowledgeBaseId() == knowledgeBaseId && doc.sha256().equals(sha256))
+                    .findFirst();
         }
 
         @Override
@@ -185,6 +186,12 @@ final class InMemoryKnowledge {
         @Override
         public List<Document> listParsing() {
             return rows.values().stream().filter(doc -> doc.status() == DocumentStatus.PARSING).toList();
+        }
+
+        @Override
+        public List<Document> listDueForRetry(java.time.OffsetDateTime now) {
+            return rows.values().stream().filter(doc -> doc.status() == DocumentStatus.FAILED
+                    && doc.retryAt() != null && !doc.retryAt().isAfter(now)).toList();
         }
 
         /** 直接放一份已就绪的文档。 */
