@@ -77,6 +77,26 @@ class KnowledgeSearchTests {
         assertThat(hits).noneMatch(hit -> "二号店陈列.txt".equals(hit.get("documentName")));
     }
 
+    @Autowired
+    private com.liming.rag.knowledge.application.ChunkIndex index;
+
+    @Test
+    @DisplayName("关键词检索也查文件名和章节：正文里没有、只在标题里的词也能找到这一块（#145 B4）")
+    void keywordSearchCoversHeadings() {
+        long store = createKnowledgeBase("标题检索知识库");
+        upload(store, "冷柜管理.md", "# 除霜\n\n每周二早上执行一次，执行前把商品移到备用柜。");
+        long admin = jdbc.queryForObject("select id from app_user where username = ?", Long.class,
+                TestLogin.ADMIN_USERNAME);
+
+        var ids = index.keyword(new com.liming.rag.knowledge.application.Grantee(new com.liming.rag.shared.TenantId(1),
+                new com.liming.rag.shared.UserId(admin), List.of()), List.of(store), java.time.LocalDate.now(),
+                "冷柜除霜", 10);
+
+        assertThat(ids).as("“冷柜”在文件名、“除霜”在章节标题，正文里都没有").hasSize(1);
+        assertThat(jdbc.queryForObject("select content from chunk where id = ?", String.class, ids.getFirst()))
+                .contains("每周二早上");
+    }
+
     @Test
     @DisplayName("空问题返回空列表；不存在的知识库返回 404")
     void handlesEmptyQuestionAndMissingKnowledgeBase() {

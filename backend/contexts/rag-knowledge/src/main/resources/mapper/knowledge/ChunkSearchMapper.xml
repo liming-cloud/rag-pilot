@@ -63,7 +63,8 @@
             AND knowledge_base_id IN <foreach collection="knowledgeBaseIds" item="kb" open="(" separator="," close=")">#{kb}</foreach>
           </if>
           AND document_id IN (<include refid="currentDocuments"/>)
-          AND content ||| #{text}
+          <!-- 正文和章节路径（含文件名）都查（#145 B4）。 -->
+          AND (content ||| #{text} OR heading_path ||| #{text})
         ORDER BY pdb.score(id) DESC
         LIMIT #{limit}
     </select>
