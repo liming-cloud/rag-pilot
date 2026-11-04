@@ -30,7 +30,7 @@ class ConversationServiceTest {
 
     private final InMemoryAnswering fixture = new InMemoryAnswering();
     private final AnswerLogService log = new AnswerLogService(fixture.records, fixture.reviews, fixture.users,
-            fixture.access, TestSettings.RETAIL, Clock.systemUTC());
+            fixture.access, TestSettings.RETAIL, event -> { }, Clock.systemUTC());
     private final ConversationService service = new ConversationService(fixture.conversations, fixture.records,
             fixture.access, fixture.access, log, Clock.systemUTC());
 

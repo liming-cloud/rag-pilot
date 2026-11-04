@@ -2,6 +2,10 @@ package com.liming.rag;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.Mockito.clearInvocations;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 import com.liming.rag.ai.EmbeddingClient;
@@ -176,6 +180,29 @@ class KnowledgeGapTests {
     }
 
     @Test
+    @DisplayName("记下回答后在后台存好问题向量，打开知识缺口不再调用嵌入模型；没存的旧记录补算一次并写回（#145 C6）")
+    void usesStoredQuestionVectors() throws InterruptedException {
+        long stored = refuse("门店几点打烊");
+        waitForVector(stored);
+        long legacy = refuse("晚上几点关门");
+        waitForVector(legacy);
+        jdbc.update("UPDATE answer_record SET question_embedding = NULL WHERE id = ?", legacy);
+        clearInvocations(embeddings);
+
+        var report = http.getForObject("/api/answers/gaps?days=7", Map.class);
+
+        assertThat(report).containsEntry("grouping", "SEMANTIC");
+        verify(embeddings).embed(List.of("晚上几点关门"));
+        verifyNoMoreInteractions(embeddings);
+        assertThat(jdbc.queryForObject("SELECT question_embedding IS NOT NULL AND cardinality(question_embedding) = ?"
+                + " FROM answer_record WHERE id = ?", Boolean.class, EmbeddingClient.DIMENSIONS, legacy)).isTrue();
+
+        clearInvocations(embeddings);
+        http.getForObject("/api/answers/gaps?days=7", Map.class);
+        verifyNoInteractions(embeddings);
+    }
+
+    @Test
     @DisplayName("嵌入模型不可用时退回按原文分组（去掉标点空格后相同的才合并），并标出来")
     @SuppressWarnings("unchecked")
     void fallsBackToText() {
@@ -200,6 +227,17 @@ class KnowledgeGapTests {
                 .isEqualTo(HttpStatus.BAD_REQUEST);
         assertThat(http.exchange("/api/answers/gaps", HttpMethod.GET, new HttpEntity<>(bearer(staffToken())),
                 String.class).getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+    }
+
+    private void waitForVector(long id) throws InterruptedException {
+        for (int i = 0; i < 100; i++) {
+            if (Boolean.TRUE.equals(jdbc.queryForObject(
+                    "SELECT question_embedding IS NOT NULL FROM answer_record WHERE id = ?", Boolean.class, id))) {
+                return;
+            }
+            Thread.sleep(50);
+        }
+        throw new AssertionError("回答 " + id + " 的问题向量 5 秒内没有存好");
     }
 
     private long refuse(String question) {

@@ -4,6 +4,7 @@ import static com.liming.rag.answering.application.InMemoryAnswering.TENANT;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.liming.rag.answering.application.AnswerRecorded;
 import com.liming.rag.answering.application.AnsweringException;
 import com.liming.rag.answering.application.InMemoryAnswering;
 import com.liming.rag.answering.application.Paged;
@@ -30,8 +31,9 @@ class AnswerLogServiceTest {
     private static final ZoneId ZONE = ZoneId.of("Asia/Shanghai");
 
     private final InMemoryAnswering fixture = new InMemoryAnswering();
+    private final List<Object> events = new java.util.ArrayList<>();
     private final AnswerLogService service = new AnswerLogService(fixture.records, fixture.reviews, fixture.users,
-            fixture.access, TestSettings.RETAIL, Clock.systemUTC());
+            fixture.access, TestSettings.RETAIL, events::add, Clock.systemUTC());
 
     {
         fixture.access.grant(7, 1, "门店规范").grant(7, 2, "商品知识");
@@ -48,6 +50,8 @@ class AnswerLogServiceTest {
         assertThat(fixture.records.rows.get(named.id()).knowledgeBaseIds()).containsExactly(2L);
         assertThat(fixture.records.rows.get(named.id()).question()).isEqualTo("青柚在哪？");
         assertThat(fixture.records.rows.get(all.id()).knowledgeBaseIds()).containsExactly(1L, 2L);
+        assertThat(events).as("提交后在后台算问题向量").containsExactly(
+                new AnswerRecorded(TENANT, named.id(), "青柚在哪？"), new AnswerRecorded(TENANT, all.id(), "冷柜温度？"));
     }
 
     @Test

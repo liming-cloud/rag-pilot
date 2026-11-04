@@ -14,4 +14,5 @@ final class GapRecordDO {
     String reviewStatus;
     Long[] knowledgeBaseIds;
     String citedDocuments;
+    Float[] questionEmbedding;
 }

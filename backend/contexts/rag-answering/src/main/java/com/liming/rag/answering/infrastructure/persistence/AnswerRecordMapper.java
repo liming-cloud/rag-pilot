@@ -53,6 +53,8 @@ interface AnswerRecordMapper {
     long countGapRecords(@Param("tenantId") long tenantId, @Param("from") OffsetDateTime from,
             @Param("to") OffsetDateTime to);
 
+    int updateQuestionVectors(@Param("tenantId") long tenantId, @Param("rows") List<QuestionVectorDO> rows);
+
     List<AnswerReviewDO> between(@Param("tenantId") long tenantId, @Param("from") OffsetDateTime from,
             @Param("to") OffsetDateTime to, @Param("limit") int limit);
 

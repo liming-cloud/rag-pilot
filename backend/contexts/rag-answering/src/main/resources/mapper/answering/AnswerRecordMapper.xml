@@ -25,6 +25,8 @@
     <resultMap id="gapRecord" type="com.liming.rag.answering.infrastructure.persistence.GapRecordDO" autoMapping="true">
         <result column="knowledge_base_ids" property="knowledgeBaseIds"
                 typeHandler="org.apache.ibatis.type.ArrayTypeHandler"/>
+        <result column="question_embedding" property="questionEmbedding"
+                typeHandler="org.apache.ibatis.type.ArrayTypeHandler"/>
     </resultMap>
 
     <!-- 回答记录的全部字段，加载聚合用（#136）。 -->
@@ -125,7 +127,7 @@
 
     <select id="gapRecords" resultMap="gapRecord">
         SELECT r.id, r.user_id, r.question, r.created_at, r.refused, r.feedback_comment, r.review_status,
-               r.knowledge_base_ids,
+               r.knowledge_base_ids, r.question_embedding,
                (SELECT string_agg(DISTINCT c.document_name, chr(31)) FROM answer_citation c
                  WHERE c.answer_id = r.id) AS cited_documents
         FROM answer_record r
@@ -138,6 +140,17 @@
         SELECT count(*) FROM answer_record r
         <include refid="gapFilter"/>
     </select>
+
+    <!-- 写回问题向量（#145 C6）：一次写一批，不逐条往返。 -->
+    <update id="updateQuestionVectors">
+        UPDATE answer_record r SET question_embedding = v.vector
+        FROM (VALUES
+        <foreach collection="rows" item="row" separator=",">
+            (#{row.id}::bigint, #{row.vector, typeHandler=org.apache.ibatis.type.ArrayTypeHandler}::real[])
+        </foreach>
+        ) AS v(id, vector)
+        WHERE r.tenant_id = #{tenantId} AND r.id = v.id
+    </update>
 
     <!-- 运营明细导出（#125）：一段时间内的全部问答，按时间先后。 -->
     <select id="between" resultType="com.liming.rag.answering.infrastructure.persistence.AnswerReviewDO">

@@ -1,5 +1,6 @@
 package com.liming.rag.answering.application.review;
 
+import com.liming.rag.answering.application.AnswerRecorded;
 import com.liming.rag.answering.application.AnsweringException;
 import com.liming.rag.answering.application.Paged;
 import com.liming.rag.answering.application.ask.AskResult;
@@ -14,6 +15,7 @@ import java.time.Clock;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Locale;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -31,15 +33,17 @@ public class AnswerLogService {
     private final UserDirectory users;
     private final KnowledgeAccess access;
     private final StatsZone zones;
+    private final ApplicationEventPublisher events;
     private final Clock clock;
 
     public AnswerLogService(AnswerRecordRepository records, AnswerReviews reviews, UserDirectory users,
-            KnowledgeAccess access, StatsZone zones, Clock clock) {
+            KnowledgeAccess access, StatsZone zones, ApplicationEventPublisher events, Clock clock) {
         this.records = records;
         this.reviews = reviews;
         this.users = users;
         this.access = access;
         this.zones = zones;
+        this.events = events;
         this.clock = clock;
     }
 
@@ -135,6 +139,7 @@ public class AnswerLogService {
     public AskResult recordSearched(TenantId tenantId, UserId asker, String question, AskResult answer,
             List<Long> searched) {
         var saved = records.add(AnswerRecord.record(tenantId, asker, question, answer.reply(), List.copyOf(searched)));
+        events.publishEvent(new AnswerRecorded(tenantId, saved.id(), saved.question()));
         return answer.withId(saved.id());
     }
 

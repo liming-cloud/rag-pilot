@@ -220,6 +220,8 @@ public final class InMemoryAnswering {
 
         public List<GapRecord> rows = List.of();
         public long total = -1;
+        /** 写回的问题向量，按记录 id。 */
+        public final Map<Long, float[]> savedVectors = new HashMap<>();
 
         @Override
         public List<GapRecord> list(TenantId tenantId, OffsetDateTime from, OffsetDateTime to, int limit) {
@@ -229,6 +231,11 @@ public final class InMemoryAnswering {
         @Override
         public long count(TenantId tenantId, OffsetDateTime from, OffsetDateTime to) {
             return total < 0 ? rows.size() : total;
+        }
+
+        @Override
+        public void saveVectors(TenantId tenantId, Map<Long, float[]> vectors) {
+            savedVectors.putAll(vectors);
         }
     }
 
@@ -347,6 +354,8 @@ public final class InMemoryAnswering {
         public final Map<String, float[]> topics = new LinkedHashMap<>();
         public boolean unavailable;
         public int calls;
+        /** 每次调用送来向量化的原文。 */
+        public final List<String> embedded = new ArrayList<>();
 
         public Embeddings topic(String keyword, float... vector) {
             topics.put(keyword, vector);
@@ -356,6 +365,7 @@ public final class InMemoryAnswering {
         @Override
         public List<float[]> embed(List<String> texts) {
             calls++;
+            embedded.addAll(texts);
             if (unavailable) {
                 throw new ModelCallException("嵌入模型不可用");
             }

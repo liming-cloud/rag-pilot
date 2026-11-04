@@ -18,10 +18,12 @@ import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -30,8 +32,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 /**
  * 知识缺口（#125、D-047）：把一段时间内答不上来的和被点踩的问题按意思归类，按待处理次数排序，告诉总部该补哪些资料。
- * 查询时现算、不落表：取范围内最近的 {@value #MAX_RECORDS} 条，把不同的问题原文向量化后归类
- * （{@link QuestionClusters}），嵌入模型不可用时退回按原文分组。不调用对话模型。
+ * 查询时归类、不落表：取范围内最近的 {@value #MAX_RECORDS} 条，按问题向量归类（{@link QuestionClusters}）。
+ * 问题向量在记录回答后由 {@link QuestionVectorRecorder} 存好（#145 C6）；还没有的（旧记录、后台没算成）这里补算并写回，
+ * 嵌入模型不可用时退回按原文分组。不调用对话模型。
  *
  * <p>查询报告不开事务：向量化是外部调用，不能占着数据库连接等它（#135）；几次读之间不要求同一快照。
  */
@@ -141,8 +144,7 @@ public class KnowledgeGapService {
         var grouping = Grouping.SEMANTIC;
         List<List<Integer>> clusters;
         try {
-            clusters = QuestionClusters.bySimilarity(texts.isEmpty() ? List.of() : embeddings.embed(texts),
-                    properties.gaps().similarity());
+            clusters = QuestionClusters.bySimilarity(vectors(tenantId, texts, byText), properties.gaps().similarity());
         } catch (ModelCallException e) {
             log.warn("知识缺口归类时嵌入模型不可用，退回按原文分组：{}", e.getMessage());
             grouping = Grouping.TEXT;
@@ -159,6 +161,27 @@ public class KnowledgeGapService {
                         .thenComparing(Group::lastAskedAt).reversed())
                 .toList();
         return new Report(from, to, zone.getId(), grouping, found.size(), truncated, groups);
+    }
+
+    /** 每段原文的问题向量：用记录里存好的，没有的一次算完并写回这段原文的每条记录。 */
+    private List<float[]> vectors(TenantId tenantId, List<String> texts, Map<String, List<GapRecord>> byText) {
+        var known = new HashMap<String, float[]>();
+        texts.forEach(text -> byText.get(text).stream().map(GapRecord::questionVector).filter(Objects::nonNull)
+                .findFirst().ifPresent(vector -> known.put(text, vector)));
+        var missing = texts.stream().filter(text -> !known.containsKey(text)).toList();
+        if (!missing.isEmpty()) {
+            var computed = embeddings.embed(missing);
+            for (int i = 0; i < missing.size(); i++) {
+                known.put(missing.get(i), computed.get(i));
+            }
+        }
+        var backfill = new HashMap<Long, float[]>();
+        texts.forEach(text -> byText.get(text).stream().filter(record -> record.questionVector() == null)
+                .forEach(record -> backfill.put(record.id(), known.get(text))));
+        if (!backfill.isEmpty()) {
+            gapRecords.saveVectors(tenantId, backfill);
+        }
+        return texts.stream().map(known::get).toList();
     }
 
     /** 待处理次数最多的几类，供运营概览；只看还有待处理记录的类。 */

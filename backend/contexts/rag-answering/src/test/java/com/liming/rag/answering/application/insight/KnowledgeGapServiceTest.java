@@ -70,6 +70,34 @@ class KnowledgeGapServiceTest {
     }
 
     @Test
+    @DisplayName("记录回答时存下的问题向量直接用，不再调用嵌入模型；没存的（旧记录、后台没算成）只算一次并写回")
+    void reusesStoredVectors() {
+        float[] cold = {1, 0, 0};
+        fixture.gaps.rows = List.of(
+                gap(6, "冷柜温度要多少？", 0, true, "OPEN", List.of(1L), cold),
+                gap(5, "青柚在哪？", 1, false, "RESOLVED", List.of(1L), new float[] {0, 1, 0}),
+                gap(4, "冰柜温度设几度？", 2, true, "OPEN", List.of()),
+                gap(3, "冷柜温度要多少？", 3, false, "RESOLVED", List.of(1L)),
+                gap(2, "冰柜温度设几度？", 4, true, "OPEN", List.of()));
+
+        var report = service.report(TENANT, LocalDate.of(2026, 10, 1), LocalDate.of(2026, 11, 4), ZONE);
+
+        assertThat(report.groups()).extracting(KnowledgeGapService.Group::question)
+                .containsExactly("冷柜温度要多少？", "青柚在哪？");
+        assertThat(fixture.embeddings.embedded).as("同一原文已有向量的不再算").containsExactly("冰柜温度设几度？");
+        assertThat(fixture.gaps.savedVectors).as("算出的向量写回这段原文的每条记录").containsOnlyKeys(4L, 2L, 3L);
+
+        fixture.embeddings.unavailable = true;
+        fixture.gaps.rows = fixture.gaps.rows.stream().map(row -> new GapRecord(row.id(), row.userId(),
+                row.question(), row.createdAt(), row.refused(), row.comment(), row.citedDocuments(),
+                row.reviewStatus(), row.knowledgeBaseIds(),
+                row.questionVector() != null ? row.questionVector() : fixture.gaps.savedVectors.get(row.id())))
+                .toList();
+        assertThat(service.report(TENANT, LocalDate.of(2026, 10, 1), LocalDate.of(2026, 11, 4), ZONE).grouping())
+                .as("向量都存好以后，嵌入模型不可用也能按意思归类").isEqualTo(KnowledgeGapService.Grouping.SEMANTIC);
+    }
+
+    @Test
     @DisplayName("嵌入模型不可用时退回按原文分组，同义问法各成一类")
     void fallsBackToTextGrouping() {
         fixture.embeddings.unavailable = true;
@@ -137,8 +165,13 @@ class KnowledgeGapServiceTest {
 
     private static GapRecord gap(long id, String question, int hoursAgo, boolean refused, String status,
             List<Long> knowledgeBaseIds) {
+        return gap(id, question, hoursAgo, refused, status, knowledgeBaseIds, null);
+    }
+
+    private static GapRecord gap(long id, String question, int hoursAgo, boolean refused, String status,
+            List<Long> knowledgeBaseIds, float[] vector) {
         return new GapRecord(id, 7, question, NOW.minusHours(hoursAgo), refused, refused ? null : "没帮助",
-                refused ? List.of() : List.of("陈列规范"), status, knowledgeBaseIds);
+                refused ? List.of() : List.of("陈列规范"), status, knowledgeBaseIds, vector);
     }
 
     private static AskResult refused() {
