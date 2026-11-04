@@ -14,8 +14,8 @@ import { Pagination } from "@/components/ui/pagination";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ErrorMessage } from "@/lib/errors";
 import { Can, PERMISSIONS } from "@/lib/permissions";
-import { fetchModelChanges, type ModelChange, modelKeys, restoreChange, USAGE_LABELS } from "./api";
 import { ModelName } from "./ModelLabels";
+import { fetchModelChanges, type ModelChange, modelKeys, restoreChange, USAGE_LABELS } from "./api";
 
 export const PAGE_SIZE = 20;
 

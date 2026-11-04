@@ -18,6 +18,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { ErrorMessage } from "@/lib/errors";
 import { Can, PERMISSIONS, useCan } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
+import { SourceBadge, ModelName } from "./ModelLabels";
 import {
   fetchAvailableModels,
   modelKeys,
@@ -29,7 +30,6 @@ import {
   USAGE_LABELS,
   type UsageConfig,
 } from "./api";
-import { SourceBadge, ModelName } from "./ModelLabels";
 
 export function UsagesTab({ settings }: { settings: ModelSettings }) {
   const [editing, setEditing] = useState<UsageConfig | null>(null);

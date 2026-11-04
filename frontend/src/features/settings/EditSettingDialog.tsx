@@ -6,10 +6,10 @@ import { DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTit
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { chatKeys } from "@/features/chat/api";
+import { brandingKey } from "@/lib/branding";
 import { ErrorMessage } from "@/lib/errors";
 import { cn } from "@/lib/utils";
-import { brandingKey } from "@/lib/branding";
-import { chatKeys } from "@/features/chat/api";
 import { saveSetting, SETTING_META, type SettingItem, settingProblem, settingsKeys, SOURCE_LABELS } from "./api";
 
 /** 保存后刷新设置页，也让登录页、顶栏和问答页下次读到新值。 */

@@ -1,14 +1,15 @@
 import { BadgeCheck, FileSearch, ShieldCheck } from "lucide-react";
 import { type FormEvent, useState } from "react";
-import { useNavigate } from "react-router";
+import { useNavigate, useSearchParams } from "react-router";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ApiError } from "@/lib/api";
+import { returnPath } from "@/lib/auth";
 import { useBranding } from "@/lib/branding";
 import { ErrorMessage } from "@/lib/errors";
-import { BadCredentialsError, login } from "./api";
 import { TrustIllustration } from "./TrustIllustration";
+import { BadCredentialsError, login } from "./api";
 
 /** 内核的产品主张，不随行业变（D-042）。 */
 const VALUES = [
@@ -23,6 +24,7 @@ const VALUES = [
  */
 export function LoginPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const branding = useBranding();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -35,7 +37,8 @@ export function LoginPage() {
     setError(null);
     try {
       const me = await login(username.trim(), password);
-      void navigate(me.mustChangePassword ? "/change-password" : "/chat", { replace: true });
+      // 必须先改密码时先去改密码；否则回到登录过期前所在的页面（#145 A6）。
+      void navigate(me.mustChangePassword ? "/change-password" : returnPath(searchParams.get("from")), { replace: true });
     } catch (e) {
       setError(
         e instanceof BadCredentialsError ||

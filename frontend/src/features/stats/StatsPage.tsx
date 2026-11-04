@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { ErrorMessage } from "@/lib/errors";
 import { Can, PERMISSIONS, useCan } from "@/lib/permissions";
+import { ExpirySection } from "./ExpirySection";
+import { DailyTable, Ranking, percent } from "./StatsTables";
 import {
   exportUsageCsv,
   fetchUsageStats,
@@ -17,8 +19,6 @@ import {
   type UsageStats,
   zoneLabel,
 } from "./api";
-import { ExpirySection } from "./ExpirySection";
-import { DailyTable, Ranking, percent } from "./StatsTables";
 
 const REASONS: Record<string, string> = {
   NO_EVIDENCE: "知识库里没有内容",
@@ -126,6 +126,24 @@ function StatsView({ stats }: { stats: UsageStats }) {
       value: String(totals.questions),
       note: `${totals.askers} 位员工`,
       change: previous ? countChange(totals.questions, previous.questions) : undefined,
+    },
+    // 产品指标（#145 A11，口径见 README）：用的人多不多、用得深不深、有没有问了又问。
+    {
+      label: "提问人数占比",
+      value: percent(totals.askers, totals.activeStaff),
+      note: `${totals.activeStaff} 位能用问答的员工里 ${totals.askers} 位问过`,
+      change: previous ? rateChange(totals, previous, (t) => [t.askers, t.activeStaff]) : undefined,
+    },
+    {
+      label: "人均提问",
+      value: totals.askers === 0 ? "-" : (totals.questions / totals.askers).toFixed(1),
+      note: "问过的员工平均每人提问数",
+    },
+    {
+      label: "短时间重复提问",
+      value: percent(totals.repeatQuestions, totals.questions),
+      note: `${totals.repeatQuestions} 题是 10 分钟内又问了相近的问题`,
+      change: previous ? rateChange(totals, previous, (t) => [t.repeatQuestions, t.questions]) : undefined,
     },
     {
       label: "拒答率",

@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { http, HttpResponse } from "msw";
 import { createMemoryRouter, RouterProvider } from "react-router";
 import { streamTiming } from "@/mocks/conversations";
@@ -330,17 +330,109 @@ describe("提问", () => {
     expect(within(reply).queryByRole("list", { name: "来源" })).not.toBeInTheDocument();
   });
 
-  it("服务端报错时给出中文提示", async () => {
+  it("服务端报错时显示它给的原因，问题还在，点“重试”重新问一次（#145 A2）", async () => {
     server.use(
-      http.post("/api/conversations/:id/turns/stream", () =>
-        sseResponse([["error", { status: 503, detail: "对话模型服务暂时不可用" }]]),
+      http.post(
+        "/api/conversations/:id/turns/stream",
+        () => sseResponse([["error", { code: "ANSWERING_UNAVAILABLE", detail: "对话模型服务暂时不可用" }]]),
+        { once: true },
       ),
     );
     renderPage("/chat/901");
     await screen.findByRole("region", { name: "问答：临期商品怎么处理？" });
     ask("那报损呢？");
 
-    expect(await screen.findByText("暂时无法回答，请稍后重试。")).toBeInTheDocument();
+    expect(await screen.findByRole("alert")).toHaveTextContent("对话模型服务暂时不可用");
+    const failed = screen.getByRole("region", { name: "问答：那报损呢？" });
+    fireEvent.click(within(failed).getByRole("button", { name: "重试" }));
+
+    expect(await finishedTurn("问答：那报损呢？")).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("问题太长等被拒绝的请求显示服务端给的原因（#145 A2）", async () => {
+    server.use(
+      http.post("/api/conversations/:id/turns/stream", () =>
+        HttpResponse.json({ status: 400, code: "ANSWERING_INVALID", detail: "问题不能超过 500 字" }, { status: 400 }),
+      ),
+    );
+    renderPage("/chat/901");
+    await screen.findByRole("region", { name: "问答：临期商品怎么处理？" });
+    ask("那报损呢？");
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("问题不能超过 500 字");
+  });
+});
+
+describe("输入框（#145 A3、A4、A6）", () => {
+  it("Enter 发送、Shift+Enter 换行；输入法还在选字时按 Enter 不发送", async () => {
+    renderPage("/chat/901");
+    await screen.findByRole("region", { name: "问答：临期商品怎么处理？" });
+    const input = screen.getByLabelText("输入问题");
+
+    fireEvent.change(input, { target: { value: "那报损呢？" } });
+    fireEvent.keyDown(input, { key: "Enter", shiftKey: true });
+    fireEvent.keyDown(input, { key: "Enter", isComposing: true });
+    expect(screen.queryByRole("region", { name: "问答：那报损呢？" })).not.toBeInTheDocument();
+    expect(input).toHaveValue("那报损呢？");
+
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(await screen.findByRole("region", { name: "问答：那报损呢？" })).toBeInTheDocument();
+    expect(input).toHaveValue("");
+  });
+
+  it("最多 500 字，快到上限时提示还能输入多少字", async () => {
+    renderPage("/chat/901");
+    const input = await screen.findByLabelText("输入问题");
+    expect(input).toHaveAttribute("maxLength", "500");
+
+    fireEvent.change(input, { target: { value: "问".repeat(480) } });
+    expect(screen.getByRole("status")).toHaveTextContent("还能输入 20 字");
+  });
+
+  it("草稿按会话存在 sessionStorage：离开再回来（比如登录过期后）还在，发出去后清掉", async () => {
+    renderPage("/chat/901");
+    fireEvent.change(await screen.findByLabelText("输入问题"), { target: { value: "冷柜坏了找谁" } });
+    expect(sessionStorage.getItem("chat-draft:901")).toBe("冷柜坏了找谁");
+    cleanup();
+
+    renderPage("/chat/901");
+    const input = await screen.findByLabelText("输入问题");
+    expect(input).toHaveValue("冷柜坏了找谁");
+    await screen.findByRole("region", { name: "问答：临期商品怎么处理？" });
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(sessionStorage.getItem("chat-draft:901")).toBeNull();
+  });
+
+  it("往上翻看时不被拉回底部；自己发出新问题时回到底部", async () => {
+    // jsdom 没有 scrollIntoView，换成记录调用的假实现，测完删掉。
+    const scrolled = vi.fn();
+    Element.prototype.scrollIntoView = scrolled;
+    onTestFinished(() => {
+      delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView;
+    });
+    renderPage("/chat/901");
+    await screen.findByRole("region", { name: "问答：临期商品怎么处理？" });
+    const main = screen.getByRole("main");
+    Object.defineProperties(main, {
+      scrollHeight: { configurable: true, value: 2000 },
+      clientHeight: { configurable: true, value: 500 },
+      scrollTop: { configurable: true, value: 100, writable: true },
+    });
+    fireEvent.scroll(main);
+    scrolled.mockClear();
+
+    Object.assign(streamTiming, { deltaMillis: 20 });
+    ask("那报损呢？");
+    await screen.findByRole("region", { name: "问答：那报损呢？" });
+    const afterAsk = scrolled.mock.calls.length;
+    expect(afterAsk).toBeGreaterThan(0);
+
+    main.scrollTop = 100;
+    fireEvent.scroll(main);
+    scrolled.mockClear();
+    await finishedTurn("问答：那报损呢？");
+    expect(scrolled).not.toHaveBeenCalled();
   });
 });
 

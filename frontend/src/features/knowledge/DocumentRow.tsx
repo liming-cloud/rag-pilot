@@ -4,8 +4,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { TableCell, TableRow } from "@/components/ui/table";
 import { Can, PERMISSIONS, useCan } from "@/lib/permissions";
-import { type KnowledgeDocument, VALIDITY } from "./api";
 import { rangeParts } from "./ValidityDialog";
+import { type KnowledgeDocument, VALIDITY } from "./api";
 
 /** 处理状态的显示文字和标签样式。 */
 const STATUS = {
@@ -23,16 +23,31 @@ export function DocumentRow({
   onValidity,
   onReplace,
   onDelete,
+  onReprocess,
 }: {
   document: KnowledgeDocument;
   onValidity: () => void;
   onReplace: () => void;
   onDelete: () => Promise<void>;
+  onReprocess: () => Promise<void>;
 }) {
   const canUpdate = useCan(PERMISSIONS.DOC_UPDATE);
   const [confirming, setConfirming] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [reprocessing, setReprocessing] = useState(false);
   const status = STATUS[document.status];
+
+  async function reprocess() {
+    setReprocessing(true);
+    setDeleteError(null);
+    try {
+      await onReprocess();
+    } catch (e) {
+      setDeleteError(e instanceof Error ? e.message : "重新处理失败");
+    } finally {
+      setReprocessing(false);
+    }
+  }
 
   async function confirmDelete() {
     try {
@@ -53,6 +68,7 @@ export function DocumentRow({
             <span className="text-xs text-muted-foreground">替换《{document.replacesFilename}》</span>
           )}
           {document.error && <span className="text-xs text-destructive">{document.error}</span>}
+          {document.status === "FAILED" && <FailureHint document={document} />}
           {document.status === "FAILED" && document.replacesFilename && (
             <span className="text-xs text-muted-foreground">
               新版本解析失败，旧版本《{document.replacesFilename}》已保留。
@@ -105,6 +121,19 @@ export function DocumentRow({
           </div>
         ) : (
           <div className="flex flex-wrap items-center justify-end gap-1">
+            {document.status === "FAILED" && document.reprocessable && (
+              <Can permission={PERMISSIONS.DOC_UPLOAD}>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  aria-label={`重新处理 ${document.filename}`}
+                  disabled={reprocessing}
+                  onClick={() => void reprocess()}
+                >
+                  重新处理
+                </Button>
+              </Can>
+            )}
             <Can permission={PERMISSIONS.DOC_REPLACE}>
               <Button size="sm" variant="ghost" aria-label={`上传新版本 ${document.filename}`} onClick={onReplace}>
                 上传新版本
@@ -124,6 +153,24 @@ export function DocumentRow({
         )}
       </TableCell>
     </TableRow>
+  );
+}
+
+/**
+ * 失败了怎么办（#145 A9）：模型暂时不可用的可以重新处理，第一次失败 10 分钟后自动重试一次；
+ * 文件本身的问题要改好文件重新上传，同一份文件会替换这条失败记录。
+ */
+function FailureHint({ document }: { document: KnowledgeDocument }) {
+  if (!document.reprocessable) {
+    return <span className="text-xs text-muted-foreground">改好文件后重新上传，会替换这条失败记录。</span>;
+  }
+  const at = document.retryAt
+    ? new Date(document.retryAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })
+    : null;
+  return (
+    <span className="text-xs text-muted-foreground">
+      {at ? `模型服务恢复后就能入库，${at} 会自动重试一次，也可以现在重新处理。` : "模型服务恢复后点“重新处理”。"}
+    </span>
   );
 }
 

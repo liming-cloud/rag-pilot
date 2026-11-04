@@ -10,8 +10,8 @@ import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 import { Pagination } from "@/components/ui/pagination";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ErrorMessage } from "@/lib/errors";
-import { fetchGaps, GAP_RANGES, type GapGroup, gapKeys, type GapRange, type GapReport } from "./api";
 import { GapDialog } from "./GapDialog";
+import { fetchGaps, GAP_RANGES, type GapGroup, gapKeys, type GapRange, type GapReport } from "./api";
 
 const PAGE_SIZE = 20;
 

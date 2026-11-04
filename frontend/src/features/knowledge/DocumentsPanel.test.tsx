@@ -40,10 +40,28 @@ describe("知识库的文档", () => {
 
     expect(within(await row("临期与报损管理.md")).getByText("可用")).toBeInTheDocument();
     expect(within(await row("旧版陈列手册.txt")).getByText(/不是 UTF-8 编码/)).toBeInTheDocument();
-    expect(screen.getByText("共 36 条")).toBeInTheDocument();
+    expect(screen.getByText("共 37 条")).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText("状态"), { target: { value: "FAILED" } });
-    expect(await screen.findByText("共 1 条")).toBeInTheDocument();
+    expect(await screen.findByText("共 2 条")).toBeInTheDocument();
+  });
+
+  it("处理失败的文档（#145 A9）：模型暂时不可用的可以重新处理、说明何时自动重试；文件本身有问题的提示改好后重传", async () => {
+    renderPanel();
+
+    const broken = await row("旧版陈列手册.txt");
+    expect(within(broken).getByText("改好文件后重新上传，会替换这条失败记录。")).toBeInTheDocument();
+    expect(within(broken).queryByRole("button", { name: /重新处理/ })).not.toBeInTheDocument();
+
+    const modelDown = await row("夜班交接手册.docx");
+    expect(within(modelDown).getByText(/会自动重试一次/)).toBeInTheDocument();
+    fireEvent.click(within(modelDown).getByRole("button", { name: "重新处理 夜班交接手册.docx" }));
+
+    // 假接口在下一次读列表时就处理完，这里只看最后的结果。
+    await vi.waitFor(async () => expect(within(await row("夜班交接手册.docx")).getByText("可用")).toBeInTheDocument(), {
+      timeout: 5000,
+    });
+    expect(within(await row("夜班交接手册.docx")).queryByRole("button", { name: /重新处理/ })).not.toBeInTheDocument();
   });
 
   it("上传后先显示解析中，后台处理完自动变成可用", async () => {

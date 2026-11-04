@@ -140,6 +140,9 @@ export const settingHandlers = [
       placeholder: valueOf<string>("CHAT_PLACEHOLDER"),
       emptyHint: valueOf<string>("CHAT_EMPTY_HINT"),
       suggestedQuestions: valueOf<string[]>("SUGGESTED_QUESTIONS"),
+      // 原型（#145 A8）：答不上来时的下一步，接接口后由行业包给出。
+      refusalTips: ["说出具体的商品名或场景，比如“鲜食”“冷柜”。", "把一个问题拆成几个小问题分开问。"],
+      refusalContact: "还是找不到的话，请联系店长确认。",
     }),
   ),
   http.get(

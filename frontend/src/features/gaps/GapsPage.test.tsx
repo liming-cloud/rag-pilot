@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { http, HttpResponse } from "msw";
+import { MemoryRouter } from "react-router";
 import { signInAs } from "@/mocks/identity";
 import { server } from "@/mocks/server";
 import { GapsPage } from "./GapsPage";
@@ -9,7 +10,9 @@ function renderPage() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
   render(
     <QueryClientProvider client={client}>
-      <GapsPage />
+      <MemoryRouter>
+        <GapsPage />
+      </MemoryRouter>
     </QueryClientProvider>,
   );
 }
@@ -58,6 +61,9 @@ describe("知识缺口页", () => {
     expect(within(records).getAllByText("留言：给的电话是旧的").length).toBeGreaterThan(0);
     expect(within(records).getAllByText("检索：门店运营知识库").length).toBeGreaterThan(0);
     expect(dialog).toHaveTextContent("差评时引用了 设备维护手册.md");
+    // 能上传资料的人可以直接打开检索过的库去补资料（#145 A10）。
+    const upload = await within(dialog).findByRole("navigation", { name: "去补资料" });
+    expect(within(upload).getByRole("link", { name: "门店运营知识库" })).toHaveAttribute("href", "/admin/knowledge/1");
 
     fireEvent.click(await within(dialog).findByRole("button", { name: "用代表问题重新回答" }));
     expect(await within(dialog).findByText(/现在的回答/)).toBeInTheDocument();

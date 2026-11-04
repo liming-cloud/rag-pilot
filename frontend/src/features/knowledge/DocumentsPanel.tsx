@@ -12,20 +12,21 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { ErrorMessage } from "@/lib/errors";
 import { Can, PERMISSIONS } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
+import { DocumentRow } from "./DocumentRow";
+import { UploadBatch } from "./UploadBatch";
+import { ReplaceDialog, ValidityDialog } from "./ValidityDialog";
 import {
   deleteDocument,
   type DocumentFilter,
   fetchDocuments,
   type KnowledgeDocument,
   knowledgeKeys,
+  reprocessDocument,
   uploadDocument,
   type Validity,
   type ValidityRange,
 } from "./api";
 import { ACCEPT, type BatchItem, MAX_BATCH, prepare, run } from "./batchUpload";
-import { UploadBatch } from "./UploadBatch";
-import { ReplaceDialog, ValidityDialog } from "./ValidityDialog";
-import { DocumentRow } from "./DocumentRow";
 
 const PAGE_SIZE = 20;
 
@@ -238,6 +239,10 @@ export function DocumentsPanel({ knowledgeBaseId }: { knowledgeBaseId: number })
                 onReplace={() => setDialog({ kind: "replace", document })}
                 onDelete={async () => {
                   await deleteDocument(knowledgeBaseId, document.id);
+                  await refresh();
+                }}
+                onReprocess={async () => {
+                  await reprocessDocument(knowledgeBaseId, document.id);
                   await refresh();
                 }}
               />

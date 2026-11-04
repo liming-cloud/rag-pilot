@@ -5,9 +5,9 @@ import { Button } from "@/components/ui/button";
 import { ErrorMessage } from "@/lib/errors";
 import { PERMISSIONS, useCan } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
-import { fetchKnowledgeBase, knowledgeKeys } from "./api";
 import { DocumentsPanel } from "./DocumentsPanel";
 import { GrantsPanel } from "./GrantsPanel";
+import { fetchKnowledgeBase, knowledgeKeys } from "./api";
 
 /**
  * 知识库详情（D-039）：标题下分“文档”“授权”两个标签，标签记在地址里，刷新后不丢。没有授权权限时不显示“授权”。

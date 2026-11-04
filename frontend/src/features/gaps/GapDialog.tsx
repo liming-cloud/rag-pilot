@@ -1,14 +1,15 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
+import { Link } from "react-router";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { answerKeys } from "@/features/answers/api";
 import { ErrorMessage } from "@/lib/errors";
 import { Can, PERMISSIONS } from "@/lib/permissions";
-import { answerKeys } from "@/features/answers/api";
 import { type GapGroup, gapKeys, recheckGap, resolveGap } from "./api";
 
 /**
@@ -44,6 +45,22 @@ export function GapDialog({ group, onDone }: { group: GapGroup; onDone: () => vo
           {group.citedDocuments.length > 0 && ` · 差评时引用了 ${group.citedDocuments.join("、")}`}
         </DialogDescription>
       </DialogHeader>
+      {group.knowledgeBaseRefs.length > 0 && (
+        <Can permission={PERMISSIONS.DOC_UPLOAD}>
+          <nav aria-label="去补资料" className="flex flex-wrap items-center gap-2 text-sm">
+            <span className="text-muted-foreground">去补资料：</span>
+            {group.knowledgeBaseRefs.map((knowledgeBase) => (
+              <Link
+                key={knowledgeBase.id}
+                to={`/admin/knowledge/${knowledgeBase.id}`}
+                className="text-primary underline-offset-4 hover:underline"
+              >
+                {knowledgeBase.name}
+              </Link>
+            ))}
+          </nav>
+        </Can>
+      )}
       <div className="max-h-72 overflow-y-auto rounded-lg border">
         <Table aria-label="这一类的记录">
           <TableHeader className="sticky top-0 bg-card">

@@ -6,13 +6,14 @@ import { getToken } from "@/lib/auth";
 import { server } from "@/mocks/server";
 import { LoginPage } from "./LoginPage";
 
-function renderLogin() {
+function renderLogin(path = "/login") {
   const router = createMemoryRouter(
     [
       { path: "/login", element: <LoginPage /> },
       { path: "/chat", element: <p>问答页</p> },
+      { path: "/admin/answers", element: <p>回答记录</p> },
     ],
-    { initialEntries: ["/login"] },
+    { initialEntries: [path] },
   );
   render(
     <QueryClientProvider client={new QueryClient()}>
@@ -54,6 +55,18 @@ describe("登录页", () => {
 
     expect(await screen.findByRole("heading", { name: "登录明答" })).toBeInTheDocument();
     expect(screen.getByText("账号由管理员开通；忘记密码请联系管理员。")).toBeInTheDocument();
+    submit("staff01", "staff-password");
+    expect(await screen.findByText("问答页")).toBeInTheDocument();
+  });
+
+  it("登录过期后重新登录，回到原来的页面；带的是外部地址时进入问答页（#145 A6）", async () => {
+    renderLogin("/login?from=%2Fadmin%2Fanswers");
+    submit("staff01", "staff-password");
+    expect(await screen.findByText("回答记录")).toBeInTheDocument();
+  });
+
+  it("带的是外部地址时不跳过去，进入问答页（#145 A6）", async () => {
+    renderLogin("/login?from=https%3A%2F%2Fevil.example");
     submit("staff01", "staff-password");
     expect(await screen.findByText("问答页")).toBeInTheDocument();
   });

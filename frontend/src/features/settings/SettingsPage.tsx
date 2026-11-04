@@ -2,9 +2,9 @@ import { useQuery } from "@tanstack/react-query";
 import { useSearchParams } from "react-router";
 import { ErrorMessage } from "@/lib/errors";
 import { cn } from "@/lib/utils";
-import { fetchSettings, settingsKeys } from "./api";
-import { PackTab } from "./PackTab";
 import { ItemsTab } from "./ItemsTab";
+import { PackTab } from "./PackTab";
+import { fetchSettings, settingsKeys } from "./api";
 
 const TABS = [
   { key: "brand", label: "品牌与登录页" },

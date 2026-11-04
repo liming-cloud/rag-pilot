@@ -1,12 +1,14 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowUp, Loader2, Pencil, RotateCcw, Square, X } from "lucide-react";
-import { type FormEvent, type ReactNode, useEffect, useRef, useState } from "react";
+import { Pencil, RotateCcw, X } from "lucide-react";
+import { type UIEvent, useEffect, useRef, useState } from "react";
 import { useParams } from "react-router";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { fetchKnowledgeBases, knowledgeKeys } from "@/features/knowledge/api";
 import { ErrorMessage } from "@/lib/errors";
+import { ConversationSidebar } from "./ConversationSidebar";
+import { KnowledgeBasePicker } from "./KnowledgeBasePicker";
+import { QuestionComposer } from "./QuestionComposer";
+import { TurnView, LiveTurnView } from "./Turns";
 import {
   chatKeys,
   type ConversationKnowledgeBase,
@@ -16,10 +18,7 @@ import {
   type Turn,
   updateConversation,
 } from "./api";
-import { AnswerCard } from "./AnswerCard";
-import { ConversationSidebar } from "./ConversationSidebar";
-import { KnowledgeBasePicker } from "./KnowledgeBasePicker";
-import { type Live, useConversationAsk } from "./useConversationAsk";
+import { useConversationAsk } from "./useConversationAsk";
 
 /**
  * 员工端问答页（PC）：左侧会话列表，右侧对话。参考对话 agent 的做法（D-036）：会话存在服务端、可以持续追问；
@@ -48,7 +47,7 @@ function ConversationView({ conversationId }: { conversationId: number | null })
     queryFn: () => fetchConversation(conversationId!),
     enabled: conversationId !== null,
   });
-  const [draft, setDraft] = useState("");
+  const [draft, setDraft] = useSessionDraft(conversationId);
   /** 正在修改的那一轮；记下所属会话，切换会话后不带过去。 */
   const [editing, setEditing] = useState<{ conversationId: number | null; turnId: number } | null>(null);
   /** 新对话还没建会话时的知识库选择；null 表示默认全选。 */
@@ -66,15 +65,28 @@ function ConversationView({ conversationId }: { conversationId: number | null })
         .filter((knowledgeBase) => knowledgeBase.accessible)
         .map((knowledgeBase) => knowledgeBase.id)
     : (newSelection ?? accessible.map((knowledgeBase) => knowledgeBase.id));
-  const { live: visibleLive, asking, ask: askInThis, stop } = useConversationAsk(conversationId, selected, options);
+  const {
+    live: visibleLive,
+    asking,
+    startError,
+    ask: askInThis,
+    stop,
+  } = useConversationAsk(conversationId, selected, options);
   const turns = (conversation.data?.turns ?? []).filter((turn) => turn.id !== visibleLive?.replacesTurnId);
   const lastTurn = turns.at(-1);
   const endRef = useRef<HTMLDivElement>(null);
+  /** 员工是不是停在最底下；往上翻看时不把他拉回去（#145 A4）。 */
+  const atBottom = useRef(true);
 
-  // 像对话 agent 一样跟到最新的内容：切换会话、新的一轮、处理阶段变化、文字流出时滚到末尾。
+  // 跟到最新的内容：切换会话、新的一轮、处理阶段变化、文字流出时，员工本来在底部才滚到末尾。
   useEffect(() => {
-    endRef.current?.scrollIntoView?.({ block: "end" });
+    if (atBottom.current) endRef.current?.scrollIntoView?.({ block: "end" });
   }, [conversationId, turns.length, visibleLive?.status, visibleLive?.text]);
+
+  function followScroll(event: UIEvent<HTMLElement>) {
+    const element = event.currentTarget;
+    atBottom.current = element.scrollHeight - element.scrollTop - element.clientHeight < 40;
+  }
 
   async function changeSelection(ids: number[]) {
     if (conversationId === null) {
@@ -87,14 +99,14 @@ function ConversationView({ conversationId }: { conversationId: number | null })
     void queryClient.invalidateQueries({ queryKey: chatKeys.conversations });
   }
 
-  /** 提问之后不再提示“改选的知识库从下一个问题起生效”。 */
+  /** 提问之后不再提示“改选的知识库从下一个问题起生效”；自己发的问题总要看到，滚回底部。 */
   function ask(question: string, replacesTurnId?: number) {
     setSelectionChangedIn(null);
+    atBottom.current = true;
     return askInThis(question, replacesTurnId);
   }
 
-  function submit(event: FormEvent) {
-    event.preventDefault();
+  function submit() {
     const question = draft.trim();
     if (!question || asking) return;
     setDraft("");
@@ -123,7 +135,7 @@ function ConversationView({ conversationId }: { conversationId: number | null })
           />
         </div>
       </header>
-      <main className="flex-1 overflow-y-auto px-6 py-4">
+      <main onScroll={followScroll} className="flex-1 overflow-y-auto px-6 py-4">
         <div className="mx-auto flex max-w-3xl flex-col gap-6">
           {conversation.isError && <ErrorMessage error="会话不存在或已删除。" />}
           {empty && !conversation.isError && (
@@ -149,6 +161,7 @@ function ConversationView({ conversationId }: { conversationId: number | null })
           )}
           {turns.map((turn) => (
             <TurnView
+              refusalHelp={{ tips: texts.refusalTips, contact: texts.refusalContact }}
               key={turn.id}
               turn={turn}
               actions={
@@ -167,7 +180,9 @@ function ConversationView({ conversationId }: { conversationId: number | null })
               }
             />
           ))}
-          {visibleLive && <LiveTurnView live={visibleLive} />}
+          {visibleLive && (
+            <LiveTurnView live={visibleLive} onRetry={() => void ask(visibleLive.question, visibleLive.replacesTurnId)} />
+          )}
           <div ref={endRef} />
         </div>
       </main>
@@ -190,36 +205,15 @@ function ConversationView({ conversationId }: { conversationId: number | null })
               </Button>
             </div>
           )}
-          <form
+          <ErrorMessage error={startError} />
+          <QuestionComposer
+            value={draft}
+            onChange={setDraft}
             onSubmit={submit}
-            className="flex items-center gap-2 rounded-xl border border-input bg-card py-1 pr-1 pl-4"
-          >
-            <Label htmlFor="question" className="sr-only">
-              输入问题
-            </Label>
-            <Input
-              id="question"
-              value={draft}
-              onChange={(event) => setDraft(event.target.value)}
-              className="h-11 flex-1 rounded-none border-0 bg-transparent px-0 text-base focus:ring-0"
-              placeholder={turns.length > 0 ? "接着问…" : texts.placeholder}
-            />
-            {asking ? (
-              <Button
-                type="button"
-                size="icon"
-                className="rounded-lg"
-                aria-label="停止生成"
-                onClick={() => void stop()}
-              >
-                <Square aria-hidden="true" className="size-4 fill-current" />
-              </Button>
-            ) : (
-              <Button type="submit" size="icon" className="rounded-lg" aria-label="发送" disabled={!draft.trim()}>
-                <ArrowUp aria-hidden="true" className="size-5" />
-              </Button>
-            )}
-          </form>
+            asking={asking}
+            onStop={() => void stop()}
+            placeholder={turns.length > 0 ? "接着问…" : texts.placeholder}
+          />
         </div>
       </footer>
     </div>
@@ -237,49 +231,20 @@ function mergeOptions(
   return [...chosen, ...others];
 }
 
-function Question({ text }: { text: string }) {
-  return <p className="max-w-[85%] self-end rounded-lg bg-accent px-3 py-2 text-accent-foreground">{text}</p>;
-}
-
-function TurnView({ turn, actions }: { turn: Turn; actions: ReactNode }) {
-  return (
-    <section aria-label={`问答：${turn.question}`} className="flex flex-col gap-2">
-      <Question text={turn.question} />
-      {turn.status === "FAILED" && <ErrorMessage error="暂时无法回答，请稍后重试。" />}
-      {turn.status === "STOPPED" && !turn.answer && (
-        <p className="text-sm text-muted-foreground">已停止生成，没有留下可核对的内容。</p>
-      )}
-      {turn.answer && <AnswerCard answer={turn.answer} />}
-      {(turn.status === "STOPPED" && turn.answer) || actions ? (
-        <div className="flex items-center gap-1">
-          {turn.status === "STOPPED" && turn.answer && (
-            <span className="text-xs text-muted-foreground">已停止生成</span>
-          )}
-          {actions}
-        </div>
-      ) : null}
-    </section>
-  );
-}
-
-function LiveTurnView({ live }: { live: Live }) {
-  return (
-    <section aria-label={`问答：${live.question}`} className="flex flex-col gap-2">
-      <Question text={live.question} />
-      {live.failed ? (
-        <p role="alert" className="text-sm text-destructive">
-          暂时无法回答，请稍后重试。
-        </p>
-      ) : live.text ? (
-        <p aria-live="polite" className="rounded-lg border bg-card p-4 leading-relaxed">
-          {live.text}
-        </p>
-      ) : (
-        <p role="status" className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Loader2 aria-hidden="true" className="size-4 animate-spin" />
-          {live.status}
-        </p>
-      )}
-    </section>
-  );
+/** 输入框的草稿存在 sessionStorage，按会话分开：登录过期去登录、再回来时还在（#145 A6）。关掉标签页就清掉。 */
+function useSessionDraft(conversationId: number | null) {
+  const key = `chat-draft:${conversationId ?? "new"}`;
+  const [draft, setDraft] = useState(() => sessionStorage.getItem(key) ?? "");
+  const [shownFor, setShownFor] = useState(key);
+  if (shownFor !== key) {
+    // 切换会话时换成那个会话的草稿（渲染期间调整状态，React 推荐的写法，不用 effect）。
+    setShownFor(key);
+    setDraft(sessionStorage.getItem(key) ?? "");
+  }
+  function update(value: string) {
+    setDraft(value);
+    if (value) sessionStorage.setItem(key, value);
+    else sessionStorage.removeItem(key);
+  }
+  return [draft, update] as const;
 }

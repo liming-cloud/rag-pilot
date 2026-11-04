@@ -18,6 +18,7 @@ export const ADMIN_MENUS = [
   { to: "/admin/answers", label: "回答记录", permission: PERMISSIONS.ANSWER_VIEW, group: "知识运营" },
   { to: "/admin/users", label: "用户", permission: PERMISSIONS.USER_VIEW, group: "账号与权限" },
   { to: "/admin/roles", label: "角色与权限", permission: PERMISSIONS.ROLE_VIEW, group: "账号与权限" },
+  { to: "/admin/audit", label: "审计记录", permission: PERMISSIONS.AUDIT_VIEW, group: "账号与权限" },
   { to: "/admin/models", label: "模型管理", permission: PERMISSIONS.MODEL_VIEW, group: "系统配置" },
   { to: "/admin/settings", label: "系统设置", permission: PERMISSIONS.SETTING_VIEW, group: "系统配置" },
 ] as const;

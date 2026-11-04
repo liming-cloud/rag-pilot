@@ -89,6 +89,21 @@
       },
       "zone" : "string"
     },
+    "GET /api/audit-logs" : {
+      "items" : [ {
+        "action" : "string",
+        "actorId" : "number",
+        "actorName" : "string",
+        "detail" : "string",
+        "id" : "number",
+        "occurredAt" : "string",
+        "targetId" : "string",
+        "targetType" : "string"
+      } ],
+      "page" : "number",
+      "size" : "number",
+      "total" : "number"
+    },
     "GET /api/auth/branding" : {
       "loginHint" : "string",
       "name" : "string",

@@ -15,6 +15,8 @@ import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ErrorMessage } from "@/lib/errors";
 import { Can, PERMISSIONS } from "@/lib/permissions";
+import { SourceBadge } from "./ModelLabels";
+import { ENV } from "./UsagesTab";
 import {
   createProvider,
   deleteProvider,
@@ -24,8 +26,6 @@ import {
   updateProvider,
   USAGE_LABELS,
 } from "./api";
-import { SourceBadge } from "./ModelLabels";
-import { ENV } from "./UsagesTab";
 
 export function ProvidersTab({ settings }: { settings: ModelSettings }) {
   const queryClient = useQueryClient();

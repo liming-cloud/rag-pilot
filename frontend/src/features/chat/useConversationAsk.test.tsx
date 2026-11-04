@@ -82,16 +82,44 @@ describe("在会话里提问（#145 useConversationAsk）", () => {
     expect(current().asking).toBe(false);
   });
 
-  it("停止生成：拿到这一轮的 id 后发停止请求；还没拿到 id 时什么也不发", async () => {
+  it("还没拿到轮次 id 就停止：断开请求，不再显示生成中，稍后重新读会话（#145 A5）", async () => {
+    // 假接口一直不回：不断开的话提问永远结束不了，这个测试会超时。
+    server.use(http.post("/api/conversations/:id/turns/stream", () => new Promise<Response>(() => {})));
+    const { current } = setup(901);
+
+    let done: Promise<void> | undefined;
+    act(() => {
+      done = current().ask("冷柜温度要多少？");
+    });
+    expect(current().asking).toBe(true);
+    await act(() => current().stop());
+    await act(() => done!);
+
+    expect(current().live).toBeNull();
+    expect(current().asking).toBe(false);
+  });
+
+  it("新建会话失败时给出原因，不显示生成中（#145 A2）", async () => {
+    server.use(
+      http.post("/api/conversations", () =>
+        HttpResponse.json({ status: 400, code: "ANSWERING_INVALID", detail: "没有可以提问的知识库" }, { status: 400 }),
+      ),
+    );
+    const { current } = setup(null);
+
+    await act(() => current().ask("交班要做什么？"));
+
+    expect(current().startError).toBe("没有可以提问的知识库");
+    expect(current().live).toBeNull();
+  });
+
+  it("停止生成：拿到这一轮的 id 后发停止请求", async () => {
     Object.assign(streamTiming, { deltaMillis: 50 });
     const stops: string[] = [];
     server.events.on("request:start", ({ request }) => {
       if (request.method === "POST" && request.url.endsWith("/stop")) stops.push(new URL(request.url).pathname);
     });
     const { current } = setup(901);
-
-    await act(() => current().stop());
-    expect(stops).toEqual([]);
 
     let done: Promise<void> | undefined;
     act(() => {

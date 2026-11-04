@@ -11,6 +11,10 @@ export type Totals = {
   disliked: number;
   /** 差评和答不上来、还没标记已处理的记录数。 */
   openReviews: number;
+  /** 能使用问答的在职员工数（启用的、有“使用问答”权限的账号），算提问人数占比用（#145 A11）。 */
+  activeStaff: number;
+  /** 短时间重复提问：同一员工 10 分钟内又问了意思相近的问题（问题向量相似度达到归类门槛），说明上一次没得到想要的答案（#145 A11）。 */
+  repeatQuestions: number;
 };
 
 /** 与后端 answering 模块的 UsageStats 一致。日期按部署配置的统计时区划分（D-045）。 */

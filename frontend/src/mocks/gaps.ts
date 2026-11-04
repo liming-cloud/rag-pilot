@@ -89,6 +89,9 @@ export function resetGaps() {
 }
 resetGaps();
 
+/** 示例知识库的 id（见 handlers.ts 的 sampleKnowledgeBases），缺口详情里的“去补资料”用。 */
+const KNOWLEDGE_BASE_IDS: Record<string, number> = { 门店运营知识库: 1, 商品知识库: 2, "区域 1 门店规范": 3 };
+
 /** 去重，出现多的在前（与后端一致）。 */
 function byFrequency(names: string[]) {
   const counts = new Map<string, number>();
@@ -127,6 +130,10 @@ function report(days: number, status: string): GapReport {
         phrasings: counts.size,
         lastAskedAt: sorted[0]!.createdAt,
         knowledgeBases: byFrequency(list.flatMap((record) => record.knowledgeBases)),
+        // 原型（#145 A10）：接接口后由后端给出。
+        knowledgeBaseRefs: byFrequency(list.flatMap((record) => record.knowledgeBases))
+          .filter((name) => name in KNOWLEDGE_BASE_IDS)
+          .map((name) => ({ id: KNOWLEDGE_BASE_IDS[name]!, name })),
         citedDocuments: [...new Set(list.flatMap((record) => record.citedDocuments))],
         records: sorted.map(withoutTopic),
       };

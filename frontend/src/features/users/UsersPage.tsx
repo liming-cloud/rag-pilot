@@ -11,10 +11,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { fetchRoles, roleKeys } from "@/features/roles/api";
 import { ErrorMessage } from "@/lib/errors";
 import { Can, PERMISSIONS } from "@/lib/permissions";
-import { type Account, fetchUsers, setUserEnabled, unlockUser, type UserFilter, userKeys } from "./api";
-import { ImportDialog } from "./ImportDialog";
 import { CreateDialog, RolesDialog, PasswordDialog } from "./AccountDialogs";
 import { AccountRow } from "./AccountRow";
+import { ImportDialog } from "./ImportDialog";
+import { type Account, fetchUsers, setUserEnabled, unlockUser, type UserFilter, userKeys } from "./api";
 
 const PAGE_SIZE = 20;
 

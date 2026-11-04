@@ -1,16 +1,21 @@
 import type { ComponentType, ReactNode } from "react";
-import { createBrowserRouter, Navigate, type RouteObject } from "react-router";
+import { createBrowserRouter, Navigate, type RouteObject, useLocation } from "react-router";
 import { ChangePasswordPage } from "@/features/auth/ChangePasswordPage";
 import { LoginPage } from "@/features/auth/LoginPage";
 import { ChatPage } from "@/features/chat/ChatPage";
-import { getToken } from "@/lib/auth";
+import { getToken, loginPath } from "@/lib/auth";
 import { type Permission, PERMISSIONS } from "@/lib/permissions";
 import { AdminLayout } from "./AdminLayout";
 import { AdminHome, AppShell, RequirePasswordChanged, RequirePermission } from "./AppShell";
 
 /** 没有令牌时先去登录；令牌过期由 authFetch 收到 401 时处理。管理员重置过密码时先去改密码。 */
 function RequireAuth({ children }: { children: ReactNode }) {
-  return getToken() ? <RequirePasswordChanged>{children}</RequirePasswordChanged> : <Navigate to="/login" replace />;
+  const location = useLocation();
+  return getToken() ? (
+    <RequirePasswordChanged>{children}</RequirePasswordChanged>
+  ) : (
+    <Navigate to={loginPath(location.pathname + location.search)} replace />
+  );
 }
 
 const guarded = (permission: Permission, page: ReactNode) => (
@@ -72,6 +77,10 @@ export const routes: RouteObject[] = [
       {
         path: "roles",
         ...adminPage(PERMISSIONS.ROLE_VIEW, () => import("@/features/roles/RolesPage").then((m) => m.RolesPage)),
+      },
+      {
+        path: "audit",
+        ...adminPage(PERMISSIONS.AUDIT_VIEW, () => import("@/features/audit/AuditPage").then((m) => m.AuditPage)),
       },
       {
         path: "gaps",

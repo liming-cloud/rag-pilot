@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/dialog";
 import { ErrorMessage } from "@/lib/errors";
 import { Can, PERMISSIONS } from "@/lib/permissions";
+import { useRefreshAfterChange, EditDialog } from "./EditSettingDialog";
 import {
   restoreSetting,
   SETTING_META,
@@ -20,7 +21,6 @@ import {
   SOURCE_LABELS,
   type SystemSettings,
 } from "./api";
-import { useRefreshAfterChange, EditDialog } from "./EditSettingDialog";
 
 export function SourceBadge({ source }: { source: SettingSource }) {
   return <Badge variant={source === "DATABASE" ? "default" : "outline"}>{SOURCE_LABELS[source]}</Badge>;

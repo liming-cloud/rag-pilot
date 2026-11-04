@@ -191,6 +191,14 @@ export async function fetchExpirySummary(): Promise<ExpirySummary> {
 }
 
 /** 删除文档及其分块，之后不会再被检索到。 */
+/** 重新处理因模型暂时不可用而失败的文档（doc:upload，#145 A9），返回回到“解析中”的文档。 */
+export async function reprocessDocument(knowledgeBaseId: number, documentId: number): Promise<KnowledgeDocument> {
+  const response = await authFetch(`/api/knowledge-bases/${knowledgeBaseId}/documents/${documentId}/reprocess`, {
+    method: "POST",
+  });
+  return json(response, "重新处理失败");
+}
+
 export async function deleteDocument(knowledgeBaseId: number, documentId: number): Promise<void> {
   const response = await authFetch(`/api/knowledge-bases/${knowledgeBaseId}/documents/${documentId}`, {
     method: "DELETE",
