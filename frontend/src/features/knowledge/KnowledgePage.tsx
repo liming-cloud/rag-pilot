@@ -17,7 +17,7 @@ import { Label } from "@/components/ui/label";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Pagination } from "@/components/ui/pagination";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Can } from "@/lib/permissions";
+import { Can, PERMISSIONS } from "@/lib/permissions";
 import { createKnowledgeBase, fetchKnowledgeBasePage } from "./api";
 
 const PAGE_SIZE = 20;
@@ -51,7 +51,7 @@ export function KnowledgePage() {
     <main className="mx-auto flex max-w-6xl flex-col gap-4 p-6 md:p-8">
       <div className="flex items-center justify-between">
         <h1 className="font-serif text-2xl font-semibold">知识库</h1>
-        <Can permission="kb:create">
+        <Can permission={PERMISSIONS.KB_CREATE}>
           <Button size="sm" onClick={() => setCreating(true)}>
             <Plus aria-hidden="true" className="size-4" />
             新建知识库

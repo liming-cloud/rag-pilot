@@ -5,21 +5,21 @@ import { Link, Navigate, Outlet, useLocation, useNavigate } from "react-router";
 import { Button } from "@/components/ui/button";
 import { logout } from "@/features/auth/api";
 import { useBranding } from "@/lib/branding";
-import { type Me, useMe } from "@/lib/permissions";
+import { type Me, type Permission, PERMISSIONS, useMe } from "@/lib/permissions";
 
 /**
  * 管理端的菜单，按菜单权限显示（D-038）。顺序就是左侧菜单的顺序：运营概览是管理端首页、不分组，其余按分组排列；
  * 打开没有权限的页面或管理端首页时，跳到第一个有权限的菜单。
  */
 export const ADMIN_MENUS = [
-  { to: "/admin/stats", label: "运营概览", permission: "stats:view", group: null },
-  { to: "/admin/knowledge", label: "知识库", permission: "kb:view", group: "知识运营" },
-  { to: "/admin/gaps", label: "知识缺口", permission: "answer:view", group: "知识运营" },
-  { to: "/admin/answers", label: "回答记录", permission: "answer:view", group: "知识运营" },
-  { to: "/admin/users", label: "用户", permission: "user:view", group: "账号与权限" },
-  { to: "/admin/roles", label: "角色与权限", permission: "role:view", group: "账号与权限" },
-  { to: "/admin/models", label: "模型管理", permission: "model:view", group: "系统配置" },
-  { to: "/admin/settings", label: "系统设置", permission: "setting:view", group: "系统配置" },
+  { to: "/admin/stats", label: "运营概览", permission: PERMISSIONS.STATS_VIEW, group: null },
+  { to: "/admin/knowledge", label: "知识库", permission: PERMISSIONS.KB_VIEW, group: "知识运营" },
+  { to: "/admin/gaps", label: "知识缺口", permission: PERMISSIONS.ANSWER_VIEW, group: "知识运营" },
+  { to: "/admin/answers", label: "回答记录", permission: PERMISSIONS.ANSWER_VIEW, group: "知识运营" },
+  { to: "/admin/users", label: "用户", permission: PERMISSIONS.USER_VIEW, group: "账号与权限" },
+  { to: "/admin/roles", label: "角色与权限", permission: PERMISSIONS.ROLE_VIEW, group: "账号与权限" },
+  { to: "/admin/models", label: "模型管理", permission: PERMISSIONS.MODEL_VIEW, group: "系统配置" },
+  { to: "/admin/settings", label: "系统设置", permission: PERMISSIONS.SETTING_VIEW, group: "系统配置" },
 ] as const;
 
 export type AdminMenu = (typeof ADMIN_MENUS)[number];
@@ -91,7 +91,7 @@ export function RequirePasswordChanged({ children }: { children: ReactNode }) {
 }
 
 /** 没有这个菜单权限时跳到第一个有权限的管理菜单；一个都没有时回问答页。读取当前用户期间先不渲染，避免闪出 403。 */
-export function RequirePermission({ permission, children }: { permission: string; children: ReactNode }) {
+export function RequirePermission({ permission, children }: { permission: Permission; children: ReactNode }) {
   const me = useMe();
   if (me.isPending) {
     return null;

@@ -18,7 +18,7 @@ import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 import { Pagination } from "@/components/ui/pagination";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { fetchRoles, type Role } from "@/features/roles/api";
-import { Can } from "@/lib/permissions";
+import { Can, PERMISSIONS } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
 import {
   type Account,
@@ -72,13 +72,13 @@ export function UsersPage() {
       <div className="flex items-center justify-between">
         <h1 className="font-serif text-2xl font-semibold">用户</h1>
         <div className="flex gap-2">
-          <Can permission="user:import">
+          <Can permission={PERMISSIONS.USER_IMPORT}>
             <Button size="sm" variant="outline" onClick={() => setDialog({ kind: "import" })}>
               <FileUp aria-hidden="true" className="size-4" />
               批量导入
             </Button>
           </Can>
-          <Can permission="user:create">
+          <Can permission={PERMISSIONS.USER_CREATE}>
             <Button size="sm" onClick={() => setDialog({ kind: "create" })}>
               <Plus aria-hidden="true" className="size-4" />
               新建账号
@@ -233,18 +233,18 @@ function AccountRow({
           <span className="text-xs text-muted-foreground">内置，不能修改</span>
         ) : (
           <div className="flex justify-end gap-1">
-            <Can permission="user:assign-role">
+            <Can permission={PERMISSIONS.USER_ASSIGN_ROLE}>
               <Button variant="ghost" size="sm" aria-label={`改角色 ${account.displayName}`} onClick={onRoles}>
                 改角色
               </Button>
             </Can>
-            <Can permission="user:reset-password">
+            <Can permission={PERMISSIONS.USER_RESET_PASSWORD}>
               <Button variant="ghost" size="sm" aria-label={`重置密码 ${account.displayName}`} onClick={onPassword}>
                 重置密码
               </Button>
             </Can>
             {locked && (
-              <Can permission="user:update">
+              <Can permission={PERMISSIONS.USER_UPDATE}>
                 <Button
                   variant="ghost"
                   size="sm"
@@ -256,7 +256,7 @@ function AccountRow({
                 </Button>
               </Can>
             )}
-            <Can permission="user:disable">
+            <Can permission={PERMISSIONS.USER_DISABLE}>
               <Button
                 variant="ghost"
                 size="sm"

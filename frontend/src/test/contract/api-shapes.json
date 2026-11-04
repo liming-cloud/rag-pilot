@@ -1,0 +1,311 @@
+{
+  "说明" : "由后端 ApiContractTests 生成，不要手改；接口变了用 -Dcontract.update=true 重新生成",
+  "permissions" : [ "answer:export", "answer:recheck", "answer:review", "answer:view", "chat:use", "doc:delete", "doc:replace", "doc:update", "doc:upload", "kb:create", "kb:delete", "kb:grant", "kb:update", "kb:view", "model:test", "model:update", "model:view", "role:create", "role:delete", "role:update", "role:view", "setting:update", "setting:view", "stats:export", "stats:view", "user:assign-role", "user:create", "user:disable", "user:import", "user:reset-password", "user:update", "user:view" ],
+  "endpoints" : {
+    "GET /api/answers" : {
+      "items" : [ {
+        "answerText" : "string",
+        "askerName" : "string",
+        "citedDocuments" : [ "string" ],
+        "comment" : "string",
+        "createdAt" : "string",
+        "id" : "number",
+        "question" : "string",
+        "rating" : "string",
+        "refusalReason" : "string",
+        "refused" : "boolean",
+        "resolutionNote" : "null",
+        "resolvedAt" : "null",
+        "reviewStatus" : "string",
+        "rewrittenQuestion" : "null",
+        "topRelevance" : "number",
+        "userId" : "number"
+      } ],
+      "page" : "number",
+      "size" : "number",
+      "total" : "number"
+    },
+    "GET /api/answers/gaps" : {
+      "from" : "string",
+      "grouping" : "string",
+      "groups" : [ {
+        "citedDocuments" : [ "string" ],
+        "count" : "number",
+        "dislikedCount" : "number",
+        "id" : "number",
+        "knowledgeBases" : [ "string" ],
+        "lastAskedAt" : "string",
+        "openCount" : "number",
+        "phrasings" : "number",
+        "question" : "string",
+        "records" : [ {
+          "askerName" : "string",
+          "citedDocuments" : [ "string" ],
+          "comment" : "string",
+          "createdAt" : "string",
+          "id" : "number",
+          "knowledgeBases" : [ "string" ],
+          "question" : "string",
+          "refused" : "boolean",
+          "reviewStatus" : "string"
+        } ],
+        "refusedCount" : "number"
+      } ],
+      "records" : "number",
+      "to" : "string",
+      "truncated" : "boolean",
+      "zone" : "string"
+    },
+    "GET /api/answers/stats" : {
+      "daily" : [ {
+        "date" : "string",
+        "disliked" : "number",
+        "questions" : "number",
+        "refused" : "number"
+      } ],
+      "from" : "string",
+      "previous" : "null",
+      "refusalReasons" : [ {
+        "count" : "number",
+        "reason" : "string"
+      } ],
+      "to" : "string",
+      "topCitedDocuments" : [ {
+        "count" : "number",
+        "documentName" : "string"
+      } ],
+      "topGaps" : [ {
+        "count" : "number",
+        "question" : "string"
+      } ],
+      "totals" : {
+        "askers" : "number",
+        "disliked" : "number",
+        "liked" : "number",
+        "openReviews" : "number",
+        "questions" : "number",
+        "rated" : "number",
+        "refused" : "number"
+      },
+      "zone" : "string"
+    },
+    "GET /api/auth/branding" : {
+      "loginHint" : "string",
+      "name" : "string",
+      "tagline" : "string"
+    },
+    "GET /api/auth/me" : {
+      "displayName" : "string",
+      "id" : "number",
+      "mustChangePassword" : "boolean",
+      "permissions" : [ "string" ],
+      "roles" : [ {
+        "id" : "number",
+        "name" : "string"
+      } ],
+      "superAdmin" : "boolean",
+      "username" : "string"
+    },
+    "GET /api/conversations" : [ {
+      "id" : "number",
+      "knowledgeBaseIds" : [ "number" ],
+      "lastAskedAt" : "string",
+      "title" : "string"
+    } ],
+    "GET /api/conversations/:id" : {
+      "id" : "number",
+      "knowledgeBases" : [ {
+        "accessible" : "boolean",
+        "id" : "number",
+        "name" : "string"
+      } ],
+      "lastAskedAt" : "string",
+      "title" : "string",
+      "turns" : [ {
+        "answer" : {
+          "citations" : [ {
+            "chunkId" : "number",
+            "documentId" : "number",
+            "documentName" : "string",
+            "excerpt" : "string",
+            "headingPath" : "string",
+            "index" : "number"
+          } ],
+          "id" : "number",
+          "refusalReason" : "string",
+          "refused" : "boolean",
+          "rewrite" : "null",
+          "text" : "string",
+          "timings" : "null",
+          "topRelevance" : "number"
+        },
+        "askedAt" : "string",
+        "id" : "number",
+        "knowledgeBaseIds" : [ "number" ],
+        "question" : "string",
+        "status" : "string"
+      } ]
+    },
+    "GET /api/knowledge-bases" : [ {
+      "id" : "number",
+      "name" : "string"
+    } ],
+    "GET /api/knowledge-bases/:id" : {
+      "id" : "number",
+      "name" : "string"
+    },
+    "GET /api/knowledge-bases/:id/documents" : {
+      "items" : [ {
+        "chunkCount" : "number",
+        "createdAt" : "string",
+        "effectiveFrom" : "null",
+        "error" : "string",
+        "expiresOn" : "string",
+        "filename" : "string",
+        "id" : "number",
+        "replacesDocumentId" : "null",
+        "replacesFilename" : "null",
+        "reprocessable" : "boolean",
+        "retryAt" : "null",
+        "sizeBytes" : "number",
+        "status" : "string",
+        "validity" : "string"
+      } ],
+      "page" : "number",
+      "size" : "number",
+      "total" : "number"
+    },
+    "GET /api/knowledge-bases/:id/members" : [ {
+      "displayName" : "string",
+      "userId" : "number",
+      "username" : "string"
+    } ],
+    "GET /api/knowledge-bases/:id/role-grants" : [ {
+      "roleId" : "number"
+    } ],
+    "GET /api/knowledge-bases/expiry-summary" : {
+      "documents" : [ {
+        "documentId" : "number",
+        "expiresOn" : "string",
+        "filename" : "string",
+        "knowledgeBaseId" : "number",
+        "knowledgeBaseName" : "string",
+        "validity" : "string"
+      } ],
+      "expired" : "number",
+      "expiring" : "number",
+      "warningDays" : "number"
+    },
+    "GET /api/knowledge-bases/page" : {
+      "items" : [ {
+        "documentCount" : "number",
+        "expiredCount" : "number",
+        "expiringCount" : "number",
+        "failedCount" : "number",
+        "id" : "number",
+        "memberCount" : "number",
+        "name" : "string",
+        "roleGrantCount" : "number"
+      } ],
+      "page" : "number",
+      "size" : "number",
+      "total" : "number"
+    },
+    "GET /api/models" : {
+      "embedding" : {
+        "dimensions" : "number",
+        "model" : "string",
+        "providerName" : "string"
+      },
+      "masterKeyConfigured" : "boolean",
+      "providers" : [ {
+        "apiKeyLast4" : "null",
+        "baseUrl" : "string",
+        "id" : "null",
+        "name" : "string",
+        "source" : "string",
+        "usedBy" : [ "string" ]
+      } ],
+      "usages" : [ {
+        "model" : "string",
+        "providerId" : "null",
+        "providerName" : "string",
+        "source" : "string",
+        "updatedAt" : "null",
+        "updatedBy" : "null",
+        "usage" : "string"
+      } ]
+    },
+    "GET /api/models/changes" : {
+      "items" : [ ],
+      "page" : "number",
+      "size" : "number",
+      "total" : "number"
+    },
+    "GET /api/permissions" : [ {
+      "buttons" : [ {
+        "code" : "string",
+        "label" : "string"
+      } ],
+      "menu" : "string",
+      "view" : {
+        "code" : "string",
+        "label" : "string"
+      }
+    } ],
+    "GET /api/roles" : [ {
+      "builtIn" : "string",
+      "id" : "number",
+      "name" : "string",
+      "permissions" : [ "string" ],
+      "userCount" : "number"
+    } ],
+    "GET /api/settings" : {
+      "industryPack" : {
+        "answerRole" : "string",
+        "citationExample" : "string",
+        "code" : "string",
+        "name" : "string",
+        "rewriteHints" : [ "string" ],
+        "rewriteRole" : "string",
+        "vocabulary" : [ {
+          "members" : [ "string" ],
+          "term" : "string"
+        } ]
+      },
+      "items" : [ {
+        "defaultSource" : "string",
+        "defaultValue" : "string",
+        "key" : "string",
+        "kind" : "string",
+        "source" : "string",
+        "updatedAt" : "string",
+        "updatedBy" : "string",
+        "value" : "string"
+      } ],
+      "statsZone" : "string"
+    },
+    "GET /api/settings/chat" : {
+      "emptyHint" : "string",
+      "placeholder" : "string",
+      "suggestedQuestions" : [ "string" ]
+    },
+    "GET /api/users" : {
+      "items" : [ {
+        "displayName" : "string",
+        "enabled" : "boolean",
+        "id" : "number",
+        "lockedUntil" : "null",
+        "roles" : [ {
+          "id" : "number",
+          "name" : "string"
+        } ],
+        "superAdmin" : "boolean",
+        "username" : "string"
+      } ],
+      "page" : "number",
+      "size" : "number",
+      "total" : "number"
+    }
+  }
+}

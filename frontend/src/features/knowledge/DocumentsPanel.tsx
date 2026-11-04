@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Pagination } from "@/components/ui/pagination";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Can, useCan } from "@/lib/permissions";
+import { Can, PERMISSIONS, useCan } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
 import {
   deleteDocument,
@@ -156,7 +156,7 @@ export function DocumentsPanel({ knowledgeBaseId }: { knowledgeBaseId: number })
             查询
           </Button>
         </form>
-        <Can permission="doc:upload">
+        <Can permission={PERMISSIONS.DOC_UPLOAD}>
           <div className="ml-auto flex gap-2">
             <Button asChild size="sm" variant="outline">
               <Label>
@@ -291,7 +291,7 @@ function DocumentRow({
   onReplace: () => void;
   onDelete: () => Promise<void>;
 }) {
-  const canUpdate = useCan("doc:update");
+  const canUpdate = useCan(PERMISSIONS.DOC_UPDATE);
   const [confirming, setConfirming] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const status = STATUS[document.status];
@@ -367,12 +367,12 @@ function DocumentRow({
           </div>
         ) : (
           <div className="flex flex-wrap items-center justify-end gap-1">
-            <Can permission="doc:replace">
+            <Can permission={PERMISSIONS.DOC_REPLACE}>
               <Button size="sm" variant="ghost" aria-label={`上传新版本 ${document.filename}`} onClick={onReplace}>
                 上传新版本
               </Button>
             </Can>
-            <Can permission="doc:delete">
+            <Can permission={PERMISSIONS.DOC_DELETE}>
               <Button
                 size="sm"
                 variant="ghost"

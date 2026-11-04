@@ -17,7 +17,7 @@ import { Label } from "@/components/ui/label";
 import { Pagination } from "@/components/ui/pagination";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
-import { Can } from "@/lib/permissions";
+import { Can, PERMISSIONS } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
 import {
   fetchSettings,
@@ -129,7 +129,7 @@ function ItemsTab({ settings, group }: { settings: SystemSettings; group: "brand
                   )}
                 </div>
               </div>
-              <Can permission="setting:update">
+              <Can permission={PERMISSIONS.SETTING_UPDATE}>
                 <div className="flex shrink-0 items-start gap-1">
                   <Button variant="ghost" size="sm" aria-label={`修改${meta.label}`} onClick={() => setEditing(item)}>
                     修改

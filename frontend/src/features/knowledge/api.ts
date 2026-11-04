@@ -22,6 +22,10 @@ export type KnowledgeDocument = {
   expiresOn: string | null;
   /** 后端按今天和提前提醒天数算好的状态，前端不自己比较日期（时区以后端为准）。 */
   validity: Validity;
+  /** 因模型暂时不可用而失败，可以“重新处理”；文件本身有问题时为 false，要改好后重传（#145 A9）。 */
+  reprocessable: boolean;
+  /** 自动重试的时间（第一次失败 10 分钟后，只重试一次）；不自动重试时为 null。 */
+  retryAt: string | null;
 };
 
 /** 有效期状态：有效、即将到期（提醒天数内）、已失效、未生效；后两种不参与检索和回答。 */

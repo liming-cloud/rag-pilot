@@ -15,13 +15,14 @@ import { UsersPage } from "@/features/users/UsersPage";
 import { getToken } from "@/lib/auth";
 import { AdminLayout } from "./AdminLayout";
 import { AdminHome, AppShell, RequirePasswordChanged, RequirePermission } from "./AppShell";
+import { type Permission, PERMISSIONS } from "@/lib/permissions";
 
 /** 没有令牌时先去登录；令牌过期由 authFetch 收到 401 时处理。管理员重置过密码时先去改密码。 */
 function RequireAuth({ children }: { children: ReactNode }) {
   return getToken() ? <RequirePasswordChanged>{children}</RequirePasswordChanged> : <Navigate to="/login" replace />;
 }
 
-const guarded = (permission: string, page: ReactNode) => (
+const guarded = (permission: Permission, page: ReactNode) => (
   <RequirePermission permission={permission}>{page}</RequirePermission>
 );
 
@@ -36,8 +37,8 @@ export const routes: RouteObject[] = [
       </RequireAuth>
     ),
     children: [
-      { path: "/chat", element: guarded("chat:use", <ChatPage />) },
-      { path: "/chat/:conversationId", element: guarded("chat:use", <ChatPage />) },
+      { path: "/chat", element: guarded(PERMISSIONS.CHAT_USE, <ChatPage />) },
+      { path: "/chat/:conversationId", element: guarded(PERMISSIONS.CHAT_USE, <ChatPage />) },
       { path: "/change-password", element: <ChangePasswordPage /> },
     ],
   },
@@ -50,15 +51,15 @@ export const routes: RouteObject[] = [
     ),
     children: [
       { index: true, element: <AdminHome /> },
-      { path: "knowledge", element: guarded("kb:view", <KnowledgePage />) },
-      { path: "knowledge/:knowledgeBaseId", element: guarded("kb:view", <KnowledgeDetailPage />) },
-      { path: "users", element: guarded("user:view", <UsersPage />) },
-      { path: "roles", element: guarded("role:view", <RolesPage />) },
-      { path: "gaps", element: guarded("answer:view", <GapsPage />) },
-      { path: "answers", element: guarded("answer:view", <AnswersPage />) },
-      { path: "stats", element: guarded("stats:view", <StatsPage />) },
-      { path: "models", element: guarded("model:view", <ModelsPage />) },
-      { path: "settings", element: guarded("setting:view", <SettingsPage />) },
+      { path: "knowledge", element: guarded(PERMISSIONS.KB_VIEW, <KnowledgePage />) },
+      { path: "knowledge/:knowledgeBaseId", element: guarded(PERMISSIONS.KB_VIEW, <KnowledgeDetailPage />) },
+      { path: "users", element: guarded(PERMISSIONS.USER_VIEW, <UsersPage />) },
+      { path: "roles", element: guarded(PERMISSIONS.ROLE_VIEW, <RolesPage />) },
+      { path: "gaps", element: guarded(PERMISSIONS.ANSWER_VIEW, <GapsPage />) },
+      { path: "answers", element: guarded(PERMISSIONS.ANSWER_VIEW, <AnswersPage />) },
+      { path: "stats", element: guarded(PERMISSIONS.STATS_VIEW, <StatsPage />) },
+      { path: "models", element: guarded(PERMISSIONS.MODEL_VIEW, <ModelsPage />) },
+      { path: "settings", element: guarded(PERMISSIONS.SETTING_VIEW, <SettingsPage />) },
     ],
   },
 ];

@@ -23,6 +23,7 @@
 
 - 后端：`./mvnw verify`（含 Testcontainers 和 Spring Modulith 边界测试，需要 Docker）。
 - 前端：在 `frontend/` 下运行 `npm run typecheck && npm run lint && npm test && npm run build`（Node 24）。
+- 改了接口的响应字段或权限点：`ApiContractTests` 会失败，用 `./mvnw verify -pl backend/boot/rag-app -Dtest=ApiContractTests -Dcontract.update=true` 重新生成 `frontend/src/test/contract/api-shapes.json`，再跑前端测试，按提示改前端类型和 MSW 假数据，一起提交（D-052）。前端判断权限只用 `lib/permissions.tsx` 的 `PERMISSIONS` 常量。
 - 改了检索或生成：加跑评测。PR 改到检索、问答、模型或评测集时 CI 的 `eval` 任务会自动用真实模型跑；本地运行：
   `MODEL_API_KEY=… ./mvnw verify -pl backend/boot/rag-app -am -Dtest.groups=eval -Dtest.excludedGroups=none -Dtest=EvaluationRun -Dsurefire.failIfNoSpecifiedTests=false`，报告在 `backend/boot/rag-app/target/eval-report.md`。
 - 评测集是合成数据，按行业包分目录（`backend/boot/rag-app/src/test/resources/eval/<行业包>/`）；客户真实评测集只放在客户环境。

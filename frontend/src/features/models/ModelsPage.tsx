@@ -17,7 +17,7 @@ import { Label } from "@/components/ui/label";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Pagination } from "@/components/ui/pagination";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Can, useCan } from "@/lib/permissions";
+import { Can, PERMISSIONS, useCan } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
 import {
   createProvider,
@@ -154,7 +154,7 @@ function UsagesTab({ settings }: { settings: ModelSettings }) {
                   <SourceBadge source={usage.source} />
                 </TableCell>
                 <TableCell className="text-right">
-                  <Can permission="model:update">
+                  <Can permission={PERMISSIONS.MODEL_UPDATE}>
                     <Button
                       variant="ghost"
                       size="sm"
@@ -203,7 +203,7 @@ const ENV = "env";
  */
 function UsageDialog({ usage, providers, onDone }: { usage: UsageConfig; providers: Provider[]; onDone: () => void }) {
   const queryClient = useQueryClient();
-  const canTest = useCan("model:test");
+  const canTest = useCan(PERMISSIONS.MODEL_TEST);
   const [providerValue, setProviderValue] = useState(usage.providerId === null ? ENV : String(usage.providerId));
   const [model, setModel] = useState(usage.model);
   const [result, setResult] = useState<{ key: string; value: TestResult } | null>(null);
@@ -350,7 +350,7 @@ function ProvidersTab({ settings }: { settings: ModelSettings }) {
         <p className="text-sm text-muted-foreground">
           OpenAI 兼容接口，如硅基流动、DeepSeek、自建的 vLLM / Ollama。密钥加密保存，只显示后 4 位。
         </p>
-        <Can permission="model:update">
+        <Can permission={PERMISSIONS.MODEL_UPDATE}>
           <Button size="sm" onClick={() => setDialog("new")}>
             <Plus aria-hidden="true" className="size-4" />
             添加服务商
@@ -391,7 +391,7 @@ function ProvidersTab({ settings }: { settings: ModelSettings }) {
                 </TableCell>
                 <TableCell className="text-right">
                   {provider.id !== null ? (
-                    <Can permission="model:update">
+                    <Can permission={PERMISSIONS.MODEL_UPDATE}>
                       <Button
                         variant="ghost"
                         size="sm"
@@ -615,7 +615,7 @@ function ChangesTab() {
                   )}
                 </TableCell>
                 <TableCell className="text-right">
-                  <Can permission="model:update">
+                  <Can permission={PERMISSIONS.MODEL_UPDATE}>
                     <Button
                       variant="ghost"
                       size="sm"

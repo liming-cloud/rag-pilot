@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { fetchExpirySummary } from "@/features/knowledge/api";
-import { Can, useCan } from "@/lib/permissions";
+import { Can, PERMISSIONS, useCan } from "@/lib/permissions";
 import {
   exportUsageCsv,
   fetchUsageStats,
@@ -82,7 +82,7 @@ export function StatsPage() {
           <Printer aria-hidden="true" className="size-4" />
           打印 / 存为 PDF
         </Button>
-        <Can permission="stats:export">
+        <Can permission={PERMISSIONS.STATS_EXPORT}>
           <Button
             size="sm"
             variant="outline"
@@ -120,7 +120,7 @@ type Card = { label: string; value: string; note: string; change?: string; to?: 
 
 function StatsView({ stats }: { stats: UsageStats }) {
   const { totals, previous } = stats;
-  const canReview = useCan("answer:view");
+  const canReview = useCan(PERMISSIONS.ANSWER_VIEW);
   const answered = totals.questions - totals.refused;
   const cards: Card[] = [
     {
@@ -246,7 +246,7 @@ function rateChange(current: Totals, previous: Totals, parts: (totals: Totals) =
  * 都没有时不占位置。
  */
 function ExpirySection() {
-  const canView = useCan("kb:view");
+  const canView = useCan(PERMISSIONS.KB_VIEW);
   const summary = useQuery({
     queryKey: ["knowledge-bases", "expiry-summary"],
     queryFn: fetchExpirySummary,

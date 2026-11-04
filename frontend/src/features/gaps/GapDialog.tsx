@@ -6,7 +6,7 @@ import { DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTit
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Can } from "@/lib/permissions";
+import { Can, PERMISSIONS } from "@/lib/permissions";
 import { type GapGroup, recheckGap, resolveGap } from "./api";
 
 /**
@@ -117,13 +117,13 @@ export function GapDialog({ group, onDone }: { group: GapGroup; onDone: () => vo
         </Label>
       )}
       <DialogFooter>
-        <Can permission="answer:recheck">
+        <Can permission={PERMISSIONS.ANSWER_RECHECK}>
           <Button size="sm" variant="ghost" disabled={recheck.isPending} onClick={() => recheck.mutate()}>
             {recheck.isPending ? "正在回答…" : "用代表问题重新回答"}
           </Button>
         </Can>
         {open.length > 0 && (
-          <Can permission="answer:review">
+          <Can permission={PERMISSIONS.ANSWER_REVIEW}>
             {resolving ? (
               <Button size="sm" disabled={resolve.isPending} onClick={() => resolve.mutate()}>
                 确认 {open.length} 条已处理

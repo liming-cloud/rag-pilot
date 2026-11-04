@@ -20,6 +20,9 @@ export type Answer = {
   refusalReason: "NO_EVIDENCE" | "LOW_RELEVANCE" | "MODEL_DECLINED" | "UNCITED" | null;
   citations: Citation[];
   topRelevance: number | null;
+  /** 低分改写和各阶段耗时，评测报告用，界面不显示。 */
+  rewrite?: Record<string, unknown> | null;
+  timings?: Record<string, unknown> | null;
 };
 
 /** 点赞、点踩（可附留言）或撤销（rating 为 null）。只有提问人本人能评价自己的回答。 */

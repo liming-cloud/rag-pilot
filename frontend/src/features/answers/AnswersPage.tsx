@@ -17,7 +17,7 @@ import { Label } from "@/components/ui/label";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Pagination } from "@/components/ui/pagination";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Can } from "@/lib/permissions";
+import { Can, PERMISSIONS } from "@/lib/permissions";
 import {
   type AnswerFilter,
   type AnswerReview,
@@ -74,7 +74,7 @@ export function AnswersPage() {
     <main className="mx-auto flex max-w-6xl flex-col gap-4 p-6 md:p-8">
       <div className="flex items-center justify-between">
         <h1 className="font-serif text-2xl font-semibold">回答记录</h1>
-        <Can permission="answer:export">
+        <Can permission={PERMISSIONS.ANSWER_EXPORT}>
           <Button
             size="sm"
             variant="outline"
@@ -271,12 +271,12 @@ function ReviewDialog({ review, onDone }: { review: AnswerReview; onDone: () => 
         </Label>
       )}
       <DialogFooter>
-        <Can permission="answer:recheck">
+        <Can permission={PERMISSIONS.ANSWER_RECHECK}>
           <Button size="sm" variant="ghost" disabled={recheck.isPending} onClick={() => recheck.mutate()}>
             重新回答
           </Button>
         </Can>
-        <Can permission="answer:review">
+        <Can permission={PERMISSIONS.ANSWER_REVIEW}>
           {resolved ? (
             <Button size="sm" variant="outline" onClick={() => mark.mutate({ status: "OPEN" })}>
               重新打开

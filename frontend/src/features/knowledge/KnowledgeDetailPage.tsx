@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft } from "lucide-react";
 import { Link, useParams, useSearchParams } from "react-router";
 import { Button } from "@/components/ui/button";
-import { useCan } from "@/lib/permissions";
+import { PERMISSIONS, useCan } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
 import { fetchKnowledgeBase } from "./api";
 import { DocumentsPanel } from "./DocumentsPanel";
@@ -14,7 +14,7 @@ import { GrantsPanel } from "./GrantsPanel";
 export function KnowledgeDetailPage() {
   const id = Number(useParams().knowledgeBaseId);
   const [params, setParams] = useSearchParams();
-  const canGrant = useCan("kb:grant");
+  const canGrant = useCan(PERMISSIONS.KB_GRANT);
   const tab = params.get("tab") === "grants" && canGrant ? "grants" : "documents";
   const knowledgeBase = useQuery({ queryKey: ["knowledge-bases", id], queryFn: () => fetchKnowledgeBase(id) });
 

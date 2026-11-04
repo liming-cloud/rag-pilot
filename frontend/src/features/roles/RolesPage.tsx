@@ -7,7 +7,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Can, useCan } from "@/lib/permissions";
+import { Can, PERMISSIONS, useCan } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
 import {
   createRole,
@@ -53,7 +53,7 @@ export function RolesPage() {
             </button>
           ))}
         </nav>
-        <Can permission="role:create">
+        <Can permission={PERMISSIONS.ROLE_CREATE}>
           <Button variant="outline" size="sm" onClick={() => setSelectedId("new")}>
             <Plus aria-hidden="true" className="size-4" />
             新建角色
@@ -88,11 +88,11 @@ function RoleDetail({
   onDeleted: () => void;
 }) {
   const queryClient = useQueryClient();
-  const canUpdate = useCan("role:update");
+  const canUpdate = useCan(PERMISSIONS.ROLE_UPDATE);
   const isSuper = role?.builtIn === "SUPER_ADMIN";
   const [editing, setEditing] = useState(role === null);
   const [name, setName] = useState(role?.name ?? "");
-  const [granted, setGranted] = useState<Set<string>>(new Set(role?.permissions ?? ["chat:use"]));
+  const [granted, setGranted] = useState<Set<string>>(new Set(role?.permissions ?? [PERMISSIONS.CHAT_USE]));
   const refresh = () => queryClient.invalidateQueries({ queryKey: ["roles"] });
 
   const save = useMutation({
@@ -251,7 +251,7 @@ function RoleDetail({
         </div>
       ) : (
         role?.builtIn === null && (
-          <Can permission="role:delete">
+          <Can permission={PERMISSIONS.ROLE_DELETE}>
             <div className="flex items-center gap-2">
               <Button
                 size="sm"

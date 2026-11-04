@@ -97,7 +97,8 @@ function daysAgo(days: number, hour = 10): string {
 }
 
 function turn(id: number, question: string, answer: Answer | null, knowledgeBaseIds: number[], askedAt: string): Turn {
-  return { id, question, status: answer ? "ANSWERED" : "FAILED", answer, knowledgeBaseIds, askedAt };
+  const stored = answer && { rewrite: null, timings: null, ...answer };
+  return { id, question, status: answer ? "ANSWERED" : "FAILED", answer: stored, knowledgeBaseIds, askedAt };
 }
 
 /** 示例会话属于店员小王（id 2）。他只是“门店运营知识库”（1）的成员；会话 902 里选过的“商品知识库”（2）已无权访问。 */

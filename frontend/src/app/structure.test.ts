@@ -1,5 +1,6 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
+import { PERMISSIONS } from "@/lib/permissions";
 
 // 前端目录规范见 AGENTS.md“目录结构”：feature 之间只能引用对方的 api.ts，feature 不引用 app。
 const src = path.resolve(import.meta.dirname, "..");
@@ -94,6 +95,14 @@ export function industryWordProblems(file: string, source: string, words: string
 const industryWords = () =>
   readdirSync(PACKS).flatMap((pack) => industryWordsOf(readFileSync(path.join(PACKS, pack, "pack.yml"), "utf8")));
 
+/** 手写的权限码（#145 C7）：界面判断权限只用 lib/permissions.tsx 的 PERMISSIONS 常量。测试和假接口里可以出现。 */
+export function permissionLiteralProblems(file: string, source: string, codes: string[]): string[] {
+  if (file === "lib/permissions.tsx" || file.startsWith("mocks/") || /\.test\.tsx?$/.test(file)) return [];
+  return codes
+    .filter((code) => source.includes(`"${code}"`) || source.includes(`'${code}'`))
+    .map((code) => `${file} 手写了权限码“${code}”：改用 PERMISSIONS 常量`);
+}
+
 describe("前端目录结构", () => {
   it("src 下只有约定的目录，components 下只放 shadcn 的 ui", () => {
     expect(readdirSync(src).filter((name) => !ALLOWED_TOP.includes(name))).toEqual([]);
@@ -116,6 +125,18 @@ describe("前端目录结构", () => {
         nativeElementProblems(path.relative(src, file).split(path.sep).join("/"), readFileSync(file, "utf8")),
       );
     expect(problems).toEqual([]);
+  });
+
+  it("界面判断权限只用 PERMISSIONS 常量，不手写权限码", () => {
+    const codes = Object.values(PERMISSIONS);
+    const problems = walk(src)
+      .filter((file) => /\.tsx?$/.test(file))
+      .flatMap((file) =>
+        permissionLiteralProblems(path.relative(src, file).split(path.sep).join("/"), readFileSync(file, "utf8"), codes),
+      );
+    expect(problems).toEqual([]);
+    expect(permissionLiteralProblems("features/x/XPage.tsx", '<Can permission="kb:view">', codes)).toHaveLength(1);
+    expect(permissionLiteralProblems("mocks/identity.ts", '"kb:view"', codes)).toEqual([]);
   });
 
   it("源码里不写死产品名称，名称从部署配置读取", () => {
