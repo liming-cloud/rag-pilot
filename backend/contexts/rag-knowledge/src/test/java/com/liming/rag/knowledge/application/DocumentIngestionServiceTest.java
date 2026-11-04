@@ -17,6 +17,8 @@ import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.DuplicateKeyException;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /** 文档入库：校验、存原文件、记文档、发事件；新版本、删除、有效期（D-026、D-046）。 */
 class DocumentIngestionServiceTest {
@@ -154,9 +156,9 @@ class DocumentIngestionServiceTest {
         var copy = service.ingest(TENANT, ADMIN, otherKb, "共用.txt", TEXT, null, null, null);
 
         var sha256 = fixture.documents.rows.get(shared.id()).sha256();
-        service.delete(TENANT, ADMIN, kb, shared.id());
+        committed(() -> service.delete(TENANT, ADMIN, kb, shared.id()));
         assertThat(fixture.files.has(TENANT, sha256)).as("另一个库还在用").isTrue();
-        service.delete(TENANT, ADMIN, otherKb, copy.id());
+        committed(() -> service.delete(TENANT, ADMIN, otherKb, copy.id()));
         assertThat(fixture.files.has(TENANT, sha256)).isFalse();
 
         assertThat(fixture.documents.rows).isEmpty();
@@ -200,5 +202,16 @@ class DocumentIngestionServiceTest {
     private static void assertReason(ThrowingCallable call, KnowledgeException.Reason reason) {
         assertThatThrownBy(call).isInstanceOfSatisfying(KnowledgeException.class,
                 e -> assertThat(e.reason()).isEqualTo(reason));
+    }
+
+    /** 模拟事务提交：原始文件在提交后才删（见 DocumentRemover）。 */
+    private static void committed(Runnable action) {
+        TransactionSynchronizationManager.initSynchronization();
+        try {
+            action.run();
+            TransactionSynchronizationManager.getSynchronizations().forEach(TransactionSynchronization::afterCommit);
+        } finally {
+            TransactionSynchronizationManager.clearSynchronization();
+        }
     }
 }
