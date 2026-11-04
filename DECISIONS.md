@@ -333,3 +333,5 @@ Compose 增加 web 服务（`deploy/web.Dockerfile`）：Node 24 构建前端，
 - **登录锁定原子计数**：失败次数在数据库里原子加一并返回新值，同时发来的错误密码不再能绕过锁定。
 - **安全响应头**：CSP 只允许本站脚本（登录令牌在 localStorage），样式允许内联（对话框运行时插入 `<style>`），不许被嵌入；另有 `X-Content-Type-Options`、`X-Frame-Options`、`Referrer-Policy`。放在 `security-headers.conf`，server 级和带 `add_header` 的 location 都 include（Nginx 的 location 有自己的 `add_header` 时不继承 server 级的）。
 - **限流**（人答复的值）：每个账号最近 1 分钟最多 10 个问题、最近 24 小时最多 300 个（`RAG_ASK_LIMIT_PER_MINUTE`、`RAG_ASK_LIMIT_PER_DAY`），超出返回 429、不调用模型、不留下这一轮；计数在内存里，单实例部署，重启清零。问题合规、会话是自己的之后才计数；管理员“重新回答”不受限。Nginx 对 `/api/auth/login` 按来源 IP 每分钟 10 次、可突发 5 次。为此共享内核的 `ErrorKind` 新增 `TOO_MANY_REQUESTS`（D-034：所有上下文共用的错误分类，转 429 由 rag-app 的入口负责）。
+- **审计记录**（人答复的范围和保留期）：identity 的 `api` 提供 `AuditTrail`，各上下文的应用服务在操作成功之后、同一个事务里记一条（`Propagation.MANDATORY`，操作回滚时审计也回滚）：知识库授权给账号或角色及撤销、角色新建/修改/删除、账号新建/启停/改角色/重置密码/解锁/批量导入、删除和替换资料、系统设置的修改和恢复默认。模型变更已有 `model_change`，不重复记。表 `audit_log` 在 identity，只增不改，每天清理一年前的记录。被拒绝的操作不记。查看审计的接口和页面要新增一个权限点（“先停下来问人”的事项），等人答复后随第 8 步的原型一起做。
+

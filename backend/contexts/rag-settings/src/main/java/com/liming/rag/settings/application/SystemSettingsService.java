@@ -1,5 +1,6 @@
 package com.liming.rag.settings.application;
 
+import com.liming.rag.identity.api.AuditTrail;
 import com.liming.rag.identity.api.UserDirectory;
 import com.liming.rag.settings.api.AnsweringSettings;
 import com.liming.rag.settings.api.IndustryPack;
@@ -48,6 +49,7 @@ public class SystemSettingsService implements AnsweringSettings, StatsZone {
     }
 
     private final SystemSettingsStore store;
+    private final AuditTrail audit;
     private final UserDirectory users;
     private final IndustryPackFile file;
     private final IndustryPack pack;
@@ -55,7 +57,9 @@ public class SystemSettingsService implements AnsweringSettings, StatsZone {
     private final ZoneId statsZone;
     private final Clock clock;
 
-    SystemSettingsService(SystemSettingsStore store, UserDirectory users, SettingsProperties properties, Clock clock) {
+    SystemSettingsService(SystemSettingsStore store, UserDirectory users, SettingsProperties properties, Clock clock,
+            AuditTrail audit) {
+        this.audit = audit;
         this.store = store;
         this.users = users;
         this.file = IndustryPackFile.load(properties.industryPack());
@@ -117,19 +121,22 @@ public class SystemSettingsService implements AnsweringSettings, StatsZone {
         SettingRules.problem(key, value).ifPresent(problem -> {
             throw invalid(key, problem);
         });
-        store.save(key, value.stream().map(String::strip).toList(), actor.value(),
-                SettingsInputs.actorName(users, tenantId, actor), OffsetDateTime.now(clock));
+        var stripped = value.stream().map(String::strip).toList();
+        store.save(key, stripped, actor.value(), SettingsInputs.actorName(users, tenantId, actor), OffsetDateTime.now(clock));
+        audit.record(tenantId, actor, "SETTING_CHANGED", "SETTING", key.name(),
+                "修改系统设置 " + key.name() + "：" + String.join(" / ", stripped));
         return item(store.all(), key);
     }
 
     /** 删掉界面保存的值，回到部署配置、行业包或内核的默认值。没保存过时什么也不做。 */
     @Transactional
-    public Item restore(String key) {
-        return restore(SettingsInputs.key(key));
+    public Item restore(TenantId tenantId, UserId actor, String key) {
+        return restore(tenantId, actor, SettingsInputs.key(key));
     }
 
-    Item restore(SettingKey key) {
+    Item restore(TenantId tenantId, UserId actor, SettingKey key) {
         store.delete(key);
+        audit.record(tenantId, actor, "SETTING_RESTORED", "SETTING", key.name(), "系统设置 " + key.name() + " 恢复为默认值");
         return item(store.all(), key);
     }
 

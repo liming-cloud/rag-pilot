@@ -16,6 +16,10 @@ final class IdentityFixture {
     final AccessService access = new AccessService(store, store, TestCatalog.REGISTRY);
     final FakeSessions sessions = new FakeSessions();
     final PlainPasswordHasher passwords = new PlainPasswordHasher();
+    /** 记下的审计：每条是“操作 说明”（#145 C2）。 */
+    final java.util.List<String> audited = new java.util.ArrayList<>();
+    final com.liming.rag.identity.api.AuditTrail audit =
+            (tenantId, actor, action, targetType, targetId, detail) -> audited.add(action + " " + detail);
     final Role superRole;
     final Role adminRole;
     final Role staffRole;

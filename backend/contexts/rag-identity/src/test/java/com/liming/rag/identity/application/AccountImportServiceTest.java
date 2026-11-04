@@ -16,7 +16,7 @@ class AccountImportServiceTest {
 
     private final IdentityFixture fixture = new IdentityFixture();
     private final AccountImportService service = new AccountImportService(fixture.store, fixture.store,
-            fixture.access, fixture.passwords);
+            fixture.access, fixture.passwords, fixture.audit);
 
     private static Row row(int line, String username, String displayName, String... roles) {
         return new Row(line, username, displayName, List.of(roles));
@@ -38,6 +38,8 @@ class AccountImportServiceTest {
         var second = fixture.store.findByUsername("new02").orElseThrow();
         assertThat(second.mustChangePassword()).isTrue();
         assertThat(fixture.store.rolesOf(second.id())).containsExactly(fixture.staffRole);
+        assertThat(fixture.audited).as("整批导入记一条审计（#145 C2）")
+                .containsExactly("ACCOUNTS_IMPORTED 批量导入 2 个账号：new01、new02");
     }
 
     @Test

@@ -1,5 +1,6 @@
 package com.liming.rag.identity.application;
 
+import com.liming.rag.identity.api.AuditTrail;
 import com.liming.rag.shared.TenantId;
 import com.liming.rag.shared.UserId;
 import java.time.Clock;
@@ -24,9 +25,11 @@ public class AccountAdminService {
     private final Sessions sessions;
     private final PasswordHasher passwords;
     private final Clock clock;
+    private final AuditTrail audit;
 
     AccountAdminService(Accounts accounts, Roles roles, AccessService access, Sessions sessions,
-            PasswordHasher passwords, Clock clock) {
+            PasswordHasher passwords, Clock clock, AuditTrail audit) {
+        this.audit = audit;
         this.accounts = accounts;
         this.roles = roles;
         this.access = access;
@@ -77,6 +80,7 @@ public class AccountAdminService {
             throw usernameTaken(name);
         }
         roles.setUserRoles(created.id(), assigned.stream().map(Role::id).toList());
+        audit(tenantId, actor, "ACCOUNT_CREATED", created, "新建账号 " + name + "（" + display + "），角色：" + names(assigned));
         return managed(created, assigned);
     }
 
@@ -89,6 +93,8 @@ public class AccountAdminService {
         }
         access.rulesFor(actor).checkManageable(roles.rolesOf(account.id()));
         accounts.setEnabled(account.id(), enabled);
+        audit(tenantId, actor, enabled ? "ACCOUNT_ENABLED" : "ACCOUNT_DISABLED", account,
+                (enabled ? "启用账号 " : "停用账号 ") + account.username());
         if (!enabled) {
             sessions.logoutAll(account.id());
         }
@@ -104,6 +110,8 @@ public class AccountAdminService {
         var assigned = rolesIn(tenantId, roleIds);
         rules.checkAssignable(assigned);
         roles.setUserRoles(account.id(), assigned.stream().map(Role::id).toList());
+        audit(tenantId, actor, "ACCOUNT_ROLES_CHANGED", account,
+                "账号 " + account.username() + " 的角色改为：" + names(assigned));
         return managed(account, assigned);
     }
 
@@ -115,12 +123,23 @@ public class AccountAdminService {
         PasswordRules.check(account.username(), password);
         accounts.setPassword(account.id(), passwords.hash(password), true);
         sessions.logoutAll(account.id());
+        audit(tenantId, actor, "ACCOUNT_PASSWORD_RESET", account, "重置了账号 " + account.username() + " 的密码");
     }
 
     /** 手动解锁连续输错被锁的账号。 */
     @Transactional
-    public void unlock(TenantId tenantId, UserId target) {
-        accounts.clearFailedLogins(find(tenantId, target).id());
+    public void unlock(TenantId tenantId, UserId actor, UserId target) {
+        var account = find(tenantId, target);
+        accounts.clearFailedLogins(account.id());
+        audit(tenantId, actor, "ACCOUNT_UNLOCKED", account, "解锁账号 " + account.username());
+    }
+
+    private void audit(TenantId tenantId, UserId actor, String action, Account account, String detail) {
+        audit.record(tenantId, actor, action, "ACCOUNT", String.valueOf(account.id()), detail);
+    }
+
+    static String names(Collection<Role> roles) {
+        return roles.isEmpty() ? "无" : String.join("、", roles.stream().map(Role::name).toList());
     }
 
     private Account find(TenantId tenantId, UserId target) {

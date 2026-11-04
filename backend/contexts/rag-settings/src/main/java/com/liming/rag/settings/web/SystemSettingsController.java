@@ -80,6 +80,6 @@ class SystemSettingsController {
     @SaCheckPermission(SettingsPermissions.SETTING_UPDATE)
     @DeleteMapping("/api/settings/{key}")
     ItemView restore(@PathVariable String key) {
-        return ItemView.of(settings.restore(key));
+        return ItemView.of(settings.restore(currentUser.tenantId(), currentUser.userId(), key));
     }
 }

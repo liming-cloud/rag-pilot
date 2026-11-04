@@ -15,7 +15,7 @@ class RoleServiceTest {
 
     private final IdentityFixture fixture = new IdentityFixture();
     private final List<Object> events = new ArrayList<>();
-    private final RoleService service = new RoleService(fixture.store, fixture.store, fixture.access, events::add, TestCatalog.REGISTRY);
+    private final RoleService service = new RoleService(fixture.store, fixture.store, fixture.access, events::add, TestCatalog.REGISTRY, fixture.audit);
 
     @Test
     @DisplayName("超级管理员只读，内置角色不能改名、不能删，但能改权限")
@@ -24,7 +24,7 @@ class RoleServiceTest {
                 List.of(TestCatalog.CHAT_USE))).hasMessage("超级管理员的权限不能修改");
         assertThatThrownBy(() -> service.update(TENANT, fixture.superAdmin, fixture.staffRole.id(), "店员", null))
                 .hasMessage("内置角色不能改名");
-        assertThatThrownBy(() -> service.delete(TENANT, fixture.staffRole.id())).hasMessage("内置角色不能删除");
+        assertThatThrownBy(() -> service.delete(TENANT, fixture.admin, fixture.staffRole.id())).hasMessage("内置角色不能删除");
 
         var updated = service.update(TENANT, fixture.superAdmin, fixture.staffRole.id(), "员工",
                 List.of(TestCatalog.CHAT_USE, TestCatalog.STATS_VIEW));
@@ -45,6 +45,8 @@ class RoleServiceTest {
 
         var manager = service.create(TENANT, fixture.admin, "店长", List.of(TestCatalog.ANSWER_VIEW));
         assertThat(manager.role().permissions()).containsExactly(TestCatalog.ANSWER_VIEW);
+        assertThat(fixture.audited).as("被拒绝的新建不记审计（#145 C2）")
+                .containsExactly("ROLE_CREATED 新建角色 店长，权限点：" + TestCatalog.ANSWER_VIEW);
         assertThatThrownBy(() -> service.create(TENANT, fixture.admin, "店长", List.of()))
                 .hasMessage("已有同名角色：店长");
     }
@@ -55,15 +57,16 @@ class RoleServiceTest {
         var manager = fixture.role("店长", TestCatalog.ANSWER_VIEW);
         var zhang = fixture.account("zhang", manager);
 
-        assertThatThrownBy(() -> service.delete(TENANT, manager.id()))
+        assertThatThrownBy(() -> service.delete(TENANT, fixture.admin, manager.id()))
                 .hasMessage("还有 1 个账号属于这个角色，先移走才能删除");
         assertThat(events).isEmpty();
 
         fixture.store.setUserRoles(zhang.value(), List.of(fixture.staffRole.id()));
-        service.delete(TENANT, manager.id());
+        service.delete(TENANT, fixture.admin, manager.id());
 
         assertThat(fixture.store.find(TENANT, manager.id())).isEmpty();
         assertThat(events).containsExactly(new RoleDeleted(TENANT, manager.id()));
+        assertThat(fixture.audited).as("删除失败时不记，删除成功记一条（#145 C2）").containsExactly("ROLE_DELETED 删除角色 店长");
     }
 
     @Test
@@ -71,7 +74,7 @@ class RoleServiceTest {
     void ensureBuiltIns() {
         var fresh = new IdentityFixture();
         var other = new com.liming.rag.shared.TenantId(9);
-        new RoleService(fresh.store, fresh.store, fresh.access, events::add, TestCatalog.REGISTRY).ensureBuiltIns(other);
+        new RoleService(fresh.store, fresh.store, fresh.access, events::add, TestCatalog.REGISTRY, fresh.audit).ensureBuiltIns(other);
 
         var created = fresh.store.list(other);
         assertThat(created).extracting(Role::builtIn)

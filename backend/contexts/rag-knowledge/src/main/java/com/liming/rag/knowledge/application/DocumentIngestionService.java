@@ -1,5 +1,6 @@
 package com.liming.rag.knowledge.application;
 
+import com.liming.rag.identity.api.AuditTrail;
 import com.liming.rag.knowledge.application.KnowledgeQueries.DocumentRow;
 import com.liming.rag.knowledge.domain.Document;
 import com.liming.rag.knowledge.domain.DocumentRepository;
@@ -23,6 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class DocumentIngestionService {
 
     private final KnowledgeBaseService knowledgeBases;
+    private final AuditTrail audit;
     private final DocumentRepository documents;
     private final FileStorage storage;
     private final ApplicationEventPublisher events;
@@ -30,7 +32,9 @@ public class DocumentIngestionService {
     private final DocumentCalendar calendar;
 
     DocumentIngestionService(KnowledgeBaseService knowledgeBases, DocumentRepository documents,
-            FileStorage storage, ApplicationEventPublisher events, DocumentRemover remover, DocumentCalendar calendar) {
+            FileStorage storage, ApplicationEventPublisher events, DocumentRemover remover, DocumentCalendar calendar,
+            AuditTrail audit) {
+        this.audit = audit;
         this.knowledgeBases = knowledgeBases;
         this.documents = documents;
         this.storage = storage;
@@ -72,6 +76,11 @@ public class DocumentIngestionService {
             throw duplicate(filename);
         }
 
+        if (previous != null) {
+            // 新版本处理成功后自动删除旧版本（D-026）；替换在上传这一刻记审计（#145 C2）。
+            audit.record(tenantId, actor, "DOCUMENT_REPLACED", "DOCUMENT", String.valueOf(previous.id()),
+                    "知识库“" + knowledgeBase.name() + "”上传 " + file.filename() + " 替换 " + previous.filename());
+        }
         // 解析、分块、向量化在事务提交后由后台完成，上传请求只返回“解析中”的文档。
         events.publishEvent(new DocumentReceived(tenantId, document.id()));
         return row(document);
@@ -84,11 +93,13 @@ public class DocumentIngestionService {
      */
     @Transactional
     public void delete(TenantId tenantId, UserId actor, long knowledgeBaseId, long documentId) {
-        knowledgeBases.getManageable(tenantId, actor, knowledgeBaseId);
-        inKnowledgeBase(tenantId, knowledgeBaseId, documentId, "文档不存在");
+        var knowledgeBase = knowledgeBases.getManageable(tenantId, actor, knowledgeBaseId);
+        var document = inKnowledgeBase(tenantId, knowledgeBaseId, documentId, "文档不存在");
         if (!remover.remove(tenantId, documentId)) {
             throw new KnowledgeException(KnowledgeException.Reason.NOT_FOUND, "文档不存在");
         }
+        audit.record(tenantId, actor, "DOCUMENT_DELETED", "DOCUMENT", String.valueOf(documentId),
+                "删除知识库“" + knowledgeBase.name() + "”里的资料 " + document.filename());
     }
 
     /**

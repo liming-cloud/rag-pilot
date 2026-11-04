@@ -35,7 +35,7 @@ class KnowledgeBaseServiceTest {
             fixture.users, fixture.calendar, query -> {
                 searched.add(query);
                 return List.of(new SearchHit(1, 2, "doc", "doc", "text", 0.5));
-            });
+            }, fixture.audit);
 
     {
         fixture.users.user(1, "管理员").user(2, "店员", STORE_ROLE).user(3, "外人").user(9, "超级管理员");
@@ -123,6 +123,8 @@ class KnowledgeBaseServiceTest {
                 .containsExactly(ADMIN.value(), STAFF.value());
         assertThat(service.members(TENANT, ADMIN, kb.id())).extracting(KnowledgeBaseService.Member::displayName)
                 .containsExactly("管理员", "店员");
+        assertThat(fixture.audited).as("只有成功的授权记审计（#145 C2）").singleElement()
+                .satisfies(entry -> assertThat(entry).startsWith("KB_MEMBER_GRANTED 知识库“门店规范”授权给账号 "));
     }
 
     @Test
@@ -136,6 +138,8 @@ class KnowledgeBaseServiceTest {
 
         assertThat(service.accessible(TENANT, STAFF)).isEmpty();
         assertThat(service.accessible(TENANT, ADMIN)).extracting(KnowledgeBaseRef::id).containsExactly(kb.id());
+        assertThat(fixture.audited).extracting(entry -> entry.split(" ")[0])
+                .as("撤销自己失败不记").containsExactly("KB_MEMBER_GRANTED", "KB_MEMBER_REVOKED");
     }
 
     @Test
@@ -154,6 +158,10 @@ class KnowledgeBaseServiceTest {
         service.grantRole(TENANT, ADMIN, kb.id(), STORE_ROLE);
         service.on(new RoleDeleted(TENANT, STORE_ROLE));
         assertThat(service.roleGrants(TENANT, ADMIN, kb.id())).isEmpty();
+        assertThat(fixture.audited).as("角色删除时的收回由删除角色那条审计记录覆盖").containsExactly(
+                "KB_ROLE_GRANTED 知识库“门店规范”授权给角色 #" + STORE_ROLE,
+                "KB_ROLE_REVOKED 知识库“门店规范”收回角色 #" + STORE_ROLE + " 的授权",
+                "KB_ROLE_GRANTED 知识库“门店规范”授权给角色 #" + STORE_ROLE);
     }
 
     @Test

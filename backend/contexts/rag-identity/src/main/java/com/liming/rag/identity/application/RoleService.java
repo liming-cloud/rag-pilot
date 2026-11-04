@@ -1,5 +1,6 @@
 package com.liming.rag.identity.application;
 
+import com.liming.rag.identity.api.AuditTrail;
 import com.liming.rag.identity.api.RoleDeleted;
 import com.liming.rag.shared.TenantId;
 import com.liming.rag.shared.UserId;
@@ -23,9 +24,11 @@ public class RoleService {
     private final AccessService access;
     private final ApplicationEventPublisher events;
     private final PermissionRegistry permissions;
+    private final AuditTrail audit;
 
     RoleService(Roles roles, Accounts accounts, AccessService access, ApplicationEventPublisher events,
-            PermissionRegistry permissions) {
+            PermissionRegistry permissions, AuditTrail audit) {
+        this.audit = audit;
         this.roles = roles;
         this.accounts = accounts;
         this.access = access;
@@ -54,7 +57,10 @@ public class RoleService {
             throw nameTaken(trimmed);
         }
         try {
-            return new RoleSummary(roles.insert(new Role(null, tenantId, trimmed, null, granted)), 0);
+            var created = roles.insert(new Role(null, tenantId, trimmed, null, granted));
+            audit.record(tenantId, actor, "ROLE_CREATED", "ROLE", String.valueOf(created.id()),
+                    "新建角色 " + trimmed + "，权限点：" + codes(granted));
+            return new RoleSummary(created, 0);
         } catch (DuplicateKeyException e) {
             // 查重之后、插入之前别人建了同名角色：靠唯一约束兜底（#135）。
             throw nameTaken(trimmed);
@@ -89,12 +95,14 @@ public class RoleService {
         } catch (DuplicateKeyException e) {
             throw nameTaken(newName);
         }
+        audit.record(tenantId, actor, "ROLE_UPDATED", "ROLE", String.valueOf(id), "角色 " + role.name()
+                + (newName.equals(role.name()) ? "" : " 改名为 " + newName) + "，权限点：" + codes(granted));
         return new RoleSummary(updated, roles.userIds(id).size());
     }
 
     /** 删除自定义角色；授权给它的知识库由 knowledge 模块监听 {@link RoleDeleted} 一并收回。 */
     @Transactional
-    public void delete(TenantId tenantId, long id) {
+    public void delete(TenantId tenantId, UserId actor, long id) {
         var role = find(tenantId, id);
         if (role.builtIn() != null) {
             throw invalid("内置角色不能删除");
@@ -105,6 +113,7 @@ public class RoleService {
                     "还有 " + users + " 个账号属于这个角色，先移走才能删除");
         }
         roles.delete(id);
+        audit.record(tenantId, actor, "ROLE_DELETED", "ROLE", String.valueOf(id), "删除角色 " + role.name());
         events.publishEvent(new RoleDeleted(tenantId, id));
     }
 
@@ -146,5 +155,9 @@ public class RoleService {
 
     private static IdentityException invalid(String message) {
         return new IdentityException(IdentityException.Reason.INVALID, message);
+    }
+
+    private static String codes(java.util.Set<String> granted) {
+        return granted.isEmpty() ? "无" : String.join("、", new java.util.TreeSet<>(granted));
     }
 }

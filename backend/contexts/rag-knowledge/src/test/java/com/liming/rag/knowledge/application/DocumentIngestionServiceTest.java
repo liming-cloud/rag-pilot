@@ -28,10 +28,10 @@ class DocumentIngestionServiceTest {
     private final InMemoryKnowledge fixture = new InMemoryKnowledge();
     private final List<Object> events = new ArrayList<>();
     private final KnowledgeBaseService knowledgeBases = new KnowledgeBaseService(fixture.knowledgeBases,
-            fixture.queries, fixture.users, fixture.calendar, query -> List.of());
+            fixture.queries, fixture.users, fixture.calendar, query -> List.of(), fixture.audit);
     private final DocumentIngestionService service = new DocumentIngestionService(knowledgeBases,
             fixture.documents, fixture.files, events::add, new DocumentRemover(fixture.documents, fixture.files),
-            fixture.calendar);
+            fixture.calendar, fixture.audit);
     private final long kb;
 
     {
@@ -111,6 +111,7 @@ class DocumentIngestionServiceTest {
                 KnowledgeException.Reason.NOT_FOUND);
         assertReason(() -> service.delete(TENANT, OUTSIDER, kb, document.id()), KnowledgeException.Reason.NOT_FOUND);
         assertThat(fixture.documents.rows).containsOnlyKeys(document.id());
+        assertThat(fixture.audited).as("被拒绝的操作不记审计（#145 C2）").isEmpty();
     }
 
     @Test
@@ -140,6 +141,9 @@ class DocumentIngestionServiceTest {
         assertThat(cleared.expiresOn()).isNull();
         assertReason(() -> service.ingest(TENANT, ADMIN, otherKb, "错库.txt", bytes("错库"), old.id(), null, null),
                 KnowledgeException.Reason.NOT_FOUND);
+        assertThat(fixture.audited).containsExactly(
+                "DOCUMENT_REPLACED 知识库“门店规范”上传 陈列规范-新版.txt 替换 陈列规范.txt",
+                "DOCUMENT_REPLACED 知识库“门店规范”上传 陈列规范-再版.txt 替换 陈列规范.txt");
     }
 
     @Test
@@ -157,6 +161,8 @@ class DocumentIngestionServiceTest {
 
         assertThat(fixture.documents.rows).isEmpty();
         assertReason(() -> service.delete(TENANT, ADMIN, kb, shared.id()), KnowledgeException.Reason.NOT_FOUND);
+        assertThat(fixture.audited).containsExactly("DOCUMENT_DELETED 删除知识库“门店规范”里的资料 共用.txt",
+                "DOCUMENT_DELETED 删除知识库“商品知识”里的资料 共用.txt");
     }
 
     @Test

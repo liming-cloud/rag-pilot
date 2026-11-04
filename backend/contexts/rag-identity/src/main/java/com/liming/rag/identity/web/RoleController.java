@@ -87,6 +87,6 @@ class RoleController {
     @DeleteMapping("/api/roles/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     void delete(@PathVariable long id) {
-        roles.delete(currentUser.tenantId(), id);
+        roles.delete(currentUser.tenantId(), currentUser.userId(), id);
     }
 }

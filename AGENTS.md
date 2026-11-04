@@ -46,6 +46,7 @@
 - SQL 只写在 Mapper XML（`src/main/resources/mapper/<模块名>/<Mapper 名>.xml`）里；不用 `@Select` 等 SQL 注解，条件构造器不拼原始 SQL（`apply`、`last`、`inSql` 等）。简单的单表条件用 `LambdaQueryWrapper`。
 - 配置只通过各模块的 `@ConfigurationProperties` record 读取（如 `AnsweringProperties`），取值在构造时校验，非法配置启动失败；不用 `@Value`。
 - 要当前时间的类注入 rag-app 声明的 `Clock`（UTC），不直接调用 `now()`，测试传固定时钟。
+- 管理操作（授权、角色和权限点、账号、删除和替换资料、系统设置）在应用服务里、操作成功之后经 identity 的 `AuditTrail` 记一条审计，和操作同一个事务（D-052）；说明里不写密码、密钥。
 - 登录和角色校验只用 Sa-Token 注解；登录会话和密码摘要经 identity 的端口 `Sessions`、`PasswordHasher`，application、domain 不依赖 Sa-Token。权限点由各上下文在自己的 `api` 包里声明（实现 identity 的 `PermissionCatalog`），identity 运行时汇总。
 - 不新增 Maven 模块、外部服务、依赖或抽象层，除非 DECISIONS.md 已记录理由。
 - Flyway 迁移放在所属模块的 `db/migration/<模块名>/`，版本号用 `V<yyyyMMddNNNN>__说明.sql`。

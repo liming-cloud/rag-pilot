@@ -20,7 +20,7 @@ class AccountAdminServiceTest {
 
     private final IdentityFixture fixture = new IdentityFixture();
     private final AccountAdminService service = new AccountAdminService(fixture.store, fixture.store, fixture.access,
-            fixture.sessions, fixture.passwords, Clock.systemUTC());
+            fixture.sessions, fixture.passwords, Clock.systemUTC(), fixture.audit);
 
     @Test
     @DisplayName("新建账号：去掉首尾空格，密码只存摘要，带上角色")
@@ -112,6 +112,30 @@ class AccountAdminServiceTest {
     }
 
     @Test
+    @DisplayName("新建、停用、改角色、重置密码、解锁都记审计（#145 C2）；被拒绝的操作不记")
+    void auditsAdminActions() {
+        var created = service.create(TENANT, fixture.admin, "audit01", "审计店员", "staff-password",
+                List.of(fixture.staffRole.id()));
+        var staff = new UserId(created.account().id());
+        service.setEnabled(TENANT, fixture.admin, staff, false);
+        service.assignRoles(TENANT, fixture.admin, staff, List.of(fixture.staffRole.id()));
+        service.resetPassword(TENANT, fixture.admin, staff, "temp-password");
+        service.unlock(TENANT, fixture.admin, staff);
+
+        assertThat(fixture.audited).containsExactly(
+                "ACCOUNT_CREATED 新建账号 audit01（审计店员），角色：" + fixture.staffRole.name(),
+                "ACCOUNT_DISABLED 停用账号 audit01",
+                "ACCOUNT_ROLES_CHANGED 账号 audit01 的角色改为：" + fixture.staffRole.name(),
+                "ACCOUNT_PASSWORD_RESET 重置了账号 audit01 的密码",
+                "ACCOUNT_UNLOCKED 解锁账号 audit01");
+
+        fixture.audited.clear();
+        assertThatThrownBy(() -> service.setEnabled(TENANT, fixture.admin, fixture.admin, false));
+        assertThatThrownBy(() -> service.resetPassword(TENANT, fixture.admin, fixture.superAdmin, "temp-password"));
+        assertThat(fixture.audited).isEmpty();
+    }
+
+    @Test
     @DisplayName("不能停用自己")
     void cannotDisableSelf() {
         assertThatThrownBy(() -> service.setEnabled(TENANT, fixture.superAdmin, fixture.superAdmin, false))
@@ -133,7 +157,7 @@ class AccountAdminServiceTest {
         assertThat(fixture.sessions.kickedOut).as("重置密码后对方已登录的会话失效").containsExactly(staff.value());
 
         fixture.store.seedFailedLogins(staff.value(), 3, java.time.OffsetDateTime.now().plusMinutes(10));
-        service.unlock(TENANT, staff);
+        service.unlock(TENANT, fixture.admin, staff);
         assertThat(fixture.get(staff).failedAttempts()).isZero();
         assertThat(fixture.get(staff).lockedUntil()).isNull();
     }
@@ -141,10 +165,10 @@ class AccountAdminServiceTest {
     @Test
     @DisplayName("跨租户的账号当作不存在")
     void otherTenantNotFound() {
-        assertThatThrownBy(() -> service.unlock(OTHER_TENANT, fixture.admin))
+        assertThatThrownBy(() -> service.unlock(OTHER_TENANT, fixture.admin, fixture.admin))
                 .isInstanceOf(IdentityException.class)
                 .satisfies(error -> assertThat(((IdentityException) error).kind()).isEqualTo(ErrorKind.NOT_FOUND));
-        assertThatThrownBy(() -> service.unlock(TENANT, new UserId(999))).hasMessage("账号不存在");
+        assertThatThrownBy(() -> service.unlock(TENANT, fixture.admin, new UserId(999))).hasMessage("账号不存在");
     }
 
     private static void assertEscalation(org.assertj.core.api.ThrowableAssert.ThrowingCallable call, String hint) {

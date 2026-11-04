@@ -50,6 +50,10 @@ final class InMemoryKnowledge {
     final Queries queries = new Queries();
     final Index index = new Index();
     final Directory users = new Directory();
+    /** 记下的审计：每条是“操作 说明”（#145 C2）。 */
+    final List<String> audited = new ArrayList<>();
+    final com.liming.rag.identity.api.AuditTrail audit =
+            (tenantId, actor, action, targetType, targetId, detail) -> audited.add(action + " " + detail);
     final DocumentCalendar calendar = calendar();
 
     private static DocumentCalendar calendar() {

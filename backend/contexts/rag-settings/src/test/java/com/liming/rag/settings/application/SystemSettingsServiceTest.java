@@ -23,10 +23,13 @@ class SystemSettingsServiceTest {
     private static final UserId ADMIN = new UserId(1);
 
     private final MemoryStore store = new MemoryStore();
+    /** 记下的审计：每条是“操作 说明”（#145 C2）。 */
+    private final List<String> audited = new java.util.ArrayList<>();
 
     private SystemSettingsService service(String pack, SettingsProperties.Branding branding) {
         return new SystemSettingsService(store, new OneUser(),
-                new SettingsProperties("", pack, branding, "Asia/Shanghai"), Clock.systemUTC());
+                new SettingsProperties("", pack, branding, "Asia/Shanghai"), Clock.systemUTC(),
+                (tenantId, actor, action, targetType, targetId, detail) -> audited.add(action + " " + detail));
     }
 
     private SystemSettingsService retail() {
@@ -71,8 +74,11 @@ class SystemSettingsServiceTest {
         assertThat(saved.updatedBy()).isEqualTo("超级管理员");
         assertThat(settings.refusalMessage()).isEqualTo("资料里没有依据，请联系总部。");
 
-        var restored = settings.restore(SettingKey.REFUSAL_MESSAGE);
+        var restored = settings.restore(TENANT, ADMIN, SettingKey.REFUSAL_MESSAGE);
         assertThat(restored.source()).isEqualTo(Source.INDUSTRY_PACK);
+        assertThat(audited).as("保存和恢复默认都记审计（#145 C2）").containsExactly(
+                "SETTING_CHANGED 修改系统设置 REFUSAL_MESSAGE：资料里没有依据，请联系总部。",
+                "SETTING_RESTORED 系统设置 REFUSAL_MESSAGE 恢复为默认值");
         assertThat(settings.refusalMessage()).contains("联系店长确认");
     }
 
@@ -104,6 +110,7 @@ class SystemSettingsServiceTest {
         assertThatThrownBy(() -> settings.save(TENANT, ADMIN, SettingKey.BRAND_NAME, List.of("名".repeat(31))))
                 .isInstanceOf(SettingsException.class).hasMessageContaining("最多 30 个字");
         assertThat(store.saved).isEmpty();
+        assertThat(audited).as("不合格的保存不记审计").isEmpty();
     }
 
     private static Map<SettingKey, SystemSettingsService.Item> items(SystemSettingsService settings) {

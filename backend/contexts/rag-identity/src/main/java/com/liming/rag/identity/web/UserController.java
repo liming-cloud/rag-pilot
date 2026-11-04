@@ -103,7 +103,7 @@ class UserController {
     @PostMapping("/{id}/unlock")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     void unlock(@PathVariable long id) {
-        accounts.unlock(currentUser.tenantId(), new UserId(id));
+        accounts.unlock(currentUser.tenantId(), currentUser.userId(), new UserId(id));
     }
 
     /** 批量导入的预检：逐行列出问题，不写入（#124）。文件由前端解析成行，后端只收行。 */

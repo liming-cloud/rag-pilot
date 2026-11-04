@@ -1,5 +1,6 @@
 package com.liming.rag.knowledge.application;
 
+import com.liming.rag.identity.api.AuditTrail;
 import com.liming.rag.identity.api.RoleDeleted;
 import com.liming.rag.identity.api.UserDirectory;
 import com.liming.rag.identity.api.UserDirectory.UserSummary;
@@ -37,13 +38,15 @@ import org.springframework.transaction.annotation.Transactional;
 public class KnowledgeBaseService implements KnowledgeAccess {
 
     private final KnowledgeBaseRepository knowledgeBases;
+    private final AuditTrail audit;
     private final KnowledgeQueries queries;
     private final UserDirectory users;
     private final DocumentCalendar calendar;
     private final KnowledgeSearch search;
 
     public KnowledgeBaseService(KnowledgeBaseRepository knowledgeBases, KnowledgeQueries queries,
-            UserDirectory users, DocumentCalendar calendar, KnowledgeSearch search) {
+            UserDirectory users, DocumentCalendar calendar, KnowledgeSearch search, AuditTrail audit) {
+        this.audit = audit;
         this.knowledgeBases = knowledgeBases;
         this.queries = queries;
         this.users = users;
@@ -183,6 +186,8 @@ public class KnowledgeBaseService implements KnowledgeAccess {
         }
         knowledgeBase.grant(userId);
         knowledgeBases.save(knowledgeBase);
+        audit(tenantId, actor, "KB_MEMBER_GRANTED", knowledgeBase, "知识库“" + knowledgeBase.name() + "”授权给账号 "
+                + username(tenantId, userId));
     }
 
     /** 不能撤销自己，规则见 {@link KnowledgeBase#revoke}。 */
@@ -195,6 +200,8 @@ public class KnowledgeBaseService implements KnowledgeAccess {
             throw new KnowledgeException(KnowledgeException.Reason.INVALID, e.getMessage());
         }
         knowledgeBases.save(knowledgeBase);
+        audit(tenantId, actor, "KB_MEMBER_REVOKED", knowledgeBase, "知识库“" + knowledgeBase.name() + "”撤销账号 "
+                + username(tenantId, userId) + " 的授权");
     }
 
     @Transactional(readOnly = true)
@@ -222,6 +229,7 @@ public class KnowledgeBaseService implements KnowledgeAccess {
         }
         knowledgeBase.grantRole(roleId);
         knowledgeBases.save(knowledgeBase);
+        audit(tenantId, actor, "KB_ROLE_GRANTED", knowledgeBase, "知识库“" + knowledgeBase.name() + "”授权给角色 #" + roleId);
     }
 
     /** 收回角色授权：属于这个角色、又没有其他途径获得授权的账号立即检索不到。 */
@@ -230,6 +238,17 @@ public class KnowledgeBaseService implements KnowledgeAccess {
         var knowledgeBase = getManageable(tenantId, actor, knowledgeBaseId);
         knowledgeBase.revokeRole(roleId);
         knowledgeBases.save(knowledgeBase);
+        audit(tenantId, actor, "KB_ROLE_REVOKED", knowledgeBase, "知识库“" + knowledgeBase.name() + "”收回角色 #" + roleId
+                + " 的授权");
+    }
+
+    private void audit(TenantId tenantId, UserId actor, String action, KnowledgeBase knowledgeBase, String detail) {
+        audit.record(tenantId, actor, action, "KNOWLEDGE_BASE", String.valueOf(knowledgeBase.id()), detail);
+    }
+
+    private String username(TenantId tenantId, UserId userId) {
+        var summary = users.summaries(tenantId, List.of(userId.value())).get(userId.value());
+        return summary == null ? "#" + userId.value() : summary.username();
     }
 
     /** 角色被删除时一并收回授权给它的库，在删除角色的事务里执行。 */

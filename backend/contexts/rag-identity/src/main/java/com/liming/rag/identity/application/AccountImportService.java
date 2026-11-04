@@ -1,5 +1,6 @@
 package com.liming.rag.identity.application;
 
+import com.liming.rag.identity.api.AuditTrail;
 import com.liming.rag.shared.TenantId;
 import com.liming.rag.shared.UserId;
 import java.util.ArrayList;
@@ -28,8 +29,10 @@ public class AccountImportService {
     private final Roles roles;
     private final AccessService access;
     private final PasswordHasher passwords;
+    private final AuditTrail audit;
 
-    AccountImportService(Accounts accounts, Roles roles, AccessService access, PasswordHasher passwords) {
+    AccountImportService(Accounts accounts, Roles roles, AccessService access, PasswordHasher passwords, AuditTrail audit) {
+        this.audit = audit;
         this.accounts = accounts;
         this.roles = roles;
         this.access = access;
@@ -86,6 +89,9 @@ public class AccountImportService {
             // 预检之后、导入之前别人建了同名账号：整批回滚。
             throw new IdentityException(IdentityException.Reason.CONFLICT, "有用户名刚被别人使用，请重新检查后再导入");
         }
+        var names = rows.stream().map(Row::username).limit(20).toList();
+        audit.record(tenantId, actor, "ACCOUNTS_IMPORTED", "ACCOUNT", "-", "批量导入 " + rows.size() + " 个账号："
+                + String.join("、", names) + (rows.size() > names.size() ? " 等" : ""));
         return rows.size();
     }
 
