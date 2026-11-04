@@ -17,8 +17,9 @@ import { Label } from "@/components/ui/label";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Pagination } from "@/components/ui/pagination";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { ErrorMessage } from "@/lib/errors";
 import { Can, PERMISSIONS } from "@/lib/permissions";
-import { createKnowledgeBase, fetchKnowledgeBasePage } from "./api";
+import { createKnowledgeBase, fetchKnowledgeBasePage, knowledgeKeys } from "./api";
 
 const PAGE_SIZE = 20;
 
@@ -37,7 +38,7 @@ export function KnowledgePage() {
   const [keyword, setKeyword] = useState("");
   const [creating, setCreating] = useState(false);
   const knowledgeBases = useQuery({
-    queryKey: ["knowledge-bases", "page", filter],
+    queryKey: knowledgeKeys.page(filter),
     queryFn: () => fetchKnowledgeBasePage(filter),
     placeholderData: keepPreviousData,
   });
@@ -90,7 +91,7 @@ export function KnowledgePage() {
           查询
         </Button>
       </form>
-      {knowledgeBases.isError && <p className="text-destructive">读取知识库失败，请稍后重试。</p>}
+      {knowledgeBases.isError && <ErrorMessage error="读取知识库失败，请稍后重试。" className="text-base" />}
       <div className="rounded-lg border bg-card">
         <Table aria-label="知识库">
           <TableHeader>
@@ -173,7 +174,7 @@ function CreateDialog({ onDone }: { onDone: () => void }) {
   const create = useMutation({
     mutationFn: () => createKnowledgeBase(name.trim()),
     onSuccess: async (created) => {
-      await queryClient.invalidateQueries({ queryKey: ["knowledge-bases"] });
+      await queryClient.invalidateQueries({ queryKey: knowledgeKeys.all });
       onDone();
       void navigate(`/admin/knowledge/${created.id}`);
     },
@@ -195,7 +196,7 @@ function CreateDialog({ onDone }: { onDone: () => void }) {
           名称
           <Input required maxLength={50} value={name} onChange={(event) => setName(event.target.value)} />
         </Label>
-        {create.isError && <p className="text-sm text-destructive">{create.error.message}</p>}
+        <ErrorMessage error={create.error} />
         <DialogFooter>
           <Button type="button" variant="ghost" size="sm" onClick={onDone}>
             取消

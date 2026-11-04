@@ -203,3 +203,11 @@ export const DEFAULT_CHAT_TEXTS: ChatTexts = {
 export async function fetchChatTexts(): Promise<ChatTexts> {
   return json(await authFetch("/api/settings/chat"), "读取问答页文案失败");
 }
+
+/** 问答页用到的查询键（#145：查询键收在各自的 api.ts）。 */
+export const chatKeys = {
+  conversations: ["conversations"],
+  /** id 为 null 时查询不启用（还没有会话）。 */
+  conversation: (id: number | null) => ["conversation", id] as const,
+  texts: ["chat-texts"],
+} as const;

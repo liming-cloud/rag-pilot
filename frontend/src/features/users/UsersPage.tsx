@@ -17,20 +17,11 @@ import { Label } from "@/components/ui/label";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Pagination } from "@/components/ui/pagination";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { fetchRoles, type Role } from "@/features/roles/api";
+import { fetchRoles, type Role, roleKeys } from "@/features/roles/api";
+import { ErrorMessage } from "@/lib/errors";
 import { Can, PERMISSIONS } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
-import {
-  type Account,
-  assignRoles,
-  createUser,
-  fetchUsers,
-  type NewAccount,
-  resetPassword,
-  setUserEnabled,
-  unlockUser,
-  type UserFilter,
-} from "./api";
+import { type Account, assignRoles, createUser, fetchUsers, type NewAccount, resetPassword, setUserEnabled, unlockUser, type UserFilter, userKeys } from "./api";
 import { ImportDialog } from "./ImportDialog";
 
 const PAGE_SIZE = 20;
@@ -44,16 +35,16 @@ export function UsersPage() {
   const [filter, setFilter] = useState<UserFilter>({ page: 1, size: PAGE_SIZE });
   const [keyword, setKeyword] = useState("");
   const users = useQuery({
-    queryKey: ["users", filter],
+    queryKey: userKeys.list(filter),
     queryFn: () => fetchUsers(filter),
     placeholderData: keepPreviousData,
   });
-  const roles = useQuery({ queryKey: ["roles"], queryFn: fetchRoles });
+  const roles = useQuery({ queryKey: roleKeys.all, queryFn: fetchRoles });
   const assignable = roles.data?.filter((role) => role.builtIn !== "SUPER_ADMIN") ?? [];
   const [dialog, setDialog] = useState<
     { kind: "create" | "import" } | { kind: "roles" | "password"; account: Account } | null
   >(null);
-  const refresh = () => queryClient.invalidateQueries({ queryKey: ["users"] });
+  const refresh = () => queryClient.invalidateQueries({ queryKey: userKeys.all });
   const toggle = useMutation({
     mutationFn: (account: Account) => setUserEnabled(account.id, !account.enabled),
     onSuccess: refresh,
@@ -127,9 +118,9 @@ export function UsersPage() {
           查询
         </Button>
       </form>
-      {users.isError && <p className="text-destructive">{users.error.message}</p>}
+      <ErrorMessage error={users.error} className="text-base" />
       {(toggle.isError || unlock.isError) && (
-        <p className="text-sm text-destructive">{(toggle.error ?? unlock.error)?.message}</p>
+        <ErrorMessage error={toggle.error ?? unlock.error} />
       )}
       <div className="rounded-lg border bg-card">
         <Table aria-label="账号">
@@ -304,8 +295,8 @@ function RolePicker({
 function useRefreshUsers() {
   const queryClient = useQueryClient();
   return async () => {
-    await queryClient.invalidateQueries({ queryKey: ["users"] });
-    await queryClient.invalidateQueries({ queryKey: ["roles"] });
+    await queryClient.invalidateQueries({ queryKey: userKeys.all });
+    await queryClient.invalidateQueries({ queryKey: roleKeys.all });
   };
 }
 
@@ -351,7 +342,7 @@ function CreateDialog({ roles, onDone }: { roles: Role[]; onDone: () => void }) 
           <Input type="password" autoComplete="new-password" required {...field("password")} />
         </Label>
         <RolePicker roles={roles} selected={form.roleIds} onChange={(roleIds) => setForm({ ...form, roleIds })} />
-        {create.isError && <p className="text-sm text-destructive">{create.error.message}</p>}
+        <ErrorMessage error={create.error} />
         <DialogFooter>
           <Button type="button" variant="ghost" size="sm" onClick={onDone}>
             取消
@@ -382,7 +373,7 @@ function RolesDialog({ account, roles, onDone }: { account: Account; roles: Role
         <DialogDescription>只能分配不超过你自己权限的角色。</DialogDescription>
       </DialogHeader>
       <RolePicker roles={roles} selected={roleIds} onChange={setRoleIds} />
-      {save.isError && <p className="text-sm text-destructive">{save.error.message}</p>}
+      <ErrorMessage error={save.error} />
       <DialogFooter>
         <Button variant="ghost" size="sm" onClick={onDone}>
           取消
@@ -433,7 +424,7 @@ function PasswordDialog({ account, onDone }: { account: Account; onDone: () => v
               onChange={(event) => setPassword(event.target.value)}
             />
           </Label>
-          {reset.isError && <p className="text-sm text-destructive">{reset.error.message}</p>}
+          <ErrorMessage error={reset.error} />
           <DialogFooter>
             <Button type="button" variant="ghost" size="sm" onClick={onDone}>
               取消

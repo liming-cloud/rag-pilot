@@ -65,7 +65,7 @@ export async function fetchMe(): Promise<Me> {
 }
 
 export function useMe() {
-  return useQuery({ queryKey: ["me"], queryFn: fetchMe, staleTime: 5 * 60 * 1000 });
+  return useQuery({ queryKey: meKey, queryFn: fetchMe, staleTime: 5 * 60 * 1000 });
 }
 
 /** 当前账号有没有这个权限点；还没读到时当作没有。 */
@@ -80,3 +80,6 @@ export function useCan(permission: Permission): boolean {
 export function Can({ permission, children }: { permission: Permission; children: ReactNode }) {
   return useCan(permission) ? children : null;
 }
+
+/** 当前账号的查询键；登录、改密码后让它失效。 */
+export const meKey = ["me"] as const;

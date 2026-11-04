@@ -7,17 +7,10 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { ErrorMessage } from "@/lib/errors";
 import { Can, PERMISSIONS, useCan } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
-import {
-  createRole,
-  deleteRole,
-  fetchPermissionCatalog,
-  fetchRoles,
-  type PermissionGroup,
-  type Role,
-  updateRole,
-} from "./api";
+import { createRole, deleteRole, fetchPermissionCatalog, fetchRoles, type PermissionGroup, type Role, roleKeys, updateRole } from "./api";
 
 /**
  * 角色与权限（D-038、D-039）：左边选角色。右边默认只读，每个菜单一行，只列出这个角色有的权限；
@@ -25,8 +18,8 @@ import {
  * 超级管理员只读；还有账号的角色和内置角色不能删。
  */
 export function RolesPage() {
-  const roles = useQuery({ queryKey: ["roles"], queryFn: fetchRoles });
-  const catalog = useQuery({ queryKey: ["permission-catalog"], queryFn: fetchPermissionCatalog });
+  const roles = useQuery({ queryKey: roleKeys.all, queryFn: fetchRoles });
+  const catalog = useQuery({ queryKey: roleKeys.catalog, queryFn: fetchPermissionCatalog });
   const [selectedId, setSelectedId] = useState<number | "new" | null>(null);
   const selected =
     selectedId === "new" ? "new" : (roles.data?.find((role) => role.id === selectedId) ?? roles.data?.[0] ?? null);
@@ -35,7 +28,7 @@ export function RolesPage() {
     <main className="mx-auto grid max-w-6xl gap-6 p-6 md:grid-cols-[220px_1fr] md:p-8">
       <aside className="flex flex-col gap-3">
         <h1 className="font-serif text-2xl font-semibold">角色与权限</h1>
-        {roles.isError && <p className="text-destructive">读取角色失败，请稍后重试。</p>}
+        {roles.isError && <ErrorMessage error="读取角色失败，请稍后重试。" className="text-base" />}
         <nav aria-label="角色" className="flex flex-col gap-1">
           {roles.data?.map((role) => (
             <button
@@ -93,7 +86,7 @@ function RoleDetail({
   const [editing, setEditing] = useState(role === null);
   const [name, setName] = useState(role?.name ?? "");
   const [granted, setGranted] = useState<Set<string>>(new Set(role?.permissions ?? [PERMISSIONS.CHAT_USE]));
-  const refresh = () => queryClient.invalidateQueries({ queryKey: ["roles"] });
+  const refresh = () => queryClient.invalidateQueries({ queryKey: roleKeys.all });
 
   const save = useMutation({
     mutationFn: () =>
@@ -235,11 +228,7 @@ function RoleDetail({
           </TableBody>
         </Table>
       </div>
-      {(save.isError || remove.isError) && (
-        <p role="alert" className="text-sm text-destructive">
-          {(save.error ?? remove.error)?.message}
-        </p>
-      )}
+      <ErrorMessage error={save.error ?? remove.error} />
       {editing ? (
         <div className="sticky bottom-0 flex items-center gap-2 border-t bg-background py-3">
           <Button size="sm" disabled={save.isPending || !name.trim()} onClick={() => save.mutate()}>

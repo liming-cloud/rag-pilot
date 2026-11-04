@@ -84,3 +84,8 @@ export function zoneLabel(zone: string): string {
     )[zone] ?? zone
   );
 }
+
+/** 运营概览的查询键。 */
+export const statsKeys = {
+  usage: (period: StatsPeriod) => ["usage-stats", period] as const,
+} as const;

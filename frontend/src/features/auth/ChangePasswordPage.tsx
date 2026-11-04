@@ -4,7 +4,8 @@ import { useNavigate } from "react-router";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useMe } from "@/lib/permissions";
+import { ErrorMessage } from "@/lib/errors";
+import { meKey, useMe } from "@/lib/permissions";
 import { changePassword } from "./api";
 
 /**
@@ -38,7 +39,7 @@ export function ChangePasswordPage() {
     setError(null);
     try {
       await changePassword(form.oldPassword, form.newPassword);
-      await queryClient.invalidateQueries({ queryKey: ["me"] });
+      await queryClient.invalidateQueries({ queryKey: meKey });
       void navigate("/chat", { replace: true });
     } catch (e) {
       setError(e instanceof Error ? e.message : "修改密码失败");
@@ -71,11 +72,7 @@ export function ChangePasswordPage() {
           再输一次新密码
           <Input type="password" autoComplete="new-password" required {...field("confirm")} />
         </Label>
-        {error && (
-          <p role="alert" className="text-sm text-destructive">
-            {error}
-          </p>
-        )}
+        <ErrorMessage error={error} />
         <Button type="submit" disabled={submitting}>
           保存新密码
         </Button>

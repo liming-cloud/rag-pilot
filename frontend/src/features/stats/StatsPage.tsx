@@ -6,18 +6,10 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { fetchExpirySummary } from "@/features/knowledge/api";
+import { fetchExpirySummary, knowledgeKeys } from "@/features/knowledge/api";
+import { ErrorMessage } from "@/lib/errors";
 import { Can, PERMISSIONS, useCan } from "@/lib/permissions";
-import {
-  exportUsageCsv,
-  fetchUsageStats,
-  RANGES,
-  recentWeeks,
-  type StatsPeriod,
-  type Totals,
-  type UsageStats,
-  zoneLabel,
-} from "./api";
+import { exportUsageCsv, fetchUsageStats, RANGES, recentWeeks, statsKeys, type StatsPeriod, type Totals, type UsageStats, zoneLabel } from "./api";
 
 const REASONS: Record<string, string> = {
   NO_EVIDENCE: "知识库里没有内容",
@@ -38,7 +30,7 @@ const EXPIRY_ROWS = 5;
  */
 export function StatsPage() {
   const [period, setPeriod] = useState<StatsPeriod>({ days: 30 });
-  const stats = useQuery({ queryKey: ["usage-stats", period], queryFn: () => fetchUsageStats(period) });
+  const stats = useQuery({ queryKey: statsKeys.usage(period), queryFn: () => fetchUsageStats(period) });
   const weeks = recentWeeks(stats.data?.zone ?? "Asia/Shanghai");
   const week = "week" in period ? period.week : "";
   const exporting = useMutation({
@@ -96,7 +88,7 @@ export function StatsPage() {
         {exporting.isError && <span className="text-sm text-destructive">{exporting.error.message}</span>}
       </div>
       {stats.isPending && <p className="text-muted-foreground">正在统计…</p>}
-      {stats.isError && <p className="text-destructive">{stats.error.message}</p>}
+      <ErrorMessage error={stats.error} className="text-base" />
       {stats.data && <StatsView stats={stats.data} />}
     </main>
   );
@@ -248,7 +240,7 @@ function rateChange(current: Totals, previous: Totals, parts: (totals: Totals) =
 function ExpirySection() {
   const canView = useCan(PERMISSIONS.KB_VIEW);
   const summary = useQuery({
-    queryKey: ["knowledge-bases", "expiry-summary"],
+    queryKey: knowledgeKeys.expirySummary,
     queryFn: fetchExpirySummary,
     enabled: canView,
   });

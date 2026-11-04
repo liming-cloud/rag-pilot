@@ -92,3 +92,9 @@ export function toEvalDrafts(reviews: AnswerReview[]) {
       .join(" "),
   }));
 }
+
+/** 回答记录的查询键；reviews 是前缀。 */
+export const answerKeys = {
+  reviews: ["answer-reviews"],
+  reviewPage: (filter: AnswerFilter) => ["answer-reviews", filter] as const,
+} as const;

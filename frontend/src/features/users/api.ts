@@ -104,3 +104,9 @@ export async function importUsers(rows: ImportRow[], password: string): Promise<
   });
   return json(response, "导入失败");
 }
+
+/** 账号相关的查询键；all 是前缀。 */
+export const userKeys = {
+  all: ["users"],
+  list: (filter: UserFilter) => ["users", filter] as const,
+} as const;

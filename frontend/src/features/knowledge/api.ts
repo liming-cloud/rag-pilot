@@ -199,3 +199,15 @@ export async function deleteDocument(knowledgeBaseId: number, documentId: number
     await json(response, "删除失败");
   }
 }
+
+/** 知识库相关的查询键；all 是前缀，让它失效时列表、详情、文档一起刷新。 */
+export const knowledgeKeys = {
+  all: ["knowledge-bases"],
+  page: (filter: Parameters<typeof fetchKnowledgeBasePage>[0]) => ["knowledge-bases", "page", filter] as const,
+  detail: (id: number) => ["knowledge-bases", id] as const,
+  documents: (knowledgeBaseId: number, filter: DocumentFilter) =>
+    ["knowledge-bases", knowledgeBaseId, "documents", filter] as const,
+  expirySummary: ["knowledge-bases", "expiry-summary"],
+  members: (knowledgeBaseId: number) => ["knowledge-bases", knowledgeBaseId, "members"] as const,
+  roleGrants: (knowledgeBaseId: number) => ["knowledge-bases", knowledgeBaseId, "role-grants"] as const,
+} as const;

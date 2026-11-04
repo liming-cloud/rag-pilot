@@ -9,8 +9,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import type { Role } from "@/features/roles/api";
-import { checkImport, type ImportProblem, type ImportRow, importUsers } from "./api";
+import { checkImport, type ImportProblem, type ImportRow, importUsers, userKeys } from "./api";
 import { decode, MAX_ROWS, readBytes, template, toRows } from "./csv";
+import { roleKeys } from "@/features/roles/api";
+import { ErrorMessage } from "@/lib/errors";
 
 type Stage =
   | { kind: "choose"; error: string | null }
@@ -42,8 +44,8 @@ export function ImportDialog({ roles, onDone }: { roles: Role[]; onDone: () => v
   const submit = useMutation({
     mutationFn: (rows: ImportRow[]) => importUsers(rows, password),
     onSuccess: async ({ imported }) => {
-      await queryClient.invalidateQueries({ queryKey: ["users"] });
-      await queryClient.invalidateQueries({ queryKey: ["roles"] });
+      await queryClient.invalidateQueries({ queryKey: userKeys.all });
+      await queryClient.invalidateQueries({ queryKey: roleKeys.all });
       setStage({ kind: "done", imported });
     },
   });
@@ -264,7 +266,7 @@ function Review({
           </span>
         </Label>
       )}
-      {error && <p className="text-sm text-destructive">{error}</p>}
+      <ErrorMessage error={error} />
       <DialogFooter>
         <Button type="button" variant="ghost" size="sm" onClick={onCancel}>
           取消

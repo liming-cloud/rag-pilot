@@ -2,9 +2,10 @@ import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft } from "lucide-react";
 import { Link, useParams, useSearchParams } from "react-router";
 import { Button } from "@/components/ui/button";
+import { ErrorMessage } from "@/lib/errors";
 import { PERMISSIONS, useCan } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
-import { fetchKnowledgeBase } from "./api";
+import { fetchKnowledgeBase, knowledgeKeys } from "./api";
 import { DocumentsPanel } from "./DocumentsPanel";
 import { GrantsPanel } from "./GrantsPanel";
 
@@ -16,7 +17,7 @@ export function KnowledgeDetailPage() {
   const [params, setParams] = useSearchParams();
   const canGrant = useCan(PERMISSIONS.KB_GRANT);
   const tab = params.get("tab") === "grants" && canGrant ? "grants" : "documents";
-  const knowledgeBase = useQuery({ queryKey: ["knowledge-bases", id], queryFn: () => fetchKnowledgeBase(id) });
+  const knowledgeBase = useQuery({ queryKey: knowledgeKeys.detail(id), queryFn: () => fetchKnowledgeBase(id) });
 
   const tabs = [{ key: "documents", label: "文档" }, ...(canGrant ? [{ key: "grants", label: "授权" }] : [])] as const;
 
@@ -28,7 +29,7 @@ export function KnowledgeDetailPage() {
           全部知识库
         </Link>
       </Button>
-      {knowledgeBase.isError && <p className="text-destructive">知识库不存在或你没有权限。</p>}
+      {knowledgeBase.isError && <ErrorMessage error="知识库不存在或你没有权限。" className="text-base" />}
       {knowledgeBase.data && (
         <>
           <h1 className="font-serif text-2xl font-semibold">{knowledgeBase.data.name}</h1>

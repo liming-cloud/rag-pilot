@@ -17,16 +17,9 @@ import { Label } from "@/components/ui/label";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Pagination } from "@/components/ui/pagination";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { ErrorMessage } from "@/lib/errors";
 import { Can, PERMISSIONS } from "@/lib/permissions";
-import {
-  type AnswerFilter,
-  type AnswerReview,
-  fetchAllAnswerReviews,
-  fetchAnswerReviews,
-  markReview,
-  recheckAnswer,
-  toEvalDrafts,
-} from "./api";
+import { type AnswerFilter, answerKeys, type AnswerReview, fetchAllAnswerReviews, fetchAnswerReviews, markReview, recheckAnswer, toEvalDrafts } from "./api";
 
 const PAGE_SIZE = 20;
 const FILTERS: AnswerFilter["filter"][] = ["disliked", "refused", "all"];
@@ -49,7 +42,7 @@ export function AnswersPage() {
   const [opened, setOpened] = useState<AnswerReview | null>(null);
   const [exporting, setExporting] = useState(false);
   const reviews = useQuery({
-    queryKey: ["answer-reviews", filter],
+    queryKey: answerKeys.reviewPage(filter),
     queryFn: () => fetchAnswerReviews(filter),
     placeholderData: keepPreviousData,
   });
@@ -136,7 +129,7 @@ export function AnswersPage() {
         导出的是当前筛选条件下的全部记录（最多 1000
         条），要人工标注预期文档和答案关键词，放进仓库外的私有评测集（EVAL_DATA_DIR），不要提交到代码仓库。
       </p>
-      {reviews.isError && <p className="text-destructive">{reviews.error.message}</p>}
+      <ErrorMessage error={reviews.error} className="text-base" />
       <div className="rounded-lg border bg-card">
         <Table aria-label="回答记录">
           <TableHeader>
@@ -221,7 +214,7 @@ function ReviewDialog({ review, onDone }: { review: AnswerReview; onDone: () => 
     mutationFn: ({ status, text }: { status: "RESOLVED" | "OPEN"; text?: string }) =>
       markReview(review.id, status, text),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["answer-reviews"] });
+      await queryClient.invalidateQueries({ queryKey: answerKeys.reviews });
       onDone();
     },
   });
@@ -257,7 +250,7 @@ function ReviewDialog({ review, onDone }: { review: AnswerReview; onDone: () => 
         </div>
       )}
       {(recheck.isError || mark.isError) && (
-        <p className="text-sm text-destructive">{(recheck.error ?? mark.error)?.message}</p>
+        <ErrorMessage error={recheck.error ?? mark.error} />
       )}
       {resolving && (
         <Label className="flex flex-col gap-1 text-sm">

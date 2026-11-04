@@ -5,7 +5,8 @@ import { DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTit
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ACCEPT } from "./batchUpload";
-import { type KnowledgeDocument, updateValidity, type ValidityRange } from "./api";
+import { type KnowledgeDocument, knowledgeKeys, updateValidity, type ValidityRange } from "./api";
+import { ErrorMessage } from "@/lib/errors";
 
 /** 表格里显示的有效期，分成“某日起”“至某日”两段，窄屏时各占一行而不是把日期从中间折断。 */
 export function rangeParts({ effectiveFrom, expiresOn }: ValidityRange): string[] {
@@ -66,7 +67,7 @@ export function ValidityDialog({
   const save = useMutation({
     mutationFn: () => updateValidity(knowledgeBaseId, document.id, range),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["knowledge-bases"] });
+      await queryClient.invalidateQueries({ queryKey: knowledgeKeys.all });
       onDone();
     },
   });
@@ -86,7 +87,7 @@ export function ValidityDialog({
         }}
       >
         <ValidityFields value={range} onChange={setRange} />
-        {(problem ?? save.error) && <p className="text-sm text-destructive">{problem ?? save.error?.message}</p>}
+        <ErrorMessage error={problem ?? save.error} />
         <DialogFooter>
           <Button type="button" variant="ghost" size="sm" onClick={onDone}>
             取消
@@ -144,7 +145,7 @@ export function ReplaceDialog({
           />
         </Label>
         <ValidityFields value={range} onChange={setRange} />
-        {problem && <p className="text-sm text-destructive">{problem}</p>}
+        <ErrorMessage error={problem} />
         <DialogFooter>
           <Button type="button" variant="ghost" size="sm" onClick={onDone}>
             取消

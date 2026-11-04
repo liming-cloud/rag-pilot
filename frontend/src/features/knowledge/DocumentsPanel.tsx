@@ -10,18 +10,10 @@ import { Label } from "@/components/ui/label";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Pagination } from "@/components/ui/pagination";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { ErrorMessage } from "@/lib/errors";
 import { Can, PERMISSIONS, useCan } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
-import {
-  deleteDocument,
-  type DocumentFilter,
-  fetchDocuments,
-  type KnowledgeDocument,
-  uploadDocument,
-  VALIDITY,
-  type Validity,
-  type ValidityRange,
-} from "./api";
+import { deleteDocument, type DocumentFilter, fetchDocuments, type KnowledgeDocument, knowledgeKeys, uploadDocument, VALIDITY, type Validity, type ValidityRange } from "./api";
 import { ACCEPT, type BatchItem, MAX_BATCH, prepare, run } from "./batchUpload";
 import { UploadBatch } from "./UploadBatch";
 import { rangeParts, ReplaceDialog, ValidityDialog } from "./ValidityDialog";
@@ -52,7 +44,7 @@ export function DocumentsPanel({ knowledgeBaseId }: { knowledgeBaseId: number })
   const [filter, setFilter] = useState<DocumentFilter>({ page: 1, size: PAGE_SIZE, validity: initialValidity });
   const [keyword, setKeyword] = useState("");
   const documents = useQuery({
-    queryKey: ["knowledge-bases", knowledgeBaseId, "documents", filter],
+    queryKey: knowledgeKeys.documents(knowledgeBaseId, filter),
     queryFn: () => fetchDocuments(knowledgeBaseId, filter),
     placeholderData: keepPreviousData,
     refetchInterval: (query) =>
@@ -62,7 +54,7 @@ export function DocumentsPanel({ knowledgeBaseId }: { knowledgeBaseId: number })
   const [tooMany, setTooMany] = useState<number | null>(null);
   const [dragging, setDragging] = useState(false);
   const [dialog, setDialog] = useState<{ kind: "validity" | "replace"; document: KnowledgeDocument } | null>(null);
-  const refresh = () => queryClient.invalidateQueries({ queryKey: ["knowledge-bases"] });
+  const refresh = () => queryClient.invalidateQueries({ queryKey: knowledgeKeys.all });
 
   async function start(next: Batch) {
     setBatch(next);
@@ -206,7 +198,7 @@ export function DocumentsPanel({ knowledgeBaseId }: { knowledgeBaseId: number })
         </p>
       )}
       {batch && <UploadBatch items={batch.items} onRetry={retry} onClose={() => setBatch(null)} />}
-      {documents.isError && <p className="text-destructive">{documents.error.message}</p>}
+      <ErrorMessage error={documents.error} className="text-base" />
       <div
         onDragOver={(event) => {
           event.preventDefault();

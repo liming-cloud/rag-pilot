@@ -126,3 +126,12 @@ export async function fetchModelChanges(filter: { page?: number; size?: number }
 export async function restoreChange(id: number): Promise<UsageConfig> {
   return json(await authFetch(`/api/models/changes/${id}/restore`, { method: "POST" }), "恢复失败");
 }
+
+/** 模型管理的查询键；changes、available 是前缀。 */
+export const modelKeys = {
+  settings: ["model-settings"],
+  changes: ["model-changes"],
+  changePage: (filter: Parameters<typeof fetchModelChanges>[0]) => ["model-changes", filter] as const,
+  available: ["available-models"],
+  availableFor: (providerId: string) => ["available-models", providerId] as const,
+} as const;

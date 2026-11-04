@@ -138,3 +138,8 @@ export async function saveSetting(key: SettingKey, value: string | string[]): Pr
 export async function restoreSetting(key: SettingKey): Promise<SettingItem> {
   return json(await authFetch(`/api/settings/${key}`, { method: "DELETE" }), "恢复默认失败");
 }
+
+/** 系统设置的查询键。 */
+export const settingsKeys = {
+  all: ["settings"],
+} as const;

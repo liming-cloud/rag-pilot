@@ -103,6 +103,12 @@ export function permissionLiteralProblems(file: string, source: string, codes: s
     .map((code) => `${file} 手写了权限码“${code}”：改用 PERMISSIONS 常量`);
 }
 
+/** 查询键写在各 feature 的 api.ts 里（#145），页面和组件引用常量，不现场写数组。测试可以直接写。 */
+export function queryKeyLiteralProblems(file: string, source: string): string[] {
+  if (/(^|\/)api\.ts$/.test(file) || /\.test\.tsx?$/.test(file)) return [];
+  return /queryKey:\s*\[/.test(source) ? [`${file} 现场写了查询键：改用 api.ts 里的 xxxKeys 常量`] : [];
+}
+
 describe("前端目录结构", () => {
   it("src 下只有约定的目录，components 下只放 shadcn 的 ui", () => {
     expect(readdirSync(src).filter((name) => !ALLOWED_TOP.includes(name))).toEqual([]);
@@ -137,6 +143,17 @@ describe("前端目录结构", () => {
     expect(problems).toEqual([]);
     expect(permissionLiteralProblems("features/x/XPage.tsx", '<Can permission="kb:view">', codes)).toHaveLength(1);
     expect(permissionLiteralProblems("mocks/identity.ts", '"kb:view"', codes)).toEqual([]);
+  });
+
+  it("查询键只在各 api.ts 里定义", () => {
+    const problems = walk(src)
+      .filter((file) => /\.tsx?$/.test(file))
+      .flatMap((file) =>
+        queryKeyLiteralProblems(path.relative(src, file).split(path.sep).join("/"), readFileSync(file, "utf8")),
+      );
+    expect(problems).toEqual([]);
+    expect(queryKeyLiteralProblems("features/x/XPage.tsx", 'useQuery({ queryKey: ["roles"] })')).toHaveLength(1);
+    expect(queryKeyLiteralProblems("features/x/api.ts", 'queryKey: ["roles"]')).toEqual([]);
   });
 
   it("源码里不写死产品名称，名称从部署配置读取", () => {

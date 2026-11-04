@@ -17,26 +17,10 @@ import { Label } from "@/components/ui/label";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Pagination } from "@/components/ui/pagination";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { ErrorMessage } from "@/lib/errors";
 import { Can, PERMISSIONS, useCan } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
-import {
-  createProvider,
-  deleteProvider,
-  fetchAvailableModels,
-  fetchModelChanges,
-  fetchModelSettings,
-  type ModelChange,
-  type ModelSettings,
-  type Provider,
-  restoreChange,
-  saveUsage,
-  type Source,
-  type TestResult,
-  testModel,
-  updateProvider,
-  USAGE_LABELS,
-  type UsageConfig,
-} from "./api";
+import { createProvider, deleteProvider, fetchAvailableModels, fetchModelChanges, fetchModelSettings, type ModelChange, modelKeys, type ModelSettings, type Provider, restoreChange, saveUsage, type Source, testModel, type TestResult, updateProvider, USAGE_LABELS, type UsageConfig } from "./api";
 
 const TABS = [
   { key: "providers", label: "服务商" },
@@ -52,7 +36,7 @@ type Tab = (typeof TABS)[number]["key"];
  * 恢复变更前先确认。嵌入模型只显示。
  */
 export function ModelsPage() {
-  const settings = useQuery({ queryKey: ["model-settings"], queryFn: fetchModelSettings });
+  const settings = useQuery({ queryKey: modelKeys.settings, queryFn: fetchModelSettings });
   const [params, setParams] = useSearchParams();
   const tab: Tab = TABS.some((item) => item.key === params.get("tab")) ? (params.get("tab") as Tab) : "providers";
 
@@ -64,7 +48,7 @@ export function ModelsPage() {
           在界面保存过的用途以这里为准，没保存过的用环境变量。保存后下一次请求就用新模型，不用重启。
         </p>
       </div>
-      {settings.isError && <p className="text-destructive">{settings.error.message}</p>}
+      <ErrorMessage error={settings.error} className="text-base" />
       {settings.data && (
         <>
           {!settings.data.masterKeyConfigured && (
@@ -211,7 +195,7 @@ function UsageDialog({ usage, providers, onDone }: { usage: UsageConfig; provide
   const trimmed = model.trim();
   const key = `${providerValue}|${trimmed}`;
   const available = useQuery({
-    queryKey: ["available-models", providerValue],
+    queryKey: modelKeys.availableFor(providerValue),
     queryFn: () => fetchAvailableModels(providerId),
     retry: false,
     staleTime: 60_000,
@@ -235,8 +219,8 @@ function UsageDialog({ usage, providers, onDone }: { usage: UsageConfig; provide
     },
     onSuccess: async (saved) => {
       if (!saved) return;
-      await queryClient.invalidateQueries({ queryKey: ["model-settings"] });
-      await queryClient.invalidateQueries({ queryKey: ["model-changes"] });
+      await queryClient.invalidateQueries({ queryKey: modelKeys.settings });
+      await queryClient.invalidateQueries({ queryKey: modelKeys.changes });
       onDone();
     },
   });
@@ -310,11 +294,7 @@ function UsageDialog({ usage, providers, onDone }: { usage: UsageConfig; provide
           {shown.latencyMs !== null && `（${shown.latencyMs} 毫秒）`}
         </p>
       )}
-      {(test.isError || testAndSave.isError) && (
-        <p role="alert" className="text-sm text-destructive">
-          {(test.error ?? testAndSave.error)?.message}
-        </p>
-      )}
+      <ErrorMessage error={test.error ?? testAndSave.error} />
       <DialogFooter>
         <Button type="button" variant="ghost" size="sm" onClick={onDone}>
           取消
@@ -339,7 +319,7 @@ function ProvidersTab({ settings }: { settings: ModelSettings }) {
   const remove = useMutation({
     mutationFn: (id: number) => deleteProvider(id),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["model-settings"] });
+      await queryClient.invalidateQueries({ queryKey: modelKeys.settings });
       setRemoving(null);
     },
   });
@@ -439,11 +419,7 @@ function ProvidersTab({ settings }: { settings: ModelSettings }) {
               <DialogTitle>删除服务商“{removing.name}”？</DialogTitle>
               <DialogDescription>保存的地址和密钥会一并删除，删除后要用得重新添加并录入密钥。</DialogDescription>
             </DialogHeader>
-            {remove.isError && (
-              <p role="alert" className="text-sm text-destructive">
-                {remove.error.message}
-              </p>
-            )}
+            <ErrorMessage error={remove.error} />
             <DialogFooter>
               <Button variant="outline" onClick={() => setRemoving(null)}>
                 取消
@@ -478,8 +454,8 @@ function ProviderDialog({
       return provider ? updateProvider(provider.id!, input) : createProvider(input);
     },
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["model-settings"] });
-      await queryClient.invalidateQueries({ queryKey: ["available-models"] });
+      await queryClient.invalidateQueries({ queryKey: modelKeys.settings });
+      await queryClient.invalidateQueries({ queryKey: modelKeys.available });
       onDone();
     },
   });
@@ -527,11 +503,7 @@ function ProviderDialog({
             onChange={(event) => setApiKey(event.target.value)}
           />
         </Label>
-        {save.isError && (
-          <p role="alert" className="text-sm text-destructive">
-            {save.error.message}
-          </p>
-        )}
+        <ErrorMessage error={save.error} />
         <DialogFooter>
           <Button type="button" variant="ghost" size="sm" onClick={onDone}>
             取消
@@ -551,7 +523,7 @@ function ChangesTab() {
   const [paging, setPaging] = useState({ page: 1, size: PAGE_SIZE });
   const [restoring, setRestoring] = useState<ModelChange | null>(null);
   const changes = useQuery({
-    queryKey: ["model-changes", paging],
+    queryKey: modelKeys.changePage(paging),
     queryFn: () => fetchModelChanges(paging),
     placeholderData: keepPreviousData,
   });
@@ -561,11 +533,7 @@ function ChangesTab() {
       <p className="text-sm text-muted-foreground">
         每次保存和恢复都记一条。恢复会把该用途换回这条记录之后的模型，确认后先测连通，通过才生效。
       </p>
-      {changes.isError && (
-        <p role="alert" className="text-sm text-destructive">
-          {changes.error.message}
-        </p>
-      )}
+      <ErrorMessage error={changes.error} />
       <div className="rounded-lg border bg-card">
         <Table aria-label="变更记录" className="table-fixed">
           <TableHeader>
@@ -648,8 +616,8 @@ function RestoreDialog({ change, onDone }: { change: ModelChange; onDone: () => 
   const restore = useMutation({
     mutationFn: () => restoreChange(change.id),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["model-settings"] });
-      await queryClient.invalidateQueries({ queryKey: ["model-changes"] });
+      await queryClient.invalidateQueries({ queryKey: modelKeys.settings });
+      await queryClient.invalidateQueries({ queryKey: modelKeys.changes });
       onDone();
     },
   });
@@ -662,11 +630,7 @@ function RestoreDialog({ change, onDone }: { change: ModelChange; onDone: () => 
           把{label}换回 {change.after.providerName} / {change.after.model}。会先测连通，通过后立即生效，并记一条变更。
         </DialogDescription>
       </DialogHeader>
-      {restore.isError && (
-        <p role="alert" className="text-sm text-destructive">
-          {restore.error.message}
-        </p>
-      )}
+      <ErrorMessage error={restore.error} />
       <DialogFooter>
         <Button type="button" variant="ghost" size="sm" onClick={onDone}>
           取消

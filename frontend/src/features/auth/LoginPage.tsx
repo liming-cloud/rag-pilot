@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ApiError } from "@/lib/api";
 import { useBranding } from "@/lib/branding";
+import { ErrorMessage } from "@/lib/errors";
 import { BadCredentialsError, login } from "./api";
 import { TrustIllustration } from "./TrustIllustration";
 
@@ -98,11 +99,7 @@ export function LoginPage() {
                 required
               />
             </Label>
-            {error && (
-              <p role="alert" className="text-sm text-destructive">
-                {error}
-              </p>
-            )}
+            <ErrorMessage error={error} />
             <Button type="submit" className="h-11" disabled={submitting}>
               登录
             </Button>

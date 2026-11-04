@@ -5,22 +5,12 @@ import { useNavigate, useParams } from "react-router";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { fetchKnowledgeBases } from "@/features/knowledge/api";
-import {
-  askInConversation,
-  type Conversation,
-  type ConversationKnowledgeBase,
-  createConversation,
-  DEFAULT_CHAT_TEXTS,
-  fetchChatTexts,
-  fetchConversation,
-  stopTurn,
-  type Turn,
-  updateConversation,
-} from "./api";
+import { fetchKnowledgeBases, knowledgeKeys } from "@/features/knowledge/api";
+import { askInConversation, chatKeys, type Conversation, type ConversationKnowledgeBase, createConversation, DEFAULT_CHAT_TEXTS, fetchChatTexts, fetchConversation, stopTurn, type Turn, updateConversation } from "./api";
 import { AnswerCard } from "./AnswerCard";
 import { ConversationSidebar } from "./ConversationSidebar";
 import { KnowledgeBasePicker } from "./KnowledgeBasePicker";
+import { ErrorMessage } from "@/lib/errors";
 
 /** 正在生成的一轮。replacesTurnId 有值时是重新生成或修改问题，生成期间先不显示被替换的那一轮。 */
 type Live = {
@@ -52,12 +42,12 @@ export function ChatPage() {
 function ConversationView({ conversationId }: { conversationId: number | null }) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
-  const knowledgeBases = useQuery({ queryKey: ["knowledge-bases"], queryFn: fetchKnowledgeBases });
+  const knowledgeBases = useQuery({ queryKey: knowledgeKeys.all, queryFn: fetchKnowledgeBases });
   const texts =
-    useQuery({ queryKey: ["chat-texts"], queryFn: fetchChatTexts, staleTime: 5 * 60 * 1000 }).data ??
+    useQuery({ queryKey: chatKeys.texts, queryFn: fetchChatTexts, staleTime: 5 * 60 * 1000 }).data ??
     DEFAULT_CHAT_TEXTS;
   const conversation = useQuery({
-    queryKey: ["conversation", conversationId],
+    queryKey: chatKeys.conversation(conversationId),
     queryFn: () => fetchConversation(conversationId!),
     enabled: conversationId !== null,
   });
@@ -98,8 +88,8 @@ function ConversationView({ conversationId }: { conversationId: number | null })
     }
     await updateConversation(conversationId, { knowledgeBaseIds: ids });
     setSelectionChangedIn(conversationId);
-    await queryClient.invalidateQueries({ queryKey: ["conversation", conversationId] });
-    void queryClient.invalidateQueries({ queryKey: ["conversations"] });
+    await queryClient.invalidateQueries({ queryKey: chatKeys.conversation(conversationId) });
+    void queryClient.invalidateQueries({ queryKey: chatKeys.conversations });
   }
 
   async function ask(question: string, replacesTurnId?: number) {
@@ -141,7 +131,7 @@ function ConversationView({ conversationId }: { conversationId: number | null })
       );
       setLive((current) => (current?.conversationId === target ? null : current));
       // 标题在第一轮回答后由后台生成，列表顺序也变了，重新读一次列表；这一轮的结果已写进会话缓存，不必重读详情。
-      void queryClient.invalidateQueries({ queryKey: ["conversations"] });
+      void queryClient.invalidateQueries({ queryKey: chatKeys.conversations });
     } catch {
       update({ failed: true });
     }
@@ -185,11 +175,7 @@ function ConversationView({ conversationId }: { conversationId: number | null })
       </header>
       <main className="flex-1 overflow-y-auto px-6 py-4">
         <div className="mx-auto flex max-w-3xl flex-col gap-6">
-          {conversation.isError && (
-            <p role="alert" className="text-sm text-destructive">
-              会话不存在或已删除。
-            </p>
-          )}
+          {conversation.isError && <ErrorMessage error="会话不存在或已删除。" />}
           {empty && !conversation.isError && (
             <div className="mt-24 flex flex-col items-center gap-4">
               <p className="text-center text-muted-foreground">{texts.emptyHint}</p>
@@ -309,11 +295,7 @@ function TurnView({ turn, actions }: { turn: Turn; actions: ReactNode }) {
   return (
     <section aria-label={`问答：${turn.question}`} className="flex flex-col gap-2">
       <Question text={turn.question} />
-      {turn.status === "FAILED" && (
-        <p role="alert" className="text-sm text-destructive">
-          暂时无法回答，请稍后重试。
-        </p>
-      )}
+      {turn.status === "FAILED" && <ErrorMessage error="暂时无法回答，请稍后重试。" />}
       {turn.status === "STOPPED" && !turn.answer && (
         <p className="text-sm text-muted-foreground">已停止生成，没有留下可核对的内容。</p>
       )}

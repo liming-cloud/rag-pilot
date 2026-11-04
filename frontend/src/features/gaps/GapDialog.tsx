@@ -6,8 +6,10 @@ import { DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTit
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { ErrorMessage } from "@/lib/errors";
 import { Can, PERMISSIONS } from "@/lib/permissions";
-import { type GapGroup, recheckGap, resolveGap } from "./api";
+import { type GapGroup, gapKeys, recheckGap, resolveGap } from "./api";
+import { answerKeys } from "@/features/answers/api";
 
 /**
  * 一类缺口的详情：类里的原始记录（时间、提问人、原文、类型、留言、状态）；用代表问题重新回答，确认补的资料生效后
@@ -26,8 +28,8 @@ export function GapDialog({ group, onDone }: { group: GapGroup; onDone: () => vo
         note.trim() || undefined,
       ),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["answer-gaps"] });
-      await queryClient.invalidateQueries({ queryKey: ["answer-reviews"] });
+      await queryClient.invalidateQueries({ queryKey: gapKeys.all });
+      await queryClient.invalidateQueries({ queryKey: answerKeys.reviews });
       onDone();
     },
   });
@@ -103,7 +105,7 @@ export function GapDialog({ group, onDone }: { group: GapGroup; onDone: () => vo
         </div>
       )}
       {(recheck.isError || resolve.isError) && (
-        <p className="text-sm text-destructive">{(recheck.error ?? resolve.error)?.message}</p>
+        <ErrorMessage error={recheck.error ?? resolve.error} />
       )}
       {resolving && (
         <Label className="flex flex-col gap-1 text-sm">

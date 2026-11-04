@@ -77,3 +77,9 @@ export async function resolveGap(recordIds: number[], note?: string): Promise<vo
 export async function recheckGap(recordId: number): Promise<Answer> {
   return json(await authFetch(`/api/answers/${recordId}/recheck`, { method: "POST" }), "重新回答失败");
 }
+
+/** 知识缺口的查询键；all 是前缀。 */
+export const gapKeys = {
+  all: ["answer-gaps"],
+  report: (days: GapRange, status: "open" | "all") => ["answer-gaps", days, status] as const,
+} as const;

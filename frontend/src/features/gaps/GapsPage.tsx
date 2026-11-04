@@ -9,8 +9,9 @@ import { Label } from "@/components/ui/label";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Pagination } from "@/components/ui/pagination";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { fetchGaps, GAP_RANGES, type GapGroup, type GapRange, type GapReport } from "./api";
+import { fetchGaps, GAP_RANGES, type GapGroup, gapKeys, type GapRange, type GapReport } from "./api";
 import { GapDialog } from "./GapDialog";
+import { ErrorMessage } from "@/lib/errors";
 
 const PAGE_SIZE = 20;
 
@@ -27,7 +28,7 @@ export function GapsPage() {
   const [page, setPage] = useState(1);
   const [opened, setOpened] = useState<GapGroup | null>(null);
   const report = useQuery({
-    queryKey: ["answer-gaps", days, status],
+    queryKey: gapKeys.report(days, status),
     queryFn: () => fetchGaps({ days, status }),
     placeholderData: keepPreviousData,
   });
@@ -87,7 +88,7 @@ export function GapsPage() {
         </Button>
       </form>
       {report.data && <Summary report={report.data} />}
-      {report.isError && <p className="text-destructive">{report.error.message}</p>}
+      <ErrorMessage error={report.error} className="text-base" />
       <div className="rounded-lg border bg-card">
         <Table aria-label="知识缺口">
           <TableHeader>

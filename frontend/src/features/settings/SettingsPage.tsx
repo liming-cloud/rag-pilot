@@ -17,20 +17,12 @@ import { Label } from "@/components/ui/label";
 import { Pagination } from "@/components/ui/pagination";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
+import { ErrorMessage } from "@/lib/errors";
 import { Can, PERMISSIONS } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
-import {
-  fetchSettings,
-  type IndustryPack,
-  restoreSetting,
-  saveSetting,
-  SETTING_META,
-  type SettingItem,
-  settingProblem,
-  SOURCE_LABELS,
-  type SettingSource,
-  type SystemSettings,
-} from "./api";
+import { fetchSettings, type IndustryPack, restoreSetting, saveSetting, SETTING_META, type SettingItem, settingProblem, settingsKeys, type SettingSource, SOURCE_LABELS, type SystemSettings } from "./api";
+import { brandingKey } from "@/lib/branding";
+import { chatKeys } from "@/features/chat/api";
 
 const TABS = [
   { key: "brand", label: "品牌与登录页" },
@@ -45,7 +37,7 @@ type Tab = (typeof TABS)[number]["key"];
  * 改过的以界面为准，可以恢复默认（先确认）；行业包里影响检索和回答质量的内容只读。
  */
 export function SettingsPage() {
-  const settings = useQuery({ queryKey: ["settings"], queryFn: fetchSettings });
+  const settings = useQuery({ queryKey: settingsKeys.all, queryFn: fetchSettings });
   const [params, setParams] = useSearchParams();
   const tab: Tab = TABS.some((item) => item.key === params.get("tab")) ? (params.get("tab") as Tab) : "brand";
 
@@ -57,7 +49,7 @@ export function SettingsPage() {
           在这里改过的项以这里为准，没改过的用部署配置或行业包的默认值。保存后刷新页面即可看到，不用重启。
         </p>
       </div>
-      {settings.isError && <p className="text-destructive">{settings.error.message}</p>}
+      <ErrorMessage error={settings.error} className="text-base" />
       {settings.data && (
         <>
           <div role="tablist" aria-label="系统设置" className="flex gap-1 border-b">
@@ -179,9 +171,9 @@ function SettingValue({ item }: { item: SettingItem }) {
 function useRefreshAfterChange() {
   const queryClient = useQueryClient();
   return async () => {
-    await queryClient.invalidateQueries({ queryKey: ["settings"] });
-    await queryClient.invalidateQueries({ queryKey: ["branding"] });
-    await queryClient.invalidateQueries({ queryKey: ["chat-texts"] });
+    await queryClient.invalidateQueries({ queryKey: settingsKeys.all });
+    await queryClient.invalidateQueries({ queryKey: brandingKey });
+    await queryClient.invalidateQueries({ queryKey: chatKeys.texts });
   };
 }
 
@@ -238,11 +230,7 @@ function EditDialog({ item, onDone }: { item: SettingItem; onDone: () => void })
             {problem}
           </p>
         )}
-        {save.isError && (
-          <p role="alert" className="text-sm text-destructive">
-            {save.error.message}
-          </p>
-        )}
+        <ErrorMessage error={save.error} />
         <DialogFooter>
           <Button type="button" variant="outline" onClick={onDone}>
             取消
@@ -397,11 +385,7 @@ function RestoreDialog({ item, onDone }: { item: SettingItem; onDone: () => void
           界面上保存的值会被删除，改用{SOURCE_LABELS[item.defaultSource]}的值：{fallback}
         </DialogDescription>
       </DialogHeader>
-      {restore.isError && (
-        <p role="alert" className="text-sm text-destructive">
-          {restore.error.message}
-        </p>
-      )}
+      <ErrorMessage error={restore.error} />
       <DialogFooter>
         <Button variant="outline" onClick={onDone}>
           取消
