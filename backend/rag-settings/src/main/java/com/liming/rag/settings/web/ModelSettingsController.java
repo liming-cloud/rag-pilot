@@ -5,7 +5,7 @@ import cn.dev33.satoken.annotation.SaCheckPermission;
 import com.liming.rag.ai.ModelProbe;
 import com.liming.rag.ai.ModelUsage;
 import com.liming.rag.identity.api.CurrentUser;
-import com.liming.rag.identity.api.Permissions;
+import com.liming.rag.settings.api.SettingsPermissions;
 import com.liming.rag.settings.application.ModelChange;
 import com.liming.rag.settings.application.ModelSettingsService;
 import com.liming.rag.settings.application.ModelSettingsService.ProviderView;
@@ -92,7 +92,7 @@ class ModelSettingsController {
         this.currentUser = currentUser;
     }
 
-    @SaCheckPermission(Permissions.MODEL_VIEW)
+    @SaCheckPermission(SettingsPermissions.MODEL_VIEW)
     @GetMapping("/api/models")
     SettingsView overview() {
         var overview = settings.overview();
@@ -103,19 +103,19 @@ class ModelSettingsController {
                         overview.embeddingDimensions()));
     }
 
-    @SaCheckPermission(Permissions.MODEL_TEST)
+    @SaCheckPermission(SettingsPermissions.MODEL_TEST)
     @PostMapping("/api/models/test")
     ModelProbe.ProbeResult test(@RequestBody TestRequest request) {
         return settings.test(usage(request.usage()), request.providerId(), request.model());
     }
 
-    @SaCheckPermission(Permissions.MODEL_UPDATE)
+    @SaCheckPermission(SettingsPermissions.MODEL_UPDATE)
     @GetMapping("/api/models/available")
     List<String> available(@RequestParam(name = "providerId", required = false) Long providerId) {
         return settings.availableModels(providerId);
     }
 
-    @SaCheckPermission(Permissions.MODEL_VIEW)
+    @SaCheckPermission(SettingsPermissions.MODEL_VIEW)
     @GetMapping("/api/models/changes")
     PageView<ChangeView> changes(@RequestParam(name = "page", defaultValue = "1") int page,
             @RequestParam(name = "size", defaultValue = "20") int size) {
@@ -124,33 +124,33 @@ class ModelSettingsController {
                 found.size());
     }
 
-    @SaCheckPermission(Permissions.MODEL_UPDATE)
+    @SaCheckPermission(SettingsPermissions.MODEL_UPDATE)
     @PostMapping("/api/models/changes/{id}/restore")
     UsageView restore(@PathVariable long id) {
         return UsageView.of(settings.restore(currentUser.tenantId(), currentUser.userId(), id));
     }
 
-    @SaCheckPermission(Permissions.MODEL_UPDATE)
+    @SaCheckPermission(SettingsPermissions.MODEL_UPDATE)
     @PutMapping("/api/models/{usage}")
     UsageView save(@PathVariable String usage, @RequestBody SaveRequest request) {
         return UsageView.of(settings.save(currentUser.tenantId(), currentUser.userId(), usage(usage),
                 request.providerId(), request.model()));
     }
 
-    @SaCheckPermission(Permissions.MODEL_UPDATE)
+    @SaCheckPermission(SettingsPermissions.MODEL_UPDATE)
     @PostMapping("/api/model-providers")
     @ResponseStatus(HttpStatus.CREATED)
     ProviderResponse createProvider(@RequestBody ProviderRequest request) {
         return ProviderResponse.of(settings.createProvider(request.name(), request.baseUrl(), request.apiKey()));
     }
 
-    @SaCheckPermission(Permissions.MODEL_UPDATE)
+    @SaCheckPermission(SettingsPermissions.MODEL_UPDATE)
     @PatchMapping("/api/model-providers/{id}")
     ProviderResponse updateProvider(@PathVariable long id, @RequestBody ProviderRequest request) {
         return ProviderResponse.of(settings.updateProvider(id, request.name(), request.baseUrl(), request.apiKey()));
     }
 
-    @SaCheckPermission(Permissions.MODEL_UPDATE)
+    @SaCheckPermission(SettingsPermissions.MODEL_UPDATE)
     @DeleteMapping("/api/model-providers/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     void deleteProvider(@PathVariable long id) {

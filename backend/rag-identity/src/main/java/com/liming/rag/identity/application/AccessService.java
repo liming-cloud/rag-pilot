@@ -3,12 +3,12 @@ package com.liming.rag.identity.application;
 import cn.dev33.satoken.stp.StpInterface;
 import cn.dev33.satoken.stp.StpUtil;
 import com.liming.rag.identity.api.CurrentUser;
-import com.liming.rag.identity.api.Permissions;
 import com.liming.rag.identity.api.UserDirectory;
 import com.liming.rag.shared.TenantId;
 import com.liming.rag.shared.UserId;
 import java.util.Collection;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -28,10 +28,12 @@ public class AccessService implements CurrentUser, UserDirectory, StpInterface {
 
     private final Accounts accounts;
     private final Roles roles;
+    private final PermissionRegistry permissions;
 
-    AccessService(Accounts accounts, Roles roles) {
+    AccessService(Accounts accounts, Roles roles, PermissionRegistry permissions) {
         this.accounts = accounts;
         this.roles = roles;
+        this.permissions = permissions;
     }
 
     /** 账号现在能用的权限点，按清单顺序。 */
@@ -43,14 +45,29 @@ public class AccessService implements CurrentUser, UserDirectory, StpInterface {
     }
 
     /** 这些角色合起来给出的权限点，不看账号状态；含超级管理员角色时为全部权限点。清单外的权限点不算。 */
-    static Set<String> grantedBy(Collection<Role> assigned) {
+    Set<String> grantedBy(Collection<Role> assigned) {
         if (assigned.stream().anyMatch(Role::superAdmin)) {
-            return Permissions.ALL;
+            return permissions.all();
         }
         var granted = new HashSet<String>();
         assigned.forEach(role -> granted.addAll(role.permissions()));
-        return Permissions.ALL.stream().filter(granted::contains)
-                .collect(Collectors.toCollection(java.util.LinkedHashSet::new));
+        return new LinkedHashSet<>(permissions.ordered(granted));
+    }
+
+    /**
+     * 操作人的越权规则（D-038）：他自己的权限点、是否超级管理员，以及全系统的权限点清单。
+     *
+     * @throws IdentityException 操作人的账号不存在
+     */
+    AssignmentRules rulesFor(UserId actor) {
+        var account = accounts.find(actor.value())
+                .orElseThrow(() -> new IdentityException(IdentityException.Reason.NOT_FOUND, "账号不存在"));
+        return new AssignmentRules(new LinkedHashSet<>(permissionsOf(account)), superAdmin(account.id()), this);
+    }
+
+    /** 全系统的权限点清单。 */
+    Set<String> catalog() {
+        return permissions.all();
     }
 
     public boolean superAdmin(long userId) {

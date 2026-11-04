@@ -2,7 +2,10 @@ package com.liming.rag;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.liming.rag.identity.api.Permissions;
+import com.liming.rag.answering.api.AnsweringPermissions;
+import com.liming.rag.identity.api.IdentityPermissions;
+import com.liming.rag.knowledge.api.KnowledgePermissions;
+import com.liming.rag.settings.api.SettingsPermissions;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -54,82 +57,99 @@ class RbacTests {
     }
 
     @Test
+    @DisplayName("权限点清单由各上下文声明、identity 汇总（#136）：角色页的菜单顺序和权限点与汇总前一致")
+    @SuppressWarnings("unchecked")
+    void catalogKeepsMenusAndCodes() {
+        var catalog = http.exchange("/api/permissions", HttpMethod.GET, new HttpEntity<>(bearer(rootToken())),
+                List.class).getBody();
+
+        assertThat(catalog).extracting(group -> ((Map<String, Object>) group).get("menu")).containsExactly(
+                "对话", "知识库管理", "用户管理", "角色与权限", "模型管理", "回答记录", "运营概览", "系统设置");
+        var codes = new ArrayList<String>();
+        for (var group : (List<Map<String, Object>>) catalog) {
+            codes.add((String) ((Map<String, Object>) group.get("view")).get("code"));
+            ((List<Map<String, Object>>) group.get("buttons")).forEach(button -> codes.add((String) button.get("code")));
+        }
+        assertThat(codes).containsExactlyElementsOf(AllPermissions.ALL).hasSize(32);
+    }
+
+    @Test
     @DisplayName("每个接口：只有这一个权限点的账号能调；有其他全部权限、唯独缺它的账号返回 403")
     void everyEndpointChecksItsPermission() {
         String root = rootToken();
         long kb = id(call(root, HttpMethod.POST, "/api/knowledge-bases", Map.of("name", "权限测试库")));
         long staffRole = TestLogin.staffRoleId(http);
         long target = createUser(root, "target01", staffRole);
-        long dummyRole = createRole(root, "待删角色", List.of(Permissions.CHAT_USE));
+        long dummyRole = createRole(root, "待删角色", List.of(IdentityPermissions.CHAT_USE));
 
         var endpoints = List.of(
-                new Endpoint(Permissions.CHAT_USE, HttpMethod.GET, "/api/knowledge-bases", null),
-                new Endpoint(Permissions.CHAT_USE, HttpMethod.GET, "/api/conversations", null),
-                new Endpoint(Permissions.KB_VIEW, HttpMethod.GET, "/api/knowledge-bases/page", null),
-                new Endpoint(Permissions.KB_VIEW, HttpMethod.GET, "/api/knowledge-bases/{kb}", null),
-                new Endpoint(Permissions.KB_VIEW, HttpMethod.GET, "/api/knowledge-bases/{kb}/documents", null),
-                new Endpoint(Permissions.KB_VIEW, HttpMethod.GET, "/api/knowledge-bases/{kb}/search?q=货架", null),
-                new Endpoint(Permissions.KB_VIEW, HttpMethod.GET, "/api/knowledge-bases/expiry-summary", null),
-                new Endpoint(Permissions.KB_CREATE, HttpMethod.POST, "/api/knowledge-bases", Map.of("name", "新库")),
-                new Endpoint(Permissions.DOC_UPLOAD, HttpMethod.POST, "/api/knowledge-bases/{kb}/documents",
+                new Endpoint(IdentityPermissions.CHAT_USE, HttpMethod.GET, "/api/knowledge-bases", null),
+                new Endpoint(IdentityPermissions.CHAT_USE, HttpMethod.GET, "/api/conversations", null),
+                new Endpoint(KnowledgePermissions.KB_VIEW, HttpMethod.GET, "/api/knowledge-bases/page", null),
+                new Endpoint(KnowledgePermissions.KB_VIEW, HttpMethod.GET, "/api/knowledge-bases/{kb}", null),
+                new Endpoint(KnowledgePermissions.KB_VIEW, HttpMethod.GET, "/api/knowledge-bases/{kb}/documents", null),
+                new Endpoint(KnowledgePermissions.KB_VIEW, HttpMethod.GET, "/api/knowledge-bases/{kb}/search?q=货架", null),
+                new Endpoint(KnowledgePermissions.KB_VIEW, HttpMethod.GET, "/api/knowledge-bases/expiry-summary", null),
+                new Endpoint(KnowledgePermissions.KB_CREATE, HttpMethod.POST, "/api/knowledge-bases", Map.of("name", "新库")),
+                new Endpoint(KnowledgePermissions.DOC_UPLOAD, HttpMethod.POST, "/api/knowledge-bases/{kb}/documents",
                         file("上传.txt")),
-                new Endpoint(Permissions.DOC_REPLACE, HttpMethod.POST,
+                new Endpoint(KnowledgePermissions.DOC_REPLACE, HttpMethod.POST,
                         "/api/knowledge-bases/{kb}/documents/999999/versions", file("新版.txt")),
-                new Endpoint(Permissions.DOC_UPDATE, HttpMethod.PUT,
+                new Endpoint(KnowledgePermissions.DOC_UPDATE, HttpMethod.PUT,
                         "/api/knowledge-bases/{kb}/documents/999999/validity", Map.of("expiresOn", "")),
-                new Endpoint(Permissions.DOC_DELETE, HttpMethod.DELETE, "/api/knowledge-bases/{kb}/documents/999999",
+                new Endpoint(KnowledgePermissions.DOC_DELETE, HttpMethod.DELETE, "/api/knowledge-bases/{kb}/documents/999999",
                         null),
-                new Endpoint(Permissions.KB_GRANT, HttpMethod.GET, "/api/knowledge-bases/{kb}/members", null),
-                new Endpoint(Permissions.KB_GRANT, HttpMethod.GET, "/api/knowledge-bases/{kb}/role-grants", null),
-                new Endpoint(Permissions.KB_GRANT, HttpMethod.PUT, "/api/knowledge-bases/{kb}/members/{user}", null),
-                new Endpoint(Permissions.KB_GRANT, HttpMethod.PUT, "/api/knowledge-bases/{kb}/role-grants/{role}",
+                new Endpoint(KnowledgePermissions.KB_GRANT, HttpMethod.GET, "/api/knowledge-bases/{kb}/members", null),
+                new Endpoint(KnowledgePermissions.KB_GRANT, HttpMethod.GET, "/api/knowledge-bases/{kb}/role-grants", null),
+                new Endpoint(KnowledgePermissions.KB_GRANT, HttpMethod.PUT, "/api/knowledge-bases/{kb}/members/{user}", null),
+                new Endpoint(KnowledgePermissions.KB_GRANT, HttpMethod.PUT, "/api/knowledge-bases/{kb}/role-grants/{role}",
                         null),
-                new Endpoint(Permissions.USER_VIEW, HttpMethod.GET, "/api/users", null),
-                new Endpoint(Permissions.USER_CREATE, HttpMethod.POST, "/api/users", Map.of("username", "made01",
+                new Endpoint(IdentityPermissions.USER_VIEW, HttpMethod.GET, "/api/users", null),
+                new Endpoint(IdentityPermissions.USER_CREATE, HttpMethod.POST, "/api/users", Map.of("username", "made01",
                         "displayName", "新人", "password", "made-password", "roleIds", List.of(staffRole))),
-                new Endpoint(Permissions.USER_UPDATE, HttpMethod.POST, "/api/users/{user}/unlock", null),
-                new Endpoint(Permissions.USER_DISABLE, HttpMethod.PUT, "/api/users/{user}/enabled",
+                new Endpoint(IdentityPermissions.USER_UPDATE, HttpMethod.POST, "/api/users/{user}/unlock", null),
+                new Endpoint(IdentityPermissions.USER_DISABLE, HttpMethod.PUT, "/api/users/{user}/enabled",
                         Map.of("enabled", true)),
-                new Endpoint(Permissions.USER_RESET_PASSWORD, HttpMethod.POST, "/api/users/{user}/reset-password",
+                new Endpoint(IdentityPermissions.USER_RESET_PASSWORD, HttpMethod.POST, "/api/users/{user}/reset-password",
                         Map.of("password", "temp-password")),
-                new Endpoint(Permissions.USER_ASSIGN_ROLE, HttpMethod.PUT, "/api/users/{user}/roles",
+                new Endpoint(IdentityPermissions.USER_ASSIGN_ROLE, HttpMethod.PUT, "/api/users/{user}/roles",
                         Map.of("roleIds", List.of(staffRole))),
-                new Endpoint(Permissions.USER_IMPORT, HttpMethod.POST, "/api/users/import/check",
+                new Endpoint(IdentityPermissions.USER_IMPORT, HttpMethod.POST, "/api/users/import/check",
                         Map.of("rows", List.of(importRow(2, "check01", staffRole)))),
-                new Endpoint(Permissions.USER_IMPORT, HttpMethod.POST, "/api/users/import",
+                new Endpoint(IdentityPermissions.USER_IMPORT, HttpMethod.POST, "/api/users/import",
                         Map.of("rows", List.of(), "password", "import-password")),
-                new Endpoint(Permissions.ROLE_VIEW, HttpMethod.GET, "/api/permissions", null),
-                new Endpoint(Permissions.ROLE_CREATE, HttpMethod.POST, "/api/roles",
+                new Endpoint(IdentityPermissions.ROLE_VIEW, HttpMethod.GET, "/api/permissions", null),
+                new Endpoint(IdentityPermissions.ROLE_CREATE, HttpMethod.POST, "/api/roles",
                         Map.of("name", "临时角色", "permissions", List.of())),
-                new Endpoint(Permissions.ROLE_UPDATE, HttpMethod.PATCH, "/api/roles/{role}",
+                new Endpoint(IdentityPermissions.ROLE_UPDATE, HttpMethod.PATCH, "/api/roles/{role}",
                         Map.of("permissions", List.of())),
-                new Endpoint(Permissions.ANSWER_VIEW, HttpMethod.GET, "/api/answers", null),
-                new Endpoint(Permissions.ANSWER_REVIEW, HttpMethod.PATCH, "/api/answers/999999/review",
+                new Endpoint(AnsweringPermissions.ANSWER_VIEW, HttpMethod.GET, "/api/answers", null),
+                new Endpoint(AnsweringPermissions.ANSWER_REVIEW, HttpMethod.PATCH, "/api/answers/999999/review",
                         Map.of("status", "RESOLVED")),
-                new Endpoint(Permissions.ANSWER_RECHECK, HttpMethod.POST, "/api/answers/999999/recheck", null),
-                new Endpoint(Permissions.STATS_VIEW, HttpMethod.GET, "/api/answers/stats", null),
-                new Endpoint(Permissions.STATS_EXPORT, HttpMethod.GET, "/api/answers/stats/export?days=7", null),
-                new Endpoint(Permissions.ANSWER_VIEW, HttpMethod.GET, "/api/answers/gaps", null),
-                new Endpoint(Permissions.ANSWER_REVIEW, HttpMethod.POST, "/api/answers/gaps/resolve",
+                new Endpoint(AnsweringPermissions.ANSWER_RECHECK, HttpMethod.POST, "/api/answers/999999/recheck", null),
+                new Endpoint(AnsweringPermissions.STATS_VIEW, HttpMethod.GET, "/api/answers/stats", null),
+                new Endpoint(AnsweringPermissions.STATS_EXPORT, HttpMethod.GET, "/api/answers/stats/export?days=7", null),
+                new Endpoint(AnsweringPermissions.ANSWER_VIEW, HttpMethod.GET, "/api/answers/gaps", null),
+                new Endpoint(AnsweringPermissions.ANSWER_REVIEW, HttpMethod.POST, "/api/answers/gaps/resolve",
                         Map.of("recordIds", List.of(999999))),
                 // 模型管理：用不存在的服务商，权限通过后也不会真的去连外部模型服务。
-                new Endpoint(Permissions.MODEL_VIEW, HttpMethod.GET, "/api/models", null),
-                new Endpoint(Permissions.MODEL_VIEW, HttpMethod.GET, "/api/models/changes", null),
-                new Endpoint(Permissions.MODEL_TEST, HttpMethod.POST, "/api/models/test",
+                new Endpoint(SettingsPermissions.MODEL_VIEW, HttpMethod.GET, "/api/models", null),
+                new Endpoint(SettingsPermissions.MODEL_VIEW, HttpMethod.GET, "/api/models/changes", null),
+                new Endpoint(SettingsPermissions.MODEL_TEST, HttpMethod.POST, "/api/models/test",
                         Map.of("usage", "RERANK", "providerId", 999999, "model", "m")),
-                new Endpoint(Permissions.MODEL_UPDATE, HttpMethod.GET, "/api/models/available?providerId=999999", null),
-                new Endpoint(Permissions.MODEL_UPDATE, HttpMethod.PUT, "/api/models/RERANK",
+                new Endpoint(SettingsPermissions.MODEL_UPDATE, HttpMethod.GET, "/api/models/available?providerId=999999", null),
+                new Endpoint(SettingsPermissions.MODEL_UPDATE, HttpMethod.PUT, "/api/models/RERANK",
                         Map.of("providerId", 999999, "model", "m")),
-                new Endpoint(Permissions.MODEL_UPDATE, HttpMethod.POST, "/api/models/changes/999999/restore", null),
-                new Endpoint(Permissions.MODEL_UPDATE, HttpMethod.POST, "/api/model-providers",
+                new Endpoint(SettingsPermissions.MODEL_UPDATE, HttpMethod.POST, "/api/models/changes/999999/restore", null),
+                new Endpoint(SettingsPermissions.MODEL_UPDATE, HttpMethod.POST, "/api/model-providers",
                         Map.of("name", "权限测试服务商", "baseUrl", "http://127.0.0.1:9/v1")),
-                new Endpoint(Permissions.MODEL_UPDATE, HttpMethod.DELETE, "/api/model-providers/999999", null),
-                new Endpoint(Permissions.CHAT_USE, HttpMethod.GET, "/api/settings/chat", null),
-                new Endpoint(Permissions.SETTING_VIEW, HttpMethod.GET, "/api/settings", null),
-                new Endpoint(Permissions.SETTING_UPDATE, HttpMethod.PUT, "/api/settings/CHAT_PLACEHOLDER",
+                new Endpoint(SettingsPermissions.MODEL_UPDATE, HttpMethod.DELETE, "/api/model-providers/999999", null),
+                new Endpoint(IdentityPermissions.CHAT_USE, HttpMethod.GET, "/api/settings/chat", null),
+                new Endpoint(SettingsPermissions.SETTING_VIEW, HttpMethod.GET, "/api/settings", null),
+                new Endpoint(SettingsPermissions.SETTING_UPDATE, HttpMethod.PUT, "/api/settings/CHAT_PLACEHOLDER",
                         Map.of("value", "权限测试")),
-                new Endpoint(Permissions.SETTING_UPDATE, HttpMethod.DELETE, "/api/settings/CHAT_PLACEHOLDER", null),
-                new Endpoint(Permissions.ROLE_DELETE, HttpMethod.DELETE, "/api/roles/{role}", null));
+                new Endpoint(SettingsPermissions.SETTING_UPDATE, HttpMethod.DELETE, "/api/settings/CHAT_PLACEHOLDER", null),
+                new Endpoint(IdentityPermissions.ROLE_DELETE, HttpMethod.DELETE, "/api/roles/{role}", null));
 
         var allowed = new HashMap<String, String>();
         var denied = new HashMap<String, String>();
@@ -138,7 +158,7 @@ class RbacTests {
             var permission = endpoint.permission();
             var with = allowed.computeIfAbsent(permission, p -> userWith(root, List.of(p)));
             var without = denied.computeIfAbsent(permission, p -> userWith(root,
-                    Permissions.ALL.stream().filter(code -> !code.equals(p)).toList()));
+                    AllPermissions.ALL.stream().filter(code -> !code.equals(p)).toList()));
             var path = endpoint.path().replace("{kb}", String.valueOf(kb)).replace("{user}", String.valueOf(target))
                     .replace("{role}", String.valueOf(dummyRole));
             var granted = send(with, endpoint.method(), path, endpoint.body());
@@ -154,12 +174,12 @@ class RbacTests {
         assertThat(problems).isEmpty();
 
         // 角色列表在角色页、用户页、知识库授权都要用：三个权限点任一即可读，一个都没有时 403（D-041）。
-        for (var permission : List.of(Permissions.ROLE_VIEW, Permissions.USER_VIEW, Permissions.KB_GRANT)) {
+        for (var permission : List.of(IdentityPermissions.ROLE_VIEW, IdentityPermissions.USER_VIEW, KnowledgePermissions.KB_GRANT)) {
             assertThat(isPermissionDenied(send(userWith(root, List.of(permission)), HttpMethod.GET, "/api/roles",
                     null))).as("只有 %s 时能读角色列表", permission).isFalse();
         }
-        var none = userWith(root, Permissions.ALL.stream().filter(code -> !List.of(Permissions.ROLE_VIEW,
-                Permissions.USER_VIEW, Permissions.KB_GRANT).contains(code)).toList());
+        var none = userWith(root, AllPermissions.ALL.stream().filter(code -> !List.of(IdentityPermissions.ROLE_VIEW,
+                IdentityPermissions.USER_VIEW, KnowledgePermissions.KB_GRANT).contains(code)).toList());
         assertThat(isPermissionDenied(send(none, HttpMethod.GET, "/api/roles", null))).isTrue();
     }
 
@@ -174,7 +194,7 @@ class RbacTests {
         createUser(root, "admin01", adminRole);
         long peer = createUser(root, "admin02", adminRole);
         long staff = createUser(root, "staff01", staffRole);
-        long modelRole = createRole(root, "模型员", List.of(Permissions.MODEL_VIEW));
+        long modelRole = createRole(root, "模型员", List.of(SettingsPermissions.MODEL_VIEW));
         String admin = login("admin01", "member-password");
 
         assertEscalation(call(admin, HttpMethod.PUT, "/api/users/" + rootId + "/enabled", Map.of("enabled", false)));
@@ -201,7 +221,7 @@ class RbacTests {
         assertThat(call(rootToken(), HttpMethod.GET, "/api/auth/me", null).getBody()).containsEntry("superAdmin", true);
         assertThat(login("sneaky01", "sneaky-password")).isNull();
         assertThat((List<Object>) call(login("staff01", "member-password"), HttpMethod.GET, "/api/auth/me", null)
-                .getBody().get("permissions")).containsExactly(Permissions.CHAT_USE);
+                .getBody().get("permissions")).containsExactly(IdentityPermissions.CHAT_USE);
         // 超级管理员能管理其他管理员。
         assertThat(call(root, HttpMethod.PUT, "/api/users/" + peer + "/enabled", Map.of("enabled", false))
                 .getBody()).containsEntry("enabled", false);
@@ -268,7 +288,7 @@ class RbacTests {
     void pagesUsers() {
         String root = rootToken();
         long staffRole = TestLogin.staffRoleId(http);
-        long manager = createRole(root, "店长", List.of(Permissions.CHAT_USE, Permissions.ANSWER_VIEW));
+        long manager = createRole(root, "店长", List.of(IdentityPermissions.CHAT_USE, AnsweringPermissions.ANSWER_VIEW));
         for (int i = 1; i <= 3; i++) {
             createUser(root, "pager0" + i, staffRole);
         }
@@ -294,7 +314,7 @@ class RbacTests {
         String root = rootToken();
         long staffRole = TestLogin.staffRoleId(http);
         String staffName = roleName(root, staffRole);
-        createRole(root, "导入测试模型员", List.of(Permissions.MODEL_VIEW));
+        createRole(root, "导入测试模型员", List.of(SettingsPermissions.MODEL_VIEW));
         createUser(root, "importer01", TestLogin.builtInRoleId(http, "ADMIN"));
         String admin = login("importer01", "member-password");
 
@@ -320,7 +340,7 @@ class RbacTests {
         assertThat(login("import04", "Welcome-2026")).isNull();
 
         createUser(root, "importer02", createRole(root, "导入测试无导入权限",
-                List.of(Permissions.USER_VIEW, Permissions.USER_CREATE)));
+                List.of(IdentityPermissions.USER_VIEW, IdentityPermissions.USER_CREATE)));
         String staff = login("importer02", "member-password");
         assertThat(isPermissionDenied(call(staff, HttpMethod.POST, "/api/users/import",
                 Map.of("rows", List.of(row(2, "import05", "无权导入", staffName)), "password", "Welcome-2026"))))

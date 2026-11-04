@@ -17,7 +17,6 @@ import com.liming.rag.archfixture.infrastructure.RawSqlWrapper;
 import com.liming.rag.archfixture.web.ChecksRoleByHand;
 import com.liming.rag.archfixture.web.UnguardedEndpoint;
 import com.liming.rag.archfixture.web.UnknownPermission;
-import com.liming.rag.identity.api.Permissions;
 import com.tngtech.archunit.base.DescribedPredicate;
 import com.tngtech.archunit.core.domain.JavaClass;
 import com.tngtech.archunit.core.domain.JavaMethod;
@@ -106,7 +105,7 @@ class ArchitectureRulesTest {
             .as("每个接口都标了权限点（@SaCheckPermission），/api/auth 除外（ROADMAP 第四节）");
 
     static final ArchRule PERMISSIONS_IN_CATALOG = classes()
-            .should(new ArchCondition<>("只用 Permissions 清单里的权限点") {
+            .should(new ArchCondition<>("只用各上下文清单里的权限点") {
                 @Override
                 public void check(JavaClass javaClass, ConditionEvents events) {
                     var annotated = new java.util.ArrayList<com.tngtech.archunit.core.domain.JavaAnnotation<?>>();
@@ -115,7 +114,7 @@ class ArchitectureRulesTest {
                             method.tryGetAnnotationOfType(SA_CHECK_PERMISSION).ifPresent(annotated::add));
                     for (var annotation : annotated) {
                         for (Object code : (Object[]) annotation.get("value").orElse(new Object[0])) {
-                            if (!Permissions.ALL.contains(code)) {
+                            if (!AllPermissions.ALL.contains(code)) {
                                 events.add(SimpleConditionEvent.violated(javaClass,
                                         javaClass.getName() + " 用了清单外的权限点 " + code));
                             }
@@ -123,7 +122,7 @@ class ArchitectureRulesTest {
                     }
                 }
             })
-            .as("@SaCheckPermission 的权限点都在 Permissions 清单里");
+            .as("@SaCheckPermission 的权限点都在各上下文声明的权限点清单里");
 
     static final ArchRule NO_SQL_ANNOTATIONS = noMethods()
             .should().beAnnotatedWith("org.apache.ibatis.annotations.Select")

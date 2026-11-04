@@ -5,7 +5,7 @@ import cn.dev33.satoken.annotation.SaCheckPermission;
 import com.liming.rag.answering.application.ConversationService;
 import com.liming.rag.answering.application.ConversationViews;
 import com.liming.rag.identity.api.CurrentUser;
-import com.liming.rag.identity.api.Permissions;
+import com.liming.rag.identity.api.IdentityPermissions;
 import java.util.List;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -25,7 +25,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/conversations")
 @SaCheckLogin
-@SaCheckPermission(Permissions.CHAT_USE)
+@SaCheckPermission(IdentityPermissions.CHAT_USE)
 class ConversationController {
 
     private final ConversationService conversations;

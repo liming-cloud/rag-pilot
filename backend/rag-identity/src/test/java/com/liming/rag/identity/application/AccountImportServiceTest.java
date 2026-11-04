@@ -5,7 +5,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import cn.dev33.satoken.secure.BCrypt;
-import com.liming.rag.identity.api.Permissions;
 import com.liming.rag.identity.application.AccountImportService.Problem;
 import com.liming.rag.identity.application.AccountImportService.Row;
 import java.util.List;
@@ -65,7 +64,7 @@ class AccountImportServiceTest {
     @Test
     @DisplayName("不能分配超出自己权限的角色、超级管理员角色；超级管理员导入时不受自己权限限制")
     void cannotEscalate() {
-        fixture.role("审计", Permissions.MODEL_VIEW);
+        fixture.role("审计", TestCatalog.MODEL_VIEW);
         var rows = List.of(row(2, "boss", "老板", "超级管理员"), row(3, "audit01", "审计员", "审计"));
 
         assertThat(service.check(TENANT, fixture.admin, rows)).containsExactly(

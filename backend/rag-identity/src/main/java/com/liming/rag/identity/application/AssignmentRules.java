@@ -1,6 +1,6 @@
 package com.liming.rag.identity.application;
 
-import com.liming.rag.identity.api.Permissions;
+import com.liming.rag.identity.api.IdentityPermissions;
 import java.util.Collection;
 import java.util.Set;
 
@@ -10,8 +10,9 @@ import java.util.Set;
  * 不能停用、重置密码、改角色的对象是权限不少于自己的账号（包括自己）。
  *
  * @param permissions 操作人自己的权限点
+ * @param access 算对象账号的权限点、核对权限点是否在清单里
  */
-record AssignmentRules(Set<String> permissions, boolean superAdmin) {
+record AssignmentRules(Set<String> permissions, boolean superAdmin, AccessService access) {
 
     void checkAssignable(Collection<Role> assigned) {
         for (var role : assigned) {
@@ -30,7 +31,7 @@ record AssignmentRules(Set<String> permissions, boolean superAdmin) {
         if (superAdmin) {
             return null;
         }
-        if (role.permissions().stream().anyMatch(code -> code.startsWith("role:"))) {
+        if (role.permissions().stream().anyMatch(code -> code.startsWith(IdentityPermissions.ROLE_PREFIX))) {
             return "只有超级管理员能分配含“角色与权限”的角色：" + role.name();
         }
         if (!permissions.containsAll(role.permissions())) {
@@ -44,13 +45,13 @@ record AssignmentRules(Set<String> permissions, boolean superAdmin) {
         if (target.stream().anyMatch(Role::superAdmin)) {
             throw escalation("超级管理员不能被别人修改");
         }
-        if (!superAdmin && AccessService.grantedBy(target).containsAll(permissions)) {
+        if (!superAdmin && access.grantedBy(target).containsAll(permissions)) {
             throw escalation("不能修改权限不少于自己的账号");
         }
     }
 
     void checkGrantable(Collection<String> granted) {
-        if (!Permissions.ALL.containsAll(granted)) {
+        if (!access.catalog().containsAll(granted)) {
             throw new IdentityException(IdentityException.Reason.INVALID, "权限点不在清单里");
         }
         if (!superAdmin && !permissions.containsAll(granted)) {

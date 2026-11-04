@@ -3,8 +3,9 @@ package com.liming.rag.settings.web;
 import cn.dev33.satoken.annotation.SaCheckLogin;
 import cn.dev33.satoken.annotation.SaCheckPermission;
 import com.liming.rag.identity.api.CurrentUser;
-import com.liming.rag.identity.api.Permissions;
+import com.liming.rag.identity.api.IdentityPermissions;
 import com.liming.rag.settings.api.IndustryPack;
+import com.liming.rag.settings.api.SettingsPermissions;
 import com.liming.rag.settings.application.SettingKey;
 import com.liming.rag.settings.application.SettingsException;
 import com.liming.rag.settings.application.SystemSettingsService;
@@ -57,7 +58,7 @@ class SystemSettingsController {
         this.currentUser = currentUser;
     }
 
-    @SaCheckPermission(Permissions.SETTING_VIEW)
+    @SaCheckPermission(SettingsPermissions.SETTING_VIEW)
     @GetMapping("/api/settings")
     SettingsView overview() {
         var overview = settings.overview();
@@ -66,13 +67,13 @@ class SystemSettingsController {
     }
 
     /** 问答页的输入框占位、空状态说明和推荐问题。 */
-    @SaCheckPermission(Permissions.CHAT_USE)
+    @SaCheckPermission(IdentityPermissions.CHAT_USE)
     @GetMapping("/api/settings/chat")
     ChatTexts chat() {
         return settings.chatTexts();
     }
 
-    @SaCheckPermission(Permissions.SETTING_UPDATE)
+    @SaCheckPermission(SettingsPermissions.SETTING_UPDATE)
     @PutMapping("/api/settings/{key}")
     ItemView save(@PathVariable String key, @RequestBody SaveRequest request) {
         var settingKey = key(key);
@@ -80,7 +81,7 @@ class SystemSettingsController {
                 value(settingKey, request == null ? null : request.value())));
     }
 
-    @SaCheckPermission(Permissions.SETTING_UPDATE)
+    @SaCheckPermission(SettingsPermissions.SETTING_UPDATE)
     @DeleteMapping("/api/settings/{key}")
     ItemView restore(@PathVariable String key) {
         return ItemView.of(settings.restore(key(key)));

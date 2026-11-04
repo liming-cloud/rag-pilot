@@ -6,7 +6,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import cn.dev33.satoken.secure.BCrypt;
-import com.liming.rag.identity.api.Permissions;
+import com.liming.rag.identity.api.IdentityPermissions;
 import com.liming.rag.shared.ErrorKind;
 import com.liming.rag.shared.UserId;
 import java.util.List;
@@ -64,8 +64,8 @@ class AccountAdminServiceTest {
     @Test
     @DisplayName("只能分配不超过自己权限的角色；含“角色与权限”的角色只有超级管理员能分配；超级管理员角色谁都不能分配")
     void cannotAssignBeyondOwnPermissions() {
-        var auditor = fixture.role("审计", Permissions.MODEL_VIEW);
-        var roleAdmin = fixture.role("角色管理员", Permissions.ROLE_VIEW);
+        var auditor = fixture.role("审计", TestCatalog.MODEL_VIEW);
+        var roleAdmin = fixture.role("角色管理员", IdentityPermissions.ROLE_VIEW);
 
         assertEscalation(() -> service.create(TENANT, fixture.admin, "x01", "x", "staff-password",
                 List.of(auditor.id())), "超出自己权限");

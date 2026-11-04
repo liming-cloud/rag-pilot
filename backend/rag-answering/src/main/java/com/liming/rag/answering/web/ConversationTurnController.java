@@ -4,7 +4,7 @@ import cn.dev33.satoken.annotation.SaCheckLogin;
 import cn.dev33.satoken.annotation.SaCheckPermission;
 import com.liming.rag.answering.application.ConversationAskService;
 import com.liming.rag.identity.api.CurrentUser;
-import com.liming.rag.identity.api.Permissions;
+import com.liming.rag.identity.api.IdentityPermissions;
 import com.liming.rag.shared.BusinessException;
 import java.io.IOException;
 import java.time.Duration;
@@ -31,7 +31,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 @RestController
 @RequestMapping("/api/conversations/{conversationId}/turns")
 @SaCheckLogin
-@SaCheckPermission(Permissions.CHAT_USE)
+@SaCheckPermission(IdentityPermissions.CHAT_USE)
 class ConversationTurnController {
 
     private static final Logger LOG = LoggerFactory.getLogger(ConversationTurnController.class);

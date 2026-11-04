@@ -6,7 +6,7 @@ import com.liming.rag.answering.api.Answer;
 import com.liming.rag.answering.application.AnswerLogService;
 import com.liming.rag.answering.application.AnswerService;
 import com.liming.rag.identity.api.CurrentUser;
-import com.liming.rag.identity.api.Permissions;
+import com.liming.rag.identity.api.IdentityPermissions;
 import com.liming.rag.shared.BusinessException;
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -30,7 +30,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 @RestController
 @RequestMapping("/api/ask")
 @SaCheckLogin
-@SaCheckPermission(Permissions.CHAT_USE)
+@SaCheckPermission(IdentityPermissions.CHAT_USE)
 class AskController {
 
     private static final Logger LOG = LoggerFactory.getLogger(AskController.class);

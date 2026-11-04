@@ -7,7 +7,6 @@ import com.liming.rag.shared.UserId;
 import java.time.Clock;
 import java.time.OffsetDateTime;
 import java.util.Collection;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.regex.Pattern;
@@ -70,7 +69,7 @@ public class AccountAdminService {
         }
         PasswordRules.check(name, password);
         var assigned = rolesIn(tenantId, roleIds);
-        rulesFor(actor).checkAssignable(assigned);
+        access.rulesFor(actor).checkAssignable(assigned);
         if (accounts.existsByUsername(name)) {
             throw usernameTaken(name);
         }
@@ -93,7 +92,7 @@ public class AccountAdminService {
         if (!enabled && target.equals(actor)) {
             throw invalid("不能停用自己的账号");
         }
-        rulesFor(actor).checkManageable(roles.rolesOf(account.id()));
+        access.rulesFor(actor).checkManageable(roles.rolesOf(account.id()));
         accounts.setEnabled(account.id(), enabled);
         if (!enabled) {
             StpUtil.logout(account.id());
@@ -105,7 +104,7 @@ public class AccountAdminService {
     @Transactional
     public ManagedAccount assignRoles(TenantId tenantId, UserId actor, UserId target, Collection<Long> roleIds) {
         var account = find(tenantId, target);
-        var rules = rulesFor(actor);
+        var rules = access.rulesFor(actor);
         rules.checkManageable(roles.rolesOf(account.id()));
         var assigned = rolesIn(tenantId, roleIds);
         rules.checkAssignable(assigned);
@@ -117,7 +116,7 @@ public class AccountAdminService {
     @Transactional
     public void resetPassword(TenantId tenantId, UserId actor, UserId target, String password) {
         var account = find(tenantId, target);
-        rulesFor(actor).checkManageable(roles.rolesOf(account.id()));
+        access.rulesFor(actor).checkManageable(roles.rolesOf(account.id()));
         PasswordRules.check(account.username(), password);
         accounts.setPassword(account.id(), BCrypt.hashpw(password, BCrypt.gensalt()), true);
         StpUtil.logout(account.id());
@@ -127,12 +126,6 @@ public class AccountAdminService {
     @Transactional
     public void unlock(TenantId tenantId, UserId target) {
         accounts.clearFailedLogins(find(tenantId, target).id());
-    }
-
-    private AssignmentRules rulesFor(UserId actor) {
-        var account = accounts.find(actor.value()).orElseThrow(() -> notFound());
-        return new AssignmentRules(new LinkedHashSet<>(access.permissionsOf(account)),
-                access.superAdmin(account.id()));
     }
 
     private Account find(TenantId tenantId, UserId target) {

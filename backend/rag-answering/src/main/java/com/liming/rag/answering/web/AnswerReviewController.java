@@ -3,6 +3,7 @@ package com.liming.rag.answering.web;
 import cn.dev33.satoken.annotation.SaCheckLogin;
 import cn.dev33.satoken.annotation.SaCheckPermission;
 import com.liming.rag.answering.api.Answer;
+import com.liming.rag.answering.api.AnsweringPermissions;
 import com.liming.rag.answering.application.AnswerLogService;
 import com.liming.rag.answering.application.AnswerReview;
 import com.liming.rag.answering.application.AnswerService;
@@ -10,7 +11,6 @@ import com.liming.rag.answering.application.KnowledgeGapService;
 import com.liming.rag.answering.application.UsageReportService;
 import com.liming.rag.answering.application.UsageStats;
 import com.liming.rag.identity.api.CurrentUser;
-import com.liming.rag.identity.api.Permissions;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import org.springframework.http.ContentDisposition;
@@ -63,7 +63,7 @@ class AnswerReviewController {
     }
 
     /** 按类型、处理状态、最近几天、问题关键词筛选，分页（D-039）。 */
-    @SaCheckPermission(Permissions.ANSWER_VIEW)
+    @SaCheckPermission(AnsweringPermissions.ANSWER_VIEW)
     @GetMapping
     PageView<AnswerReview> list(@RequestParam(name = "filter", defaultValue = "disliked") String filter,
             @RequestParam(name = "status", defaultValue = "open") String status,
@@ -76,7 +76,7 @@ class AnswerReviewController {
     }
 
     /** 最近几天（含今天）或某个自然周的使用统计，按周时与上一周对比（#125）。 */
-    @SaCheckPermission(Permissions.STATS_VIEW)
+    @SaCheckPermission(AnsweringPermissions.STATS_VIEW)
     @GetMapping("/stats")
     UsageStats stats(@RequestParam(name = "days", required = false) Integer days,
             @RequestParam(name = "week", required = false) String week) {
@@ -84,7 +84,7 @@ class AnswerReviewController {
     }
 
     /** 导出这段时间每条问答的 CSV（UTF-8 带 BOM）。 */
-    @SaCheckPermission(Permissions.STATS_EXPORT)
+    @SaCheckPermission(AnsweringPermissions.STATS_EXPORT)
     @GetMapping("/stats/export")
     ResponseEntity<byte[]> export(@RequestParam(name = "days", required = false) Integer days,
             @RequestParam(name = "week", required = false) String week) {
@@ -97,7 +97,7 @@ class AnswerReviewController {
     }
 
     /** 知识缺口（D-047）：按意思归类的拒答和差评，status 为 open（有待处理的类）或 all。 */
-    @SaCheckPermission(Permissions.ANSWER_VIEW)
+    @SaCheckPermission(AnsweringPermissions.ANSWER_VIEW)
     @GetMapping("/gaps")
     KnowledgeGapService.Report gaps(@RequestParam(name = "days", defaultValue = "30") int days,
             @RequestParam(name = "status", defaultValue = "open") String status) {
@@ -105,7 +105,7 @@ class AnswerReviewController {
     }
 
     /** 整类标记已处理：这些记录里还没处理的都标记已处理，附同一条说明。 */
-    @SaCheckPermission(Permissions.ANSWER_REVIEW)
+    @SaCheckPermission(AnsweringPermissions.ANSWER_REVIEW)
     @PostMapping("/gaps/resolve")
     ResolveGapResponse resolveGap(@RequestBody ResolveGapRequest request) {
         return new ResolveGapResponse(gaps.resolve(currentUser.tenantId(), currentUser.userId(), request.recordIds(),
@@ -113,7 +113,7 @@ class AnswerReviewController {
     }
 
     /** 标记已处理（附处理说明）或重新打开。 */
-    @SaCheckPermission(Permissions.ANSWER_REVIEW)
+    @SaCheckPermission(AnsweringPermissions.ANSWER_REVIEW)
     @PatchMapping("/{answerId}/review")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     void review(@PathVariable long answerId, @RequestBody ReviewRequest request) {
@@ -124,7 +124,7 @@ class AnswerReviewController {
      * 用当前知识库重新回答这条记录里的问题，确认补的文档是否解决了问题。按管理员自己的权限检索，
      * 结果不写入回答记录。
      */
-    @SaCheckPermission(Permissions.ANSWER_RECHECK)
+    @SaCheckPermission(AnsweringPermissions.ANSWER_RECHECK)
     @PostMapping("/{answerId}/recheck")
     Answer recheck(@PathVariable long answerId) {
         var question = log.questionOf(currentUser.tenantId(), answerId);

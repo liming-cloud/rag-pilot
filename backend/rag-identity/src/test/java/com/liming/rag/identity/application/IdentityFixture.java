@@ -14,7 +14,7 @@ final class IdentityFixture {
     static final String PASSWORD = "test-password";
 
     final InMemoryIdentity store = new InMemoryIdentity();
-    final AccessService access = new AccessService(store, store);
+    final AccessService access = new AccessService(store, store, TestCatalog.REGISTRY);
     final Role superRole;
     final Role adminRole;
     final Role staffRole;
@@ -23,8 +23,8 @@ final class IdentityFixture {
 
     IdentityFixture() {
         superRole = store.insert(new Role(null, TENANT, "超级管理员", Role.BuiltIn.SUPER_ADMIN, Set.of()));
-        adminRole = store.insert(new Role(null, TENANT, "管理员", Role.BuiltIn.ADMIN, RoleService.ADMIN_DEFAULT));
-        staffRole = store.insert(new Role(null, TENANT, "员工", Role.BuiltIn.STAFF, RoleService.STAFF_DEFAULT));
+        adminRole = store.insert(new Role(null, TENANT, "管理员", Role.BuiltIn.ADMIN, TestCatalog.REGISTRY.adminDefaults()));
+        staffRole = store.insert(new Role(null, TENANT, "员工", Role.BuiltIn.STAFF, TestCatalog.REGISTRY.staffDefaults()));
         superAdmin = account("root", superRole);
         admin = account("admin01", adminRole);
     }

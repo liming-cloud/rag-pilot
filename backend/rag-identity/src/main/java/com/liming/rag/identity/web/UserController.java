@@ -3,7 +3,7 @@ package com.liming.rag.identity.web;
 import cn.dev33.satoken.annotation.SaCheckLogin;
 import cn.dev33.satoken.annotation.SaCheckPermission;
 import com.liming.rag.identity.api.CurrentUser;
-import com.liming.rag.identity.api.Permissions;
+import com.liming.rag.identity.api.IdentityPermissions;
 import com.liming.rag.identity.application.AccountAdminService;
 import com.liming.rag.identity.application.AccountImportService;
 import com.liming.rag.shared.UserId;
@@ -60,7 +60,7 @@ class UserController {
     }
 
     /** 按关键词、角色、状态（enabled、disabled、locked）筛选，分页（D-039）。 */
-    @SaCheckPermission(Permissions.USER_VIEW)
+    @SaCheckPermission(IdentityPermissions.USER_VIEW)
     @GetMapping
     PageView<UserView> list(@RequestParam(name = "keyword", required = false) String keyword,
             @RequestParam(name = "roleId", required = false) Long roleId,
@@ -70,7 +70,7 @@ class UserController {
         return PageView.of(accounts.page(currentUser.tenantId(), keyword, roleId, status, page, size), UserView::of);
     }
 
-    @SaCheckPermission(Permissions.USER_CREATE)
+    @SaCheckPermission(IdentityPermissions.USER_CREATE)
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     UserView create(@RequestBody CreateUserRequest request) {
@@ -78,28 +78,28 @@ class UserController {
                 request.displayName(), request.password(), request.roleIds()));
     }
 
-    @SaCheckPermission(Permissions.USER_DISABLE)
+    @SaCheckPermission(IdentityPermissions.USER_DISABLE)
     @PutMapping("/{id}/enabled")
     UserView setEnabled(@PathVariable long id, @RequestBody EnabledRequest request) {
         return UserView.of(accounts.setEnabled(currentUser.tenantId(), currentUser.userId(), new UserId(id),
                 request.enabled()));
     }
 
-    @SaCheckPermission(Permissions.USER_ASSIGN_ROLE)
+    @SaCheckPermission(IdentityPermissions.USER_ASSIGN_ROLE)
     @PutMapping("/{id}/roles")
     UserView assignRoles(@PathVariable long id, @RequestBody RolesRequest request) {
         return UserView.of(accounts.assignRoles(currentUser.tenantId(), currentUser.userId(), new UserId(id),
                 request.roleIds()));
     }
 
-    @SaCheckPermission(Permissions.USER_RESET_PASSWORD)
+    @SaCheckPermission(IdentityPermissions.USER_RESET_PASSWORD)
     @PostMapping("/{id}/reset-password")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     void resetPassword(@PathVariable long id, @RequestBody ResetPasswordRequest request) {
         accounts.resetPassword(currentUser.tenantId(), currentUser.userId(), new UserId(id), request.password());
     }
 
-    @SaCheckPermission(Permissions.USER_UPDATE)
+    @SaCheckPermission(IdentityPermissions.USER_UPDATE)
     @PostMapping("/{id}/unlock")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     void unlock(@PathVariable long id) {
@@ -107,14 +107,14 @@ class UserController {
     }
 
     /** 批量导入的预检：逐行列出问题，不写入（#124）。文件由前端解析成行，后端只收行。 */
-    @SaCheckPermission(Permissions.USER_IMPORT)
+    @SaCheckPermission(IdentityPermissions.USER_IMPORT)
     @PostMapping("/import/check")
     ImportCheckResponse checkImport(@RequestBody ImportCheckRequest request) {
         return new ImportCheckResponse(imports.check(currentUser.tenantId(), currentUser.userId(), request.rows()));
     }
 
     /** 批量导入：重新预检，有问题时一条都不写入；导入的账号首次登录必须先改密码。 */
-    @SaCheckPermission(Permissions.USER_IMPORT)
+    @SaCheckPermission(IdentityPermissions.USER_IMPORT)
     @PostMapping("/import")
     ImportResponse importUsers(@RequestBody ImportRequest request) {
         return new ImportResponse(imports.importAll(currentUser.tenantId(), currentUser.userId(), request.rows(),

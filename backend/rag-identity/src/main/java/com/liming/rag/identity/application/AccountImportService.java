@@ -5,7 +5,6 @@ import com.liming.rag.shared.TenantId;
 import com.liming.rag.shared.UserId;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
@@ -89,7 +88,7 @@ public class AccountImportService {
     }
 
     private List<Problem> problems(TenantId tenantId, UserId actor, List<Row> rows, String password) {
-        var rules = rulesFor(actor);
+        var rules = access.rulesFor(actor);
         var byName = rolesByName(tenantId);
         var existing = accounts.existingUsernames(rows.stream().map(Row::username).toList());
         var firstLine = new HashMap<String, Integer>();
@@ -128,13 +127,6 @@ public class AccountImportService {
     private Map<String, Role> rolesByName(TenantId tenantId) {
         return roles.list(tenantId).stream()
                 .collect(Collectors.toMap(Role::name, Function.identity(), (first, second) -> first));
-    }
-
-    private AssignmentRules rulesFor(UserId actor) {
-        var account = accounts.find(actor.value())
-                .orElseThrow(() -> new IdentityException(IdentityException.Reason.NOT_FOUND, "账号不存在"));
-        return new AssignmentRules(new LinkedHashSet<>(access.permissionsOf(account)),
-                access.superAdmin(account.id()));
     }
 
     private static void checkSize(List<Row> rows) {

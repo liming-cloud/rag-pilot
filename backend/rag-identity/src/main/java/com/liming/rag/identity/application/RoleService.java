@@ -1,11 +1,9 @@
 package com.liming.rag.identity.application;
 
-import com.liming.rag.identity.api.Permissions;
 import com.liming.rag.identity.api.RoleDeleted;
 import com.liming.rag.shared.TenantId;
 import com.liming.rag.shared.UserId;
 import java.util.Collection;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 import org.springframework.context.ApplicationEventPublisher;
@@ -20,27 +18,19 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class RoleService {
 
-    /** 内置“管理员”的默认权限：知识库、用户、回答记录、使用统计的全部权限和问答。 */
-    static final Set<String> ADMIN_DEFAULT = Set.of(Permissions.CHAT_USE,
-            Permissions.KB_VIEW, Permissions.KB_CREATE, Permissions.KB_UPDATE, Permissions.KB_DELETE,
-            Permissions.DOC_UPLOAD, Permissions.DOC_REPLACE, Permissions.DOC_UPDATE, Permissions.DOC_DELETE,
-            Permissions.KB_GRANT,
-            Permissions.USER_VIEW, Permissions.USER_CREATE, Permissions.USER_UPDATE, Permissions.USER_DISABLE,
-            Permissions.USER_RESET_PASSWORD, Permissions.USER_ASSIGN_ROLE, Permissions.USER_IMPORT,
-            Permissions.ANSWER_VIEW, Permissions.ANSWER_REVIEW, Permissions.ANSWER_RECHECK, Permissions.ANSWER_EXPORT,
-            Permissions.STATS_VIEW, Permissions.STATS_EXPORT);
-    static final Set<String> STAFF_DEFAULT = Set.of(Permissions.CHAT_USE);
-
     private final Roles roles;
     private final Accounts accounts;
     private final AccessService access;
     private final ApplicationEventPublisher events;
+    private final PermissionRegistry permissions;
 
-    RoleService(Roles roles, Accounts accounts, AccessService access, ApplicationEventPublisher events) {
+    RoleService(Roles roles, Accounts accounts, AccessService access, ApplicationEventPublisher events,
+            PermissionRegistry permissions) {
         this.roles = roles;
         this.accounts = accounts;
         this.access = access;
         this.events = events;
+        this.permissions = permissions;
     }
 
     /** 一个角色和属于它的账号数。 */
@@ -59,7 +49,7 @@ public class RoleService {
     public RoleSummary create(TenantId tenantId, UserId actor, String name, Collection<String> permissions) {
         var trimmed = checkName(name);
         var granted = permissionsOrEmpty(permissions);
-        rulesFor(actor).checkGrantable(granted);
+        access.rulesFor(actor).checkGrantable(granted);
         if (roles.existsByName(tenantId, trimmed)) {
             throw nameTaken(trimmed);
         }
@@ -91,7 +81,7 @@ public class RoleService {
         var granted = role.permissions();
         if (permissions != null) {
             granted = permissionsOrEmpty(permissions);
-            rulesFor(actor).checkGrantable(granted);
+            access.rulesFor(actor).checkGrantable(granted);
         }
         var updated = new Role(role.id(), tenantId, newName, role.builtIn(), granted);
         try {
@@ -123,20 +113,14 @@ public class RoleService {
     public void ensureBuiltIns(TenantId tenantId) {
         for (var builtIn : Role.BuiltIn.values()) {
             if (roles.findBuiltIn(tenantId, builtIn).isEmpty()) {
-                var permissions = switch (builtIn) {
+                var defaults = switch (builtIn) {
                     case SUPER_ADMIN -> Set.<String>of();
-                    case ADMIN -> ADMIN_DEFAULT;
-                    case STAFF -> STAFF_DEFAULT;
+                    case ADMIN -> permissions.adminDefaults();
+                    case STAFF -> permissions.staffDefaults();
                 };
-                roles.insert(new Role(null, tenantId, builtIn.defaultName(), builtIn, permissions));
+                roles.insert(new Role(null, tenantId, builtIn.defaultName(), builtIn, defaults));
             }
         }
-    }
-
-    private AssignmentRules rulesFor(UserId actor) {
-        var account = accounts.find(actor.value())
-                .orElseThrow(() -> new IdentityException(IdentityException.Reason.NOT_FOUND, "账号不存在"));
-        return new AssignmentRules(new LinkedHashSet<>(access.permissionsOf(account)), access.superAdmin(account.id()));
     }
 
     private Role find(TenantId tenantId, long id) {
