@@ -87,13 +87,15 @@ class SystemSettingsTests {
         assertThat(get("/api/settings/chat")).containsEntry("placeholder", "问问示例…")
                 .containsEntry("suggestedQuestions", List.of("第一个问题？", "第二个问题？"));
 
+        // 问答只有会话接口：先有一个可用的空知识库，检索不到资料才会用拒答话术回复（#145）。
+        http.postForEntity("/api/knowledge-bases", Map.of("name", "拒答话术测试库"), Map.class);
         save("REFUSAL_MESSAGE", "资料里没有依据，请联系总部确认。");
-        var refused = http.postForEntity("/api/ask", Map.of("question", "员工年假怎么申请"), Map.class).getBody();
+        var refused = TestAsk.ask(http, null, null, "员工年假怎么申请");
         assertThat(refused).containsEntry("refused", true).containsEntry("text", "资料里没有依据，请联系总部确认。");
 
         var restored = http.exchange("/api/settings/REFUSAL_MESSAGE", HttpMethod.DELETE, null, Map.class);
         assertThat(restored.getBody()).containsEntry("source", "INDUSTRY_PACK");
-        var again = http.postForEntity("/api/ask", Map.of("question", "员工年假怎么申请"), Map.class).getBody();
+        var again = TestAsk.ask(http, null, null, "员工年假怎么申请");
         assertThat(String.valueOf(again.get("text"))).contains("联系店长确认");
         http.exchange("/api/settings/BRAND_NAME", HttpMethod.DELETE, null, Map.class);
         assertThat(anonymous("/api/auth/branding").getBody()).containsEntry("name", "明答");

@@ -13,6 +13,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
@@ -50,8 +51,14 @@ class AuthTests {
     void rejectsAnonymous() {
         assertThat(status(HttpMethod.GET, "/api/knowledge-bases", null, null))
                 .isEqualTo(HttpStatus.UNAUTHORIZED);
-        assertThat(call(HttpMethod.POST, "/api/ask", null, Map.of("question", "货架", "knowledgeBaseIds", 1))
-                .getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(call(HttpMethod.POST, "/api/conversations", null, Map.of()).getStatusCode())
+                .isEqualTo(HttpStatus.UNAUTHORIZED);
+        var streamHeaders = new HttpHeaders();
+        streamHeaders.setAccept(List.of(MediaType.TEXT_EVENT_STREAM));
+        streamHeaders.setContentType(MediaType.APPLICATION_JSON);
+        assertThat(http.exchange("/api/conversations/1/turns/stream", HttpMethod.POST,
+                new HttpEntity<>(Map.of("question", "货架"), streamHeaders), String.class).getStatusCode())
+                .isEqualTo(HttpStatus.UNAUTHORIZED);
     }
 
     @Test

@@ -146,10 +146,8 @@ class EvaluationRun {
         }
         long searchMillis = (System.nanoTime() - start) / 1_000_000;
 
-        boolean inConversation = !evalCase.history().isEmpty() || evalCase.kind() == EvalCase.Kind.SMALL_TALK;
-        var events = inConversation ? askInConversation(knowledgeBaseId, restricted, staff, evalCase)
-                : askWithRetry(evalCase, () -> SseEvents.post(http, "/api/ask/stream", Map.of("question",
-                        evalCase.question(), "knowledgeBaseIds", List.of(knowledgeBaseId, restricted)), staff));
+        // 全部按员工实际用的会话提问（#145）：单轮题建一个新会话只问这一题。
+        var events = askInConversation(knowledgeBaseId, restricted, staff, evalCase);
         if (events == null) {
             return null;
         }
@@ -158,13 +156,11 @@ class EvaluationRun {
         var json = JsonMapper.builder().build();
         Map<String, Object> answer = json.readValue(done.data(), new TypeReference<>() {
         });
-        if (inConversation) {
-            // 会话提问的 done 是这一轮；停止或出错时没有回答，按拒答计。
-            @SuppressWarnings("unchecked")
-            var turnAnswer = (Map<String, Object>) answer.get("answer");
-            answer = turnAnswer != null ? turnAnswer : Map.of("refused", true, "refusalReason",
-                    String.valueOf(answer.get("status")), "text", "", "citations", List.of());
-        }
+        // 会话提问的 done 是这一轮；停止或出错时没有回答，按拒答计。
+        @SuppressWarnings("unchecked")
+        var turnAnswer = (Map<String, Object>) answer.get("answer");
+        answer = turnAnswer != null ? turnAnswer : Map.of("refused", true, "refusalReason",
+                String.valueOf(answer.get("status")), "text", "", "citations", List.of());
         @SuppressWarnings("unchecked")
         var citations = (List<Map<String, Object>>) answer.get("citations");
         // 引用校验不通过时，已流出的文字会被拒答替换；记下原文，才看得出模型为什么没带引用。
@@ -185,7 +181,7 @@ class EvaluationRun {
                 (String) answer.get("text"),
                 citations.stream().map(citation -> (String) citation.get("documentName")).toList(),
                 answer.get("topRelevance") == null ? null : ((Number) answer.get("topRelevance")).doubleValue(),
-                searchMillis, firstContentMillis(events, inConversation), done.atMillis(), stages(answer),
+                searchMillis, firstContentMillis(events), done.atMillis(), stages(answer),
                 rewrite(answer))
                 .withDiscardedReply(refused && !streamed.isEmpty() ? streamed.toString() : null);
     }
@@ -234,7 +230,7 @@ class EvaluationRun {
     }
 
     /**
-     * 多轮题和寒暄题按会话提问（D-036）：新建会话（点名店长专用库，会被忽略），依次问完前面的问题（不计分），
+     * 按会话提问（D-036、#145）：新建会话（点名店长专用库，会被忽略），多轮题先依次问完前面的问题（不计分），
      * 再问这一题。前面的问题碰上模型不可用时同样重试。
      */
     private List<SseEvents.Event> askInConversation(long store, long restricted, String staff, EvalCase evalCase) {
@@ -254,13 +250,10 @@ class EvaluationRun {
     }
 
     /**
-     * 首字延迟：旧接口按第一个事件计（D-021 的口径）；会话提问先发 turn 和处理阶段的 status，按第一段文字或最终结果计，
-     * 两种口径都是员工看到第一段内容的时间。
+     * 首字延迟：员工看到第一段内容的时间。会话提问先发 turn 和处理阶段的 status，按第一段文字或最终结果计（#145 起
+     * 全部题都按这个口径；原来单轮题走旧接口、按第一个事件计，D-021）。
      */
-    private static long firstContentMillis(List<SseEvents.Event> events, boolean inConversation) {
-        if (!inConversation) {
-            return events.getFirst().atMillis();
-        }
+    private static long firstContentMillis(List<SseEvents.Event> events) {
         return events.stream().filter(event -> "delta".equals(event.name()) || "done".equals(event.name()))
                 .findFirst().orElse(events.getLast()).atMillis();
     }

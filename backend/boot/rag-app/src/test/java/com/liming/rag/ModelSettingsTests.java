@@ -147,9 +147,7 @@ class ModelSettingsTests {
     }
 
     private void ask(long kb) {
-        var response = http.postForEntity("/api/ask",
-                Map.of("question", "交班时要做什么", "knowledgeBaseIds", List.of(kb)), Map.class);
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(TestAsk.ask(http, null, List.of(kb), "交班时要做什么")).containsKey("refused");
     }
 
     private static String lastRerank() {

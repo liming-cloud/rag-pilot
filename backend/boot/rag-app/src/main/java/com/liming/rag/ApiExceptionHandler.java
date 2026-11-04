@@ -22,7 +22,7 @@ import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExcep
  *
  * <p>业务异常按 {@link ErrorKind} 转状态码；Sa-Token 的未登录、无角色、无权限点转 401、403；Spring MVC 自己的异常
  * （方法不支持、上传过大等）沿用框架的处理并补上 code；其余意外异常记日志、返回 500，不把内部信息带给用户。
- * 流式问答在后台线程里出错时不经过这里，由 {@code AskController} 发 {@code error} 事件。
+ * 流式问答在后台线程里出错时不经过这里，由 {@code SseChannel} 发 {@code error} 事件。
  */
 @RestControllerAdvice
 class ApiExceptionHandler extends ResponseEntityExceptionHandler {

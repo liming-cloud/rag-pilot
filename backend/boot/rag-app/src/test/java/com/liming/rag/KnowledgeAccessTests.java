@@ -57,7 +57,7 @@ class KnowledgeAccessTests {
         String staff = TestLogin.token(http, "access01", "staff-password");
 
         assertThat(list(staff, "/api/knowledge-bases")).isEmpty();
-        assertThat(ask(staff, "青柚气泡水在哪个货架", null)).containsEntry("refused", true);
+        assertNoAccess(ask(staff, "青柚气泡水在哪个货架", null), "商品陈列.txt", "03 号货架");
 
         assertThat(send(HttpMethod.PUT, "/api/knowledge-bases/" + store + "/members/999999", admin))
                 .isEqualTo(HttpStatus.NOT_FOUND);
@@ -130,10 +130,18 @@ class KnowledgeAccessTests {
         assertThat(list(admin, "/api/knowledge-bases/" + cashierDesk + "/role-grants")).isEmpty();
     }
 
-    /** 没有权限时拒答，且回答里没有那份文档的名字和原文。 */
+    /**
+     * 没有权限时问不到：要么拒答，要么一个可用的知识库都没有、会话建不起来（#145 起问答只有会话接口）；
+     * 两种情况下返回的内容里都没有那份文档的名字和原文。
+     */
+    private static void assertNoAccess(Map<String, Object> answer, String document, String content) {
+        assertThat(Boolean.TRUE.equals(answer.get("refused")) || "ANSWERING_INVALID".equals(answer.get("code")))
+                .as("应拒答或无法开始会话：" + answer).isTrue();
+        assertThat(answer.toString()).doesNotContain(document).doesNotContain(content);
+    }
+
     private static void assertNoAccess(Map<String, Object> answer) {
-        assertThat(answer).containsEntry("refused", true);
-        assertThat(answer.toString()).doesNotContain("收银差异.txt").doesNotContain("差异单");
+        assertNoAccess(answer, "收银差异.txt", "差异单");
     }
 
     private long createUser(String admin, String username, long roleId) {
@@ -175,14 +183,9 @@ class KnowledgeAccessTests {
                 .containsEntry("status", "READY");
     }
 
-    @SuppressWarnings("unchecked")
+    /** 员工提问；一个可用的知识库都没有时会话建不起来，返回的是错误详情（见 {@link #assertNoAccess}）。 */
     private Map<String, Object> ask(String token, String question, List<Long> knowledgeBaseIds) {
-        var body = new java.util.HashMap<String, Object>();
-        body.put("question", question);
-        body.put("knowledgeBaseIds", knowledgeBaseIds);
-        var response = http.exchange("/api/ask", HttpMethod.POST, new HttpEntity<>(body, auth(token)), Map.class);
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-        return response.getBody();
+        return TestAsk.attempt(http, token, knowledgeBaseIds, question);
     }
 
     private List<Map<String, Object>> list(String token, String path) {

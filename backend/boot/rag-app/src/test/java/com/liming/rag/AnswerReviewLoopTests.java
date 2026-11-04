@@ -129,8 +129,7 @@ class AnswerReviewLoopTests {
     @DisplayName("补上文档后重新回答，确认已能答出来；重新回答不新增回答记录")
     void rechecksWithCurrentKnowledge() {
         long kb = createKnowledgeBase();
-        var first = http.postForEntity("/api/ask", Map.of("question", "交班时要做什么", "knowledgeBaseIds", List.of(kb)),
-                Map.class).getBody();
+        var first = TestAsk.ask(http, null, List.of(kb), "交班时要做什么");
         assertThat(first).containsEntry("refused", true);
         long id = ((Number) first.get("id")).longValue();
 

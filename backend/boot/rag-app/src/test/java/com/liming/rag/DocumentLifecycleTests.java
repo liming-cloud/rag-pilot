@@ -193,8 +193,7 @@ class DocumentLifecycleTests {
 
     @SuppressWarnings("unchecked")
     private Map<String, Object> ask(String question, long kb) {
-        return http.postForEntity("/api/ask", Map.of("question", question, "knowledgeBaseIds", List.of(kb)), Map.class)
-                .getBody();
+        return TestAsk.ask(http, null, List.of(kb), question);
     }
 
     private long createKnowledgeBase(String name) {

@@ -82,8 +82,7 @@ class DocumentValidityTests {
         long kb = createKnowledgeBase("有效期问答库");
         upload(kb, "交班旧规.txt", "收银员交班时要清点备用金并交给值班经理保管。", null, TODAY.minusDays(3).toString());
 
-        var asked = http.postForEntity("/api/ask", Map.of("question", "收银员交班时要做什么",
-                "knowledgeBaseIds", List.of(kb)), Map.class).getBody();
+        var asked = TestAsk.ask(http, null, List.of(kb), "收银员交班时要做什么");
         assertThat(asked).containsEntry("refused", true);
         assertThat((List<?>) asked.get("citations")).isEmpty();
 

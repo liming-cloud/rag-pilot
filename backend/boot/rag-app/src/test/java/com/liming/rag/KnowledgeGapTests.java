@@ -128,10 +128,9 @@ class KnowledgeGapTests {
         long foreign = ((Number) jdbc.queryForObject(
                 "INSERT INTO knowledge_base (tenant_id, name) VALUES (1, '缺口测试无权库') RETURNING id", Long.class))
                 .longValue();
-        // 经问答接口提问：空库里检索不到，记为拒答，连同点名且有权访问的库。
+        // 经会话提问：空库里检索不到，记为拒答，连同点名且有权访问的库。
         for (var knowledgeBases : List.of(List.of(store), List.of(store, goods), List.of(store, foreign))) {
-            var asked = http.postForObject("/api/ask", Map.of("question", "门店几点打烊",
-                    "knowledgeBaseIds", knowledgeBases), Map.class);
+            var asked = TestAsk.ask(http, null, knowledgeBases, "门店几点打烊");
             assertThat(asked).containsEntry("refused", true);
         }
 

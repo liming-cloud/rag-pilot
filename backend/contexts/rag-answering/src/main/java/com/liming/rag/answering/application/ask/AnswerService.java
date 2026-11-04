@@ -111,9 +111,8 @@ public class AnswerService {
     }
 
     /**
-     * 流式问答，另外把处理中的状态（如“换个说法再找找…”）交给 {@code onStatus}，前端据此提示员工系统还在找。
-     * 这个入口不推“正在检索资料…”“正在整理答案…”两个阶段状态：评测按 /api/ask/stream 的第一个事件计首字，
-     * 保持口径不变；阶段状态只在会话提问里推（D-036）。
+     * 不经会话的单次问答（管理员“重新回答”），另外把处理中的状态（如“换个说法再找找…”）交给 {@code onStatus}。
+     * 这个入口不推“正在检索资料…”“正在整理答案…”两个阶段状态，阶段状态只在会话提问里推（D-036）。
      */
     public AskResult ask(TenantId tenantId, UserId userId, List<Long> knowledgeBaseIds, String question,
             Consumer<String> onDelta, Consumer<String> onStatus) {

@@ -52,7 +52,9 @@ class IndustryPackSwitchTests {
         assertThat(settings.pack().vocabulary()).singleElement()
                 .satisfies(term -> assertThat(term.members()).contains("直梯"));
 
-        var refused = http.postForEntity("/api/ask", Map.of("question", "员工年假怎么申请"), Map.class).getBody();
+        // 问答只有会话接口：先有一个可用的空知识库，检索不到资料才会用拒答话术回复（#145）。
+        http.postForEntity("/api/knowledge-bases", Map.of("name", "拒答话术测试库"), Map.class);
+        var refused = TestAsk.ask(http, null, null, "员工年假怎么申请");
         assertThat(refused).containsEntry("refused", true).containsEntry("text", "资料里没有找到依据，请联系物业经理确认。");
         assertThat(http.getForEntity("/api/answers/stats?days=7", Map.class).getBody())
                 .containsEntry("zone", "Asia/Singapore");

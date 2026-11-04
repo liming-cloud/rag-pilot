@@ -57,14 +57,14 @@ class AnswerFeedbackTests {
         long knowledgeBaseId = createKnowledgeBase();
         upload(knowledgeBaseId, "商品陈列.txt", "青柚气泡水陈列在一层 A 区 03 号货架第二层。补货时先移出临期批次。");
 
-        var answer = http.postForEntity("/api/ask", Map.of("question", "青柚气泡水在哪个货架"), Map.class).getBody();
+        var answer = TestAsk.ask(http, null, null, "青柚气泡水在哪个货架");
         long id = ((Number) answer.get("id")).longValue();
         assertThat(jdbc.queryForMap("select question, refused, answer_text from answer_record where id = ?", id))
                 .containsEntry("question", "青柚气泡水在哪个货架").containsEntry("refused", false);
         assertThat(jdbc.queryForList("select document_name from answer_citation where answer_id = ?", String.class, id))
                 .containsExactly("商品陈列.txt");
 
-        var refused = http.postForEntity("/api/ask", Map.of("question", "员工年假怎么申请"), Map.class).getBody();
+        var refused = TestAsk.ask(http, null, null, "员工年假怎么申请");
         assertThat(refused.get("id")).isNotNull();
 
         assertThat(feedback(HttpMethod.PUT, id, Map.of("rating", "DOWN", "comment", "实际在 A-05"), null))
@@ -87,9 +87,8 @@ class AnswerFeedbackTests {
     @DisplayName("流式问答的 done 事件也带回答 id")
     void streamIncludesId() {
         createKnowledgeBase();
-        var events = SseEvents.post(http, "/api/ask/stream", Map.of("question", "员工年假怎么申请"), null);
-        assertThat(events.getLast().name()).isEqualTo("done");
-        assertThat(events.getLast().data()).containsPattern("\"id\":\\d+");
+        var answer = TestAsk.answer(TestAsk.stream(http, null, TestAsk.conversation(http, null, null), "员工年假怎么申请"));
+        assertThat(answer.get("id")).isInstanceOf(Number.class);
     }
 
     @Test
@@ -97,10 +96,10 @@ class AnswerFeedbackTests {
     void adminReviewsAnswers() {
         long knowledgeBaseId = createKnowledgeBase();
         upload(knowledgeBaseId, "收银规范.txt", "收银员交班时要清点备用金，在交班表上签字后再离开收银台。");
-        var disliked = http.postForEntity("/api/ask", Map.of("question", "交班时要做什么"), Map.class).getBody();
+        var disliked = TestAsk.ask(http, null, null, "交班时要做什么");
         feedback(HttpMethod.PUT, ((Number) disliked.get("id")).longValue(),
                 Map.of("rating", "DOWN", "comment", "还要锁好钱箱"), null);
-        http.postForEntity("/api/ask", Map.of("question", "门店几点打烊"), Map.class);
+        TestAsk.ask(http, null, null, "门店几点打烊");
 
         var dislikedList = review("disliked", null);
         assertThat(dislikedList.getStatusCode()).isEqualTo(HttpStatus.OK);

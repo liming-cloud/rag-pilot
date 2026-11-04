@@ -28,6 +28,21 @@ api() {
   RESPONSE="$(sed '$d' <<<"$output")"
 }
 
+# 会话提问（问答只有会话接口，#145）：新建会话（点名知识库 $1），流式问 $2，令牌 $3（可省略）。
+# 整个事件流放在 $RESPONSE；会话建不起来（一个可用的知识库都没有）时 STATUS 为 400、RESPONSE 是错误详情。
+ask_in_conversation() {
+  local kb="$1" question="$2" token="${3-${TOKEN:-}}" id args=() output
+  api POST /api/conversations "{\"knowledgeBaseIds\":[$kb]}" "$token"
+  [ "$STATUS" = 201 ] || return 0
+  id="$(field id <<<"$RESPONSE")"
+  args=(-sS -N --max-time 120 -X POST -w '\n%{http_code}' -H "Accept: text/event-stream" -H "Content-Type: application/json")
+  [ -n "$token" ] && args+=(-H "Authorization: Bearer $token")
+  output="$(curl "${args[@]}" --data "{\"question\":\"$question\"}" "$WEB_URL/api/conversations/$id/turns/stream")" \
+    || output=$'\n000'
+  STATUS="$(tail -n 1 <<<"$output")"
+  RESPONSE="$(sed '$d' <<<"$output")"
+}
+
 # 从 JSON 里取第一个 "key":值（只用于脚本里的简单字段）。
 field() {
   { grep -o "\"$1\":\"\\{0,1\\}[^,\"}]*" || true; } | head -n 1 | sed "s/\"$1\":\"\\{0,1\\}//"
@@ -89,8 +104,8 @@ grep -q '"filename":"deploy-verify.txt"' <<<"$documents" && grep -q '"status":"R
   && ok "文档已入库" || fail "文档没有入库：$documents"
 api GET "/api/knowledge-bases/$kb/search?q=%E5%86%B7%E6%9F%9C%E9%99%A4%E9%9C%9C"
 grep -q 'deploy-verify.txt' <<<"$RESPONSE" && ok "检索能找到文档" || fail "检索没有找到文档：$RESPONSE"
-api POST /api/ask "{\"question\":\"冷柜什么时候除霜\",\"knowledgeBaseIds\":[$kb]}"
-[ "$STATUS" = 200 ] && ok "问答接口可用" || fail "问答返回 $STATUS"
+ask_in_conversation "$kb" "冷柜什么时候除霜"
+[ "$STATUS" = 200 ] && grep -q 'event:done' <<<"$RESPONSE" && ok "会话提问可用" || fail "会话提问返回 $STATUS：$RESPONSE"
 
 # 5. 没有授权的账号（员工角色）选不到这个库，点名它提问也不引用它。每次把测试账号的密码重置后改成新的随机密码。
 api GET /api/roles
@@ -111,7 +126,8 @@ staff_token="$LOGIN_TOKEN"
 [ -n "$staff_token" ] || { fail "测试账号 $STAFF 登录失败"; exit 1; }
 api GET /api/knowledge-bases "" "$staff_token"
 grep -q "\"id\":$kb," <<<"$RESPONSE" && fail "未授权的账号能选到“$KB_NAME”" || ok "未授权的账号选不到“$KB_NAME”"
-api POST /api/ask "{\"question\":\"冷柜什么时候除霜\",\"knowledgeBaseIds\":[$kb]}" "$staff_token"
+# 一个可用的知识库都没有时会话建不起来（400），同样算问不到。
+ask_in_conversation "$kb" "冷柜什么时候除霜" "$staff_token"
 grep -q 'deploy-verify.txt' <<<"$RESPONSE" && fail "未授权的账号的回答引用了“$KB_NAME”的文档" \
   || ok "未授权的账号的回答没有引用“$KB_NAME”"
 

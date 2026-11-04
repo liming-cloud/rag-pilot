@@ -51,46 +51,50 @@ class AskTests {
         upload(store, "商品陈列.txt", "青柚气泡水陈列在一层 A 区 03 号货架第二层。补货时先移出临期批次。");
         upload(store, "收银规范.txt", "收银员交班时要清点备用金，在交班表上签字后再离开收银台。");
 
-        var answered = ask(store, "青柚气泡水在哪个货架");
-        assertThat(answered.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(answered.getBody()).containsEntry("refused", false);
-        assertThat((String) answered.getBody().get("text")).contains("03 号货架").contains("[1]");
+        var answered = TestAsk.ask(http, null, List.of(store), "青柚气泡水在哪个货架");
+        assertThat(answered).containsEntry("refused", false);
+        assertThat((String) answered.get("text")).contains("03 号货架").contains("[1]");
         @SuppressWarnings("unchecked")
-        var citations = (List<Map<String, Object>>) answered.getBody().get("citations");
+        var citations = (List<Map<String, Object>>) answered.get("citations");
         assertThat(citations).singleElement().satisfies(citation -> {
             assertThat(citation).containsEntry("index", 1).containsEntry("documentName", "商品陈列.txt");
             assertThat((String) citation.get("excerpt")).contains("03 号货架");
         });
 
-        var refused = ask(store, "员工年假怎么申请");
-        assertThat(refused.getBody()).containsEntry("refused", true).containsEntry("refusalReason", "LOW_RELEVANCE");
-        assertThat((List<?>) refused.getBody().get("citations")).isEmpty();
+        var refused = TestAsk.ask(http, null, List.of(store), "员工年假怎么申请");
+        assertThat(refused).containsEntry("refused", true).containsEntry("refusalReason", "LOW_RELEVANCE");
+        assertThat((List<?>) refused.get("citations")).isEmpty();
 
-        assertThat(ask(store, "  ").getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        long conversation = TestAsk.conversation(http, null, List.of(store));
+        assertThat(http.postForEntity("/api/conversations/{id}/turns/stream", Map.of("question", "  "), String.class,
+                conversation).getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
     }
 
     @Test
-    @DisplayName("流式接口先发 delta 再发 done；拒答只发 done")
+    @DisplayName("流式提问：先发这一轮的 id 和处理阶段，再发 delta，最后是 done；拒答不发 delta")
     void streamsAnswer() {
         long store = createKnowledgeBase("流式知识库");
         upload(store, "商品陈列.txt", "青柚气泡水陈列在一层 A 区 03 号货架第二层。补货时先移出临期批次。");
 
-        var answered = SseEvents.post(http, "/api/ask/stream", Map.of("question", "青柚气泡水在哪个货架"), null);
-        assertThat(answered).extracting(SseEvents.Event::name).startsWith("delta").endsWith("done");
-        assertThat(answered.getLast().data()).contains("\"refused\":false").contains("商品陈列.txt");
+        var answered = TestAsk.stream(http, null, TestAsk.conversation(http, null, List.of(store)), "青柚气泡水在哪个货架");
+        assertThat(answered.getFirst().name()).isEqualTo("turn");
+        assertThat(answered).extracting(SseEvents.Event::name).filteredOn(name -> !name.equals("turn") && !name.equals("status"))
+                .startsWith("delta").endsWith("done");
+        assertThat(TestAsk.answer(answered)).containsEntry("refused", false);
+        assertThat(answered.getLast().data()).contains("商品陈列.txt");
 
-        var refused = SseEvents.post(http, "/api/ask/stream", Map.of("question", "员工年假怎么申请"), null);
-        assertThat(refused).singleElement().satisfies(event -> {
-            assertThat(event.name()).isEqualTo("done");
-            assertThat(event.data()).contains("\"refused\":true");
-        });
+        var refused = TestAsk.stream(http, null, TestAsk.conversation(http, null, List.of(store)), "员工年假怎么申请");
+        assertThat(refused).extracting(SseEvents.Event::name).doesNotContain("delta").endsWith("done");
+        assertThat(TestAsk.answer(refused)).containsEntry("refused", true);
     }
 
-    @SuppressWarnings({"rawtypes", "unchecked"})
-    private org.springframework.http.ResponseEntity<Map<String, Object>> ask(long knowledgeBaseId, String question) {
-        org.springframework.http.ResponseEntity response = http.postForEntity("/api/ask",
-                Map.of("question", question, "knowledgeBaseIds", List.of(knowledgeBaseId)), Map.class);
-        return response;
+    @Test
+    @DisplayName("旧的直接问答接口已下线（#145）：员工只用会话提问，评测也走会话接口")
+    void directAskIsGone() {
+        assertThat(http.postForEntity("/api/ask", Map.of("question", "货架"), String.class).getStatusCode())
+                .isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(http.postForEntity("/api/ask/stream", Map.of("question", "货架"), String.class).getStatusCode())
+                .isEqualTo(HttpStatus.NOT_FOUND);
     }
 
     private long createKnowledgeBase(String name) {
