@@ -15,6 +15,8 @@ import java.time.Clock;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Locale;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,6 +26,8 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Service
 public class AnswerLogService {
+
+    private static final Logger log = LoggerFactory.getLogger(AnswerLogService.class);
 
     /** 回答记录最多按多少天筛选。 */
     static final int MAX_STATS_DAYS = 90;
@@ -140,7 +144,20 @@ public class AnswerLogService {
             List<Long> searched) {
         var saved = records.add(AnswerRecord.record(tenantId, asker, question, answer.reply(), List.copyOf(searched)));
         events.publishEvent(new AnswerRecorded(tenantId, saved.id(), saved.question()));
+        logOutcome(saved.id(), asker, answer);
         return answer.withId(saved.id());
+    }
+
+    /** 拒答和低分改写各留一行日志（#145 C1），不记问题原文。 */
+    private static void logOutcome(long id, UserId asker, AskResult answer) {
+        var rewrite = answer.rewrite() == null ? null : answer.rewrite().outcome();
+        if (rewrite != null) {
+            log.info("event=query_rewritten answer={} outcome={}", id, rewrite);
+        }
+        if (answer.refused()) {
+            log.info("event=answer_refused answer={} user={} reason={} top={}", id, asker.value(),
+                    answer.refusalReason(), answer.topRelevance());
+        }
     }
 
     /**

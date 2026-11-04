@@ -4,6 +4,8 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.util.List;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -13,6 +15,8 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Service
 public class AuthService {
+
+    private static final Logger log = LoggerFactory.getLogger(AuthService.class);
 
     private final Accounts accounts;
     private final Roles roles;
@@ -42,28 +46,41 @@ public class AuthService {
         var found = accounts.findByUsername(username == null ? "" : username.strip());
         boolean matches = passwords.matches(password, found.map(Account::passwordHash).orElse(dummyHash));
         if (found.isEmpty()) {
+            loginFailed(username, "unknown_user");
             throw badCredentials();
         }
         var account = found.get();
         var now = OffsetDateTime.now(clock);
         if (account.lockedAt(now)) {
+            loginFailed(account.username(), "locked");
             throw locked(account.lockedUntil(), now);
         }
         if (!matches) {
-            var lockedUntil = AccountRules.lockedUntil(accounts.incrementFailedLogins(account.id()), now);
+            int attempts = accounts.incrementFailedLogins(account.id());
+            var lockedUntil = AccountRules.lockedUntil(attempts, now);
+            loginFailed(account.username(), "bad_password attempts=" + attempts);
             if (lockedUntil == null) {
                 throw badCredentials();
             }
             accounts.lock(account.id(), lockedUntil);
+            log.warn("event=account_locked username={} until={}", account.username(), lockedUntil);
             throw locked(lockedUntil, now);
         }
         if (!account.enabled()) {
+            loginFailed(account.username(), "disabled");
             throw badCredentials();
         }
         if (account.failedAttempts() > 0 || account.lockedUntil() != null) {
             accounts.clearFailedLogins(account.id());
         }
         return new SignIn(sessions.login(account.id(), account.tenantId()), me(account));
+    }
+
+    /** 登录失败留一行日志（#145 C1）；不合规的用户名不原样写进日志，防止伪造日志行。 */
+    private static void loginFailed(String username, String reason) {
+        var shown = username != null && AccountRules.USERNAME.matcher(username.strip()).matches() ? username.strip()
+                : "(不合规)";
+        log.warn("event=login_failed username={} reason={}", shown, reason);
     }
 
     public void logout() {

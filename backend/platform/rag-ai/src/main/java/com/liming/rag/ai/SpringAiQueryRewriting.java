@@ -36,7 +36,7 @@ final class SpringAiQueryRewriting implements QueryRewriting {
                     .content();
             return rewritten == null ? "" : rewritten.strip();
         } catch (RuntimeException e) {
-            throw new ModelCallException("改写问题失败：对话模型服务暂时不可用", e);
+            throw ModelCallFailures.failed("rewrite", route.model(), "改写问题失败：对话模型服务暂时不可用", e);
         }
     }
 }

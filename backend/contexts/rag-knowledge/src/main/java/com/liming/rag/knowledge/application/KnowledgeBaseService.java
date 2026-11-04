@@ -23,6 +23,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.event.EventListener;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
@@ -36,6 +38,9 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Service
 public class KnowledgeBaseService implements KnowledgeAccess {
+
+    private static final Logger log = LoggerFactory.getLogger(KnowledgeBaseService.class);
+
 
     private final KnowledgeBaseRepository knowledgeBases;
     private final AuditTrail audit;
@@ -151,6 +156,7 @@ public class KnowledgeBaseService implements KnowledgeAccess {
      */
     KnowledgeBase getManageable(TenantId tenantId, UserId actor, long id) {
         if (!users.isSuperAdmin(tenantId, actor) && !queries.isAccessible(grantee(tenantId, actor), id)) {
+            log.warn("event=access_denied user={} knowledgeBase={}", actor.value(), id);
             throw notFound();
         }
         return knowledgeBases.find(tenantId, id).orElseThrow(KnowledgeBaseService::notFound);

@@ -6,6 +6,8 @@ import com.liming.rag.knowledge.domain.Document;
 import com.liming.rag.knowledge.domain.DocumentRepository;
 import java.time.Clock;
 import java.time.OffsetDateTime;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionOperations;
 
@@ -15,6 +17,8 @@ import org.springframework.transaction.support.TransactionOperations;
  */
 @Component
 class IngestionPipeline {
+
+    private static final Logger log = LoggerFactory.getLogger(IngestionPipeline.class);
 
     private final DocumentReaders readers;
     private final DocumentRepository documents;
@@ -39,18 +43,24 @@ class IngestionPipeline {
         try {
             var chunks = chunker.chunk(document.filename(), readers.read(document.filename(), content));
             if (chunks.isEmpty()) {
-                document.markFailed("文件里没有可检索的文字");
-                documents.save(document);
+                failed(document, "文件里没有可检索的文字");
             } else {
                 new ChunkWriter(documents, embeddings, transactions, remover, document).write(chunks);
             }
         } catch (DocumentParseException e) {
-            document.markFailed(e.getMessage());
-            documents.save(document);
+            failed(document, e.getMessage());
         } catch (ModelCallException e) {
             // 模型暂时不可用不是文件的问题：可以重新处理，第一次失败后自动重试一次（#145 A9）。
             document.markModelUnavailable(e.getMessage(), OffsetDateTime.now(clock));
             documents.save(document);
+            log.warn("event=document_failed document={} kind=model attempts={} retryAt={}", document.id(),
+                    document.attempts(), document.retryAt());
         }
+    }
+
+    private void failed(Document document, String reason) {
+        document.markFailed(reason);
+        documents.save(document);
+        log.warn("event=document_failed document={} kind=content attempts={}", document.id(), document.attempts());
     }
 }

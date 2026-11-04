@@ -59,7 +59,8 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info
+        # metrics 含 Spring AI 的模型调用耗时和 token 用量（#145 C1）；Nginx 只转发 /api，这些端点只在本机 8080。
+        include: health,info,metrics
   info:
     env:
       enabled: true

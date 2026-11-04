@@ -75,7 +75,7 @@ final class SpringAiTextGeneration implements TextGeneration {
             var text = client(route).prompt(prompt).call().content();
             return text == null ? "" : text;
         } catch (RuntimeException e) {
-            throw unavailable(e);
+            throw unavailable(route, e);
         }
     }
 
@@ -110,7 +110,7 @@ final class SpringAiTextGeneration implements TextGeneration {
                 onDelta.accept(delta);
             }).blockLast();
         } catch (RuntimeException e) {
-            throw unavailable(e);
+            throw unavailable(answer, e);
         }
         return text.toString();
     }
@@ -124,7 +124,7 @@ final class SpringAiTextGeneration implements TextGeneration {
         return new Prompt(List.of(new SystemMessage(systemPrompt), new UserMessage(userMessage)), options);
     }
 
-    private static ModelCallException unavailable(RuntimeException e) {
-        return new ModelCallException("生成回答失败：对话模型服务暂时不可用，请稍后重试", e);
+    private static ModelCallException unavailable(ModelRoute route, RuntimeException e) {
+        return ModelCallFailures.failed("chat", route.model(), "生成回答失败：对话模型服务暂时不可用，请稍后重试", e);
     }
 }

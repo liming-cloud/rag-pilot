@@ -91,7 +91,7 @@ public class IngestionWorker implements DisposableBean {
         try {
             pipeline.run(document.get(), storage.read(tenantId, document.get().sha256()));
         } catch (RuntimeException e) {
-            log.error("文档 {} 入库失败", documentId, e);
+            log.error("event=document_failed document={} kind=error", documentId, e);
             document.get().markFailed("处理时出错，请重新上传；如果反复失败请联系管理员");
             documents.save(document.get());
         }

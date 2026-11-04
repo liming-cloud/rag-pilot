@@ -19,6 +19,7 @@ final class SpringAiEmbeddingClient implements EmbeddingClient {
 
     private final EmbeddingModel model;
     private final int batchSize;
+    private final String modelName;
 
     SpringAiEmbeddingClient(AiProperties properties, ObservationRegistry observations) {
         var options = OpenAiEmbeddingOptions.builder()
@@ -30,6 +31,7 @@ final class SpringAiEmbeddingClient implements EmbeddingClient {
                 .build();
         this.model = OpenAiEmbeddingModel.builder().options(options).observationRegistry(observations).build();
         this.batchSize = Math.max(1, properties.embedding().batchSize());
+        this.modelName = properties.embedding().model();
     }
 
     @Override
@@ -41,7 +43,7 @@ final class SpringAiEmbeddingClient implements EmbeddingClient {
             try {
                 result = model.embed(batch);
             } catch (RuntimeException e) {
-                throw new ModelCallException("向量化失败：嵌入模型服务暂时不可用，请稍后重试", e);
+                throw ModelCallFailures.failed("embedding", modelName, "向量化失败：嵌入模型服务暂时不可用，请稍后重试", e);
             }
             if (result.size() != batch.size()) {
                 throw new ModelCallException("向量化失败：模型返回的向量数量不对");

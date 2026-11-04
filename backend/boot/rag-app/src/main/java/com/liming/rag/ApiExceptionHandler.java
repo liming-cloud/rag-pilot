@@ -3,6 +3,8 @@ package com.liming.rag;
 import cn.dev33.satoken.exception.NotLoginException;
 import cn.dev33.satoken.exception.NotPermissionException;
 import cn.dev33.satoken.exception.NotRoleException;
+import cn.dev33.satoken.exception.SaTokenContextException;
+import cn.dev33.satoken.stp.StpUtil;
 import com.liming.rag.shared.BusinessException;
 import com.liming.rag.shared.ErrorKind;
 import org.slf4j.Logger;
@@ -39,10 +41,22 @@ class ApiExceptionHandler extends ResponseEntityExceptionHandler {
         return problem(HttpStatus.UNAUTHORIZED, "UNAUTHENTICATED", "请先登录");
     }
 
-    /** 没有角色或没有权限点都是 403；说明里不写缺的是哪个权限，避免暴露权限设计。 */
+    /** 没有角色或没有权限点都是 403；说明里不写缺的是哪个权限，避免暴露权限设计，日志里记下（#145 C1）。 */
     @ExceptionHandler({NotRoleException.class, NotPermissionException.class})
     ProblemDetail forbidden(RuntimeException exception) {
+        var missing = exception instanceof NotPermissionException permission ? "permission=" + permission.getPermission()
+                : "role=" + ((NotRoleException) exception).getRole();
+        LOG.warn("event=access_denied user={} {}", currentUser(), missing);
         return problem(HttpStatus.FORBIDDEN, "FORBIDDEN", "没有权限执行此操作");
+    }
+
+    /** 当前登录的用户，只用来写日志；不在请求里（直接调用处理方法时）没有 Sa-Token 上下文，记为 null。 */
+    private static Object currentUser() {
+        try {
+            return StpUtil.getLoginIdDefaultNull();
+        } catch (SaTokenContextException e) {
+            return null;
+        }
     }
 
     @ExceptionHandler(Exception.class)

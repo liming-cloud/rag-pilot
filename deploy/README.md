@@ -68,6 +68,25 @@ docker compose --env-file .env --env-file release.env logs --tail 200 app   # �
 
 容器日志按大小自动轮转（每个服务最多约 100 MB）。管理端左下角也显示版本号。
 
+关键事件在日志里各占一行，以 `event=` 开头、后面是 `键=值`，用 `grep` 就能筛出来（日志里没有密码、密钥和员工的问题原文）：
+
+| 事件 | 什么时候出现 |
+| --- | --- |
+| `event=model_call_failed` | 模型调用失败或超时：`usage` 是用途（chat、rewrite、embedding、rerank），`error` 是异常类型（如 `HttpTimeoutException`、`ConnectException`） |
+| `event=answer_refused` | 答不上来：`reason` 是原因（`NO_EVIDENCE` 没检索到、`LOW_RELEVANCE` 相关度太低、`MODEL_DECLINED` 模型判断依据不足、`UNCITED` 回答没有有效引用），`top` 是最高相关度 |
+| `event=query_rewritten` | 相关度偏低时换个说法再找一次：`outcome` 是结果（`REWRITTEN` 改写了、`NO_CHANGE` 没改、`TIMED_OUT` 改写超时、`SKIPPED_BELOW_FLOOR` 分数太低不改写直接拒答） |
+| `event=document_failed` | 文档入库失败：`kind=content` 是文件本身的问题，`kind=model` 是模型暂时不可用（10 分钟后自动重试一次） |
+| `event=login_failed`、`event=account_locked` | 登录失败（`reason`）、连续输错被锁 |
+| `event=access_denied` | 越权被拒：缺的权限点（`permission`）或不能管理的知识库（`knowledgeBase`） |
+
+```bash
+docker compose --env-file .env --env-file release.env logs --since 24h app | grep 'event=model_call_failed'
+curl -s http://127.0.0.1:8080/actuator/metrics/gen_ai.client.operation         # 模型调用次数和耗时
+curl -s 'http://127.0.0.1:8080/actuator/metrics/http.server.requests?tag=status:500'   # 出错的接口请求
+```
+
+指标只在服务器本机的 8080 端口能看，页面所在的 80 端口不转发。
+
 ## 五、备份与恢复
 
 ### 备份
@@ -156,7 +175,7 @@ cd /opt/rag-pilot/rag-pilot-1.0.0.1
 | 现象 | 原因和处理 |
 | --- | --- |
 | 页面能打开，操作都提示“系统维护中” | 后端没在运行：备份、升级时是正常的；否则看 `logs app`，常见是数据库没起来或 `.env` 填错 |
-| 提问都答“找不到”，或上传的文档一直“失败：向量化失败” | 模型服务不可用或密钥失效：在管理端“模型管理”测试连通，检查 `MODEL_API_KEY` 和服务器能否访问模型服务 |
+| 提问都答“找不到”，或上传的文档一直“失败：向量化失败” | 模型服务不可用或密钥失效：`grep event=model_call_failed` 看是哪个用途、什么错误；在管理端“模型管理”测试连通，检查 `MODEL_API_KEY` 和服务器能否访问模型服务。恢复后在知识库里点“重新处理”，或等自动重试 |
 | `app` 反复重启，日志里有 `Flyway` / `Migration` 报错 | 数据库结构升级失败：按“六、回退”用升级前的备份恢复，把日志发给开发方 |
 | `app` 启动失败，日志里有“rag.xxx 必须…” | `.env` 里的配置值不合法，按提示改正后 `up -d app` |
 | `build.sh` 拉镜像失败（`pull access denied`、超时） | 服务器访问不了镜像仓库：配置 Docker 的镜像源，或在 `.env` 里把 `RAG_DB_IMAGE`、`RAG_JRE_IMAGE`、`RAG_NGINX_IMAGE` 改成能访问的仓库地址（摘要不变），再运行一次 |

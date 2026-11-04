@@ -39,9 +39,10 @@ final class HttpRerankClient implements RerankClient {
         }
         // 每次按当前配置取服务商和模型，管理端保存后下一次请求就生效（D-043）。
         var route = routes.resolve(ModelUsage.RERANK);
-        var response = send(request(route, query, documents));
+        var response = send(route, request(route, query, documents));
         if (response.statusCode() / 100 != 2) {
-            throw new ModelCallException("重排失败：模型服务返回 HTTP " + response.statusCode());
+            throw ModelCallFailures.failed("rerank", route.model(), "重排失败：模型服务返回 HTTP " + response.statusCode(),
+                    null);
         }
         return scores(response.body(), documents.size());
     }
@@ -62,11 +63,11 @@ final class HttpRerankClient implements RerankClient {
         return builder.POST(HttpRequest.BodyPublishers.ofString(json.writeValueAsString(body))).build();
     }
 
-    private HttpResponse<String> send(HttpRequest request) {
+    private HttpResponse<String> send(ModelRoute route, HttpRequest request) {
         try {
             return http.send(request, HttpResponse.BodyHandlers.ofString());
         } catch (java.io.IOException e) {
-            throw new ModelCallException("重排失败：重排模型服务暂时不可用，请稍后重试", e);
+            throw ModelCallFailures.failed("rerank", route.model(), "重排失败：重排模型服务暂时不可用，请稍后重试", e);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new ModelCallException("重排被中断", e);
