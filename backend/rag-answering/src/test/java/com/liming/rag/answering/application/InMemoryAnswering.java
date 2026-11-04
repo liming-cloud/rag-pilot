@@ -172,6 +172,14 @@ final class InMemoryAnswering {
                     record.resolutionNote(), record.resolvedBy()));
         }
 
+        int batchSaves;
+
+        @Override
+        public void saveReviews(Collection<AnswerRecord> records) {
+            batchSaves++;
+            records.forEach(this::saveReview);
+        }
+
         /** 每次都按库里的状态重新恢复一个聚合，不共享对象。 */
         private static AnswerRecord copy(AnswerRecord row) {
             return AnswerRecord.restore(row.id(), row.tenantId(), row.asker(), row.question(), row.reply(),

@@ -1,6 +1,7 @@
 package com.liming.rag.answering.application;
 
 import com.liming.rag.ai.ChatGateway;
+import com.liming.rag.answering.domain.Question;
 import java.time.Duration;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -93,7 +94,7 @@ final class SearchPlanner {
             }
             if (line.startsWith("检索：") || line.startsWith("检索:")) {
                 var query = line.substring(3).strip().replaceAll("^[\"“”'「」]+|[\"“”'「」]+$", "").strip();
-                if (!query.isEmpty() && query.length() <= AnswerService.MAX_QUESTION_LENGTH) {
+                if (Question.fits(query)) {
                     queries.add(query);
                 }
             }

@@ -3,6 +3,7 @@ package com.liming.rag.answering.application;
 import com.liming.rag.ai.ChatGateway;
 import com.liming.rag.ai.RerankClient;
 import com.liming.rag.answering.domain.CitationParser;
+import com.liming.rag.answering.domain.Question;
 import com.liming.rag.answering.domain.RefusalReason;
 import com.liming.rag.knowledge.api.KnowledgeSearch;
 import com.liming.rag.settings.api.AnsweringSettings;
@@ -45,8 +46,6 @@ import org.springframework.stereotype.Service;
  */
 @Service
 public class AnswerService {
-
-    static final int MAX_QUESTION_LENGTH = 500;
 
     static final String SEARCHING_STATUS = "正在检索资料…";
     static final String GENERATING_STATUS = "正在整理答案…";
@@ -133,11 +132,7 @@ public class AnswerService {
      * 生成中停止时返回已生成部分的校验结果。
      */
     public AskResult ask(AskRequest request, Consumer<String> onDelta, Consumer<String> onStatus, CompletionStage<?> stop) {
-        var text = request.question() == null ? "" : request.question().strip();
-        if (text.isEmpty() || text.length() > MAX_QUESTION_LENGTH) {
-            throw new AnsweringException(AnsweringException.Reason.INVALID,
-                    "问题不能为空，且不超过 " + MAX_QUESTION_LENGTH + " 个字");
-        }
+        var text = question(request.question());
         var clock = new StageClock();
         onStatus.accept(SEARCHING_STATUS);
         var searchTexts = request.searchQueries() == null || request.searchQueries().isEmpty() ? List.of(text)
@@ -175,6 +170,15 @@ public class AnswerService {
         var asked = AnswerContext.query(text, request.tenantId(), request.userId(), request.knowledgeBaseIds(),
                 request.history());
         return finish(generate(asked, evidence, topRelevance, clock, onDelta, stop), clock, rewrite);
+    }
+
+    /** 员工的问题，规则见 {@link Question}。 */
+    static String question(String text) {
+        try {
+            return new Question(text).text();
+        } catch (IllegalArgumentException e) {
+            throw new AnsweringException(AnsweringException.Reason.INVALID, e.getMessage());
+        }
     }
 
     /** 合并几个检索词的候选，同一分块只留第一次出现的。 */

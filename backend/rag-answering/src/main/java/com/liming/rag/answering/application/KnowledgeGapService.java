@@ -180,22 +180,21 @@ public class KnowledgeGapService {
         if (recordIds.size() > MAX_RESOLVE) {
             throw invalid("一次最多处理 " + MAX_RESOLVE + " 条");
         }
-        int resolved = 0;
-        for (long id : new LinkedHashSet<>(recordIds)) {
-            var record = records.find(tenantId, id)
-                    .orElseThrow(() -> new AnsweringException(AnsweringException.Reason.NOT_FOUND, "回答不存在"));
-            if (record.reviewStatus() == AnswerRecord.ReviewStatus.RESOLVED) {
-                continue;
-            }
-            try {
-                record.review(by, AnswerRecord.ReviewStatus.RESOLVED, note);
-            } catch (IllegalArgumentException e) {
-                throw invalid(e.getMessage());
-            }
-            records.saveReview(record);
-            resolved++;
+        var ids = new LinkedHashSet<>(recordIds);
+        var found = records.findAll(tenantId, ids);
+        if (found.size() < ids.size()) {
+            throw new AnsweringException(AnsweringException.Reason.NOT_FOUND, "回答不存在");
         }
-        return resolved;
+        var open = found.values().stream()
+                .filter(record -> record.reviewStatus() == AnswerRecord.ReviewStatus.OPEN).toList();
+        try {
+            open.forEach(record -> record.review(by, AnswerRecord.ReviewStatus.RESOLVED, note));
+        } catch (IllegalArgumentException e) {
+            throw invalid(e.getMessage());
+        }
+        // 一类可能有上千条：读一次、写一次，不逐条往返（#136）。
+        records.saveReviews(open);
+        return open.size();
     }
 
     private static Group group(List<String> texts, Map<String, List<GapRecord>> byText,

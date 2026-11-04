@@ -3,6 +3,7 @@ package com.liming.rag.answering.application;
 import com.liming.rag.ai.ChatGateway;
 import com.liming.rag.ai.ModelCallException;
 import com.liming.rag.answering.domain.ConversationTurn;
+import com.liming.rag.answering.domain.Question;
 import com.liming.rag.answering.domain.RefusalReason;
 import com.liming.rag.shared.TenantId;
 import com.liming.rag.shared.UserId;
@@ -84,10 +85,7 @@ public class ConversationAskService {
      * @throws AnsweringException 问题为空或太长、会话不存在或不是自己的、要替换的不是最后一轮
      */
     public Pending start(TenantId tenantId, UserId userId, long conversationId, String question, Long replacesTurnId) {
-        var text = question == null ? "" : question.strip();
-        if (text.isEmpty() || text.length() > AnswerService.MAX_QUESTION_LENGTH) {
-            throw ConversationService.invalid("问题不能为空，且不超过 " + AnswerService.MAX_QUESTION_LENGTH + " 个字");
-        }
+        var text = AnswerService.question(question);
         var context = conversations.prepareTurn(tenantId, userId, conversationId, replacesTurnId);
         long turnId = conversations.nextTurnId();
         var stop = stops.register(conversationId, turnId);

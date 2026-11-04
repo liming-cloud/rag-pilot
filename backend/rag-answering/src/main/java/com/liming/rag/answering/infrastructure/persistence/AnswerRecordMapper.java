@@ -60,6 +60,10 @@ interface AnswerRecordMapper {
     void updateReview(@Param("tenantId") long tenantId, @Param("id") long id, @Param("status") String status,
             @Param("note") String note, @Param("resolvedBy") Long resolvedBy);
 
+    /** 一批记录改成同样的处理状态、说明和处理人。 */
+    void updateReviews(@Param("tenantId") long tenantId, @Param("ids") Collection<Long> ids,
+            @Param("status") String status, @Param("note") String note, @Param("resolvedBy") Long resolvedBy);
+
     void updateFeedback(@Param("tenantId") long tenantId, @Param("id") long id, @Param("rating") String rating,
             @Param("comment") String comment);
 }

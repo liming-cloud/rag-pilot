@@ -1,6 +1,7 @@
 package com.liming.rag.answering.application;
 
 import com.liming.rag.ai.ChatGateway;
+import com.liming.rag.answering.domain.Question;
 import com.liming.rag.settings.api.IndustryPack;
 import com.liming.rag.answering.application.AskResult.Rewrite.Outcome;
 import java.time.Duration;
@@ -85,7 +86,7 @@ final class LowRelevanceRewriter implements QueryTransformer {
         var rewritten = raw.strip().lines().findFirst().orElse("").strip()
                 .replaceAll("^[\"“”'「」]+|[\"“”'「」]+$", "");
         if (rewritten.isEmpty() || rewritten.startsWith(AnswerPrompt.NO_ANSWER)
-                || rewritten.length() > AnswerService.MAX_QUESTION_LENGTH || rewritten.equals(query.text())) {
+                || !Question.fits(rewritten) || rewritten.equals(query.text())) {
             return new Result(query, Outcome.NO_CHANGE, raw.length(), modelMillis);
         }
         return new Result(query.mutate().text(rewritten).build(), Outcome.REWRITTEN, raw.length(), modelMillis);

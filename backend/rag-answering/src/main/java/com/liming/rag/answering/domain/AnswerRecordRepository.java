@@ -24,4 +24,7 @@ public interface AnswerRecordRepository {
 
     /** 保存处理状态、处理说明和处理人。 */
     void saveReview(AnswerRecord record);
+
+    /** 一次保存一批记录的处理状态（整类标记已处理时，处理状态、说明和处理人都相同）。 */
+    void saveReviews(Collection<AnswerRecord> records);
 }

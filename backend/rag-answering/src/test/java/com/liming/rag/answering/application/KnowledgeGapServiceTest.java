@@ -119,6 +119,7 @@ class KnowledgeGapServiceTest {
 
         assertThat(service.resolve(TENANT, ADMIN, List.of(open, done, open), "已补温度表")).isEqualTo(1);
         assertThat(fixture.records.reviewSaves - saves).isEqualTo(1);
+        assertThat(fixture.records.batchSaves).as("整类一次写入").isEqualTo(2);
         assertThat(fixture.records.rows.get(open).reviewStatus()).isEqualTo(AnswerRecord.ReviewStatus.RESOLVED);
         assertThat(fixture.records.rows.get(done).resolutionNote()).as("已处理的不变").isEqualTo("已补");
 

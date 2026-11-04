@@ -7,10 +7,6 @@ import com.liming.rag.answering.application.AnswerLogService;
 import com.liming.rag.answering.application.AnswerService;
 import com.liming.rag.identity.api.CurrentUser;
 import com.liming.rag.identity.api.IdentityPermissions;
-import com.liming.rag.shared.BusinessException;
-import java.io.IOException;
-import java.io.UncheckedIOException;
-import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import org.slf4j.Logger;
@@ -34,7 +30,6 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 class AskController {
 
     private static final Logger LOG = LoggerFactory.getLogger(AskController.class);
-    private static final long STREAM_TIMEOUT_MILLIS = Duration.ofMinutes(2).toMillis();
 
     private final AnswerService answers;
     private final AnswerLogService log;
@@ -71,39 +66,13 @@ class AskController {
         // 登录信息只在请求线程里能取到，先取出来再交给后台线程。
         var tenantId = currentUser.tenantId();
         var userId = currentUser.userId();
-        var emitter = new SseEmitter(STREAM_TIMEOUT_MILLIS);
-        streams.execute(() -> {
-            try {
-                var answer = answers.ask(tenantId, userId, request.knowledgeBaseIds(), request.question(),
-                        delta -> send(emitter, "delta", Map.of("text", delta)),
-                        status -> send(emitter, "status", Map.of("text", status)));
-                send(emitter, "done", log.record(tenantId, userId, request.question(), answer,
-                        request.knowledgeBaseIds()));
-                emitter.complete();
-            } catch (BusinessException e) {
-                finishWithError(emitter, e.code(), e.getMessage());
-            } catch (UncheckedIOException e) {
-                // 客户端已断开，停止生成即可。
-                emitter.completeWithError(e);
-            } catch (RuntimeException e) {
-                // 后台线程里的意外错误不经过全局异常处理器，在这里记日志并告诉前端，不让连接一直挂到超时。
-                LOG.error("流式问答出错", e);
-                finishWithError(emitter, "INTERNAL_ERROR", "回答时出错，请稍后再试");
-            }
-        });
-        return emitter;
-    }
-
-    private static void finishWithError(SseEmitter emitter, String code, String detail) {
-        send(emitter, "error", Map.of("code", code, "detail", detail));
-        emitter.complete();
-    }
-
-    private static void send(SseEmitter emitter, String event, Object data) {
-        try {
-            emitter.send(SseEmitter.event().name(event).data(data, MediaType.APPLICATION_JSON));
-        } catch (IOException e) {
-            throw new UncheckedIOException(e);
-        }
+        var channel = new SseChannel(SseChannel.OnDisconnect.STOP);
+        streams.execute(() -> channel.run(events -> {
+            var answer = answers.ask(tenantId, userId, request.knowledgeBaseIds(), request.question(),
+                    delta -> events.send("delta", Map.of("text", delta)),
+                    status -> events.send("status", Map.of("text", status)));
+            events.send("done", log.record(tenantId, userId, request.question(), answer, request.knowledgeBaseIds()));
+        }, LOG, "流式问答出错"));
+        return channel.emitter();
     }
 }

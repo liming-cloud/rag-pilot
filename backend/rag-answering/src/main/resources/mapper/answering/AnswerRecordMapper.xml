@@ -148,6 +148,14 @@
         WHERE tenant_id = #{tenantId} AND id = #{id}
     </update>
 
+    <update id="updateReviews">
+        UPDATE answer_record
+        SET review_status = #{status}, resolution_note = #{note}, resolved_by = #{resolvedBy},
+            resolved_at = CASE WHEN #{status} = 'RESOLVED' THEN now() ELSE NULL END
+        WHERE tenant_id = #{tenantId}
+          AND id IN <foreach collection="ids" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </update>
+
     <update id="updateFeedback">
         UPDATE answer_record
         SET rating = #{rating}, feedback_comment = #{comment},

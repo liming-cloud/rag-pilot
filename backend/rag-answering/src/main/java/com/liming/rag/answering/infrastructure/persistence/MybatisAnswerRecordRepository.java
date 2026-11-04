@@ -12,9 +12,11 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
 import org.springframework.stereotype.Repository;
 
 @Repository
@@ -74,6 +76,16 @@ class MybatisAnswerRecordRepository implements AnswerRecordRepository {
     public void saveReview(AnswerRecord record) {
         mapper.updateReview(record.tenantId().value(), record.id(), record.reviewStatus().name(),
                 record.resolutionNote(), record.resolvedBy() == null ? null : record.resolvedBy().value());
+    }
+
+    @Override
+    public void saveReviews(Collection<AnswerRecord> records) {
+        records.stream().collect(Collectors.groupingBy(record -> Arrays.asList(record.tenantId().value(),
+                        record.reviewStatus().name(), record.resolutionNote(),
+                        record.resolvedBy() == null ? null : record.resolvedBy().value()),
+                        LinkedHashMap::new, Collectors.mapping(AnswerRecord::id, Collectors.toList())))
+                .forEach((key, ids) -> mapper.updateReviews((Long) key.get(0), ids, (String) key.get(1),
+                        (String) key.get(2), (Long) key.get(3)));
     }
 
     private static AnswerRecord toDomain(Map<String, Object> row, List<Citation> citations) {

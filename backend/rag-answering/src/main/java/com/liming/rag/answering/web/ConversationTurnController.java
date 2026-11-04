@@ -5,11 +5,7 @@ import cn.dev33.satoken.annotation.SaCheckPermission;
 import com.liming.rag.answering.application.ConversationAskService;
 import com.liming.rag.identity.api.CurrentUser;
 import com.liming.rag.identity.api.IdentityPermissions;
-import com.liming.rag.shared.BusinessException;
-import java.io.IOException;
-import java.time.Duration;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicBoolean;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -35,7 +31,6 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 class ConversationTurnController {
 
     private static final Logger LOG = LoggerFactory.getLogger(ConversationTurnController.class);
-    private static final long STREAM_TIMEOUT_MILLIS = Duration.ofMinutes(2).toMillis();
 
     private final ConversationAskService turns;
     private final CurrentUser currentUser;
@@ -62,27 +57,13 @@ class ConversationTurnController {
     SseEmitter stream(@PathVariable long conversationId, @RequestBody TurnRequest request) {
         var pending = turns.start(currentUser.tenantId(), currentUser.userId(), conversationId, request.question(),
                 request.replacesTurnId());
-        var emitter = new SseEmitter(STREAM_TIMEOUT_MILLIS);
-        var client = new Client(emitter);
-        client.send("turn", Map.of("id", pending.turnId()));
-        streams.execute(() -> {
-            try {
-                var turn = turns.run(pending, new ConversationAskService.Events(
-                        status -> client.send("status", Map.of("text", status)),
-                        delta -> client.send("delta", Map.of("text", delta))));
-                client.send("done", turn);
-                client.complete();
-            } catch (BusinessException e) {
-                client.send("error", Map.of("code", e.code(), "detail", e.getMessage()));
-                client.complete();
-            } catch (RuntimeException e) {
-                // 后台线程里的意外错误不经过全局异常处理器，在这里记日志并告诉前端，不让连接一直挂到超时。
-                LOG.error("会话提问出错", e);
-                client.send("error", Map.of("code", "INTERNAL_ERROR", "detail", "回答时出错，请稍后再试"));
-                client.complete();
-            }
-        });
-        return emitter;
+        // 员工断开后不再发送，但不中断生成（D-036）。
+        var channel = new SseChannel(SseChannel.OnDisconnect.CONTINUE);
+        channel.send("turn", Map.of("id", pending.turnId()));
+        streams.execute(() -> channel.run(events -> events.send("done", turns.run(pending,
+                new ConversationAskService.Events(status -> events.send("status", Map.of("text", status)),
+                        delta -> events.send("delta", Map.of("text", delta))))), LOG, "会话提问出错"));
+        return channel.emitter();
     }
 
     /** 停止生成。只有这个操作会中止生成；这一轮已经结束时什么也不做。 */
@@ -90,35 +71,5 @@ class ConversationTurnController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     void stop(@PathVariable long conversationId, @PathVariable long turnId) {
         turns.stop(currentUser.tenantId(), currentUser.userId(), conversationId, turnId);
-    }
-
-    /** 发往浏览器的事件。员工断开后不再发送，但不中断生成（D-036）。 */
-    private static final class Client {
-
-        private final SseEmitter emitter;
-        private final AtomicBoolean gone = new AtomicBoolean();
-
-        Client(SseEmitter emitter) {
-            this.emitter = emitter;
-            emitter.onError(error -> gone.set(true));
-            emitter.onTimeout(() -> gone.set(true));
-        }
-
-        void send(String event, Object data) {
-            if (gone.get()) {
-                return;
-            }
-            try {
-                emitter.send(SseEmitter.event().name(event).data(data, MediaType.APPLICATION_JSON));
-            } catch (IOException | IllegalStateException e) {
-                gone.set(true);
-            }
-        }
-
-        void complete() {
-            if (!gone.get()) {
-                emitter.complete();
-            }
-        }
     }
 }
