@@ -205,8 +205,8 @@ public class ConversationAskService {
     }
 
     private ConversationViews.Turn record(Pending pending, ConversationTurn.Status status, AskResult answer) {
-        return conversations.recordTurn(pending.tenantId(), pending.userId(), pending.conversationId(),
-                pending.turnId(), pending.question(), status, answer, pending.context().knowledgeBaseIds(),
-                pending.replacesTurnId());
+        return conversations.recordTurn(new ConversationService.NewTurn(pending.tenantId(), pending.userId(),
+                pending.conversationId(), pending.turnId(), pending.question(), pending.context().knowledgeBaseIds(),
+                pending.replacesTurnId()), status, answer);
     }
 }

@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.liming.rag.knowledge.application.DocumentIngestionService;
+import com.liming.rag.knowledge.application.DocumentIngestionService.Upload;
 import com.liming.rag.knowledge.application.KnowledgeException;
 import com.liming.rag.shared.TenantId;
 import com.liming.rag.shared.UserId;
@@ -130,8 +131,8 @@ class DocumentLifecycleTests {
         int documentsBefore = jdbc.queryForObject("select count(*) from document where knowledge_base_id = ?",
                 Integer.class, kb);
 
-        assertNotFound(() -> ingestion.ingest(tenant, outsider, kb, "外人.txt", content, null, null, null));
-        assertNotFound(() -> ingestion.ingest(tenant, outsider, kb, "外人.txt", content, docId, null, null));
+        assertNotFound(() -> ingestion.ingest(tenant, outsider, Upload.of(kb, "外人.txt", content)));
+        assertNotFound(() -> ingestion.ingest(tenant, outsider, new Upload(kb, "外人.txt", content, docId, null, null)));
         assertNotFound(() -> ingestion.changeValidity(tenant, outsider, kb, docId, "2020-01-01", "2020-01-02"));
         assertNotFound(() -> ingestion.delete(tenant, outsider, kb, docId));
 

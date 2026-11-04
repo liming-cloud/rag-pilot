@@ -126,7 +126,7 @@ class KnowledgeBaseController {
             @RequestParam(name = "page", defaultValue = "1") int page,
             @RequestParam(name = "size", defaultValue = "20") int size) {
         return PageView.of(knowledgeBases.documents(currentUser.tenantId(), currentUser.userId(), knowledgeBaseId,
-                keyword, status, validity, page, size), row -> row);
+                new KnowledgeBaseService.DocumentFilter(keyword, status, validity, page, size)), row -> row);
     }
 
     /** 上传时可以顺带设有效期（D-046），不传表示长期有效。 */
@@ -136,8 +136,8 @@ class KnowledgeBaseController {
     DocumentRow upload(@PathVariable long knowledgeBaseId, @RequestParam("file") MultipartFile file,
             @RequestParam(name = "effectiveFrom", required = false) String effectiveFrom,
             @RequestParam(name = "expiresOn", required = false) String expiresOn) throws IOException {
-        return ingestion.ingest(currentUser.tenantId(), currentUser.userId(), knowledgeBaseId,
-                file.getOriginalFilename(), file.getBytes(), null, effectiveFrom, expiresOn);
+        return ingestion.ingest(currentUser.tenantId(), currentUser.userId(), new DocumentIngestionService.Upload(
+                knowledgeBaseId, file.getOriginalFilename(), file.getBytes(), null, effectiveFrom, expiresOn));
     }
 
     /** 上传新版本：新版本处理成功后自动删除旧版本（D-026）；不传失效日期时继承旧版本的（D-046）。 */
@@ -149,8 +149,8 @@ class KnowledgeBaseController {
             @RequestParam("file") MultipartFile file,
             @RequestParam(name = "effectiveFrom", required = false) String effectiveFrom,
             @RequestParam(name = "expiresOn", required = false) String expiresOn) throws IOException {
-        return ingestion.ingest(currentUser.tenantId(), currentUser.userId(), knowledgeBaseId,
-                file.getOriginalFilename(), file.getBytes(), documentId, effectiveFrom, expiresOn);
+        return ingestion.ingest(currentUser.tenantId(), currentUser.userId(), new DocumentIngestionService.Upload(
+                knowledgeBaseId, file.getOriginalFilename(), file.getBytes(), documentId, effectiveFrom, expiresOn));
     }
 
     /** 修改有效期（D-046），保存后立即按新日期参与或退出检索。 */

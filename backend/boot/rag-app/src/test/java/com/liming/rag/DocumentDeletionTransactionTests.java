@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.liming.rag.knowledge.application.DocumentIngestionService;
+import com.liming.rag.knowledge.application.DocumentIngestionService.Upload;
 import com.liming.rag.knowledge.application.FileStorage;
 import com.liming.rag.knowledge.application.KnowledgeBaseService;
 import com.liming.rag.shared.TenantId;
@@ -54,7 +55,7 @@ class DocumentDeletionTransactionTests {
                 TestLogin.ADMIN_USERNAME));
         long kb = knowledgeBases.create(TENANT, admin, "删除事务测试库").id();
         var content = "冷柜每周二除霜一次。".getBytes(StandardCharsets.UTF_8);
-        long documentId = ingestion.ingest(TENANT, admin, kb, "除霜.txt", content, null, null, null).id();
+        long documentId = ingestion.ingest(TENANT, admin, Upload.of(kb, "除霜.txt", content)).id();
         var sha256 = jdbc.queryForObject("select sha256 from document where id = ?", String.class, documentId);
 
         transactions.executeWithoutResult(status -> {

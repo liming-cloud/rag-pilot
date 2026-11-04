@@ -157,6 +157,16 @@ public class ConversationService {
     }
 
     /**
+     * 要存下的一轮是哪个会话的哪一轮（#145：参数太多时改用对象，照 {@code AskRequest}）。
+     *
+     * @param knowledgeBaseIds 这一轮实际检索的知识库
+     * @param replacesTurnId 重新提问时被替换的那一轮，接着问时为 null
+     */
+    record NewTurn(TenantId tenantId, UserId userId, long conversationId, long turnId, String question,
+            List<Long> knowledgeBaseIds, @Nullable Long replacesTurnId) {
+    }
+
+    /**
      * 存下一轮：有回答时先记回答记录，再把这一轮接到主线上，更新最后提问时间（第一次提问时标题用问题截断）。
      * 回答记录和会话在同一个事务里：会话没保存成功时，回答记录也不留（#135）。
      *
@@ -164,8 +174,14 @@ public class ConversationService {
      * @throws AnsweringException 要替换的已不是最后一轮（INVALID），或会话刚被别的提问改过（CONFLICT）
      */
     @Transactional
-    ConversationViews.Turn recordTurn(TenantId tenantId, UserId userId, long id, long turnId, String question,
-            ConversationTurn.Status status, AskResult answer, List<Long> knowledgeBaseIds, @Nullable Long replacesTurnId) {
+    ConversationViews.Turn recordTurn(NewTurn newTurn, ConversationTurn.Status status, @Nullable AskResult answer) {
+        var tenantId = newTurn.tenantId();
+        var userId = newTurn.userId();
+        long id = newTurn.conversationId();
+        long turnId = newTurn.turnId();
+        var question = newTurn.question();
+        var knowledgeBaseIds = newTurn.knowledgeBaseIds();
+        var replacesTurnId = newTurn.replacesTurnId();
         var conversation = owned(tenantId, userId, id);
         var recorded = answer == null ? null
                 : log.recordSearched(tenantId, userId, question, answer, knowledgeBaseIds);

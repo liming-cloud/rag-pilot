@@ -164,15 +164,21 @@ public class KnowledgeBaseService implements KnowledgeAccess {
     }
 
     /**
+     * 文档列表的筛选条件，都是请求里的原值（#145：参数太多时改用对象）。
+     *
+     * @param keyword 匹配文件名，为空不筛
      * @param status PARSING、READY、FAILED（不区分大小写），为空不筛
      * @param validity ACTIVE、EXPIRING、EXPIRED、PENDING（不区分大小写），为空不筛
      */
+    public record DocumentFilter(@Nullable String keyword, @Nullable String status, @Nullable String validity, int page,
+            int size) {
+    }
+
     @Transactional(readOnly = true)
-    public Paged<DocumentRow> documents(TenantId tenantId, UserId actor, long knowledgeBaseId,
-            @Nullable String keyword, @Nullable String status, @Nullable String validity, int page, int size) {
+    public Paged<DocumentRow> documents(TenantId tenantId, UserId actor, long knowledgeBaseId, DocumentFilter filter) {
         getManageable(tenantId, actor, knowledgeBaseId);
-        return queries.documents(tenantId, knowledgeBaseId, blankToNull(keyword), parseStatus(status),
-                parseValidity(validity), calendar.window(), new Paged.Request(page, size));
+        return queries.documents(tenantId, knowledgeBaseId, blankToNull(filter.keyword()), parseStatus(filter.status()),
+                parseValidity(filter.validity()), calendar.window(), new Paged.Request(filter.page(), filter.size()));
     }
 
     /**

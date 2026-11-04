@@ -46,6 +46,22 @@ public class DocumentIngestionService {
     }
 
     /**
+     * 上传的一份文件，以及它要放进哪个库（#145：参数太多时改用对象）。web 原样转交请求里的值，这里再解析。
+     *
+     * @param replacesDocumentId 作为这份文档的新版本上传；新上传时为 null
+     * @param effectiveFrom 生效日期 yyyy-MM-dd，空串表示不限，null 表示没传
+     * @param expiresOn 失效日期 yyyy-MM-dd，空串表示不限，null 表示没传（新版本继承旧版本的）
+     */
+    public record Upload(long knowledgeBaseId, String filename, byte[] content, @Nullable Long replacesDocumentId,
+            @Nullable String effectiveFrom, @Nullable String expiresOn) {
+
+        /** 新上传、长期有效。 */
+        public static Upload of(long knowledgeBaseId, String filename, byte[] content) {
+            return new Upload(knowledgeBaseId, filename, content, null, null, null);
+        }
+    }
+
+    /**
      * 上传一份文档；{@code replacesDocumentId} 不为空时作为该文档的新版本，解析成功后替换它，失败时旧版本保留。
      * 有效期（D-046）：日期为 yyyy-MM-dd，空串表示不限；不传（null）时新文档长期有效，新版本继承旧版本的失效日期。
      *
@@ -57,14 +73,16 @@ public class DocumentIngestionService {
      *         日期不合法、文件不合格时为 INVALID；类型不支持时为 UNSUPPORTED_TYPE；重复上传时为 CONFLICT
      */
     @Transactional
-    public DocumentRow ingest(TenantId tenantId, UserId actor, long knowledgeBaseId, String filename, byte[] content,
-            @Nullable Long replacesDocumentId, String effectiveFrom, String expiresOn) {
+    public DocumentRow ingest(TenantId tenantId, UserId actor, Upload upload) {
+        long knowledgeBaseId = upload.knowledgeBaseId();
+        var filename = upload.filename();
+        var replacesDocumentId = upload.replacesDocumentId();
         var knowledgeBase = knowledgeBases.getManageable(tenantId, actor, knowledgeBaseId);
         var previous = replacesDocumentId == null ? null : inKnowledgeBase(tenantId, knowledgeBaseId,
                 replacesDocumentId, "要替换的文档不存在");
         var inheritedExpiry = previous == null ? null : previous.validity().expiresOn();
-        var validity = validity(date(effectiveFrom, null), date(expiresOn, inheritedExpiry));
-        var file = uploaded(filename, content);
+        var validity = validity(date(upload.effectiveFrom(), null), date(upload.expiresOn(), inheritedExpiry));
+        var file = uploaded(filename, upload.content());
         var existing = documents.findInKnowledgeBase(knowledgeBase.id(), file.sha256());
         if (existing.isPresent()) {
             if (existing.get().status() != DocumentStatus.FAILED) {
@@ -74,7 +92,7 @@ public class DocumentIngestionService {
             remover.remove(tenantId, existing.get().id());
         }
 
-        storage.store(tenantId, file.sha256(), content);
+        storage.store(tenantId, file.sha256(), upload.content());
         var document = Document.received(tenantId, knowledgeBase.id(), file, replacesDocumentId, validity);
         try {
             documents.save(document);

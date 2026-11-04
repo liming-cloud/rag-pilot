@@ -94,10 +94,10 @@ class ConversationServiceTest {
         var first = service.prepareTurn(TENANT, OWNER, id, null);
         assertThat(first.firstTurn()).isTrue();
         assertThat(first.knowledgeBaseIds()).containsExactly(STORE, GOODS);
-        service.recordTurn(TENANT, OWNER, id, 11, "青柚在哪？", ConversationTurn.Status.ANSWERED, answer,
-                first.knowledgeBaseIds(), null);
-        service.recordTurn(TENANT, OWNER, id, 12, "补货先做什么？", ConversationTurn.Status.STOPPED, null,
-                first.knowledgeBaseIds(), null);
+        service.recordTurn(newTurn(id, 11, "青柚在哪？", first.knowledgeBaseIds(), null),
+                ConversationTurn.Status.ANSWERED, answer);
+        service.recordTurn(newTurn(id, 12, "补货先做什么？", first.knowledgeBaseIds(), null),
+                ConversationTurn.Status.STOPPED, null);
 
         var detail = service.detail(TENANT, OWNER, id);
         assertThat(detail.title()).isEqualTo("青柚在哪？");
@@ -115,22 +115,19 @@ class ConversationServiceTest {
     @DisplayName("重新生成：只能替换主线最后一轮；替换时历史不含被替换的那一轮，新的一轮接在它的上一轮之后")
     void replacesOnlyTheLastTurn() {
         long id = service.create(TENANT, OWNER, null).id();
-        service.recordTurn(TENANT, OWNER, id, 11, "青柚在哪？", ConversationTurn.Status.ANSWERED, null,
-                List.of(STORE), null);
-        service.recordTurn(TENANT, OWNER, id, 12, "补货先做什么？", ConversationTurn.Status.ANSWERED, null,
-                List.of(STORE), null);
+        service.recordTurn(newTurn(id, 11, "青柚在哪？", List.of(STORE), null), ConversationTurn.Status.ANSWERED, null);
+        service.recordTurn(newTurn(id, 12, "补货先做什么？", List.of(STORE), null), ConversationTurn.Status.ANSWERED, null);
 
         assertReason(() -> service.prepareTurn(TENANT, OWNER, id, 11L), AnsweringException.Reason.INVALID);
         var replacing = service.prepareTurn(TENANT, OWNER, id, 12L);
         assertThat(replacing.history()).extracting(ConversationHistory.Entry::question).containsExactly("青柚在哪？");
-        service.recordTurn(TENANT, OWNER, id, 13, "补货前要移出什么？", ConversationTurn.Status.ANSWERED, null,
-                List.of(STORE), 12L);
+        service.recordTurn(newTurn(id, 13, "补货前要移出什么？", List.of(STORE), 12L), ConversationTurn.Status.ANSWERED, null);
 
         assertThat(service.detail(TENANT, OWNER, id).turns()).extracting(ConversationViews.Turn::question)
                 .containsExactly("青柚在哪？", "补货前要移出什么？");
         assertThat(fixture.conversations.superseded).containsExactly(12L);
-        assertReason(() -> service.recordTurn(TENANT, OWNER, id, 14, "再改", ConversationTurn.Status.ANSWERED, null,
-                List.of(STORE), 12L), AnsweringException.Reason.INVALID);
+        assertReason(() -> service.recordTurn(newTurn(id, 14, "再改", List.of(STORE), 12L),
+                ConversationTurn.Status.ANSWERED, null), AnsweringException.Reason.INVALID);
     }
 
     @Test
@@ -139,8 +136,8 @@ class ConversationServiceTest {
         long id = service.create(TENANT, OWNER, null).id();
         fixture.conversations.staleUpdates = 1;
 
-        assertReason(() -> service.recordTurn(TENANT, OWNER, id, 11, "青柚在哪？", ConversationTurn.Status.ANSWERED,
-                AskResult.answered("A 区[1]。", List.of(citation()), 0.9), List.of(STORE), null),
+        assertReason(() -> service.recordTurn(newTurn(id, 11, "青柚在哪？", List.of(STORE), null),
+                ConversationTurn.Status.ANSWERED, AskResult.answered("A 区[1]。", List.of(citation()), 0.9)),
                 AnsweringException.Reason.CONFLICT);
         assertThat(fixture.conversations.turns).isEmpty();
     }
@@ -150,8 +147,8 @@ class ConversationServiceTest {
     void followsCurrentAccess() {
         long id = service.create(TENANT, OWNER, null).id();
         fixture.access.excerpts.put(100L, "青柚陈列在 A 区。");
-        service.recordTurn(TENANT, OWNER, id, 11, "青柚在哪？", ConversationTurn.Status.ANSWERED,
-                AskResult.answered("A 区[1]。", List.of(citation()), 0.9), List.of(STORE, GOODS), null);
+        service.recordTurn(newTurn(id, 11, "青柚在哪？", List.of(STORE, GOODS), null),
+                ConversationTurn.Status.ANSWERED, AskResult.answered("A 区[1]。", List.of(citation()), 0.9));
         assertThat(service.detail(TENANT, OWNER, id).turns().getFirst().answer().citations().getFirst().excerpt())
                 .isEqualTo("青柚陈列在 A 区。");
 
@@ -169,8 +166,7 @@ class ConversationServiceTest {
     @DisplayName("后台生成的标题只替换问题截断；和别的修改撞上时重新读一次再试；会话已删时什么也不做")
     void appliesGeneratedTitle() {
         long id = service.create(TENANT, OWNER, null).id();
-        service.recordTurn(TENANT, OWNER, id, 11, "冷柜温度要多少？", ConversationTurn.Status.ANSWERED, null,
-                List.of(STORE), null);
+        service.recordTurn(newTurn(id, 11, "冷柜温度要多少？", List.of(STORE), null), ConversationTurn.Status.ANSWERED, null);
         fixture.conversations.staleUpdates = 1;
 
         service.applyGeneratedTitle(TENANT, id, "冷柜温度");
@@ -186,8 +182,8 @@ class ConversationServiceTest {
     @DisplayName("删除会话只影响员工端，回答记录照常保留")
     void deleteKeepsAnswerRecords() {
         long id = service.create(TENANT, OWNER, null).id();
-        service.recordTurn(TENANT, OWNER, id, 11, "青柚在哪？", ConversationTurn.Status.ANSWERED,
-                AskResult.answered("A 区[1]。", List.of(citation()), 0.9), List.of(STORE), null);
+        service.recordTurn(newTurn(id, 11, "青柚在哪？", List.of(STORE), null),
+                ConversationTurn.Status.ANSWERED, AskResult.answered("A 区[1]。", List.of(citation()), 0.9));
 
         service.delete(TENANT, OWNER, id);
 
@@ -202,5 +198,11 @@ class ConversationServiceTest {
     private static void assertReason(ThrowingCallable call, AnsweringException.Reason reason) {
         assertThatThrownBy(call).isInstanceOfSatisfying(AnsweringException.class,
                 e -> assertThat(e.reason()).isEqualTo(reason));
+    }
+
+    private static ConversationService.NewTurn newTurn(long conversationId, long turnId, String question,
+            List<Long> knowledgeBaseIds, Long replacesTurnId) {
+        return new ConversationService.NewTurn(TENANT, OWNER, conversationId, turnId, question, knowledgeBaseIds,
+                replacesTurnId);
     }
 }

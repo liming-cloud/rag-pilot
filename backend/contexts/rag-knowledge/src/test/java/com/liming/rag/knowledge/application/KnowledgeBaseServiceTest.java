@@ -188,13 +188,13 @@ class KnowledgeBaseServiceTest {
     void listsDocumentsOfManageableKnowledgeBase() {
         var kb = service.create(TENANT, ADMIN, "门店规范");
 
-        service.documents(TENANT, ADMIN, kb.id(), null, "ready", "pending", 1, 20);
+        service.documents(TENANT, ADMIN, kb.id(), new KnowledgeBaseService.DocumentFilter(null, "ready", "pending", 1, 20));
         assertThat(fixture.queries.status).isEqualTo(DocumentStatus.READY);
         assertThat(fixture.queries.validity).isEqualTo(Validity.State.PENDING);
 
-        assertReason(() -> service.documents(TENANT, OUTSIDER, kb.id(), null, null, null, 1, 20),
+        assertReason(() -> service.documents(TENANT, OUTSIDER, kb.id(), new KnowledgeBaseService.DocumentFilter(null, null, null, 1, 20)),
                 KnowledgeException.Reason.NOT_FOUND);
-        assertReason(() -> service.documents(TENANT, ADMIN, kb.id(), null, "DONE", null, 1, 20),
+        assertReason(() -> service.documents(TENANT, ADMIN, kb.id(), new KnowledgeBaseService.DocumentFilter(null, "DONE", null, 1, 20)),
                 KnowledgeException.Reason.INVALID);
     }
 
