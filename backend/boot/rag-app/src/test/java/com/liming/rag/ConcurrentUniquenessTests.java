@@ -83,6 +83,7 @@ class ConcurrentUniquenessTests {
 
     @Test
     @DisplayName("同时把两个角色改成同一个名字：一个成功，另一个 409 IDENTITY_CONFLICT")
+    @SuppressWarnings({"rawtypes", "unchecked"})
     void renamesOneRole() throws Exception {
         long first = id(post("/api/roles", Map.of("name", "改名角色一", "permissions", List.of())));
         long second = id(post("/api/roles", Map.of("name", "改名角色二", "permissions", List.of())));
@@ -117,6 +118,7 @@ class ConcurrentUniquenessTests {
         assertOneCreated(responses, "SETTINGS_CONFLICT");
     }
 
+    @SuppressWarnings({"rawtypes", "unchecked"})
     private static void assertOneCreated(List<ResponseEntity<Map>> responses, String conflictCode) {
         assertThat(responses).extracting(ResponseEntity::getStatusCode)
                 .as("只有 201 和 409，没有 500").containsOnly(HttpStatus.CREATED, HttpStatus.CONFLICT);
@@ -125,11 +127,13 @@ class ConcurrentUniquenessTests {
                 .allSatisfy(response -> assertThat(response.getBody()).containsEntry("code", conflictCode));
     }
 
+    @SuppressWarnings("rawtypes")
     private List<ResponseEntity<Map>> concurrently(Callable<ResponseEntity<Map>> call) throws Exception {
         return concurrently(CALLERS, call);
     }
 
     /** 让几个调用尽量同时发出，返回每个调用的响应。 */
+    @SuppressWarnings("rawtypes")
     private static List<ResponseEntity<Map>> concurrently(int callers, Callable<ResponseEntity<Map>> call)
             throws Exception {
         var ready = new CountDownLatch(callers);
@@ -153,10 +157,12 @@ class ConcurrentUniquenessTests {
         }
     }
 
+    @SuppressWarnings("rawtypes")
     private ResponseEntity<Map> post(String path, Map<String, Object> body) {
         return http.postForEntity(path, body, Map.class);
     }
 
+    @SuppressWarnings("rawtypes")
     private ResponseEntity<Map> upload(long kb, String filename, byte[] content) {
         var file = new ByteArrayResource(content) {
             @Override
@@ -172,6 +178,7 @@ class ConcurrentUniquenessTests {
                 kb);
     }
 
+    @SuppressWarnings("rawtypes")
     private static long id(ResponseEntity<Map> response) {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
         return ((Number) response.getBody().get("id")).longValue();

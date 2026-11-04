@@ -4,6 +4,7 @@ import com.liming.rag.answering.application.ask.AskResult;
 import com.liming.rag.answering.domain.ConversationTurn;
 import java.time.Instant;
 import java.util.List;
+import org.jspecify.annotations.Nullable;
 
 /** 会话接口返回的视图，字段与前端 features/chat/api.ts 的类型一致。 */
 public final class ConversationViews {
@@ -24,7 +25,7 @@ public final class ConversationViews {
      *
      * @param answer 停止时没留下可核对的内容、或出错时为 null
      */
-    public record Turn(long id, String question, ConversationTurn.Status status, AskResult answer,
+    public record Turn(long id, String question, ConversationTurn.Status status, @Nullable AskResult answer,
             List<Long> knowledgeBaseIds, Instant askedAt) {
     }
 

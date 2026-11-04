@@ -74,6 +74,7 @@ class AuthTests {
 
     @Test
     @DisplayName("管理员建店员账号；店员能读不能管；退出后令牌失效")
+    @SuppressWarnings("unchecked")
     void adminCreatesStaffWithLimitedRights() {
         String admin = TestLogin.token(http, TestLogin.ADMIN_USERNAME, TestLogin.ADMIN_PASSWORD);
         var me = call(HttpMethod.GET, "/api/auth/me", admin, null);

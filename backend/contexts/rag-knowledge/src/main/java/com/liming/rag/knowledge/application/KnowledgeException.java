@@ -2,11 +2,15 @@ package com.liming.rag.knowledge.application;
 
 import com.liming.rag.shared.BusinessException;
 import com.liming.rag.shared.ErrorKind;
+import java.io.Serial;
 
 /**
  * 知识模块的业务异常。错误码为 {@code KNOWLEDGE_<原因>}，message 是给用户看的中文说明。
  */
 public class KnowledgeException extends BusinessException {
+
+    @Serial
+    private static final long serialVersionUID = 1L;
 
     public enum Reason {
         NOT_FOUND(ErrorKind.NOT_FOUND),

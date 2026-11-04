@@ -14,6 +14,7 @@ import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.List;
 import java.util.stream.Collectors;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -63,7 +64,7 @@ public class UsageReportService {
      * @param week 某周的周一（yyyy-MM-dd），只能是最近 {@value #MAX_WEEKS} 周里的；本周只统计到今天
      * @throws AnsweringException 参数不合法
      */
-    public UsageStats usage(TenantId tenantId, Integer days, String week) {
+    public UsageStats usage(TenantId tenantId, @Nullable Integer days, String week) {
         var zone = zones.statsZone();
         var period = period(days, week, zone);
         var stats = statistics.usage(tenantId, period.from(), period.to(), zone);
@@ -85,7 +86,7 @@ public class UsageReportService {
      * 以 = + - @ 开头的单元格前加单引号，防止在 Excel 里被当成公式执行。
      */
     @Transactional(readOnly = true)
-    public Export export(TenantId tenantId, Integer days, String week) {
+    public Export export(TenantId tenantId, @Nullable Integer days, String week) {
         var zone = zones.statsZone();
         var period = period(days, week, zone);
         var rows = reviews.between(tenantId, period.from().atStartOfDay(zone).toOffsetDateTime(),
@@ -105,7 +106,7 @@ public class UsageReportService {
         return new Export("运营明细_" + period.from() + "_" + period.to() + ".csv", csv.toString());
     }
 
-    Period period(Integer days, String week, ZoneId zone) {
+    Period period(@Nullable Integer days, String week, ZoneId zone) {
         var today = LocalDate.now(clock.withZone(zone));
         if (days != null && week != null) {
             throw invalid("最近几天和按周只能选一个");

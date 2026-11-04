@@ -2,11 +2,15 @@ package com.liming.rag.identity.application;
 
 import com.liming.rag.shared.BusinessException;
 import com.liming.rag.shared.ErrorKind;
+import java.io.Serial;
 
 /**
  * 账号模块的业务异常。错误码为 {@code IDENTITY_<原因>}，message 是给用户看的中文说明。
  */
 public class IdentityException extends BusinessException {
+
+    @Serial
+    private static final long serialVersionUID = 1L;
 
     public enum Reason {
         BAD_CREDENTIALS(ErrorKind.UNAUTHENTICATED),

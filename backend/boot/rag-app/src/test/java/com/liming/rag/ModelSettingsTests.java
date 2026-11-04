@@ -128,6 +128,7 @@ class ModelSettingsTests {
 
     @Test
     @DisplayName("密钥加密存库：库里和接口响应都没有明文，只显示后 4 位；能读服务商的模型列表")
+    @SuppressWarnings("unchecked")
     void storesKeysEncrypted() {
         var created = send(HttpMethod.POST, "/api/model-providers",
                 Map.of("name", "加密测试", "baseUrl", fakeUrl("db"), "apiKey", PROVIDER_KEY));
@@ -185,6 +186,7 @@ class ModelSettingsTests {
         return id(send(HttpMethod.POST, "/api/knowledge-bases", Map.of("name", "模型切换测试库")));
     }
 
+    @SuppressWarnings("unchecked")
     private void upload(long knowledgeBaseId, String filename, String text) {
         var file = new ByteArrayResource(text.getBytes(StandardCharsets.UTF_8)) {
             @Override

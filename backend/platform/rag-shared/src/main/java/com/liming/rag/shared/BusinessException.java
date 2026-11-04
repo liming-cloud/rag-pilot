@@ -1,5 +1,6 @@
 package com.liming.rag.shared;
 
+import java.io.Serial;
 import java.util.Objects;
 
 /**
@@ -8,6 +9,9 @@ import java.util.Objects;
  * <p>说明会原样展示给用户，不能包含密钥、地址、SQL 或外部服务的原始响应。
  */
 public class BusinessException extends RuntimeException {
+
+    @Serial
+    private static final long serialVersionUID = 1L;
 
     private final ErrorKind kind;
     private final String code;

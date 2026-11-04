@@ -4,6 +4,7 @@ import com.liming.rag.shared.TenantId;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
+import org.jspecify.annotations.Nullable;
 
 /** 知识缺口要归类的记录的查询端口：一段时间内答不上来的和被点踩的（D-047）。 */
 public interface GapRecords {
@@ -26,6 +27,6 @@ public interface GapRecords {
      */
     record GapRecord(long id, long userId, String question, OffsetDateTime createdAt, boolean refused,
             String comment, List<String> citedDocuments, String reviewStatus, List<Long> knowledgeBaseIds,
-            float[] questionVector) {
+            float @Nullable [] questionVector) {
     }
 }

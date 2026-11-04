@@ -5,6 +5,7 @@ import com.liming.rag.identity.application.AuditLogs;
 import com.liming.rag.identity.application.AuditRecord;
 import com.liming.rag.identity.application.Paged;
 import java.time.OffsetDateTime;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Repository;
 
 @Repository
@@ -23,7 +24,7 @@ class MybatisAuditLogs implements AuditLogs {
     }
 
     @Override
-    public Paged<AuditRecord> page(long tenantId, OffsetDateTime since, String action, Paged.Request page) {
+    public Paged<AuditRecord> page(long tenantId, OffsetDateTime since, @Nullable String action, Paged.Request page) {
         var rows = mapper.page(tenantId, since, action, page.offset(), page.size()).stream()
                 .map(row -> new AuditRecord(row.id, row.actorId, row.actorName, row.action, row.targetType,
                         row.targetId, row.detail, row.occurredAt))

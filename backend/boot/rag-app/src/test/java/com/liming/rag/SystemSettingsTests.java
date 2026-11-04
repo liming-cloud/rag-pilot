@@ -77,6 +77,7 @@ class SystemSettingsTests {
 
     @Test
     @DisplayName("保存后不重启就生效：登录页品牌、问答页文案、拒答话术；恢复默认后回到原来的值")
+    @SuppressWarnings("unchecked")
     void savedValuesTakeEffectAndRestore() {
         assertThat(save("BRAND_NAME", " 示例知识库 ").getBody()).containsEntry("value", "示例知识库")
                 .containsEntry("source", "DATABASE").containsEntry("updatedBy", "超级管理员");

@@ -3,6 +3,7 @@ package com.liming.rag.evaluation.api;
 import com.liming.rag.ai.ModelCallException;
 import com.liming.rag.ai.TextGeneration;
 import java.util.regex.Pattern;
+import org.jspecify.annotations.Nullable;
 
 /**
  * 用模型做答案评判（#145：评判规则在这里，模型调用经 rag-ai）。温度为 0，要求最后输出两行：结论和理由。
@@ -69,7 +70,7 @@ final class ModelAnswerJudge implements AnswerJudge {
     }
 
     /** 最后一次匹配的第一组，去掉首尾空白；没有匹配时为 null。 */
-    private static String last(Pattern pattern, String text) {
+    private static @Nullable String last(Pattern pattern, String text) {
         String found = null;
         var matcher = pattern.matcher(text);
         while (matcher.find()) {

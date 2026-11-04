@@ -10,6 +10,7 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Repository;
 
 @Repository
@@ -67,7 +68,7 @@ class MybatisConversationRepository implements ConversationRepository {
     }
 
     @Override
-    public void addTurn(long conversationId, ConversationTurn turn, Long replacesTurnId) {
+    public void addTurn(long conversationId, ConversationTurn turn, @Nullable Long replacesTurnId) {
         if (replacesTurnId != null) {
             mapper.markSuperseded(conversationId, replacesTurnId);
         }

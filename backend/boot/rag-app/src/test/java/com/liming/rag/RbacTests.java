@@ -186,6 +186,7 @@ class RbacTests {
 
     @Test
     @DisplayName("超级管理员不能被别人停用、重置密码、改角色；超级管理员角色不能分配、修改；越权分配被拒绝")
+    @SuppressWarnings("unchecked")
     void superAdminIsFixedAndEscalationIsRefused() {
         String root = rootToken();
         long rootId = id(call(root, HttpMethod.GET, "/api/auth/me", null));

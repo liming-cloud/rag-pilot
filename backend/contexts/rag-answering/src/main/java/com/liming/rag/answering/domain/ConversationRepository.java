@@ -5,6 +5,7 @@ import com.liming.rag.shared.UserId;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import org.jspecify.annotations.Nullable;
 
 /** 会话仓储。所有查询都带租户；是不是本人由聚合判断。 */
 public interface ConversationRepository {
@@ -34,7 +35,7 @@ public interface ConversationRepository {
      * 存一轮问答。接在哪一轮之后由聚合算好（{@link Conversation#appendTurn}，即 {@code turn.parentTurnId()}），
      * 调用方先用 {@link #save} 保存会话；{@code replacesTurnId} 不为 null 时，被替换的那一轮移出主线，留着供审计。
      */
-    void addTurn(long conversationId, ConversationTurn turn, Long replacesTurnId);
+    void addTurn(long conversationId, ConversationTurn turn, @Nullable Long replacesTurnId);
 
     /** 主线上的轮次：从会话记下的最后一轮沿“上一轮”往回找，按先后排列。 */
     List<ConversationTurn> mainLine(long conversationId);

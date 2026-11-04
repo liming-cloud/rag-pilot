@@ -19,6 +19,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -129,7 +130,7 @@ public class ConversationService {
      * @throws AnsweringException 要替换的不是主线最后一轮
      */
     @Transactional(readOnly = true)
-    TurnContext prepareTurn(TenantId tenantId, UserId userId, long id, Long replacesTurnId) {
+    TurnContext prepareTurn(TenantId tenantId, UserId userId, long id, @Nullable Long replacesTurnId) {
         var conversation = owned(tenantId, userId, id);
         try {
             conversation.checkReplaceable(replacesTurnId);
@@ -164,7 +165,7 @@ public class ConversationService {
      */
     @Transactional
     ConversationViews.Turn recordTurn(TenantId tenantId, UserId userId, long id, long turnId, String question,
-            ConversationTurn.Status status, AskResult answer, List<Long> knowledgeBaseIds, Long replacesTurnId) {
+            ConversationTurn.Status status, AskResult answer, List<Long> knowledgeBaseIds, @Nullable Long replacesTurnId) {
         var conversation = owned(tenantId, userId, id);
         var recorded = answer == null ? null
                 : log.recordSearched(tenantId, userId, question, answer, knowledgeBaseIds);

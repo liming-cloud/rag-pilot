@@ -2,11 +2,15 @@ package com.liming.rag.answering.application;
 
 import com.liming.rag.shared.BusinessException;
 import com.liming.rag.shared.ErrorKind;
+import java.io.Serial;
 
 /**
  * 问答模块的业务异常。错误码为 {@code ANSWERING_<原因>}，message 是给用户看的中文说明。
  */
 public class AnsweringException extends BusinessException {
+
+    @Serial
+    private static final long serialVersionUID = 1L;
 
     public enum Reason {
         INVALID(ErrorKind.INVALID),

@@ -47,6 +47,7 @@ class IndustryPackSwitchTests {
 
     @Test
     @DisplayName("问答用的角色、词表、拒答话术和统计时区来自 demo 行业包和部署配置")
+    @SuppressWarnings("unchecked")
     void answeringUsesDemoPack() {
         assertThat(settings.pack().answerRole()).isEqualTo("你是物业公司的客服助手，回答物业员工的问题。");
         assertThat(settings.pack().vocabulary()).singleElement()
@@ -62,6 +63,7 @@ class IndustryPackSwitchTests {
 
     @Test
     @DisplayName("问答页文案、推荐问题来自 demo 行业包；品牌来自部署配置")
+    @SuppressWarnings("unchecked")
     void textsUseDemoPack() {
         assertThat(http.getForEntity("/api/settings/chat", Map.class).getBody())
                 .containsEntry("placeholder", "问问物业服务规范…")

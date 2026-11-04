@@ -3,8 +3,10 @@ package com.liming.rag.answering.domain;
 import com.liming.rag.shared.AggregateRoot;
 import com.liming.rag.shared.TenantId;
 import com.liming.rag.shared.UserId;
+import java.io.Serial;
 import java.util.List;
 import java.util.Objects;
+import org.jspecify.annotations.Nullable;
 
 /**
  * 回答记录聚合：一次问答的问题和回答（{@link Reply}）、实际检索的知识库、提问人给它的评价，以及管理员的处理状态。
@@ -35,8 +37,8 @@ public final class AnswerRecord implements AggregateRoot {
      * @param topRelevance 重排后最高的相关度分数，没有检索结果时为 null
      * @param rewrittenQuestion 低分时改写后的问题，没有改写时为 null
      */
-    public record Reply(String text, boolean refused, RefusalReason refusalReason, List<Citation> citations,
-            Double topRelevance, String rewrittenQuestion) {
+    public record Reply(String text, boolean refused, @Nullable RefusalReason refusalReason, List<Citation> citations,
+            @Nullable Double topRelevance, @Nullable String rewrittenQuestion) {
 
         public Reply {
             Objects.requireNonNull(text, "回答不能为空");
@@ -46,6 +48,9 @@ public final class AnswerRecord implements AggregateRoot {
 
     /** 评价人不是提问人。对外按“回答不存在”处理，不暴露别人的回答是否存在。 */
     public static final class NotAskerException extends RuntimeException {
+
+        @Serial
+        private static final long serialVersionUID = 1L;
 
         NotAskerException() {
             super("只有提问人能评价这条回答");
@@ -62,9 +67,9 @@ public final class AnswerRecord implements AggregateRoot {
     private String comment;
     private ReviewStatus reviewStatus;
     private String resolutionNote;
-    private UserId resolvedBy;
+    private @Nullable UserId resolvedBy;
 
-    private AnswerRecord(Long id, TenantId tenantId, UserId asker, String question, Reply reply,
+    private AnswerRecord(@Nullable Long id, TenantId tenantId, UserId asker, String question, Reply reply,
             List<Long> knowledgeBaseIds, Rating rating, String comment, ReviewStatus reviewStatus,
             String resolutionNote, UserId resolvedBy) {
         this.id = id;
@@ -154,7 +159,7 @@ public final class AnswerRecord implements AggregateRoot {
     }
 
     /** 新建、还没保存时为 null。 */
-    public Long id() {
+    public @Nullable Long id() {
         return id;
     }
 
@@ -197,7 +202,7 @@ public final class AnswerRecord implements AggregateRoot {
     }
 
     /** 处理人；未处理或重新打开后为 null。 */
-    public UserId resolvedBy() {
+    public @Nullable UserId resolvedBy() {
         return resolvedBy;
     }
 }

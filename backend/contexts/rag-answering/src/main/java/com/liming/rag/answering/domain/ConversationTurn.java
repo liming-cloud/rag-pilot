@@ -3,6 +3,7 @@ package com.liming.rag.answering.domain;
 import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
+import org.jspecify.annotations.Nullable;
 
 /**
  * 会话里的一轮问答。按树存：{@code parentTurnId} 是它接着的上一轮；被“重新生成”“修改问题”替换后，
@@ -11,7 +12,7 @@ import java.util.Objects;
  * @param answerRecordId 回答记录；停止时没留下可核对的内容、或出错时为 null
  * @param knowledgeBaseIds 这一轮实际检索的知识库（会话所选的库与当时的授权取交集）
  */
-public record ConversationTurn(long id, Long parentTurnId, String question, Status status, Long answerRecordId,
+public record ConversationTurn(long id, @Nullable Long parentTurnId, String question, Status status, @Nullable Long answerRecordId,
         List<Long> knowledgeBaseIds, Instant askedAt) {
 
     public enum Status {

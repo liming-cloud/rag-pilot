@@ -15,6 +15,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
+import org.jspecify.annotations.Nullable;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -50,12 +51,12 @@ public class ModelSettingsService implements ModelRouting {
     }
 
     /** 一个用途当前的配置，给界面显示。 */
-    public record PurposeView(ModelUsage purpose, Long providerId, String providerName, String model,
+    public record PurposeView(ModelUsage purpose, @Nullable Long providerId, String providerName, String model,
             boolean fromDatabase, String updatedBy, OffsetDateTime updatedAt) {
     }
 
     /** 一个服务商，给界面显示：密钥只给后 4 位；环境变量里的服务商 id 为 null。 */
-    public record ProviderView(Long id, String name, String baseUrl, String apiKeyLast4, boolean fromDatabase,
+    public record ProviderView(@Nullable Long id, String name, String baseUrl, @Nullable String apiKeyLast4, boolean fromDatabase,
             List<ModelUsage> usedBy) {
     }
 
@@ -92,23 +93,23 @@ public class ModelSettingsService implements ModelRouting {
     }
 
     /** 只测试，不保存；{@code usage} 是用途的名字。 */
-    public ModelProbe.ProbeResult test(String usage, Long providerId, String model) {
+    public ModelProbe.ProbeResult test(String usage, @Nullable Long providerId, String model) {
         var parsed = SettingsInputs.usage(usage);
         return probe.probe(parsed, route(parsed, providerId, checkModel(model)));
     }
 
     /** 服务商提供的模型，用来在界面上选。 */
-    public List<String> availableModels(Long providerId) {
+    public List<String> availableModels(@Nullable Long providerId) {
         var route = route(ModelUsage.ANSWER, providerId, "");
         return probe.models(route.baseUrl(), route.apiKey());
     }
 
     /** 先测连通，通了才保存并记一条变更，下一次请求就用新模型；{@code usage} 是用途的名字。 */
-    public PurposeView save(TenantId tenantId, UserId actor, String usage, Long providerId, String model) {
+    public PurposeView save(TenantId tenantId, UserId actor, String usage, @Nullable Long providerId, String model) {
         return save(tenantId, actor, SettingsInputs.usage(usage), providerId, model);
     }
 
-    PurposeView save(TenantId tenantId, UserId actor, ModelUsage usage, Long providerId, String model) {
+    PurposeView save(TenantId tenantId, UserId actor, ModelUsage usage, @Nullable Long providerId, String model) {
         return apply(tenantId, actor, usage, providerId, checkModel(model), null);
     }
 
@@ -168,8 +169,8 @@ public class ModelSettingsService implements ModelRouting {
         store.deleteProvider(id);
     }
 
-    private PurposeView apply(TenantId tenantId, UserId actor, ModelUsage usage, Long providerId, String model,
-            Long restoredFrom) {
+    private PurposeView apply(TenantId tenantId, UserId actor, ModelUsage usage, @Nullable Long providerId, String model,
+            @Nullable Long restoredFrom) {
         // 外部调用在事务外：连通测试可能等到超时。
         var result = probe.probe(usage, route(usage, providerId, model));
         if (!result.ok()) {
@@ -195,7 +196,7 @@ public class ModelSettingsService implements ModelRouting {
     }
 
     /** 这次调用打到哪里：providerId 为 null 用环境变量的地址和密钥。 */
-    private ModelRoute route(ModelUsage usage, Long providerId, String model) {
+    private ModelRoute route(ModelUsage usage, @Nullable Long providerId, String model) {
         if (providerId == null) {
             var environment = probe.environment(usage);
             return new ModelRoute(environment.baseUrl(), environment.apiKey(), model);
@@ -205,7 +206,7 @@ public class ModelSettingsService implements ModelRouting {
         return new ModelRoute(provider.baseUrl(), key, model);
     }
 
-    private String providerName(Long providerId) {
+    private String providerName(@Nullable Long providerId) {
         if (providerId == null) {
             return environmentName();
         }
@@ -224,7 +225,7 @@ public class ModelSettingsService implements ModelRouting {
         return host == null ? "环境变量" : "环境变量（" + host + "）";
     }
 
-    private static List<ModelUsage> usedBy(List<PurposeView> purposes, Long providerId) {
+    private static List<ModelUsage> usedBy(List<PurposeView> purposes, @Nullable Long providerId) {
         return purposes.stream()
                 .filter(view -> providerId == null ? view.providerId() == null : providerId.equals(view.providerId()))
                 .map(PurposeView::purpose)
@@ -235,7 +236,7 @@ public class ModelSettingsService implements ModelRouting {
         return key == null ? null : cipher.encrypt(key);
     }
 
-    private String checkName(String name, Long exceptId) {
+    private String checkName(String name, @Nullable Long exceptId) {
         var trimmed = name == null ? "" : name.strip();
         if (trimmed.isEmpty() || trimmed.length() > 30) {
             throw invalid("服务商名称必须是 1 到 30 个字符");

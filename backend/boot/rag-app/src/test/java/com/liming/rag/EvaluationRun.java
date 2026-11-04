@@ -189,7 +189,6 @@ class EvaluationRun {
     /** 模型服务不可用（503）时的重试间隔；服务商偶尔成批 503（D-028），隔一会儿通常就恢复。 */
     private static final List<Duration> RETRY_DELAYS = List.of(Duration.ofSeconds(10), Duration.ofSeconds(30));
 
-    /** 流式问答；模型服务不可用时退避重试，仍不可用返回 null，这道题不计入指标。 */
     /**
      * 检索调试接口也要向量化问题，模型服务暂时不可用（503）时和提问一样重试，仍失败就不计入指标；
      * 其他失败直接报出状态码和响应，便于定位。
@@ -386,7 +385,6 @@ class EvaluationRun {
         return stale;
     }
 
-    /** 先把文件全部上传，再统一等入库完成：后台按并发数处理，比逐篇上传逐篇等快得多。 */
     /** 入库重试后仍失败的文档；不超过 1% 时照常评测，在报告开头列出（#81）。 */
     private final List<String> corpusFailures = new ArrayList<>();
 
@@ -401,6 +399,7 @@ class EvaluationRun {
     /** 入库失败（多是嵌入模型偶发不可用）的文档最多占这个比例，超过就停止评测。 */
     private static final double MAX_CORPUS_FAILURE_SHARE = 0.01;
 
+    /** 先把文件全部上传，再统一等入库完成：后台按并发数处理，比逐篇上传逐篇等快得多。 */
     private Set<String> uploadCorpus(long knowledgeBaseId, String folder) throws IOException {
         var files = new LinkedHashMap<String, byte[]>();
         for (var resource : RESOURCES.getResources(dataLocation() + "corpus/" + folder + "/*")) {

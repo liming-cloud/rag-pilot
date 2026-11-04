@@ -1,8 +1,10 @@
 package com.liming.rag.answering.infrastructure.persistence;
 
 import java.time.OffsetDateTime;
+import org.jspecify.annotations.NullUnmarked;
 
 /** 审核列表和运营明细的一行，引用的文档名用 \u001F 连接（#136）：MyBatis 按列名（下划线转驼峰）直接给字段赋值，只在 infrastructure 包内读取。 */
+@NullUnmarked
 final class AnswerReviewDO {
 
     Long id;

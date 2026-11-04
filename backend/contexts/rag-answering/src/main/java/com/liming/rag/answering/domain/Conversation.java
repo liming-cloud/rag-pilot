@@ -3,9 +3,11 @@ package com.liming.rag.answering.domain;
 import com.liming.rag.shared.AggregateRoot;
 import com.liming.rag.shared.TenantId;
 import com.liming.rag.shared.UserId;
+import java.io.Serial;
 import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
+import org.jspecify.annotations.Nullable;
 
 /**
  * 员工端会话聚合（#107、D-036）：属于提问人本人，记下标题、会话里选中的知识库和主线的末尾。轮次
@@ -38,6 +40,9 @@ public final class Conversation implements AggregateRoot {
     /** 操作人不是会话的主人。对外按“会话不存在”处理，不暴露别人的会话是否存在。 */
     public static final class NotOwnerException extends RuntimeException {
 
+        @Serial
+        private static final long serialVersionUID = 1L;
+
         NotOwnerException() {
             super("只能操作自己的会话");
         }
@@ -45,6 +50,9 @@ public final class Conversation implements AggregateRoot {
 
     /** 保存时发现会话已被别的操作改过（版本号不一致）。 */
     public static final class ConcurrentChangeException extends RuntimeException {
+
+        @Serial
+        private static final long serialVersionUID = 1L;
 
         public ConcurrentChangeException() {
             super("会话刚被别的操作改过");
@@ -54,7 +62,7 @@ public final class Conversation implements AggregateRoot {
     /**
      * 主线的末尾：最后一轮，以及它接在哪一轮之后（第一轮为 null）。还没有提问时整个为 null。
      */
-    public record MainLineTail(long turnId, Long parentTurnId) {
+    public record MainLineTail(long turnId, @Nullable Long parentTurnId) {
     }
 
     private final Long id;
@@ -65,10 +73,10 @@ public final class Conversation implements AggregateRoot {
     private TitleSource titleSource;
     private List<Long> knowledgeBaseIds;
     private Instant lastAskedAt;
-    private MainLineTail tail;
+    private @Nullable MainLineTail tail;
 
-    private Conversation(Long id, TenantId tenantId, UserId owner, long version, String title, TitleSource titleSource,
-            List<Long> knowledgeBaseIds, Instant lastAskedAt, MainLineTail tail) {
+    private Conversation(@Nullable Long id, TenantId tenantId, UserId owner, long version, String title, TitleSource titleSource,
+            List<Long> knowledgeBaseIds, Instant lastAskedAt, @Nullable MainLineTail tail) {
         this.id = id;
         this.tenantId = Objects.requireNonNull(tenantId);
         this.owner = Objects.requireNonNull(owner);
@@ -94,7 +102,7 @@ public final class Conversation implements AggregateRoot {
      * @param tail 主线的末尾，还没有提问时为 null
      */
     public static Conversation restore(long id, TenantId tenantId, UserId owner, long version, String title,
-            TitleSource titleSource, List<Long> knowledgeBaseIds, Instant lastAskedAt, MainLineTail tail) {
+            TitleSource titleSource, List<Long> knowledgeBaseIds, Instant lastAskedAt, @Nullable MainLineTail tail) {
         return new Conversation(id, tenantId, owner, version, title, titleSource, knowledgeBaseIds, lastAskedAt, tail);
     }
 
@@ -148,7 +156,7 @@ public final class Conversation implements AggregateRoot {
      *
      * @throws IllegalArgumentException 要替换的不是主线最后一轮
      */
-    public void checkReplaceable(Long replacesTurnId) {
+    public void checkReplaceable(@Nullable Long replacesTurnId) {
         if (replacesTurnId != null && (tail == null || tail.turnId() != replacesTurnId)) {
             throw new IllegalArgumentException("只能重新生成或修改最后一轮");
         }
@@ -160,7 +168,7 @@ public final class Conversation implements AggregateRoot {
      * @return 新的一轮接在哪一轮之后；是第一轮时为 null
      * @throws IllegalArgumentException 要替换的不是主线最后一轮
      */
-    public Long appendTurn(long turnId, Long replacesTurnId, String question, Instant at) {
+    public @Nullable Long appendTurn(long turnId, @Nullable Long replacesTurnId, String question, Instant at) {
         checkReplaceable(replacesTurnId);
         Long parent = replacesTurnId == null ? (tail == null ? null : tail.turnId()) : tail.parentTurnId();
         this.tail = new MainLineTail(turnId, parent);
@@ -196,7 +204,7 @@ public final class Conversation implements AggregateRoot {
         return values;
     }
 
-    public Long id() {
+    public @Nullable Long id() {
         return id;
     }
 
@@ -225,7 +233,7 @@ public final class Conversation implements AggregateRoot {
     }
 
     /** 主线的末尾；还没有提问时为 null。 */
-    public MainLineTail tail() {
+    public @Nullable MainLineTail tail() {
         return tail;
     }
 

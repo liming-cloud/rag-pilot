@@ -2,6 +2,7 @@ package com.liming.rag.answering.application.insight;
 
 import java.time.LocalDate;
 import java.util.List;
+import org.jspecify.annotations.Nullable;
 
 /**
  * 一段时间内的使用统计，日期按部署配置的统计时区划分（D-045）。评价相关的数只算给出了回答的记录。
@@ -13,7 +14,8 @@ import java.util.List;
  * @param daily 每天一条，没有提问的日子也有，数都是 0
  * @param topGaps 待处理次数最多的知识缺口（按意思归类，D-047）：代表问题和待处理次数
  */
-public record UsageStats(LocalDate from, LocalDate to, String zone, Totals totals, Totals previous, List<Day> daily,
+public record UsageStats(LocalDate from, LocalDate to, String zone, Totals totals, @Nullable Totals previous,
+        List<Day> daily,
         List<ReasonCount> refusalReasons, List<QuestionCount> topGaps, List<DocumentCount> topCitedDocuments) {
 
     public UsageStats withComparison(Totals previousTotals, List<QuestionCount> gaps) {

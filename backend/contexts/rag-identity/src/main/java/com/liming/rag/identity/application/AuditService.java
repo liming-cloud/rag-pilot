@@ -7,6 +7,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.util.regex.Pattern;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -51,7 +52,7 @@ public class AuditService implements AuditTrail {
      * @throws IdentityException 天数不在 1 到 365 之间、操作类型格式不对时为 INVALID
      */
     @Transactional(readOnly = true)
-    public Paged<AuditRecord> page(TenantId tenantId, int days, String action, int page, int size) {
+    public Paged<AuditRecord> page(TenantId tenantId, int days, @Nullable String action, int page, int size) {
         if (days < 1 || days > MAX_DAYS) {
             throw new IdentityException(IdentityException.Reason.INVALID, "天数只能是 1 到 " + MAX_DAYS + " 天");
         }

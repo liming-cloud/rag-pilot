@@ -181,6 +181,7 @@ class KnowledgeGapTests {
 
     @Test
     @DisplayName("记下回答后在后台存好问题向量，打开知识缺口不再调用嵌入模型；没存的旧记录补算一次并写回（#145 C6）")
+    @SuppressWarnings("unchecked")
     void usesStoredQuestionVectors() throws InterruptedException {
         long stored = refuse("门店几点打烊");
         waitForVector(stored);

@@ -60,6 +60,7 @@ class KnowledgeIngestionTests {
 
     @Test
     @DisplayName("上传门店样例文本后分块入库，可在文档列表看到")
+    @SuppressWarnings("unchecked")
     void uploadsAndChunksText() throws IOException {
         long knowledgeBaseId = createKnowledgeBase("门店运营知识库");
         var sample = new ClassPathResource("fixtures/store-knowledge.txt").getContentAsByteArray();

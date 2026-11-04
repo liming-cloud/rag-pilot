@@ -47,6 +47,7 @@
 - SQL 只写在 Mapper XML（`src/main/resources/mapper/<模块名>/<Mapper 名>.xml`）里；不用 `@Select` 等 SQL 注解，条件构造器不拼原始 SQL（`apply`、`last`、`inSql` 等）。简单的单表条件用 `LambdaQueryWrapper`。
 - 配置只通过各模块的 `@ConfigurationProperties` record 读取（如 `AnsweringProperties`），取值在构造时校验，非法配置启动失败；不用 `@Value`。
 - 要当前时间的类注入 rag-app 声明的 `Clock`（UTC），不直接调用 `now()`，测试传固定时钟。
+- 编译开 `-Xlint:all`，保持零告警；确实要留的用 `@SuppressWarnings` 写在最小范围并注明原因（测试里读 JSON 的 `unchecked`、`rawtypes` 按方法抑制）。每个主代码包的 `package-info.java` 标 JSpecify 的 `@NullMarked`，可以为 null 的参数、返回值、字段写 `@Nullable`（包装类型的参数和 record 组件都表示可空），MyBatis 的 `XxxDO` 标 `@NullUnmarked`；`PackageLayoutTest` 检查每个包都有 `@NullMarked`（D-052）。
 - 管理操作（授权、角色和权限点、账号、删除和替换资料、系统设置）在应用服务里、操作成功之后经 identity 的 `AuditTrail` 记一条审计，和操作同一个事务（D-052）；说明里不写密码、密钥。
 - 要运维看得到的事件（模型调用失败、拒答、入库失败、登录失败和锁定、越权拒绝）记一行 `event=<名字> 键=值` 的日志，事件列表在运维手册；不记密码、密钥、提示词和员工的问题原文，用户输入的值先校验再写进日志。
 - 登录和角色校验只用 Sa-Token 注解；登录会话和密码摘要经 identity 的端口 `Sessions`、`PasswordHasher`，application、domain 不依赖 Sa-Token。权限点由各上下文在自己的 `api` 包里声明（实现 identity 的 `PermissionCatalog`），identity 运行时汇总。
@@ -67,11 +68,11 @@
   - `application`：用例服务，以及它需要的端口接口（如 `ChunkIndex`、`FileStorage`）；用例多时按业务分子包（如 answering 的 `ask`、`conversation`、`review`、`insight`），共用的类留在 `application`；
   - `domain`：聚合、值对象、领域规则，只在 knowledge、answering；
   - `infrastructure`：端口的实现，按技术分子包（`persistence`、`storage`、`parsing`、`security`）。
-- **依赖方向**：`domain` 只依赖 JDK、rag-shared 和本模块的 `domain`、`api`；`application` 不依赖 `infrastructure`、`web`；`web` 不依赖 `infrastructure`、`domain`（展示用 application 的查询结果 record）；`api` 不依赖本模块其他子包。
+- **依赖方向**：`domain` 只依赖 JDK（含 JSpecify 空值注解）、rag-shared 和本模块的 `domain`、`api`；`application` 不依赖 `infrastructure`、`web`；`web` 不依赖 `infrastructure`、`domain`（展示用 application 的查询结果 record）；`api` 不依赖本模块其他子包。
 - **上下文依赖**：identity 不依赖其他上下文；settings 依赖 identity；knowledge 依赖 identity、settings；answering 依赖 identity、knowledge、settings；evaluation 不依赖其他上下文。平台层的 shared、ai 都可以用（evaluation 经 ai 调评判模型），ai 不依赖上下文。各上下文在根包 `package-info.java` 的 `allowedDependencies` 里声明，`ModularityTests` 检查。上游要用到下游的东西时（如权限点清单），由上游在 `api` 里定义接口、下游实现，不反向依赖。
 - **输入**：web 只转交原始值（路径、查询参数和请求体里的字符串、数字），application 解析成枚举或值对象，不合规时抛本模块的业务异常；每个模块的解析写在一处。
 - **租户**：单租户部署，`TenantId` 为以后多租户预留；哪些端口和设置不分租户见 D-051。
-- **共享内核**（rag-shared）：只放多个上下文共同依赖、用纯 Java 表达、很少变动的模型概念——租户和用户标识、错误分类 `ErrorKind` 与 `BusinessException`、聚合根标记 `AggregateRoot`。只依赖 JDK，没有资源文件（迁移、配置归各自模块），不放业务规则；当前用户、权限码、各上下文自己的标识不放这里。新增类型前先在 DECISIONS.md 记录理由（D-034）。
+- **共享内核**（rag-shared）：只放多个上下文共同依赖、用纯 Java 表达、很少变动的模型概念——租户和用户标识、错误分类 `ErrorKind` 与 `BusinessException`、聚合根标记 `AggregateRoot`。只依赖 JDK（空值注解 JSpecify 除外），没有资源文件（迁移、配置归各自模块），不放业务规则；当前用户、权限码、各上下文自己的标识不放这里。新增类型前先在 DECISIONS.md 记录理由（D-034）。
 - **平台层模块**（shared、ai）扁平：对外只公开接口、record、枚举和异常，实现类包内可见；rag-app 只放启动类和全局配置（含唯一的异常出口 `ApiExceptionHandler`）。
 - **聚合**：聚合根实现 `AggregateRoot`，只在 knowledge、answering 的 `domain` 包；`domain` 里的 `XxxRepository` 只为同包的聚合根 `Xxx` 而建。
 - **错误**：业务失败抛本模块继承 `BusinessException` 的异常（错误码 `<模块>_<原因>`，说明是给用户看的中文，不含内部信息）；领域对象检查不变量时抛的 `IllegalArgumentException` 由 application 转成业务异常。模块不写 `@RestControllerAdvice`，统一由 `ApiExceptionHandler` 转成带 `code` 的问题详情。

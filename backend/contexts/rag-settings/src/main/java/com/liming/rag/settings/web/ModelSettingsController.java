@@ -11,6 +11,7 @@ import com.liming.rag.settings.application.ModelSettingsService.ProviderView;
 import com.liming.rag.settings.application.ModelSettingsService.PurposeView;
 import java.time.OffsetDateTime;
 import java.util.List;
+import org.jspecify.annotations.Nullable;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -31,16 +32,16 @@ import org.springframework.web.bind.annotation.RestController;
 @SaCheckLogin
 class ModelSettingsController {
 
-    record TestRequest(String usage, Long providerId, String model) {
+    record TestRequest(String usage, @Nullable Long providerId, String model) {
     }
 
-    record SaveRequest(Long providerId, String model) {
+    record SaveRequest(@Nullable Long providerId, String model) {
     }
 
     record ProviderRequest(String name, String baseUrl, String apiKey) {
     }
 
-    record UsageView(String usage, Long providerId, String providerName, String model, String source,
+    record UsageView(String usage, @Nullable Long providerId, String providerName, String model, String source,
             OffsetDateTime updatedAt, String updatedBy) {
         static UsageView of(PurposeView view) {
             return new UsageView(view.purpose().name(), view.providerId(), view.providerName(), view.model(),
@@ -48,7 +49,7 @@ class ModelSettingsController {
         }
     }
 
-    record ProviderResponse(Long id, String name, String baseUrl, String apiKeyLast4, String source,
+    record ProviderResponse(@Nullable Long id, String name, String baseUrl, String apiKeyLast4, String source,
             List<String> usedBy) {
         static ProviderResponse of(ProviderView view) {
             return new ProviderResponse(view.id(), view.name(), view.baseUrl(), view.apiKeyLast4(),
@@ -67,7 +68,7 @@ class ModelSettingsController {
     }
 
     record ChangeView(long id, String usage, Side before, Side after, String changedBy, OffsetDateTime changedAt,
-            Long restoredFrom) {
+            @Nullable Long restoredFrom) {
         static ChangeView of(ModelChange change) {
             var before = change.beforeModel() == null ? null
                     : new Side(change.beforeProviderName(), change.beforeModel());

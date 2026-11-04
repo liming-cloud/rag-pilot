@@ -1,5 +1,6 @@
 package com.liming.rag.ai;
 
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -18,7 +19,7 @@ final class ModelCallFailures {
      * @param usage 用途：answer、light、rewrite、embedding、rerank 等
      * @param cause 底层异常；没有时为 null（如服务商返回了错误的状态码），日志里记 {@code message}
      */
-    static ModelCallException failed(String usage, String model, String message, Throwable cause) {
+    static ModelCallException failed(String usage, String model, String message, @Nullable Throwable cause) {
         log.warn("event=model_call_failed usage={} model={} error={}", usage, model,
                 cause == null ? message : describe(cause));
         return cause == null ? new ModelCallException(message) : new ModelCallException(message, cause);

@@ -19,6 +19,7 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.function.Consumer;
+import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.core.task.AsyncTaskExecutor;
 import org.springframework.stereotype.Service;
@@ -229,7 +230,7 @@ public class AnswerService {
     }
 
     /** 拒答，话术用系统设置里当前的（D-045）。 */
-    public AskResult refusal(RefusalReason reason, Double topRelevance) {
+    public AskResult refusal(RefusalReason reason, @Nullable Double topRelevance) {
         return AskResult.refused(reason, topRelevance, settings.refusalMessage());
     }
 

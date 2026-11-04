@@ -3,6 +3,7 @@ package com.liming.rag.identity.application;
 import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.util.regex.Pattern;
+import org.jspecify.annotations.Nullable;
 
 /**
  * 账号的规则（D-038、#136）：用户名、显示名的格式，以及连续输错密码后的锁定。新建账号、批量导入、登录都按这里判断，
@@ -36,7 +37,7 @@ final class AccountRules {
     /**
      * 又输错一次、连续错误累计到 {@code attempts} 次之后：到上限时锁到什么时候，没到时为 null。
      */
-    static OffsetDateTime lockedUntil(int attempts, OffsetDateTime now) {
+    static @Nullable OffsetDateTime lockedUntil(int attempts, OffsetDateTime now) {
         return attempts >= MAX_FAILED_ATTEMPTS ? now.plus(LOCK_DURATION) : null;
     }
 }

@@ -3,6 +3,7 @@ package com.liming.rag.answering.application.conversation;
 import com.liming.rag.answering.application.ask.AskResult;
 import java.util.ArrayDeque;
 import java.util.List;
+import org.jspecify.annotations.Nullable;
 
 /**
  * 带进提示词的对话历史（D-036）：只取最近几轮，回答去掉引用标记、每条最多 {@value #MAX_ANSWER_CHARS} 字；
@@ -16,7 +17,7 @@ record ConversationHistory(String text) {
     /**
      * @param answer 这一轮的回答；停止时没留下内容、或出错时为 null
      */
-    record Entry(String question, AskResult answer) {
+    record Entry(String question, @Nullable AskResult answer) {
     }
 
     static ConversationHistory empty() {

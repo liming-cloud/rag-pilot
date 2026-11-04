@@ -7,6 +7,8 @@
  */
 // 允许依赖的模块（#136）：上下文只能依赖这些模块，以及它们 api 包公开的类型；方向见 AGENTS.md“上下文依赖”。
 @ApplicationModule(allowedDependencies = {"shared"})
+@NullMarked
 package com.liming.rag.identity;
 
+import org.jspecify.annotations.NullMarked;
 import org.springframework.modulith.ApplicationModule;

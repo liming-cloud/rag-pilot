@@ -4,9 +4,11 @@ import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import java.time.OffsetDateTime;
+import org.jspecify.annotations.NullUnmarked;
 
 /** app_user 表的持久化对象，只在 infrastructure 包内使用。 */
 @TableName("app_user")
+@NullUnmarked
 public class AppUserDO {
 
     @TableId(type = IdType.AUTO)

@@ -446,6 +446,7 @@ class ConversationTests {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
     }
 
+    @SuppressWarnings("unchecked")
     void upload(long knowledgeBaseId, String filename, String text) {
         var file = new ByteArrayResource(text.getBytes(StandardCharsets.UTF_8)) {
             @Override

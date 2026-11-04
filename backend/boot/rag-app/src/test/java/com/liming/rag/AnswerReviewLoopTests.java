@@ -127,6 +127,7 @@ class AnswerReviewLoopTests {
 
     @Test
     @DisplayName("补上文档后重新回答，确认已能答出来；重新回答不新增回答记录")
+    @SuppressWarnings("unchecked")
     void rechecksWithCurrentKnowledge() {
         long kb = createKnowledgeBase();
         var first = TestAsk.ask(http, null, List.of(kb), "交班时要做什么");
@@ -188,6 +189,7 @@ class AnswerReviewLoopTests {
         return ((Number) created.getBody().get("id")).longValue();
     }
 
+    @SuppressWarnings("unchecked")
     private void upload(long knowledgeBaseId, String filename, String text) {
         var file = new ByteArrayResource(text.getBytes(StandardCharsets.UTF_8)) {
             @Override

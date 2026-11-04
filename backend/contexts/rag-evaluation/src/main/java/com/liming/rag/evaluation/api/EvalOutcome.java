@@ -1,6 +1,7 @@
 package com.liming.rag.evaluation.api;
 
 import java.util.List;
+import org.jspecify.annotations.Nullable;
 
 /**
  * 一道题在检索和问答两步的实际结果。
@@ -15,9 +16,10 @@ import java.util.List;
  * @param judgement 评判模型对回答的判断；没有参考答案、拒答了或没开评判时为 null
  * @param discardedReply 拒答时模型已流式输出、随后被拒答替换掉的原文；没有时为 null
  */
-public record EvalOutcome(EvalCase evalCase, List<Retrieved> retrieved, boolean refused, String refusalReason,
-        String answer, List<String> citedDocuments, Double topRelevance, long searchMillis, long firstEventMillis,
-        long askMillis, Stages stages, Rewrite rewrite, Judgement judgement, String discardedReply) {
+public record EvalOutcome(EvalCase evalCase, List<Retrieved> retrieved, boolean refused,
+        @Nullable String refusalReason, String answer, List<String> citedDocuments, @Nullable Double topRelevance,
+        long searchMillis, long firstEventMillis, long askMillis, @Nullable Stages stages, @Nullable Rewrite rewrite,
+        @Nullable Judgement judgement, @Nullable String discardedReply) {
 
     /**
      * 评判模型对照参考答案给出的结论。
@@ -28,14 +30,14 @@ public record EvalOutcome(EvalCase evalCase, List<Retrieved> retrieved, boolean 
     }
 
     public EvalOutcome(EvalCase evalCase, List<Retrieved> retrieved, boolean refused, String refusalReason,
-            String answer, List<String> citedDocuments, Double topRelevance, long searchMillis, long firstEventMillis,
+            String answer, List<String> citedDocuments, @Nullable Double topRelevance, long searchMillis, long firstEventMillis,
             long askMillis, Stages stages, Rewrite rewrite) {
         this(evalCase, retrieved, refused, refusalReason, answer, citedDocuments, topRelevance, searchMillis,
                 firstEventMillis, askMillis, stages, rewrite, null);
     }
 
     public EvalOutcome(EvalCase evalCase, List<Retrieved> retrieved, boolean refused, String refusalReason,
-            String answer, List<String> citedDocuments, Double topRelevance, long searchMillis, long firstEventMillis,
+            String answer, List<String> citedDocuments, @Nullable Double topRelevance, long searchMillis, long firstEventMillis,
             long askMillis, Stages stages, Rewrite rewrite, Judgement judgement) {
         this(evalCase, retrieved, refused, refusalReason, answer, citedDocuments, topRelevance, searchMillis,
                 firstEventMillis, askMillis, stages, rewrite, judgement, null);
@@ -60,32 +62,32 @@ public record EvalOutcome(EvalCase evalCase, List<Retrieved> retrieved, boolean 
      * @param question 改写后的问题，只有 REWRITTEN 时有值
      * @param outputChars 模型改写输出的字数
      */
-    public record Rewrite(String outcome, String question, int outputChars, Long modelMillis, Long retrievalMillis,
-            Long rerankMillis) {
+    public record Rewrite(String outcome, String question, int outputChars, @Nullable Long modelMillis, @Nullable Long retrievalMillis,
+            @Nullable Long rerankMillis) {
     }
 
     /** 改写后的问题；没有改写时为 null。 */
-    public String rewrittenQuestion() {
+    public @Nullable String rewrittenQuestion() {
         return rewrite == null ? null : rewrite.question();
     }
 
     /** 服务端各阶段耗时（毫秒），没走到的阶段为 null。 */
-    public record Stages(Long retrievalMillis, Long rerankMillis, Long modelFirstTokenMillis, Long rewriteMillis) {
+    public record Stages(@Nullable Long retrievalMillis, @Nullable Long rerankMillis, @Nullable Long modelFirstTokenMillis, @Nullable Long rewriteMillis) {
 
-        public Stages(Long retrievalMillis, Long rerankMillis, Long modelFirstTokenMillis) {
+        public Stages(@Nullable Long retrievalMillis, @Nullable Long rerankMillis, @Nullable Long modelFirstTokenMillis) {
             this(retrievalMillis, rerankMillis, modelFirstTokenMillis, null);
         }
     }
 
     public EvalOutcome(EvalCase evalCase, List<Retrieved> retrieved, boolean refused, String refusalReason,
-            String answer, List<String> citedDocuments, Double topRelevance, long searchMillis, long firstEventMillis,
+            String answer, List<String> citedDocuments, @Nullable Double topRelevance, long searchMillis, long firstEventMillis,
             long askMillis, Stages stages) {
         this(evalCase, retrieved, refused, refusalReason, answer, citedDocuments, topRelevance, searchMillis,
                 firstEventMillis, askMillis, stages, null, null);
     }
 
     public EvalOutcome(EvalCase evalCase, List<Retrieved> retrieved, boolean refused, String refusalReason,
-            String answer, List<String> citedDocuments, Double topRelevance, long searchMillis, long firstEventMillis,
+            String answer, List<String> citedDocuments, @Nullable Double topRelevance, long searchMillis, long firstEventMillis,
             long askMillis) {
         this(evalCase, retrieved, refused, refusalReason, answer, citedDocuments, topRelevance, searchMillis,
                 firstEventMillis, askMillis, null, null, null);

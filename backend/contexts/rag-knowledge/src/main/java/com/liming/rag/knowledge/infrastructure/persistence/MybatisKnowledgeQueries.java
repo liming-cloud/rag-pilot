@@ -13,6 +13,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Repository;
 
 @Repository
@@ -53,8 +54,8 @@ class MybatisKnowledgeQueries implements KnowledgeQueries {
     }
 
     @Override
-    public Paged<KnowledgeBaseSummary> knowledgeBases(TenantId tenantId, Grantee grantee, String keyword,
-            Validity.State validity, Window window, Paged.Request page) {
+    public Paged<KnowledgeBaseSummary> knowledgeBases(TenantId tenantId, @Nullable Grantee grantee,
+            @Nullable String keyword, Validity.@Nullable State validity, Window window, Paged.Request page) {
         boolean all = grantee == null;
         Long userId = all ? null : grantee.userId().value();
         List<Long> roleIds = all ? List.of() : grantee.roleIds();
@@ -86,7 +87,7 @@ class MybatisKnowledgeQueries implements KnowledgeQueries {
     }
 
     @Override
-    public ExpirySummary expirySummary(TenantId tenantId, Grantee grantee, Window window, int limit) {
+    public ExpirySummary expirySummary(TenantId tenantId, @Nullable Grantee grantee, Window window, int limit) {
         boolean all = grantee == null;
         Long userId = all ? null : grantee.userId().value();
         List<Long> roleIds = all ? List.of() : grantee.roleIds();

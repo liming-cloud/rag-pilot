@@ -4,6 +4,7 @@ import com.liming.rag.answering.domain.AnswerRecord;
 import com.liming.rag.answering.domain.Citation;
 import com.liming.rag.answering.domain.RefusalReason;
 import java.util.List;
+import org.jspecify.annotations.Nullable;
 
 /**
  * 一次提问的用例结果（#136：不是聚合，回答记录才是），问答接口原样返回给前端。领域里的“回答”是
@@ -15,8 +16,8 @@ import java.util.List;
  * @param rewrite 低分时的改写情况，没有走到改写这一步时为 null
  * @param timings 各阶段耗时，用于评测和排查延迟
  */
-public record AskResult(Long id, String text, boolean refused, RefusalReason refusalReason, List<Citation> citations,
-        Double topRelevance, Rewrite rewrite, Timings timings) {
+public record AskResult(@Nullable Long id, String text, boolean refused, @Nullable RefusalReason refusalReason,
+        List<Citation> citations, @Nullable Double topRelevance, @Nullable Rewrite rewrite, @Nullable Timings timings) {
 
     /**
      * 低分时改写问题的情况，用于评测和排查。
@@ -27,8 +28,8 @@ public record AskResult(Long id, String text, boolean refused, RefusalReason ref
      * @param retrievalMillis 用改写后的问题重新检索的耗时，没有重新检索时为 null
      * @param rerankMillis 重新重排的耗时，没有重新重排时为 null
      */
-    public record Rewrite(Outcome outcome, String question, int outputChars, Long modelMillis, Long retrievalMillis,
-            Long rerankMillis) {
+    public record Rewrite(Outcome outcome, String question, int outputChars, @Nullable Long modelMillis, @Nullable Long retrievalMillis,
+            @Nullable Long rerankMillis) {
 
         public enum Outcome {
             /** 改写前最高分低于下限，判定改写也救不回，直接拒答。 */
@@ -51,8 +52,8 @@ public record AskResult(Long id, String text, boolean refused, RefusalReason ref
      * @param generationMillis 从开始生成到生成完成
      * @param rewriteMillis 低分时尝试改写问题并重新检索、重排的耗时（包括模型没给出有效改写的情况），没有尝试时为 null
      */
-    public record Timings(long retrievalMillis, Long rerankMillis, Long firstTokenMillis, Long generationMillis,
-            Long rewriteMillis) {
+    public record Timings(long retrievalMillis, @Nullable Long rerankMillis, @Nullable Long firstTokenMillis, @Nullable Long generationMillis,
+            @Nullable Long rewriteMillis) {
     }
 
     public static AskResult answered(String text, List<Citation> citations, double topRelevance) {
@@ -65,7 +66,7 @@ public record AskResult(Long id, String text, boolean refused, RefusalReason ref
     }
 
     /** 拒答：{@code text} 是给员工看的拒答话术，由系统设置提供（D-045）。 */
-    public static AskResult refused(RefusalReason reason, Double topRelevance, String text) {
+    public static AskResult refused(RefusalReason reason, @Nullable Double topRelevance, String text) {
         return new AskResult(null, text, true, reason, List.of(), topRelevance, null, null);
     }
 
@@ -82,7 +83,7 @@ public record AskResult(Long id, String text, boolean refused, RefusalReason ref
     }
 
     /** 改写后的问题；没有改写时为 null。 */
-    public String rewrittenQuestion() {
+    public @Nullable String rewrittenQuestion() {
         return rewrite == null ? null : rewrite.question();
     }
 

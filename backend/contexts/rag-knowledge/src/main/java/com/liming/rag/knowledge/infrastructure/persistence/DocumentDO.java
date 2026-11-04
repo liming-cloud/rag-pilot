@@ -7,9 +7,11 @@ import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import org.jspecify.annotations.NullUnmarked;
 
 /** document 表的持久化对象，只在 infrastructure 包内使用。 */
 @TableName("document")
+@NullUnmarked
 public class DocumentDO {
 
     @TableId(type = IdType.AUTO)

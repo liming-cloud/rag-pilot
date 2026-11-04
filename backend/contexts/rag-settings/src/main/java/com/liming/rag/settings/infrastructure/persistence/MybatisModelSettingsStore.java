@@ -8,6 +8,7 @@ import com.liming.rag.settings.application.Paged;
 import com.liming.rag.settings.application.PurposeSetting;
 import java.util.List;
 import java.util.Optional;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Repository;
 
 @Repository
@@ -30,7 +31,7 @@ class MybatisModelSettingsStore implements ModelSettingsStore {
     }
 
     @Override
-    public boolean providerNameTaken(String name, Long exceptId) {
+    public boolean providerNameTaken(String name, @Nullable Long exceptId) {
         return mapper.providerNameTaken(name, exceptId);
     }
 

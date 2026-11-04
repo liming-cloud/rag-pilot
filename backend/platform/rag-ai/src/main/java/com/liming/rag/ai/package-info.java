@@ -6,6 +6,8 @@
  * 密钥只从环境变量读取，任何日志都不能输出密钥或完整的请求体。
  */
 @ApplicationModule(type = ApplicationModule.Type.OPEN)
+@NullMarked
 package com.liming.rag.ai;
 
+import org.jspecify.annotations.NullMarked;
 import org.springframework.modulith.ApplicationModule;

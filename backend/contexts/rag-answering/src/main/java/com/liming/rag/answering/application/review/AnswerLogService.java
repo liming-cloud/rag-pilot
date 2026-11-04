@@ -15,6 +15,7 @@ import java.time.Clock;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Locale;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
@@ -61,8 +62,8 @@ public class AnswerLogService {
      * @throws AnsweringException 筛选条件不认识
      */
     @Transactional(readOnly = true)
-    public Paged<AnswerReview> review(TenantId tenantId, String filter, String status, Integer days, String keyword,
-            int page, int size) {
+    public Paged<AnswerReview> review(TenantId tenantId, String filter, String status, @Nullable Integer days,
+            @Nullable String keyword, int page, int size) {
         var parsedFilter = parse(AnswerReview.Filter.class, filter, "查看范围只能是 disliked、refused 或 all");
         var parsedStatus = parse(AnswerReview.Status.class, status, "处理状态只能是 open、resolved 或 all");
         if (days != null && (days < 1 || days > MAX_STATS_DAYS)) {

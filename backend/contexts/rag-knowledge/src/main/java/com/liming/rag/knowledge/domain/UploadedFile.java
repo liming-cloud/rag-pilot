@@ -1,5 +1,6 @@
 package com.liming.rag.knowledge.domain;
 
+import java.io.Serial;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
@@ -32,6 +33,9 @@ public record UploadedFile(String filename, String mediaType, String sha256, lon
 
     /** 文件类型不支持。和其他不合格的情况分开，接口按“不支持的类型”报错。 */
     public static final class UnsupportedTypeException extends IllegalArgumentException {
+
+        @Serial
+        private static final long serialVersionUID = 1L;
 
         UnsupportedTypeException() {
             super("目前支持 PDF、Word（.docx）、Excel（.xlsx / .xls）、TXT 和 Markdown；旧版 .doc 请先另存为 .docx");

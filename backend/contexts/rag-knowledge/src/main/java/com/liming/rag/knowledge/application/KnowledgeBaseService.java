@@ -23,6 +23,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.event.EventListener;
@@ -112,8 +113,8 @@ public class KnowledgeBaseService implements KnowledgeAccess {
      * @param validity EXPIRING 或 EXPIRED（不区分大小写）时只列有这种文档的库，为空不筛
      */
     @Transactional(readOnly = true)
-    public Paged<KnowledgeBaseSummary> page(TenantId tenantId, UserId actor, String keyword, String validity,
-            int page, int size) {
+    public Paged<KnowledgeBaseSummary> page(TenantId tenantId, UserId actor, @Nullable String keyword,
+            @Nullable String validity, int page, int size) {
         var state = parseValidity(validity);
         if (state == Validity.State.ACTIVE || state == Validity.State.PENDING) {
             throw new KnowledgeException(KnowledgeException.Reason.INVALID, "资料有效期只能按 EXPIRING 或 EXPIRED 筛选");
@@ -167,8 +168,8 @@ public class KnowledgeBaseService implements KnowledgeAccess {
      * @param validity ACTIVE、EXPIRING、EXPIRED、PENDING（不区分大小写），为空不筛
      */
     @Transactional(readOnly = true)
-    public Paged<DocumentRow> documents(TenantId tenantId, UserId actor, long knowledgeBaseId, String keyword,
-            String status, String validity, int page, int size) {
+    public Paged<DocumentRow> documents(TenantId tenantId, UserId actor, long knowledgeBaseId,
+            @Nullable String keyword, @Nullable String status, @Nullable String validity, int page, int size) {
         getManageable(tenantId, actor, knowledgeBaseId);
         return queries.documents(tenantId, knowledgeBaseId, blankToNull(keyword), parseStatus(status),
                 parseValidity(validity), calendar.window(), new Paged.Request(page, size));

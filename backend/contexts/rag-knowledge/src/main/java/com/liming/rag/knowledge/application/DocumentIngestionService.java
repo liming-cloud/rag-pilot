@@ -11,6 +11,7 @@ import com.liming.rag.shared.TenantId;
 import com.liming.rag.shared.UserId;
 import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
+import org.jspecify.annotations.Nullable;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
@@ -57,7 +58,7 @@ public class DocumentIngestionService {
      */
     @Transactional
     public DocumentRow ingest(TenantId tenantId, UserId actor, long knowledgeBaseId, String filename, byte[] content,
-            Long replacesDocumentId, String effectiveFrom, String expiresOn) {
+            @Nullable Long replacesDocumentId, String effectiveFrom, String expiresOn) {
         var knowledgeBase = knowledgeBases.getManageable(tenantId, actor, knowledgeBaseId);
         var previous = replacesDocumentId == null ? null : inKnowledgeBase(tenantId, knowledgeBaseId,
                 replacesDocumentId, "要替换的文档不存在");
@@ -169,7 +170,7 @@ public class DocumentIngestionService {
     }
 
     /** null 表示没传，用默认值；空串表示不限。 */
-    private static LocalDate date(String value, LocalDate absent) {
+    private static @Nullable LocalDate date(@Nullable String value, @Nullable LocalDate absent) {
         if (value == null) {
             return absent;
         }

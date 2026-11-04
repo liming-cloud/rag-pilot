@@ -8,6 +8,7 @@ import java.time.OffsetDateTime;
 import java.util.Collection;
 import java.util.List;
 import java.util.Locale;
+import org.jspecify.annotations.Nullable;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -44,8 +45,8 @@ public class AccountAdminService {
 
     /** @param status enabled、disabled、locked，为空不筛 */
     @Transactional(readOnly = true)
-    public Paged<ManagedAccount> page(TenantId tenantId, String keyword, Long roleId, String status, int page,
-            int size) {
+    public Paged<ManagedAccount> page(TenantId tenantId, @Nullable String keyword, @Nullable Long roleId,
+            @Nullable String status, int page, int size) {
         var parsed = status == null || status.isBlank() ? null : parseStatus(status);
         var found = accounts.page(tenantId, new AccountQuery(blankToNull(keyword), roleId, parsed,
                 OffsetDateTime.now(clock), new Paged.Request(page, size)));

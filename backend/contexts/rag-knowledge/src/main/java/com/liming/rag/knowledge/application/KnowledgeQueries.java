@@ -10,6 +10,7 @@ import java.time.OffsetDateTime;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import org.jspecify.annotations.Nullable;
 
 /** 只读查询端口（D-039）：管理端列表的分页、筛选和统计，以及可访问的库、库名，都不加载聚合。 */
 public interface KnowledgeQueries {
@@ -32,8 +33,8 @@ public interface KnowledgeQueries {
      * @param keyword 匹配名称，为 null 不筛
      * @param validity EXPIRING、EXPIRED 时只列有这种文档的库，为 null 不筛
      */
-    Paged<KnowledgeBaseSummary> knowledgeBases(TenantId tenantId, Grantee grantee, String keyword,
-            Validity.State validity, Window window, Paged.Request page);
+    Paged<KnowledgeBaseSummary> knowledgeBases(TenantId tenantId, @Nullable Grantee grantee,
+            @Nullable String keyword, Validity.@Nullable State validity, Window window, Paged.Request page);
 
     /**
      * 知识库里的文档，最新上传的在前。
@@ -42,15 +43,15 @@ public interface KnowledgeQueries {
      * @param status 为 null 不筛
      * @param validity 有效期状态，为 null 不筛
      */
-    Paged<DocumentRow> documents(TenantId tenantId, long knowledgeBaseId, String keyword, DocumentStatus status,
-            Validity.State validity, Window window, Paged.Request page);
+    Paged<DocumentRow> documents(TenantId tenantId, long knowledgeBaseId, @Nullable String keyword,
+            @Nullable DocumentStatus status, Validity.@Nullable State validity, Window window, Paged.Request page);
 
     /**
      * 即将到期和已失效的文档数，以及最早到期的 {@code limit} 份。
      *
      * @param grantee 只算授权给他本人或其角色的库；为 null 时算本租户全部（超级管理员）
      */
-    ExpirySummary expirySummary(TenantId tenantId, Grantee grantee, Window window, int limit);
+    ExpirySummary expirySummary(TenantId tenantId, @Nullable Grantee grantee, Window window, int limit);
 
     /** 按哪天判断有效期：今天，以及“即将到期”截止到哪天（含），口径同 {@link Validity#state}。 */
     record Window(LocalDate today, LocalDate warnUntil) {
@@ -75,7 +76,7 @@ public interface KnowledgeQueries {
      * （分页后旧版本不一定在同一页）；{@code validity} 是按部署的统计时区算好的有效期状态，前端不自己比较日期（D-046）。
      */
     record DocumentRow(long id, String filename, DocumentStatus status, String error, int chunkCount, long sizeBytes,
-            OffsetDateTime createdAt, Long replacesDocumentId, String replacesFilename, LocalDate effectiveFrom,
+            OffsetDateTime createdAt, @Nullable Long replacesDocumentId, String replacesFilename, LocalDate effectiveFrom,
             LocalDate expiresOn, Validity.State validity, boolean reprocessable, OffsetDateTime retryAt) {
 
         public static DocumentRow of(Document document, String replacesFilename, Validity.State state) {

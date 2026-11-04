@@ -3,6 +3,7 @@ package com.liming.rag.settings.application;
 import com.liming.rag.ai.ModelUsage;
 import java.util.List;
 import java.util.Optional;
+import org.jspecify.annotations.Nullable;
 
 /** 模型管理的存储端口。 */
 public interface ModelSettingsStore {
@@ -12,7 +13,7 @@ public interface ModelSettingsStore {
 
     Optional<ModelProvider> provider(long id);
 
-    boolean providerNameTaken(String name, Long exceptId);
+    boolean providerNameTaken(String name, @Nullable Long exceptId);
 
     ModelProvider insertProvider(ModelProvider provider);
 

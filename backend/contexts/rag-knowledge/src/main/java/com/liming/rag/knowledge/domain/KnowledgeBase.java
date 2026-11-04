@@ -8,6 +8,7 @@ import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.Objects;
 import java.util.Set;
+import org.jspecify.annotations.Nullable;
 
 /**
  * 知识库聚合（D-038、#136）：一组文档和它的授权——直接授权给哪些账号、授权给哪些角色。
@@ -33,7 +34,7 @@ public final class KnowledgeBase implements AggregateRoot {
     private final Set<Long> addedRoles = new LinkedHashSet<>();
     private final Set<Long> removedRoles = new LinkedHashSet<>();
 
-    private KnowledgeBase(Long id, TenantId tenantId, String name, Collection<UserId> members,
+    private KnowledgeBase(@Nullable Long id, TenantId tenantId, String name, Collection<UserId> members,
             Collection<Long> roleGrants) {
         this.id = id;
         this.tenantId = Objects.requireNonNull(tenantId, "租户不能为空");

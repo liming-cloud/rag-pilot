@@ -7,6 +7,7 @@ import com.liming.rag.shared.UserId;
 import java.util.Collection;
 import java.util.List;
 import java.util.Set;
+import org.jspecify.annotations.Nullable;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
@@ -69,7 +70,8 @@ public class RoleService {
 
     /** {@code name}、{@code permissions} 为 null 表示不改。 */
     @Transactional
-    public RoleSummary update(TenantId tenantId, UserId actor, long id, String name, Collection<String> permissions) {
+    public RoleSummary update(TenantId tenantId, UserId actor, long id, @Nullable String name,
+            @Nullable Collection<String> permissions) {
         var role = find(tenantId, id);
         if (role.superAdmin()) {
             throw invalid("超级管理员的权限不能修改");

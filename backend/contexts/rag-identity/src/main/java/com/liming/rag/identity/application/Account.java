@@ -2,6 +2,7 @@ package com.liming.rag.identity.application;
 
 import com.liming.rag.shared.TenantId;
 import java.time.OffsetDateTime;
+import org.jspecify.annotations.Nullable;
 
 /**
  * 一个账号。{@code passwordHash} 是密码摘要（{@link PasswordHasher}），不出本模块。
@@ -10,8 +11,8 @@ import java.time.OffsetDateTime;
  * @param failedAttempts 连续输错密码的次数，登录成功或锁定时清零
  * @param lockedUntil 连续输错被锁到什么时候，没锁为 null
  */
-public record Account(Long id, TenantId tenantId, String username, String displayName, String passwordHash,
-        boolean enabled, boolean mustChangePassword, int failedAttempts, OffsetDateTime lockedUntil) {
+public record Account(@Nullable Long id, TenantId tenantId, String username, String displayName, String passwordHash,
+        boolean enabled, boolean mustChangePassword, int failedAttempts, @Nullable OffsetDateTime lockedUntil) {
 
     public boolean lockedAt(OffsetDateTime now) {
         return lockedUntil != null && lockedUntil.isAfter(now);

@@ -1,6 +1,7 @@
 package com.liming.rag.evaluation.api;
 
 import java.util.List;
+import org.jspecify.annotations.Nullable;
 
 /**
  * 一道评测题。
@@ -15,7 +16,7 @@ import java.util.List;
  * @param forbidden 回答里不能出现的内容：资料里夹带的指令要模型说的话（提示词注入题，#145）；出现即算被资料里的指令带偏
  */
 public record EvalCase(String id, String question, Kind kind, List<String> expectedDocuments, List<String> keywords,
-        boolean restricted, String style, String referenceAnswer, List<String> history, String searchAs,
+        boolean restricted, String style, @Nullable String referenceAnswer, List<String> history, String searchAs,
         List<String> forbidden) {
 
     public static final String DEFAULT_STYLE = "原话";

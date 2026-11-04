@@ -200,8 +200,19 @@ class SpringAiTextGenerationTest {
         generation.stream("系统", "问题", delta -> {
         });
 
-        assertThat(names).contains("gen_ai.client.operation m", "spring.ai.chat.client ");
-        assertThat(names.stream().filter(name -> name.startsWith("gen_ai.client.operation"))).hasSize(2);
+        // 流式调用的观测在流结束后由另一个线程结束，等它记下来再取快照，不在写入时遍历。
+        List<String> recorded = List.of();
+        for (int i = 0; i < 100; i++) {
+            synchronized (names) {
+                recorded = List.copyOf(names);
+            }
+            if (recorded.stream().filter(name -> name.startsWith("gen_ai.client.operation")).count() >= 2) {
+                break;
+            }
+            Thread.sleep(20);
+        }
+        assertThat(recorded).contains("gen_ai.client.operation m", "spring.ai.chat.client ");
+        assertThat(recorded.stream().filter(name -> name.startsWith("gen_ai.client.operation"))).hasSize(2);
     }
 
     @Test

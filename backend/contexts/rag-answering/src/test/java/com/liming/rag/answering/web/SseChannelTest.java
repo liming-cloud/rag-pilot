@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.liming.rag.shared.BusinessException;
 import com.liming.rag.shared.ErrorKind;
 import java.io.IOException;
+import java.io.Serial;
 import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
@@ -48,6 +49,10 @@ class SseChannelTest {
     }
 
     private static final class Failed extends BusinessException {
+
+        @Serial
+        private static final long serialVersionUID = 1L;
+
         Failed() {
             super(ErrorKind.INVALID, "ANSWERING_INVALID", "问题不能为空");
         }

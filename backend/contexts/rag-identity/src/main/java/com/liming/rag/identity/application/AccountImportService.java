@@ -10,6 +10,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import org.jspecify.annotations.Nullable;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -116,7 +117,7 @@ public class AccountImportService {
     }
 
     /** 用户名本身的规则优先；合规时再看是否与前面的行重复、是否已有同名账号。 */
-    private static String usernameProblem(String username, Integer earlierLine, Set<String> existing) {
+    private static String usernameProblem(String username, @Nullable Integer earlierLine, Set<String> existing) {
         var problem = AccountRules.usernameProblem(username);
         if (problem != null) {
             return problem;

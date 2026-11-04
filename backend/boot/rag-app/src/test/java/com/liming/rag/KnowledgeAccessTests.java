@@ -166,6 +166,7 @@ class KnowledgeAccessTests {
         return ((Number) created.getBody().get("id")).longValue();
     }
 
+    @SuppressWarnings("unchecked")
     private void upload(String token, long knowledgeBaseId, String filename, String text) {
         var file = new ByteArrayResource(text.getBytes(StandardCharsets.UTF_8)) {
             @Override

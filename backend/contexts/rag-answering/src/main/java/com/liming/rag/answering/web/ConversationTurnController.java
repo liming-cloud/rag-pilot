@@ -6,6 +6,7 @@ import com.liming.rag.answering.application.conversation.ConversationAskService;
 import com.liming.rag.identity.api.CurrentUser;
 import com.liming.rag.identity.api.IdentityPermissions;
 import java.util.Map;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -45,7 +46,7 @@ class ConversationTurnController {
     }
 
     /** @param replacesTurnId 重新生成或修改问题时，指向要替换的最后一轮 */
-    record TurnRequest(String question, Long replacesTurnId) {
+    record TurnRequest(String question, @Nullable Long replacesTurnId) {
     }
 
     /**

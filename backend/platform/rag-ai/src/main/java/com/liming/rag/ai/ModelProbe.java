@@ -1,6 +1,7 @@
 package com.liming.rag.ai;
 
 import java.util.List;
+import org.jspecify.annotations.Nullable;
 
 /** 给模型管理用（D-043、D-044）：环境变量里的默认配置、连通测试、读服务商的模型列表。都不返回密钥明文。 */
 public interface ModelProbe {
@@ -28,6 +29,6 @@ public interface ModelProbe {
      * @param latencyMs 请求耗时；没连上时为 null
      * @param message 给管理员看的中文说明，不含密钥
      */
-    record ProbeResult(boolean ok, Long latencyMs, String message) {
+    record ProbeResult(boolean ok, @Nullable Long latencyMs, String message) {
     }
 }

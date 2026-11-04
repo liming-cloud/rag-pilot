@@ -19,6 +19,10 @@ import com.tngtech.archunit.core.domain.JavaClasses;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
 import com.tngtech.archunit.core.importer.ImportOption;
 import com.tngtech.archunit.lang.ArchRule;
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -90,6 +94,28 @@ class PackageLayoutTest {
             APPLICATION_NOT_ON_SA_TOKEN,
             APPLICATION_NOT_ON_ADAPTERS, WEB_NOT_ON_INFRASTRUCTURE, WEB_NOT_ON_DOMAIN, API_SELF_CONTAINED,
             TECH_MODULES_EXPOSE_CONTRACTS_ONLY);
+
+    @Test
+    @DisplayName("每个主代码包都有 package-info.java 并标 @NullMarked：默认不为 null，可以为 null 的地方写 @Nullable（#145）")
+    void everyPackageIsNullMarked() throws IOException {
+        var root = BackendTree.root();
+        try (var files = Files.walk(root)) {
+            var packages = files.filter(file -> file.toString().endsWith(".java"))
+                    .filter(file -> file.toString().replace('\\', '/').contains("/src/main/java/"))
+                    .map(Path::getParent).distinct().toList();
+            var missing = packages.stream().filter(dir -> {
+                var info = dir.resolve("package-info.java");
+                try {
+                    return !Files.exists(info) || !Files.readString(info)
+                            .contains("@NullMarked");
+                } catch (IOException e) {
+                    throw new UncheckedIOException(e);
+                }
+            }).map(dir -> BackendTree.moduleRelative(root, dir)).sorted().toList();
+            assertThat(packages).hasSizeGreaterThan(30);
+            assertThat(missing).as("缺 @NullMarked 的包").isEmpty();
+        }
+    }
 
     @Test
     @DisplayName("生产代码的目录和分层依赖符合规范")

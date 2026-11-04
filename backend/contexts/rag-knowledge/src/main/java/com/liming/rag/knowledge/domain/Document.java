@@ -5,6 +5,7 @@ import com.liming.rag.shared.TenantId;
 import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.util.Objects;
+import org.jspecify.annotations.Nullable;
 
 /**
  * 文档聚合：一份上传到知识库的原始文件，以及它的处理状态。
@@ -29,7 +30,7 @@ public final class Document implements AggregateRoot {
     private final String sha256;
     private final long sizeBytes;
     private DocumentStatus status;
-    private String error;
+    private @Nullable String error;
     private int chunkCount;
     private final OffsetDateTime createdAt;
     /** 要替换的旧文档；本文档解析成功后删除它。 */
@@ -38,13 +39,13 @@ public final class Document implements AggregateRoot {
     /** 失败原因是模型暂时不可用，可以重新处理。 */
     private boolean reprocessable;
     /** 自动重试的时间；不自动重试时为 null。 */
-    private OffsetDateTime retryAt;
+    private @Nullable OffsetDateTime retryAt;
     /** 第几次处理，从 1 开始。 */
     private int attempts;
 
-    private Document(Long id, TenantId tenantId, long knowledgeBaseId, String filename, String mediaType,
+    private Document(@Nullable Long id, TenantId tenantId, long knowledgeBaseId, String filename, String mediaType,
             String sha256, long sizeBytes, DocumentStatus status, String error, int chunkCount,
-            OffsetDateTime createdAt, Long replacesDocumentId, Validity validity, Retry retry) {
+            OffsetDateTime createdAt, @Nullable Long replacesDocumentId, Validity validity, Retry retry) {
         this.id = id;
         this.tenantId = Objects.requireNonNull(tenantId, "租户不能为空");
         this.knowledgeBaseId = knowledgeBaseId;
@@ -68,13 +69,13 @@ public final class Document implements AggregateRoot {
      *
      * @param attempts 第几次处理，从 1 开始
      */
-    public record Retry(boolean reprocessable, OffsetDateTime retryAt, int attempts) {
+    public record Retry(boolean reprocessable, @Nullable OffsetDateTime retryAt, int attempts) {
 
         public static final Retry FIRST = new Retry(false, null, 1);
     }
 
     /** 接收一份上传的文件，进入解析状态；{@code replacesDocumentId} 不为空时是它的新版本，解析成功后替换它。 */
-    public static Document received(TenantId tenantId, long knowledgeBaseId, UploadedFile file, Long replacesDocumentId,
+    public static Document received(TenantId tenantId, long knowledgeBaseId, UploadedFile file, @Nullable Long replacesDocumentId,
             Validity validity) {
         return new Document(null, tenantId, knowledgeBaseId, file.filename(), file.mediaType(), file.sha256(),
                 file.sizeBytes(), DocumentStatus.PARSING, null, 0, null, replacesDocumentId, validity, Retry.FIRST);
@@ -83,7 +84,7 @@ public final class Document implements AggregateRoot {
     /** 仓储从数据库恢复聚合时使用，不做状态校验。 */
     public static Document restore(long id, TenantId tenantId, long knowledgeBaseId, String filename,
             String mediaType, String sha256, long sizeBytes, DocumentStatus status, String error, int chunkCount,
-            OffsetDateTime createdAt, Long replacesDocumentId, Validity validity, Retry retry) {
+            OffsetDateTime createdAt, @Nullable Long replacesDocumentId, Validity validity, Retry retry) {
         return new Document(id, tenantId, knowledgeBaseId, filename, mediaType, sha256, sizeBytes, status, error,
                 chunkCount, createdAt, replacesDocumentId, validity, retry);
     }
@@ -211,7 +212,7 @@ public final class Document implements AggregateRoot {
         return status;
     }
 
-    public String error() {
+    public @Nullable String error() {
         return error;
     }
 
@@ -219,7 +220,7 @@ public final class Document implements AggregateRoot {
         return chunkCount;
     }
 
-    public OffsetDateTime createdAt() {
+    public @Nullable OffsetDateTime createdAt() {
         return createdAt;
     }
 
@@ -227,7 +228,7 @@ public final class Document implements AggregateRoot {
         return reprocessable;
     }
 
-    public OffsetDateTime retryAt() {
+    public @Nullable OffsetDateTime retryAt() {
         return retryAt;
     }
 

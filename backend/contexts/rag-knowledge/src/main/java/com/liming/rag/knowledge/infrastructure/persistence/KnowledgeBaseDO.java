@@ -3,9 +3,11 @@ package com.liming.rag.knowledge.infrastructure.persistence;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
+import org.jspecify.annotations.NullUnmarked;
 
 /** knowledge_base 表的持久化对象，只在 infrastructure 包内使用。 */
 @TableName("knowledge_base")
+@NullUnmarked
 public class KnowledgeBaseDO {
 
     @TableId(type = IdType.AUTO)

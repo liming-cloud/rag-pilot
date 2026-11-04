@@ -1,6 +1,7 @@
 package com.liming.rag.identity.application;
 
 import java.time.OffsetDateTime;
+import org.jspecify.annotations.Nullable;
 
 /**
  * 账号列表的筛选（D-039）。
@@ -10,7 +11,8 @@ import java.time.OffsetDateTime;
  * @param status 启用、停用或锁定，为 null 不筛
  * @param now 判断“锁定”用的当前时间
  */
-public record AccountQuery(String keyword, Long roleId, Status status, OffsetDateTime now, Paged.Request page) {
+public record AccountQuery(@Nullable String keyword, @Nullable Long roleId, @Nullable Status status, OffsetDateTime now,
+        Paged.Request page) {
 
     public enum Status {
         ENABLED,

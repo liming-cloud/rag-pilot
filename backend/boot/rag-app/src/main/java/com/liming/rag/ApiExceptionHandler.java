@@ -7,6 +7,7 @@ import cn.dev33.satoken.exception.SaTokenContextException;
 import cn.dev33.satoken.stp.StpUtil;
 import com.liming.rag.shared.BusinessException;
 import com.liming.rag.shared.ErrorKind;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
@@ -51,7 +52,7 @@ class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     }
 
     /** 当前登录的用户，只用来写日志；不在请求里（直接调用处理方法时）没有 Sa-Token 上下文，记为 null。 */
-    private static Object currentUser() {
+    private static @Nullable Object currentUser() {
         try {
             return StpUtil.getLoginIdDefaultNull();
         } catch (SaTokenContextException e) {

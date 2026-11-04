@@ -125,6 +125,14 @@
         </dependencies>
     </dependencyManagement>
 
+    <!-- 空值标注（#145）：各包 @NullMarked，可以为 null 的地方写 @Nullable。只是注解，版本由 Spring Boot 管理，Spring 自己也用它。 -->
+    <dependencies>
+        <dependency>
+            <groupId>org.jspecify</groupId>
+            <artifactId>jspecify</artifactId>
+        </dependency>
+    </dependencies>
+
     <build>
         <pluginManagement>
             <plugins>
@@ -136,6 +144,13 @@
                         <release>${java.version}</release>
                         <!-- 保留参数名，Spring MVC 和 MyBatis 绑定参数时需要。 -->
                         <parameters>true</parameters>
+                        <!-- 打开全部编译告警（#145）；告警不让构建失败，但要清零，确实要留的在代码里用 @SuppressWarnings 并写明原因。 -->
+                        <showWarnings>true</showWarnings>
+                        <compilerArgs>
+                            <arg>-Xlint:all</arg>
+                            <arg>-Xmaxwarns</arg>
+                            <arg>10000</arg>
+                        </compilerArgs>
                     </configuration>
                 </plugin>
                 <plugin>

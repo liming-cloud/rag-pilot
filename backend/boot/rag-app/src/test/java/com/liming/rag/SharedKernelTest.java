@@ -31,8 +31,9 @@ class SharedKernelTest {
     static final ArchRule SHARED_ONLY_ON_JDK = classes()
             .that().resideInAPackage("com.liming.rag.shared..")
             .should().onlyDependOnClassesThat()
-            .resideInAnyPackage("java..", "com.liming.rag.shared..", "org.springframework.modulith..")
-            .as("共享内核只依赖 JDK（package-info 上的 Modulith 注解除外），不依赖框架和其他模块");
+            .resideInAnyPackage("java..", "com.liming.rag.shared..", "org.springframework.modulith..",
+                    "org.jspecify.annotations..")
+            .as("共享内核只依赖 JDK（package-info 上的 Modulith 注解和 JSpecify 空值注解除外，#145），不依赖框架和其他模块");
 
     static final ArchRule AGGREGATES_ONLY_IN_CORE = classes()
             .that().implement(AggregateRoot.class)

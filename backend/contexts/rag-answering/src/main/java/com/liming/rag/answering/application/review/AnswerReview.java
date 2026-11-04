@@ -3,6 +3,7 @@ package com.liming.rag.answering.application.review;
 import com.liming.rag.answering.application.Paged;
 import java.time.OffsetDateTime;
 import java.util.List;
+import org.jspecify.annotations.Nullable;
 
 /**
  * 管理员查看的一条回答记录：问了什么、答了什么、员工怎么评价、引用了哪些文档。
@@ -15,10 +16,10 @@ import java.util.List;
  * @param resolutionNote 管理员的处理说明
  * @param resolvedAt 标记已处理的时间，未处理时为 null
  */
-public record AnswerReview(long id, long userId, String askerName, String question, String answerText, boolean refused,
-        String refusalReason, Double topRelevance, String rating, String comment, OffsetDateTime createdAt,
-        List<String> citedDocuments, String rewrittenQuestion, String reviewStatus, String resolutionNote,
-        OffsetDateTime resolvedAt) {
+public record AnswerReview(long id, long userId, @Nullable String askerName, String question, String answerText,
+        boolean refused, @Nullable String refusalReason, @Nullable Double topRelevance, @Nullable String rating,
+        @Nullable String comment, OffsetDateTime createdAt, List<String> citedDocuments, @Nullable String rewrittenQuestion,
+        String reviewStatus, @Nullable String resolutionNote, @Nullable OffsetDateTime resolvedAt) {
 
     public AnswerReview withAskerName(String name) {
         return new AnswerReview(id, userId, name, question, answerText, refused, refusalReason, topRelevance, rating,
@@ -47,7 +48,7 @@ public record AnswerReview(long id, long userId, String askerName, String questi
      * @param since 只看这个时间以后的，为 null 不限
      * @param keyword 匹配问题，为 null 不筛
      */
-    public record Query(Filter filter, Status status, java.time.OffsetDateTime since, String keyword,
-            Paged.Request page) {
+    public record Query(Filter filter, @Nullable Status status, java.time.@Nullable OffsetDateTime since,
+            @Nullable String keyword, Paged.Request page) {
     }
 }

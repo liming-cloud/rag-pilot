@@ -16,6 +16,7 @@ import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 import java.util.regex.Pattern;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -81,7 +82,7 @@ public class ConversationAskService {
 
     /** 准备好的一轮：已校验、已分配 id、已登记停止信号。 */
     public record Pending(TenantId tenantId, UserId userId, long conversationId, long turnId, String question,
-            Long replacesTurnId, ConversationService.TurnContext context, CompletableFuture<Void> stop) {
+            @Nullable Long replacesTurnId, ConversationService.TurnContext context, CompletableFuture<Void> stop) {
     }
 
     /** 生成过程中的事件，交给流式接口转成 SSE。 */
@@ -91,7 +92,7 @@ public class ConversationAskService {
     /**
      * @throws AnsweringException 问题为空或太长、会话不存在或不是自己的、要替换的不是最后一轮
      */
-    public Pending start(TenantId tenantId, UserId userId, long conversationId, String question, Long replacesTurnId) {
+    public Pending start(TenantId tenantId, UserId userId, long conversationId, String question, @Nullable Long replacesTurnId) {
         var text = AnswerService.question(question);
         var context = conversations.prepareTurn(tenantId, userId, conversationId, replacesTurnId);
         // 问题合规、会话是自己的之后才计数，超过频率上限时不调用模型（#145）。

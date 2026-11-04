@@ -5,6 +5,8 @@
  * 标记为开放模块，所有模块都可以直接使用。
  */
 @ApplicationModule(type = ApplicationModule.Type.OPEN)
+@NullMarked
 package com.liming.rag.shared;
 
+import org.jspecify.annotations.NullMarked;
 import org.springframework.modulith.ApplicationModule;
