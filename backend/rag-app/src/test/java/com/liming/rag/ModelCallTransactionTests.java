@@ -96,8 +96,8 @@ class ModelCallTransactionTests {
     void probesOutsideTransactions() {
         var admin = admin();
 
-        ignoreFailure(() -> models.save(TENANT, admin, ModelUsage.RERANK, null, "any-reranker"));
-        ignoreFailure(() -> models.test(ModelUsage.ANSWER, null, "any-model"));
+        ignoreFailure(() -> models.save(TENANT, admin, ModelUsage.RERANK.name(), null, "any-reranker"));
+        ignoreFailure(() -> models.test(ModelUsage.ANSWER.name(), null, "any-model"));
         ignoreFailure(() -> models.availableModels(null));
 
         assertThat(inTransaction).hasSize(3).containsOnly(false);

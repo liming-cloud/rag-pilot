@@ -3,17 +3,14 @@ package com.liming.rag.settings.web;
 import cn.dev33.satoken.annotation.SaCheckLogin;
 import cn.dev33.satoken.annotation.SaCheckPermission;
 import com.liming.rag.ai.ModelProbe;
-import com.liming.rag.ai.ModelUsage;
 import com.liming.rag.identity.api.CurrentUser;
 import com.liming.rag.settings.api.SettingsPermissions;
 import com.liming.rag.settings.application.ModelChange;
 import com.liming.rag.settings.application.ModelSettingsService;
 import com.liming.rag.settings.application.ModelSettingsService.ProviderView;
 import com.liming.rag.settings.application.ModelSettingsService.PurposeView;
-import com.liming.rag.settings.application.SettingsException;
 import java.time.OffsetDateTime;
 import java.util.List;
-import java.util.Locale;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -106,7 +103,7 @@ class ModelSettingsController {
     @SaCheckPermission(SettingsPermissions.MODEL_TEST)
     @PostMapping("/api/models/test")
     ModelProbe.ProbeResult test(@RequestBody TestRequest request) {
-        return settings.test(usage(request.usage()), request.providerId(), request.model());
+        return settings.test(request.usage(), request.providerId(), request.model());
     }
 
     @SaCheckPermission(SettingsPermissions.MODEL_UPDATE)
@@ -133,7 +130,7 @@ class ModelSettingsController {
     @SaCheckPermission(SettingsPermissions.MODEL_UPDATE)
     @PutMapping("/api/models/{usage}")
     UsageView save(@PathVariable String usage, @RequestBody SaveRequest request) {
-        return UsageView.of(settings.save(currentUser.tenantId(), currentUser.userId(), usage(usage),
+        return UsageView.of(settings.save(currentUser.tenantId(), currentUser.userId(), usage,
                 request.providerId(), request.model()));
     }
 
@@ -155,14 +152,6 @@ class ModelSettingsController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     void deleteProvider(@PathVariable long id) {
         settings.deleteProvider(id);
-    }
-
-    private static ModelUsage usage(String value) {
-        try {
-            return ModelUsage.valueOf(value == null ? "" : value.toUpperCase(Locale.ROOT));
-        } catch (IllegalArgumentException e) {
-            throw new SettingsException(SettingsException.Reason.INVALID, "用途只能是 ANSWER、HEDGE、LIGHT 或 RERANK");
-        }
     }
 
     private static String sourceOf(boolean fromDatabase) {
