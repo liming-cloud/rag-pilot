@@ -2,8 +2,8 @@ package com.liming.rag.answering.application;
 
 import com.liming.rag.ai.ChatGateway;
 import com.liming.rag.ai.ModelCallException;
-import com.liming.rag.answering.api.Answer;
 import com.liming.rag.answering.domain.ConversationTurn;
+import com.liming.rag.answering.domain.RefusalReason;
 import com.liming.rag.shared.TenantId;
 import com.liming.rag.shared.UserId;
 import java.util.List;
@@ -133,7 +133,7 @@ public class ConversationAskService {
     private Answer answer(Pending pending, Events events) {
         var context = pending.context();
         if (context.knowledgeBaseIds().isEmpty()) {
-            return answers.refusal(Answer.RefusalReason.NO_EVIDENCE, null);
+            return answers.refusal(RefusalReason.NO_EVIDENCE, null);
         }
         var plan = SearchPlanner.direct(pending.question());
         String generationHistory = "";

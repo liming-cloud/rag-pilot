@@ -4,9 +4,9 @@ import static com.liming.rag.answering.application.InMemoryAnswering.TENANT;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.liming.rag.answering.api.Answer;
 import com.liming.rag.answering.application.GapRecords.GapRecord;
 import com.liming.rag.answering.domain.AnswerRecord;
+import com.liming.rag.answering.domain.RefusalReason;
 import com.liming.rag.shared.UserId;
 import java.time.Duration;
 import java.time.LocalDate;
@@ -112,8 +112,8 @@ class KnowledgeGapServiceTest {
     @Test
     @DisplayName("整类标记已处理：只改还没处理的，返回改了几条；没有记录、超过上限、有记录不存在都拒绝")
     void resolvesGroup() {
-        long open = fixture.records.record(TENANT, new UserId(7), "冷柜温度要多少？", refused(), List.of());
-        long done = fixture.records.record(TENANT, new UserId(7), "冷柜温度设几度？", refused(), List.of());
+        long open = fixture.records.add(AnswerRecord.record(TENANT, new UserId(7), "冷柜温度要多少？", refused().reply(), List.of())).id();
+        long done = fixture.records.add(AnswerRecord.record(TENANT, new UserId(7), "冷柜温度设几度？", refused().reply(), List.of())).id();
         service.resolve(TENANT, ADMIN, List.of(done), "已补");
         int saves = fixture.records.reviewSaves;
 
@@ -135,7 +135,7 @@ class KnowledgeGapServiceTest {
     }
 
     private static Answer refused() {
-        return Answer.refused(Answer.RefusalReason.NO_EVIDENCE, null, TestSettings.RETAIL_REFUSAL);
+        return Answer.refused(RefusalReason.NO_EVIDENCE, null, TestSettings.RETAIL_REFUSAL);
     }
 
     private static void assertReason(ThrowingCallable call, AnsweringException.Reason reason) {

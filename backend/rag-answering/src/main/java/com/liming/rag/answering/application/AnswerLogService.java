@@ -1,6 +1,5 @@
 package com.liming.rag.answering.application;
 
-import com.liming.rag.answering.api.Answer;
 import com.liming.rag.answering.domain.AnswerRecord;
 import com.liming.rag.answering.domain.AnswerRecordRepository;
 import com.liming.rag.identity.api.UserDirectory;
@@ -129,7 +128,8 @@ public class AnswerLogService {
     @Transactional
     public Answer recordSearched(TenantId tenantId, UserId asker, String question, Answer answer,
             List<Long> searched) {
-        return answer.withId(records.record(tenantId, asker, question.strip(), answer, List.copyOf(searched)));
+        var saved = records.add(AnswerRecord.record(tenantId, asker, question, answer.reply(), List.copyOf(searched)));
+        return answer.withId(saved.id());
     }
 
     /**

@@ -1,6 +1,5 @@
 package com.liming.rag.answering.application;
 
-import com.liming.rag.answering.api.Answer;
 import com.liming.rag.answering.domain.ConversationTurn;
 import java.time.Instant;
 import java.util.List;

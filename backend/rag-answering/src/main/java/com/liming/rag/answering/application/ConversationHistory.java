@@ -1,6 +1,5 @@
 package com.liming.rag.answering.application;
 
-import com.liming.rag.answering.api.Answer;
 import java.util.ArrayDeque;
 import java.util.List;
 

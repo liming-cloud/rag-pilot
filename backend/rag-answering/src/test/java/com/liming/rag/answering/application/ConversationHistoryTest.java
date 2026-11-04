@@ -2,7 +2,7 @@ package com.liming.rag.answering.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.liming.rag.answering.api.Answer;
+import com.liming.rag.answering.domain.RefusalReason;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -25,7 +25,7 @@ class ConversationHistoryTest {
     @DisplayName("拒答的轮次只带问题和一句说明，不带拒答话术；停止或出错的轮次也只带问题")
     void refusedTurnsKeepOnlyQuestion() {
         var history = ConversationHistory.of(List.of(
-                new ConversationHistory.Entry("年假怎么请？", Answer.refused(Answer.RefusalReason.LOW_RELEVANCE, 0.01, TestSettings.RETAIL_REFUSAL)),
+                new ConversationHistory.Entry("年假怎么请？", Answer.refused(RefusalReason.LOW_RELEVANCE, 0.01, TestSettings.RETAIL_REFUSAL)),
                 new ConversationHistory.Entry("那病假呢？", null)), 6, 3000);
 
         assertThat(history.text()).isEqualTo("员工：年假怎么请？\n助手：（这一轮没有找到依据）\n员工：那病假呢？\n助手：（这一轮没有结果）");

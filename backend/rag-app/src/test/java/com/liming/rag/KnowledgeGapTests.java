@@ -6,9 +6,10 @@ import static org.mockito.Mockito.when;
 
 import com.liming.rag.ai.EmbeddingClient;
 import com.liming.rag.ai.ModelCallException;
-import com.liming.rag.answering.api.Answer;
-import com.liming.rag.answering.api.Citation;
+import com.liming.rag.answering.application.Answer;
 import com.liming.rag.answering.application.AnswerLogService;
+import com.liming.rag.answering.domain.Citation;
+import com.liming.rag.answering.domain.RefusalReason;
 import com.liming.rag.shared.TenantId;
 import com.liming.rag.shared.UserId;
 import java.util.List;
@@ -95,7 +96,7 @@ class KnowledgeGapTests {
         jdbc.update("UPDATE answer_record SET created_at = now() - interval '40 days' WHERE id = ?",
                 refuse("很久以前的问题"));
         log.record(new TenantId(2), new UserId(9), "门店几点打烊",
-                Answer.refused(Answer.RefusalReason.NO_EVIDENCE, null, "拒答"));
+                Answer.refused(RefusalReason.NO_EVIDENCE, null, "拒答"));
 
         var report = http.getForObject("/api/answers/gaps?days=30&status=all", Map.class);
 
@@ -204,7 +205,7 @@ class KnowledgeGapTests {
 
     private long refuse(String question) {
         return log.record(TENANT, new UserId(1), question,
-                Answer.refused(Answer.RefusalReason.LOW_RELEVANCE, 0.01, "拒答")).id();
+                Answer.refused(RefusalReason.LOW_RELEVANCE, 0.01, "拒答")).id();
     }
 
     private int staffSequence;

@@ -20,9 +20,7 @@ interface AnswerRecordMapper {
             @Param("documentId") long documentId, @Param("documentName") String documentName,
             @Param("headingPath") String headingPath);
 
-    Map<String, Object> find(@Param("tenantId") long tenantId, @Param("id") long id);
-
-    List<Map<String, Object>> answers(@Param("tenantId") long tenantId, @Param("ids") Collection<Long> ids);
+    List<Map<String, Object>> records(@Param("tenantId") long tenantId, @Param("ids") Collection<Long> ids);
 
     List<Map<String, Object>> citations(@Param("tenantId") long tenantId, @Param("ids") Collection<Long> ids);
 

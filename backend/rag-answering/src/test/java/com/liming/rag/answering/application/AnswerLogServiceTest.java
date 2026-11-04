@@ -4,8 +4,8 @@ import static com.liming.rag.answering.application.InMemoryAnswering.TENANT;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.liming.rag.answering.api.Answer;
 import com.liming.rag.answering.domain.AnswerRecord;
+import com.liming.rag.answering.domain.RefusalReason;
 import com.liming.rag.shared.UserId;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
@@ -110,7 +110,7 @@ class AnswerLogServiceTest {
     }
 
     private static Answer refused() {
-        return Answer.refused(Answer.RefusalReason.NO_EVIDENCE, null, TestSettings.RETAIL_REFUSAL);
+        return Answer.refused(RefusalReason.NO_EVIDENCE, null, TestSettings.RETAIL_REFUSAL);
     }
 
     private static void assertReason(ThrowingCallable call, AnsweringException.Reason reason) {

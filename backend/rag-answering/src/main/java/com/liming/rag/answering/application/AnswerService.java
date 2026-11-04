@@ -2,9 +2,8 @@ package com.liming.rag.answering.application;
 
 import com.liming.rag.ai.ChatGateway;
 import com.liming.rag.ai.RerankClient;
-import com.liming.rag.answering.api.Answer.RefusalReason;
-import com.liming.rag.answering.api.Answer;
 import com.liming.rag.answering.domain.CitationParser;
+import com.liming.rag.answering.domain.RefusalReason;
 import com.liming.rag.knowledge.api.KnowledgeSearch;
 import com.liming.rag.settings.api.AnsweringSettings;
 import com.liming.rag.shared.TenantId;

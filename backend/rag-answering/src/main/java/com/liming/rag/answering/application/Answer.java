@@ -1,9 +1,13 @@
-package com.liming.rag.answering.api;
+package com.liming.rag.answering.application;
 
+import com.liming.rag.answering.domain.AnswerRecord;
+import com.liming.rag.answering.domain.Citation;
+import com.liming.rag.answering.domain.RefusalReason;
 import java.util.List;
 
 /**
- * 一次问答的结果。拒答时 {@code text} 是给用户看的说明，{@code citations} 为空。
+ * 一次问答的结果，问答接口原样返回给前端。拒答时 {@code text} 是给用户看的说明，{@code citations} 为空。
+ * 记进回答记录的部分见 {@link #reply()}；改写情况和各阶段耗时只用于评测和排查（评测从流式接口的 done 事件读取）。
  *
  * @param id 回答记录的标识，用于点赞点踩；记录之前为 null
  * @param topRelevance 重排后最高的相关度分数，没有检索结果时为 null；用于评测时校准拒答门槛
@@ -50,17 +54,6 @@ public record Answer(Long id, String text, boolean refused, RefusalReason refusa
             Long rewriteMillis) {
     }
 
-    public enum RefusalReason {
-        /** 指定知识库里没有检索到任何内容。 */
-        NO_EVIDENCE,
-        /** 检索到的内容与问题相关度都低于阈值。 */
-        LOW_RELEVANCE,
-        /** 模型判断资料不足以回答。 */
-        MODEL_DECLINED,
-        /** 模型给出的回答没有可核对的引用。 */
-        UNCITED
-    }
-
     public static Answer answered(String text, List<Citation> citations, double topRelevance) {
         return new Answer(null, text, false, null, List.copyOf(citations), topRelevance, null, null);
     }
@@ -90,5 +83,17 @@ public record Answer(Long id, String text, boolean refused, RefusalReason refusa
     /** 改写后的问题；没有改写时为 null。 */
     public String rewrittenQuestion() {
         return rewrite == null ? null : rewrite.question();
+    }
+
+    /** 记进回答记录的部分：文字、是否拒答、引用、相关度和改写后的问题；耗时只用于评测，不记。 */
+    public AnswerRecord.Reply reply() {
+        return new AnswerRecord.Reply(text, refused, refusalReason, citations, topRelevance, rewrittenQuestion());
+    }
+
+    /** 回答记录里当时的回答，供会话展示历史；不带改写和耗时。 */
+    public static Answer of(AnswerRecord record) {
+        var reply = record.reply();
+        return new Answer(record.id(), reply.text(), reply.refused(), reply.refusalReason(), reply.citations(),
+                reply.topRelevance(), null, null);
     }
 }

@@ -3,14 +3,14 @@ package com.liming.rag.answering.domain;
 import com.liming.rag.shared.AggregateRoot;
 import com.liming.rag.shared.TenantId;
 import com.liming.rag.shared.UserId;
+import java.util.List;
 import java.util.Objects;
 
 /**
- * 回答记录聚合：一次问答的结果、提问人给它的评价，以及管理员的处理状态。问题、回答、引用写入后不再变；
- * 评价和处理状态可以改。
+ * 回答记录聚合：一次问答的问题和回答（{@link Reply}）、实际检索的知识库、提问人给它的评价，以及管理员的处理状态。
+ * 问题、回答、引用、检索范围写入后不再变；评价和处理状态可以改（#136：新建也经过聚合，加载时带全部字段）。
  *
- * <p>只有提问人本人能评价，别人的评价会被拒绝。处理只有管理员能做，角色由接口层的 Sa-Token 注解校验。
- * 仓储只加载评价和处理相关的字段。
+ * <p>只有提问人本人能评价，别人的评价会被拒绝。处理只有管理员能做，权限点由接口层的 Sa-Token 注解校验。
  */
 public final class AnswerRecord implements AggregateRoot {
 
@@ -28,6 +28,22 @@ public final class AnswerRecord implements AggregateRoot {
         RESOLVED
     }
 
+    /**
+     * 当时给员工的回答。拒答时 {@code text} 是拒答话术，{@code citations} 为空。
+     *
+     * @param citations 引用的出处；原文不存在这里，展示时按当前授权读取（D-036）
+     * @param topRelevance 重排后最高的相关度分数，没有检索结果时为 null
+     * @param rewrittenQuestion 低分时改写后的问题，没有改写时为 null
+     */
+    public record Reply(String text, boolean refused, RefusalReason refusalReason, List<Citation> citations,
+            Double topRelevance, String rewrittenQuestion) {
+
+        public Reply {
+            Objects.requireNonNull(text, "回答不能为空");
+            citations = List.copyOf(citations);
+        }
+    }
+
     /** 评价人不是提问人。对外按“回答不存在”处理，不暴露别人的回答是否存在。 */
     public static final class NotAskerException extends RuntimeException {
 
@@ -36,37 +52,57 @@ public final class AnswerRecord implements AggregateRoot {
         }
     }
 
-    private final long id;
+    private final Long id;
     private final TenantId tenantId;
     private final UserId asker;
     private final String question;
+    private final Reply reply;
+    private final List<Long> knowledgeBaseIds;
     private Rating rating;
     private String comment;
     private ReviewStatus reviewStatus;
     private String resolutionNote;
     private UserId resolvedBy;
 
-    private AnswerRecord(long id, TenantId tenantId, UserId asker, String question, Rating rating, String comment,
-            ReviewStatus reviewStatus, String resolutionNote) {
+    private AnswerRecord(Long id, TenantId tenantId, UserId asker, String question, Reply reply,
+            List<Long> knowledgeBaseIds, Rating rating, String comment, ReviewStatus reviewStatus,
+            String resolutionNote, UserId resolvedBy) {
         this.id = id;
         this.tenantId = Objects.requireNonNull(tenantId);
         this.asker = Objects.requireNonNull(asker);
-        this.question = question;
+        this.question = Objects.requireNonNull(question);
+        this.reply = Objects.requireNonNull(reply);
+        this.knowledgeBaseIds = List.copyOf(knowledgeBaseIds);
         this.rating = rating;
         this.comment = comment;
         this.reviewStatus = Objects.requireNonNull(reviewStatus);
         this.resolutionNote = resolutionNote;
+        this.resolvedBy = resolvedBy;
     }
 
-    /** 仓储从数据库恢复聚合时使用，只关心评价时用这个。 */
-    public static AnswerRecord restore(long id, TenantId tenantId, UserId asker, Rating rating, String comment) {
-        return restore(id, tenantId, asker, null, rating, comment, ReviewStatus.OPEN, null);
+    /**
+     * 记下一次问答：还没有评价，待处理。
+     *
+     * @param knowledgeBaseIds 这次实际检索的知识库（D-047）；为空表示所选的库都已收回授权
+     */
+    public static AnswerRecord record(TenantId tenantId, UserId asker, String question, Reply reply,
+            List<Long> knowledgeBaseIds) {
+        return new AnswerRecord(null, tenantId, asker, question.strip(), reply, knowledgeBaseIds, null, null,
+                ReviewStatus.OPEN, null, null);
     }
 
-    /** 仓储从数据库恢复聚合时使用，带上问题和处理状态。 */
-    public static AnswerRecord restore(long id, TenantId tenantId, UserId asker, String question, Rating rating,
-            String comment, ReviewStatus reviewStatus, String resolutionNote) {
-        return new AnswerRecord(id, tenantId, asker, question, rating, comment, reviewStatus, resolutionNote);
+    /** 仓储从数据库恢复聚合时使用，不做业务校验。 */
+    public static AnswerRecord restore(long id, TenantId tenantId, UserId asker, String question, Reply reply,
+            List<Long> knowledgeBaseIds, Rating rating, String comment, ReviewStatus reviewStatus,
+            String resolutionNote, UserId resolvedBy) {
+        return new AnswerRecord(id, tenantId, asker, question, reply, knowledgeBaseIds, rating, comment, reviewStatus,
+                resolutionNote, resolvedBy);
+    }
+
+    /** 新建后由仓储回填标识。 */
+    public AnswerRecord withId(long newId) {
+        return new AnswerRecord(newId, tenantId, asker, question, reply, knowledgeBaseIds, rating, comment,
+                reviewStatus, resolutionNote, resolvedBy);
     }
 
     /**
@@ -117,7 +153,8 @@ public final class AnswerRecord implements AggregateRoot {
         return value.isEmpty() ? null : value;
     }
 
-    public long id() {
+    /** 新建、还没保存时为 null。 */
+    public Long id() {
         return id;
     }
 
@@ -125,9 +162,22 @@ public final class AnswerRecord implements AggregateRoot {
         return tenantId;
     }
 
-    /** 员工原来的问题；只按评价加载时为 null。 */
+    public UserId asker() {
+        return asker;
+    }
+
+    /** 员工原来的问题。 */
     public String question() {
         return question;
+    }
+
+    public Reply reply() {
+        return reply;
+    }
+
+    /** 这次实际检索的知识库。 */
+    public List<Long> knowledgeBaseIds() {
+        return knowledgeBaseIds;
     }
 
     public Rating rating() {

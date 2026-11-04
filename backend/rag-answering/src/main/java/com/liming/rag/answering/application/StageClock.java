@@ -1,6 +1,5 @@
 package com.liming.rag.answering.application;
 
-import com.liming.rag.answering.api.Answer;
 
 /** 一次问答各阶段结束的时刻；首字只记第一次。评测报告的分段计时来自这里（D-021）。 */
 final class StageClock {

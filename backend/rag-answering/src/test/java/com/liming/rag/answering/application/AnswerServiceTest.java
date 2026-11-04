@@ -4,8 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.liming.rag.ai.ChatGateway;
-import com.liming.rag.answering.api.Answer.RefusalReason;
-import com.liming.rag.answering.api.Answer;
+import com.liming.rag.answering.domain.RefusalReason;
+import com.liming.rag.answering.domain.RefusalReason;
 import com.liming.rag.knowledge.api.SearchHit;
 import com.liming.rag.shared.ErrorKind;
 import com.liming.rag.shared.TenantId;

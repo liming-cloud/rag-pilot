@@ -16,14 +16,11 @@
         VALUES (#{answerId}, #{index}, #{chunkId}, #{documentId}, #{documentName}, #{headingPath})
     </insert>
 
-    <select id="find" resultType="map">
-        SELECT id, tenant_id, user_id, question, rating, feedback_comment, review_status, resolution_note
-        FROM answer_record
-        WHERE tenant_id = #{tenantId} AND id = #{id}
-    </select>
-
-    <select id="answers" resultType="map">
-        SELECT id, answer_text, refused, refusal_reason, top_relevance
+    <!-- 回答记录的全部字段，加载聚合用（#136）。 -->
+    <select id="records" resultType="map">
+        SELECT id, tenant_id, user_id, question, answer_text, refused, refusal_reason, top_relevance,
+               rewritten_question, knowledge_base_ids, rating, feedback_comment, review_status, resolution_note,
+               resolved_by
         FROM answer_record
         WHERE tenant_id = #{tenantId}
           AND id IN <foreach collection="ids" item="id" open="(" separator="," close=")">#{id}</foreach>

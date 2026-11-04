@@ -1,6 +1,6 @@
 package com.liming.rag.answering.application;
 
-import com.liming.rag.answering.api.Citation;
+import com.liming.rag.answering.domain.Citation;
 import com.liming.rag.knowledge.api.SearchHit;
 import java.util.HashMap;
 import org.springframework.ai.document.Document;

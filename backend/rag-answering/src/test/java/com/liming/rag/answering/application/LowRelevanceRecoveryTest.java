@@ -2,7 +2,7 @@ package com.liming.rag.answering.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.liming.rag.answering.api.Answer.Rewrite.Outcome;
+import com.liming.rag.answering.application.Answer.Rewrite.Outcome;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;

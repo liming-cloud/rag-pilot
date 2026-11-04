@@ -2,8 +2,8 @@ package com.liming.rag.answering.web;
 
 import cn.dev33.satoken.annotation.SaCheckLogin;
 import cn.dev33.satoken.annotation.SaCheckPermission;
-import com.liming.rag.answering.api.Answer;
 import com.liming.rag.answering.api.AnsweringPermissions;
+import com.liming.rag.answering.application.Answer;
 import com.liming.rag.answering.application.AnswerLogService;
 import com.liming.rag.answering.application.AnswerReview;
 import com.liming.rag.answering.application.AnswerService;

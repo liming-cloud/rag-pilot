@@ -1,4 +1,4 @@
-package com.liming.rag.answering.api;
+package com.liming.rag.answering.domain;
 
 /**
  * 回答中 [index] 对应的出处。

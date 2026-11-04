@@ -4,8 +4,7 @@ import static com.liming.rag.answering.application.InMemoryAnswering.TENANT;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.liming.rag.answering.api.Answer;
-import com.liming.rag.answering.api.Citation;
+import com.liming.rag.answering.domain.Citation;
 import com.liming.rag.answering.domain.Conversation;
 import com.liming.rag.answering.domain.ConversationTurn;
 import com.liming.rag.shared.UserId;

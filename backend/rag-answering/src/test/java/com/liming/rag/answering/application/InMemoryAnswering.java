@@ -2,7 +2,6 @@ package com.liming.rag.answering.application;
 
 import com.liming.rag.ai.EmbeddingClient;
 import com.liming.rag.ai.ModelCallException;
-import com.liming.rag.answering.api.Answer;
 import com.liming.rag.answering.domain.AnswerRecord;
 import com.liming.rag.answering.domain.AnswerRecordRepository;
 import com.liming.rag.answering.domain.Conversation;
@@ -30,7 +29,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.function.Function;
 
 /**
  * answering 应用服务单元测试用的内存实现：会话（带版本号和主线末尾，口径同 {@code MybatisConversationRepository}）、
@@ -130,59 +128,55 @@ final class InMemoryAnswering {
         }
     }
 
-    /** 回答记录：问答本身、评价和处理状态。 */
+    /** 回答记录：按聚合存，评价和处理状态分开保存，口径同 {@code MybatisAnswerRecordRepository}。 */
     static final class Records implements AnswerRecordRepository {
 
-        record Row(long id, TenantId tenantId, UserId asker, String question, Answer answer,
-                List<Long> knowledgeBaseIds, AnswerRecord.Rating rating, String comment,
-                AnswerRecord.ReviewStatus reviewStatus, String resolutionNote, UserId resolvedBy) {
-        }
-
-        final Map<Long, Row> rows = new LinkedHashMap<>();
+        final Map<Long, AnswerRecord> rows = new LinkedHashMap<>();
         private final AtomicLong ids = new AtomicLong(200);
         int reviewSaves;
 
         @Override
-        public long record(TenantId tenantId, UserId asker, String question, Answer answer,
-                List<Long> knowledgeBaseIds) {
-            long id = ids.incrementAndGet();
-            rows.put(id, new Row(id, tenantId, asker, question, answer, List.copyOf(knowledgeBaseIds), null, null,
-                    AnswerRecord.ReviewStatus.OPEN, null, null));
-            return id;
+        public AnswerRecord add(AnswerRecord record) {
+            var saved = record.withId(ids.incrementAndGet());
+            rows.put(saved.id(), copy(saved));
+            return saved;
         }
 
         @Override
         public Optional<AnswerRecord> find(TenantId tenantId, long id) {
             return Optional.ofNullable(rows.get(id)).filter(row -> row.tenantId().equals(tenantId))
-                    .map(row -> AnswerRecord.restore(row.id(), row.tenantId(), row.asker(), row.question(),
-                            row.rating(), row.comment(), row.reviewStatus(), row.resolutionNote()));
+                    .map(Records::copy);
         }
 
         @Override
-        public Map<Long, Answer> answers(TenantId tenantId, Collection<Long> ids) {
-            var result = new HashMap<Long, Answer>();
-            ids.stream().filter(rows::containsKey)
-                    .forEach(id -> result.put(id, rows.get(id).answer().withId(id)));
+        public Map<Long, AnswerRecord> findAll(TenantId tenantId, Collection<Long> ids) {
+            var result = new HashMap<Long, AnswerRecord>();
+            ids.forEach(id -> find(tenantId, id).ifPresent(record -> result.put(id, record)));
             return result;
         }
 
         @Override
         public void saveFeedback(AnswerRecord record) {
-            update(record.id(), row -> new Row(row.id(), row.tenantId(), row.asker(), row.question(), row.answer(),
-                    row.knowledgeBaseIds(), record.rating(), record.comment(), row.reviewStatus(),
+            var row = rows.get(record.id());
+            rows.put(record.id(), AnswerRecord.restore(row.id(), row.tenantId(), row.asker(), row.question(),
+                    row.reply(), row.knowledgeBaseIds(), record.rating(), record.comment(), row.reviewStatus(),
                     row.resolutionNote(), row.resolvedBy()));
         }
 
         @Override
         public void saveReview(AnswerRecord record) {
             reviewSaves++;
-            update(record.id(), row -> new Row(row.id(), row.tenantId(), row.asker(), row.question(), row.answer(),
-                    row.knowledgeBaseIds(), row.rating(), row.comment(), record.reviewStatus(),
+            var row = rows.get(record.id());
+            rows.put(record.id(), AnswerRecord.restore(row.id(), row.tenantId(), row.asker(), row.question(),
+                    row.reply(), row.knowledgeBaseIds(), row.rating(), row.comment(), record.reviewStatus(),
                     record.resolutionNote(), record.resolvedBy()));
         }
 
-        private void update(long id, Function<Row, Row> change) {
-            rows.put(id, change.apply(rows.get(id)));
+        /** 每次都按库里的状态重新恢复一个聚合，不共享对象。 */
+        private static AnswerRecord copy(AnswerRecord row) {
+            return AnswerRecord.restore(row.id(), row.tenantId(), row.asker(), row.question(), row.reply(),
+                    row.knowledgeBaseIds(), row.rating(), row.comment(), row.reviewStatus(), row.resolutionNote(),
+                    row.resolvedBy());
         }
     }
 

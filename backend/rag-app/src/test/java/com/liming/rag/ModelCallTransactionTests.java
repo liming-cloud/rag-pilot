@@ -8,10 +8,11 @@ import static org.mockito.Mockito.doAnswer;
 import com.liming.rag.ai.EmbeddingClient;
 import com.liming.rag.ai.ModelProbe;
 import com.liming.rag.ai.ModelUsage;
-import com.liming.rag.answering.api.Answer;
+import com.liming.rag.answering.application.Answer;
 import com.liming.rag.answering.application.AnswerLogService;
 import com.liming.rag.answering.application.KnowledgeGapService;
 import com.liming.rag.answering.application.UsageReportService;
+import com.liming.rag.answering.domain.RefusalReason;
 import com.liming.rag.knowledge.api.KnowledgeSearch;
 import com.liming.rag.knowledge.api.SearchQuery;
 import com.liming.rag.settings.application.ModelSettingsService;
@@ -106,7 +107,7 @@ class ModelCallTransactionTests {
     @DisplayName("知识缺口、运营概览归类时的向量化不在事务里")
     void embedsGapQuestionsOutsideTransactions() {
         var admin = admin();
-        answers.record(TENANT, admin, "冷柜温度要多少？", Answer.refused(Answer.RefusalReason.NO_EVIDENCE, null, "答不上来"));
+        answers.record(TENANT, admin, "冷柜温度要多少？", Answer.refused(RefusalReason.NO_EVIDENCE, null, "答不上来"));
 
         gaps.report(TENANT, 7, "all");
         usage.usage(TENANT, 7, null);

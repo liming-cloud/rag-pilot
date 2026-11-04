@@ -1,8 +1,7 @@
 package com.liming.rag.answering.application;
 
-import com.liming.rag.answering.api.Answer;
-import com.liming.rag.answering.api.Citation;
 import com.liming.rag.answering.domain.AnswerRecordRepository;
+import com.liming.rag.answering.domain.Citation;
 import com.liming.rag.answering.domain.Conversation;
 import com.liming.rag.answering.domain.ConversationRepository;
 import com.liming.rag.answering.domain.ConversationTurn;
@@ -74,8 +73,7 @@ public class ConversationService {
                 .map(kb -> new ConversationViews.KnowledgeBaseOption(kb, names.get(kb), accessible.contains(kb)))
                 .toList();
         var turns = conversations.mainLine(id);
-        var recorded = answers.answers(tenantId, turns.stream().map(ConversationTurn::answerRecordId)
-                .filter(Objects::nonNull).toList());
+        var recorded = recordedAnswers(tenantId, turns);
         var chunkIds = recorded.values().stream().flatMap(answer -> answer.citations().stream())
                 .map(Citation::chunkId).collect(Collectors.toSet());
         var excerpts = search.excerpts(tenantId, userId, chunkIds);
@@ -134,8 +132,7 @@ public class ConversationService {
         }
         var mainLine = conversations.mainLine(id);
         var history = replacesTurnId == null ? mainLine : mainLine.subList(0, mainLine.size() - 1);
-        var recorded = answers.answers(tenantId, history.stream().map(ConversationTurn::answerRecordId)
-                .filter(Objects::nonNull).toList());
+        var recorded = recordedAnswers(tenantId, history);
         var entries = history.stream()
                 .map(turn -> new ConversationHistory.Entry(turn.question(),
                         turn.answerRecordId() == null ? null : recorded.get(turn.answerRecordId())))
@@ -223,6 +220,14 @@ public class ConversationService {
             throw notFound();
         }
         return conversation;
+    }
+
+    /** 这些轮次当时的回答，按回答记录 id。 */
+    private Map<Long, Answer> recordedAnswers(TenantId tenantId, List<ConversationTurn> turns) {
+        var ids = turns.stream().map(ConversationTurn::answerRecordId).filter(Objects::nonNull).toList();
+        var answers = new HashMap<Long, Answer>();
+        this.answers.findAll(tenantId, ids).forEach((id, record) -> answers.put(id, Answer.of(record)));
+        return answers;
     }
 
     /** 引用原文按当前授权补上；授权已收回或文档已删时为 null。 */

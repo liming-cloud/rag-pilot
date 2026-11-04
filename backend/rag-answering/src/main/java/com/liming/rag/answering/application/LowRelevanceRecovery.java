@@ -1,7 +1,6 @@
 package com.liming.rag.answering.application;
 
-import com.liming.rag.answering.api.Answer.Rewrite.Outcome;
-import com.liming.rag.answering.api.Answer;
+import com.liming.rag.answering.application.Answer.Rewrite.Outcome;
 import java.util.List;
 import java.util.function.Consumer;
 import org.springframework.ai.document.Document;
