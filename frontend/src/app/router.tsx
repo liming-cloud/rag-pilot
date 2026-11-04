@@ -4,9 +4,9 @@ import { ChangePasswordPage } from "@/features/auth/ChangePasswordPage";
 import { LoginPage } from "@/features/auth/LoginPage";
 import { ChatPage } from "@/features/chat/ChatPage";
 import { getToken } from "@/lib/auth";
+import { type Permission, PERMISSIONS } from "@/lib/permissions";
 import { AdminLayout } from "./AdminLayout";
 import { AdminHome, AppShell, RequirePasswordChanged, RequirePermission } from "./AppShell";
-import { type Permission, PERMISSIONS } from "@/lib/permissions";
 
 /** 没有令牌时先去登录；令牌过期由 authFetch 收到 401 时处理。管理员重置过密码时先去改密码。 */
 function RequireAuth({ children }: { children: ReactNode }) {

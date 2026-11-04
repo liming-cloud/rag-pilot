@@ -4,9 +4,9 @@ import { Button } from "@/components/ui/button";
 import { DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { ErrorMessage } from "@/lib/errors";
 import { ACCEPT } from "./batchUpload";
 import { type KnowledgeDocument, knowledgeKeys, updateValidity, type ValidityRange } from "./api";
-import { ErrorMessage } from "@/lib/errors";
 
 /** 表格里显示的有效期，分成“某日起”“至某日”两段，窄屏时各占一行而不是把日期从中间折断。 */
 export function rangeParts({ effectiveFrom, expiresOn }: ValidityRange): string[] {

@@ -2,14 +2,23 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { ChevronRight, Download, Printer } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { fetchExpirySummary, knowledgeKeys } from "@/features/knowledge/api";
 import { ErrorMessage } from "@/lib/errors";
 import { Can, PERMISSIONS, useCan } from "@/lib/permissions";
-import { exportUsageCsv, fetchUsageStats, RANGES, recentWeeks, statsKeys, type StatsPeriod, type Totals, type UsageStats, zoneLabel } from "./api";
+import {
+  exportUsageCsv,
+  fetchUsageStats,
+  RANGES,
+  recentWeeks,
+  statsKeys,
+  type StatsPeriod,
+  type Totals,
+  type UsageStats,
+  zoneLabel,
+} from "./api";
+import { ExpirySection } from "./ExpirySection";
+import { DailyTable, Ranking, percent } from "./StatsTables";
 
 const REASONS: Record<string, string> = {
   NO_EVIDENCE: "知识库里没有内容",
@@ -17,9 +26,6 @@ const REASONS: Record<string, string> = {
   MODEL_DECLINED: "模型判断资料不足",
   UNCITED: "回答没有可核对的引用",
 };
-
-/** 运营概览上列出的到期资料份数，其余到知识库里看。 */
-const EXPIRY_ROWS = 5;
 
 /**
  * 运营概览（管理端首页）：员工用得怎么样、哪些资料该补、哪些资料该更新，供试点汇报和补文档参考。
@@ -231,132 +237,4 @@ function rateChange(current: Totals, previous: Totals, parts: (totals: Totals) =
   if (whole === 0 || previousWhole === 0) return "上周无可比数据";
   const delta = ((part / whole - previousPart / previousWhole) * 100).toFixed(1);
   return `比上周 ${Number(delta) > 0 ? "+" : ""}${delta} 个百分点`;
-}
-
-/**
- * 资料有效期（#124、#125）：有知识库权限时显示即将到期和已失效的文档数，列出最早到期的几份，周报里一起打印。
- * 都没有时不占位置。
- */
-function ExpirySection() {
-  const canView = useCan(PERMISSIONS.KB_VIEW);
-  const summary = useQuery({
-    queryKey: knowledgeKeys.expirySummary,
-    queryFn: fetchExpirySummary,
-    enabled: canView,
-  });
-  if (!summary.data || summary.data.expiring + summary.data.expired === 0) return null;
-  const { expiring, expired, warningDays, documents } = summary.data;
-  const total = expiring + expired;
-  return (
-    <section
-      aria-label="资料有效期"
-      className="flex flex-col gap-2 rounded-lg border bg-card p-3 text-sm print:break-inside-avoid"
-    >
-      <div role="status" className="flex flex-wrap items-center gap-x-3 gap-y-1">
-        <span className="font-medium">资料有效期</span>
-        {expiring > 0 && (
-          <span>
-            {expiring} 份将在 {warningDays} 天内到期
-          </span>
-        )}
-        {expired > 0 && <span className="text-destructive">{expired} 份已失效，不再参与回答</span>}
-        <Link to="/admin/knowledge" className="ml-auto inline-flex items-center hover:underline print:hidden">
-          去知识库处理
-          <ChevronRight aria-hidden="true" className="size-4" />
-        </Link>
-      </div>
-      <ul className="flex flex-col gap-1">
-        {documents.slice(0, EXPIRY_ROWS).map((document) => (
-          <li key={document.documentId} className="flex flex-wrap items-center gap-x-2">
-            <Badge variant={document.validity === "EXPIRED" ? "destructive" : "default"}>
-              {document.validity === "EXPIRED" ? "已失效" : "即将到期"}
-            </Badge>
-            <Link
-              to={`/admin/knowledge/${document.knowledgeBaseId}?validity=${document.validity}`}
-              className="wrap-anywhere hover:underline"
-            >
-              {document.filename}
-            </Link>
-            <span className="text-muted-foreground">
-              {document.knowledgeBaseName} · {document.validity === "EXPIRED" ? "失效于" : "到期"} {document.expiresOn}
-            </span>
-          </li>
-        ))}
-      </ul>
-      {total > EXPIRY_ROWS && (
-        <p className="text-xs text-muted-foreground">还有 {total - EXPIRY_ROWS} 份，到知识库里查看。</p>
-      )}
-    </section>
-  );
-}
-
-/** 每日提问、拒答、差评。条形长度按这段时间里单日最多的提问数换算。 */
-function DailyTable({ daily }: { daily: UsageStats["daily"] }) {
-  const max = Math.max(1, ...daily.map((day) => day.questions));
-  return (
-    <section className="flex flex-col gap-2">
-      <h2 className="text-lg font-medium">每日趋势</h2>
-      <div className="max-h-96 overflow-y-auto rounded-lg border bg-card print:max-h-none print:overflow-visible">
-        <Table aria-label="每日趋势">
-          <TableHeader className="sticky top-0 bg-card">
-            <TableRow>
-              <TableHead>日期</TableHead>
-              <TableHead className="w-1/2">提问</TableHead>
-              <TableHead className="text-right">拒答</TableHead>
-              <TableHead className="text-right">差评</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {daily.map((day) => (
-              <TableRow key={day.date}>
-                <TableCell className="tabular-nums">{day.date.slice(5)}</TableCell>
-                <TableCell>
-                  <div className="flex items-center gap-2">
-                    <div className="h-2 flex-1 overflow-hidden rounded-sm bg-secondary">
-                      <div className="h-full bg-primary" style={{ width: `${(day.questions / max) * 100}%` }} />
-                    </div>
-                    <span className="w-8 text-right tabular-nums">{day.questions}</span>
-                  </div>
-                </TableCell>
-                <TableCell className="text-right tabular-nums">{day.refused}</TableCell>
-                <TableCell className="text-right tabular-nums">{day.disliked}</TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </div>
-    </section>
-  );
-}
-
-function Ranking({ title, rows, to }: { title: string; rows: { label: string; count: number }[]; to?: string }) {
-  return (
-    <section className="flex flex-col gap-2 print:break-inside-avoid">
-      <h2 className="flex items-center text-lg font-medium">
-        {title}
-        {to && (
-          <Link to={to} className="ml-auto inline-flex items-center text-sm font-normal hover:underline print:hidden">
-            查看全部
-            <ChevronRight aria-hidden="true" className="size-4" />
-          </Link>
-        )}
-      </h2>
-      {rows.length === 0 ? (
-        <p className="text-sm text-muted-foreground">没有。</p>
-      ) : (
-        <ol className="flex flex-col divide-y rounded-lg border bg-card text-sm">
-          {rows.map((row) => (
-            <li key={row.label} className="flex items-start gap-3 px-3 py-2">
-              <span className="min-w-0 flex-1 break-words">{row.label}</span>
-              <span className="shrink-0 tabular-nums text-muted-foreground">{row.count} 次</span>
-            </li>
-          ))}
-        </ol>
-      )}
-    </section>
-  );
-}
-
-function percent(part: number, whole: number) {
-  return whole > 0 ? `${((part / whole) * 100).toFixed(1)}%` : "-";
 }

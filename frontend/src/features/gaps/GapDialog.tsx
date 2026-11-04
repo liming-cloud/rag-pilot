@@ -8,8 +8,8 @@ import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ErrorMessage } from "@/lib/errors";
 import { Can, PERMISSIONS } from "@/lib/permissions";
-import { type GapGroup, gapKeys, recheckGap, resolveGap } from "./api";
 import { answerKeys } from "@/features/answers/api";
+import { type GapGroup, gapKeys, recheckGap, resolveGap } from "./api";
 
 /**
  * 一类缺口的详情：类里的原始记录（时间、提问人、原文、类型、留言、状态）；用代表问题重新回答，确认补的资料生效后

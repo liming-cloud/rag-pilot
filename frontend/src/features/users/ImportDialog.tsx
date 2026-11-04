@@ -9,10 +9,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import type { Role } from "@/features/roles/api";
-import { checkImport, type ImportProblem, type ImportRow, importUsers, userKeys } from "./api";
-import { decode, MAX_ROWS, readBytes, template, toRows } from "./csv";
 import { roleKeys } from "@/features/roles/api";
 import { ErrorMessage } from "@/lib/errors";
+import { checkImport, type ImportProblem, type ImportRow, importUsers, userKeys } from "./api";
+import { decode, MAX_ROWS, readBytes, template, toRows } from "./csv";
 
 type Stage =
   | { kind: "choose"; error: string | null }

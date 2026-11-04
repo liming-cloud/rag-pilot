@@ -1,27 +1,25 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowUp, Loader2, Pencil, RotateCcw, Square, X } from "lucide-react";
 import { type FormEvent, type ReactNode, useEffect, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router";
+import { useParams } from "react-router";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { fetchKnowledgeBases, knowledgeKeys } from "@/features/knowledge/api";
-import { askInConversation, chatKeys, type Conversation, type ConversationKnowledgeBase, createConversation, DEFAULT_CHAT_TEXTS, fetchChatTexts, fetchConversation, stopTurn, type Turn, updateConversation } from "./api";
+import { ErrorMessage } from "@/lib/errors";
+import {
+  chatKeys,
+  type ConversationKnowledgeBase,
+  DEFAULT_CHAT_TEXTS,
+  fetchChatTexts,
+  fetchConversation,
+  type Turn,
+  updateConversation,
+} from "./api";
 import { AnswerCard } from "./AnswerCard";
 import { ConversationSidebar } from "./ConversationSidebar";
 import { KnowledgeBasePicker } from "./KnowledgeBasePicker";
-import { ErrorMessage } from "@/lib/errors";
-
-/** 正在生成的一轮。replacesTurnId 有值时是重新生成或修改问题，生成期间先不显示被替换的那一轮。 */
-type Live = {
-  conversationId: number;
-  question: string;
-  replacesTurnId?: number;
-  turnId?: number;
-  status: string;
-  text: string;
-  failed?: boolean;
-};
+import { type Live, useConversationAsk } from "./useConversationAsk";
 
 /**
  * 员工端问答页（PC）：左侧会话列表，右侧对话。参考对话 agent 的做法（D-036）：会话存在服务端、可以持续追问；
@@ -41,7 +39,6 @@ export function ChatPage() {
 
 function ConversationView({ conversationId }: { conversationId: number | null }) {
   const queryClient = useQueryClient();
-  const navigate = useNavigate();
   const knowledgeBases = useQuery({ queryKey: knowledgeKeys.all, queryFn: fetchKnowledgeBases });
   const texts =
     useQuery({ queryKey: chatKeys.texts, queryFn: fetchChatTexts, staleTime: 5 * 60 * 1000 }).data ??
@@ -54,7 +51,6 @@ function ConversationView({ conversationId }: { conversationId: number | null })
   const [draft, setDraft] = useState("");
   /** 正在修改的那一轮；记下所属会话，切换会话后不带过去。 */
   const [editing, setEditing] = useState<{ conversationId: number | null; turnId: number } | null>(null);
-  const [live, setLive] = useState<Live | null>(null);
   /** 新对话还没建会话时的知识库选择；null 表示默认全选。 */
   const [newSelection, setNewSelection] = useState<number[] | null>(null);
   /** 哪个会话在有问答之后改过知识库，用来提示“从下一个问题起生效”。 */
@@ -70,8 +66,7 @@ function ConversationView({ conversationId }: { conversationId: number | null })
         .filter((knowledgeBase) => knowledgeBase.accessible)
         .map((knowledgeBase) => knowledgeBase.id)
     : (newSelection ?? accessible.map((knowledgeBase) => knowledgeBase.id));
-  const asking = live !== null && live.conversationId === conversationId && !live.failed;
-  const visibleLive = live && live.conversationId === conversationId ? live : null;
+  const { live: visibleLive, asking, ask: askInThis, stop } = useConversationAsk(conversationId, selected, options);
   const turns = (conversation.data?.turns ?? []).filter((turn) => turn.id !== visibleLive?.replacesTurnId);
   const lastTurn = turns.at(-1);
   const endRef = useRef<HTMLDivElement>(null);
@@ -92,49 +87,10 @@ function ConversationView({ conversationId }: { conversationId: number | null })
     void queryClient.invalidateQueries({ queryKey: chatKeys.conversations });
   }
 
-  async function ask(question: string, replacesTurnId?: number) {
-    let id = conversationId;
-    if (id === null) {
-      const created = await createConversation(selected);
-      id = created.id;
-      queryClient.setQueryData<Conversation>(["conversation", id], {
-        id,
-        title: created.title,
-        lastAskedAt: created.lastAskedAt,
-        knowledgeBases: options.filter((option) => created.knowledgeBaseIds.includes(option.id)),
-        turns: [],
-      });
-      void navigate(`/chat/${id}`);
-    }
-    const target = id;
+  /** 提问之后不再提示“改选的知识库从下一个问题起生效”。 */
+  function ask(question: string, replacesTurnId?: number) {
     setSelectionChangedIn(null);
-    setLive({ conversationId: target, question, replacesTurnId, status: "正在准备…", text: "" });
-    const update = (change: Partial<Live>) =>
-      setLive((current) => (current && current.conversationId === target ? { ...current, ...change } : current));
-    try {
-      const turn = await askInConversation(
-        target,
-        { question, replacesTurnId },
-        {
-          onTurn: (turnId) => update({ turnId }),
-          onStatus: (status) => update({ status }),
-          onDelta: (delta) =>
-            setLive((current) =>
-              current && current.conversationId === target ? { ...current, text: current.text + delta } : current,
-            ),
-        },
-      );
-      queryClient.setQueryData<Conversation>(["conversation", target], (current) =>
-        current
-          ? { ...current, turns: [...current.turns.filter((candidate) => candidate.id !== replacesTurnId), turn] }
-          : current,
-      );
-      setLive((current) => (current?.conversationId === target ? null : current));
-      // 标题在第一轮回答后由后台生成，列表顺序也变了，重新读一次列表；这一轮的结果已写进会话缓存，不必重读详情。
-      void queryClient.invalidateQueries({ queryKey: chatKeys.conversations });
-    } catch {
-      update({ failed: true });
-    }
+    return askInThis(question, replacesTurnId);
   }
 
   function submit(event: FormEvent) {
@@ -150,12 +106,6 @@ function ConversationView({ conversationId }: { conversationId: number | null })
   function startEditing(turn: Turn) {
     setEditing({ conversationId, turnId: turn.id });
     setDraft(turn.question);
-  }
-
-  async function stop() {
-    if (live?.turnId !== undefined && conversationId !== null) {
-      await stopTurn(conversationId, live.turnId).catch(() => undefined);
-    }
   }
 
   const empty = turns.length === 0 && !visibleLive;

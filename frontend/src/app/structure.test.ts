@@ -145,6 +145,14 @@ describe("前端目录结构", () => {
     expect(permissionLiteralProblems("mocks/identity.ts", '"kb:view"', codes)).toEqual([]);
   });
 
+  it("组件文件不超过 300 行，超过时把对话框、分区拆到同目录的文件里（#145）", () => {
+    const tooLong = walk(src)
+      .filter((file) => /\.tsx$/.test(file) && !/\.test\.tsx$/.test(file) && !file.includes(`${path.sep}components${path.sep}`))
+      .map((file) => [path.relative(src, file), readFileSync(file, "utf8").split("\n").length] as const)
+      .filter(([, lines]) => lines > 300);
+    expect(tooLong).toEqual([]);
+  });
+
   it("查询键只在各 api.ts 里定义", () => {
     const problems = walk(src)
       .filter((file) => /\.tsx?$/.test(file))

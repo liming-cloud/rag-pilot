@@ -10,7 +10,16 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { ErrorMessage } from "@/lib/errors";
 import { Can, PERMISSIONS, useCan } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
-import { createRole, deleteRole, fetchPermissionCatalog, fetchRoles, type PermissionGroup, type Role, roleKeys, updateRole } from "./api";
+import {
+  createRole,
+  deleteRole,
+  fetchPermissionCatalog,
+  fetchRoles,
+  type PermissionGroup,
+  type Role,
+  roleKeys,
+  updateRole,
+} from "./api";
 
 /**
  * 角色与权限（D-038、D-039）：左边选角色。右边默认只读，每个菜单一行，只列出这个角色有的权限；

@@ -82,6 +82,7 @@
 
 - `app/`：路由、布局；`components/ui/`：只放 shadcn 生成的组件；`lib/`：通用工具与请求封装；`mocks/`：MSW 假接口；`styles/`：`tokens.css`；`test/`：测试初始化。
 - `features/<领域>/`：页面（`XxxPage.tsx`）、`api.ts`（接口调用和类型）、子组件，测试与源文件同目录。feature 之间只能引用对方的 `api.ts`，不引用 `app/`。
+- 前端写法（#145，`structure.test.ts` 检查）：查询键定义在各 feature 的 `api.ts`（`xxxKeys`），页面不现场写 `queryKey: [...]`；出错提示用 `lib/errors.tsx` 的 `ErrorMessage`（带 `role="alert"`）；判断权限用 `lib/permissions.tsx` 的 `PERMISSIONS` 常量；组件文件不超过 300 行，对话框、分区拆到同目录；复杂的交互逻辑抽成 hook 单独测试（如问答页的 `useConversationAsk`）。
 
 ## 测试
 
