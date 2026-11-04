@@ -101,7 +101,7 @@ public class ConversationAskService {
      */
     public ConversationViews.Turn run(Pending pending, Events events) {
         try {
-            Answer answer;
+            AskResult answer;
             try {
                 answer = answer(pending, events);
             } catch (ModelCallException e) {
@@ -130,7 +130,7 @@ public class ConversationAskService {
         stops.stop(conversationId, turnId);
     }
 
-    private Answer answer(Pending pending, Events events) {
+    private AskResult answer(Pending pending, Events events) {
         var context = pending.context();
         if (context.knowledgeBaseIds().isEmpty()) {
             return answers.refusal(RefusalReason.NO_EVIDENCE, null);
@@ -148,7 +148,7 @@ public class ConversationAskService {
         if (plan.smallTalk()) {
             var reply = smallTalk(pending.question());
             events.onDelta().accept(reply);
-            return Answer.smallTalk(reply);
+            return AskResult.smallTalk(reply);
         }
         var request = new AnswerService.AskRequest(pending.tenantId(), pending.userId(), context.knowledgeBaseIds(),
                 pending.question(), plan.queries(), generationHistory);
@@ -196,7 +196,7 @@ public class ConversationAskService {
         }
     }
 
-    private ConversationViews.Turn record(Pending pending, ConversationTurn.Status status, Answer answer) {
+    private ConversationViews.Turn record(Pending pending, ConversationTurn.Status status, AskResult answer) {
         return conversations.recordTurn(pending.tenantId(), pending.userId(), pending.conversationId(),
                 pending.turnId(), pending.question(), status, answer, pending.context().knowledgeBaseIds(),
                 pending.replacesTurnId());

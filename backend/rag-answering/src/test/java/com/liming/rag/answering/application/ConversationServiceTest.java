@@ -83,7 +83,7 @@ class ConversationServiceTest {
     @DisplayName("一轮接一轮：回答记录记下这一轮实际检索的库；第一次提问时标题用问题截断；主线按接上的先后排列")
     void recordsTurnsOnMainLine() {
         long id = service.create(TENANT, OWNER, null).id();
-        var answer = Answer.answered("青柚在 A 区[1]。", List.of(citation()), 0.9);
+        var answer = AskResult.answered("青柚在 A 区[1]。", List.of(citation()), 0.9);
 
         var first = service.prepareTurn(TENANT, OWNER, id, null);
         assertThat(first.firstTurn()).isTrue();
@@ -134,7 +134,7 @@ class ConversationServiceTest {
         fixture.conversations.staleUpdates = 1;
 
         assertReason(() -> service.recordTurn(TENANT, OWNER, id, 11, "青柚在哪？", ConversationTurn.Status.ANSWERED,
-                Answer.answered("A 区[1]。", List.of(citation()), 0.9), List.of(STORE), null),
+                AskResult.answered("A 区[1]。", List.of(citation()), 0.9), List.of(STORE), null),
                 AnsweringException.Reason.CONFLICT);
         assertThat(fixture.conversations.turns).isEmpty();
     }
@@ -145,7 +145,7 @@ class ConversationServiceTest {
         long id = service.create(TENANT, OWNER, null).id();
         fixture.access.excerpts.put(100L, "青柚陈列在 A 区。");
         service.recordTurn(TENANT, OWNER, id, 11, "青柚在哪？", ConversationTurn.Status.ANSWERED,
-                Answer.answered("A 区[1]。", List.of(citation()), 0.9), List.of(STORE, GOODS), null);
+                AskResult.answered("A 区[1]。", List.of(citation()), 0.9), List.of(STORE, GOODS), null);
         assertThat(service.detail(TENANT, OWNER, id).turns().getFirst().answer().citations().getFirst().excerpt())
                 .isEqualTo("青柚陈列在 A 区。");
 
@@ -181,7 +181,7 @@ class ConversationServiceTest {
     void deleteKeepsAnswerRecords() {
         long id = service.create(TENANT, OWNER, null).id();
         service.recordTurn(TENANT, OWNER, id, 11, "青柚在哪？", ConversationTurn.Status.ANSWERED,
-                Answer.answered("A 区[1]。", List.of(citation()), 0.9), List.of(STORE), null);
+                AskResult.answered("A 区[1]。", List.of(citation()), 0.9), List.of(STORE), null);
 
         service.delete(TENANT, OWNER, id);
 

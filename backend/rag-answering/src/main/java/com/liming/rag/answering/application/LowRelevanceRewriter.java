@@ -2,7 +2,7 @@ package com.liming.rag.answering.application;
 
 import com.liming.rag.ai.ChatGateway;
 import com.liming.rag.settings.api.IndustryPack;
-import com.liming.rag.answering.application.Answer.Rewrite.Outcome;
+import com.liming.rag.answering.application.AskResult.Rewrite.Outcome;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;

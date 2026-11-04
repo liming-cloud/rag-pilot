@@ -6,7 +6,8 @@ import com.liming.rag.answering.domain.RefusalReason;
 import java.util.List;
 
 /**
- * 一次问答的结果，问答接口原样返回给前端。拒答时 {@code text} 是给用户看的说明，{@code citations} 为空。
+ * 一次提问的用例结果（#136：不是聚合，回答记录才是），问答接口原样返回给前端。领域里的“回答”是
+ * {@link AnswerRecord.Reply}。拒答时 {@code text} 是给用户看的说明，{@code citations} 为空。
  * 记进回答记录的部分见 {@link #reply()}；改写情况和各阶段耗时只用于评测和排查（评测从流式接口的 done 事件读取）。
  *
  * @param id 回答记录的标识，用于点赞点踩；记录之前为 null
@@ -14,7 +15,7 @@ import java.util.List;
  * @param rewrite 低分时的改写情况，没有走到改写这一步时为 null
  * @param timings 各阶段耗时，用于评测和排查延迟
  */
-public record Answer(Long id, String text, boolean refused, RefusalReason refusalReason, List<Citation> citations,
+public record AskResult(Long id, String text, boolean refused, RefusalReason refusalReason, List<Citation> citations,
         Double topRelevance, Rewrite rewrite, Timings timings) {
 
     /**
@@ -54,30 +55,30 @@ public record Answer(Long id, String text, boolean refused, RefusalReason refusa
             Long rewriteMillis) {
     }
 
-    public static Answer answered(String text, List<Citation> citations, double topRelevance) {
-        return new Answer(null, text, false, null, List.copyOf(citations), topRelevance, null, null);
+    public static AskResult answered(String text, List<Citation> citations, double topRelevance) {
+        return new AskResult(null, text, false, null, List.copyOf(citations), topRelevance, null, null);
     }
 
     /** 寒暄的回复（D-036）：没有检索、没有引用，也不含事实内容。 */
-    public static Answer smallTalk(String text) {
-        return new Answer(null, text, false, null, List.of(), null, null, null);
+    public static AskResult smallTalk(String text) {
+        return new AskResult(null, text, false, null, List.of(), null, null, null);
     }
 
     /** 拒答：{@code text} 是给员工看的拒答话术，由系统设置提供（D-045）。 */
-    public static Answer refused(RefusalReason reason, Double topRelevance, String text) {
-        return new Answer(null, text, true, reason, List.of(), topRelevance, null, null);
+    public static AskResult refused(RefusalReason reason, Double topRelevance, String text) {
+        return new AskResult(null, text, true, reason, List.of(), topRelevance, null, null);
     }
 
-    public Answer withId(long newId) {
-        return new Answer(newId, text, refused, refusalReason, citations, topRelevance, rewrite, timings);
+    public AskResult withId(long newId) {
+        return new AskResult(newId, text, refused, refusalReason, citations, topRelevance, rewrite, timings);
     }
 
-    public Answer withTimings(Timings newTimings) {
-        return new Answer(id, text, refused, refusalReason, citations, topRelevance, rewrite, newTimings);
+    public AskResult withTimings(Timings newTimings) {
+        return new AskResult(id, text, refused, refusalReason, citations, topRelevance, rewrite, newTimings);
     }
 
-    public Answer withRewrite(Rewrite newRewrite) {
-        return new Answer(id, text, refused, refusalReason, citations, topRelevance, newRewrite, timings);
+    public AskResult withRewrite(Rewrite newRewrite) {
+        return new AskResult(id, text, refused, refusalReason, citations, topRelevance, newRewrite, timings);
     }
 
     /** 改写后的问题；没有改写时为 null。 */
@@ -91,9 +92,9 @@ public record Answer(Long id, String text, boolean refused, RefusalReason refusa
     }
 
     /** 回答记录里当时的回答，供会话展示历史；不带改写和耗时。 */
-    public static Answer of(AnswerRecord record) {
+    public static AskResult of(AnswerRecord record) {
         var reply = record.reply();
-        return new Answer(record.id(), reply.text(), reply.refused(), reply.refusalReason(), reply.citations(),
+        return new AskResult(record.id(), reply.text(), reply.refused(), reply.refusalReason(), reply.citations(),
                 reply.topRelevance(), null, null);
     }
 }

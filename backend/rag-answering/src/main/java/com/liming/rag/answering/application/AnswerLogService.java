@@ -107,7 +107,7 @@ public class AnswerLogService {
 
     /** 记下一次问答，返回带 id 的回答；没点名知识库，检索的是提问人能访问的全部知识库。 */
     @Transactional
-    public Answer record(TenantId tenantId, UserId asker, String question, Answer answer) {
+    public AskResult record(TenantId tenantId, UserId asker, String question, AskResult answer) {
         return record(tenantId, asker, question, answer, List.of());
     }
 
@@ -118,7 +118,7 @@ public class AnswerLogService {
      * @param requested 员工点名的知识库，可以为空
      */
     @Transactional
-    public Answer record(TenantId tenantId, UserId asker, String question, Answer answer, List<Long> requested) {
+    public AskResult record(TenantId tenantId, UserId asker, String question, AskResult answer, List<Long> requested) {
         return recordSearched(tenantId, asker, question, answer, access.scope(tenantId, asker, requested));
     }
 
@@ -126,7 +126,7 @@ public class AnswerLogService {
      * 记下一次问答，{@code searched} 是已经按权限算好的实际检索范围（会话提问时由会话给出，为空表示所选的库都已收回授权）。
      */
     @Transactional
-    public Answer recordSearched(TenantId tenantId, UserId asker, String question, Answer answer,
+    public AskResult recordSearched(TenantId tenantId, UserId asker, String question, AskResult answer,
             List<Long> searched) {
         var saved = records.add(AnswerRecord.record(tenantId, asker, question, answer.reply(), List.copyOf(searched)));
         return answer.withId(saved.id());

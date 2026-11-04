@@ -34,7 +34,7 @@ import org.springframework.stereotype.Service;
  * 重排后都低于门槛时，先把问题改写一次再检索（{@link LowRelevanceRecovery}，可用 {@code rag.answering.rewrite-on-low-relevance} 关闭）。
  * 配置见 {@link AnsweringProperties}。
  *
- * <p>流式问答时，生成中的文字先流给用户，最终以返回的 {@link Answer} 为准：引用校验不通过时它是拒答，
+ * <p>流式问答时，生成中的文字先流给用户，最终以返回的 {@link AskResult} 为准：引用校验不通过时它是拒答，
  * 调用方要用它替换已流出的文字。模型回复 NO_ANSWER 时一个字也不流出。
  *
  * <p>提示词开头的角色、引用示例和拒答话术来自行业包和系统设置（D-045）；检索前用行业词表扩展检索用的问题
@@ -98,7 +98,7 @@ public class AnswerService {
     /**
      * @param knowledgeBaseIds 想缩小到的知识库，可以为空；只会在提问人是成员的知识库里检索
      */
-    public Answer ask(TenantId tenantId, UserId userId, List<Long> knowledgeBaseIds, String question) {
+    public AskResult ask(TenantId tenantId, UserId userId, List<Long> knowledgeBaseIds, String question) {
         return ask(tenantId, userId, knowledgeBaseIds, question, delta -> {
         });
     }
@@ -106,7 +106,7 @@ public class AnswerService {
     /**
      * 流式问答：生成中的文字交给 {@code onDelta}，返回值是最终结果。检索阶段就拒答时不会调用 {@code onDelta}。
      */
-    public Answer ask(TenantId tenantId, UserId userId, List<Long> knowledgeBaseIds, String question,
+    public AskResult ask(TenantId tenantId, UserId userId, List<Long> knowledgeBaseIds, String question,
             Consumer<String> onDelta) {
         return ask(tenantId, userId, knowledgeBaseIds, question, onDelta, status -> {
         });
@@ -117,7 +117,7 @@ public class AnswerService {
      * 这个入口不推“正在检索资料…”“正在整理答案…”两个阶段状态：评测按 /api/ask/stream 的第一个事件计首字，
      * 保持口径不变；阶段状态只在会话提问里推（D-036）。
      */
-    public Answer ask(TenantId tenantId, UserId userId, List<Long> knowledgeBaseIds, String question,
+    public AskResult ask(TenantId tenantId, UserId userId, List<Long> knowledgeBaseIds, String question,
             Consumer<String> onDelta, Consumer<String> onStatus) {
         Consumer<String> withoutStages = status -> {
             if (!SEARCHING_STATUS.equals(status) && !GENERATING_STATUS.equals(status)) {
@@ -132,7 +132,7 @@ public class AnswerService {
      * 按检索规划提问（会话用）。{@code stop} 完成后不再生成：生成前就停止时不调用模型，返回的结果由调用方丢弃；
      * 生成中停止时返回已生成部分的校验结果。
      */
-    public Answer ask(AskRequest request, Consumer<String> onDelta, Consumer<String> onStatus, CompletionStage<?> stop) {
+    public AskResult ask(AskRequest request, Consumer<String> onDelta, Consumer<String> onStatus, CompletionStage<?> stop) {
         var text = request.question() == null ? "" : request.question().strip();
         if (text.isEmpty() || text.length() > MAX_QUESTION_LENGTH) {
             throw new AnsweringException(AnsweringException.Reason.INVALID,
@@ -156,7 +156,7 @@ public class AnswerService {
                 request.knowledgeBaseIds());
         var ranked = rerank(queries, candidates);
         clock.reranked();
-        Answer.Rewrite rewrite = null;
+        AskResult.Rewrite rewrite = null;
         if (evidence(ranked).isEmpty() && rewriteOnLowRelevance) {
             var recovered = recovery.recover(query, ranked, clock, onStatus);
             ranked = recovered.ranked();
@@ -204,7 +204,7 @@ public class AnswerService {
     }
 
     /** 生成并校验引用：模型拒答、去掉标记后为空或没有有效引用都按拒答处理。 */
-    private Answer generate(Query query, List<Document> evidence, double topRelevance, StageClock clock,
+    private AskResult generate(Query query, List<Document> evidence, double topRelevance, StageClock clock,
             Consumer<String> onDelta, CompletionStage<?> stop) {
         var prompt = augmenter.augment(query, evidence).text();
         var gate = new NoAnswerGate(onDelta, clock::firstToken);
@@ -223,12 +223,12 @@ public class AnswerService {
         var citations = parsed.cited().stream()
                 .map(index -> Evidence.citation(index, evidence.get(index - 1)))
                 .toList();
-        return Answer.answered(parsed.text(), citations, topRelevance);
+        return AskResult.answered(parsed.text(), citations, topRelevance);
     }
 
     /** 拒答，话术用系统设置里当前的（D-045）。 */
-    public Answer refusal(RefusalReason reason, Double topRelevance) {
-        return Answer.refused(reason, topRelevance, settings.refusalMessage());
+    public AskResult refusal(RefusalReason reason, Double topRelevance) {
+        return AskResult.refused(reason, topRelevance, settings.refusalMessage());
     }
 
     /** 重排后达到门槛的前几条。 */
@@ -239,7 +239,7 @@ public class AnswerService {
                 .toList();
     }
 
-    private static Answer finish(Answer answer, StageClock clock, Answer.Rewrite rewrite) {
+    private static AskResult finish(AskResult answer, StageClock clock, AskResult.Rewrite rewrite) {
         return answer.withRewrite(rewrite).withTimings(clock.timings());
     }
 }

@@ -39,10 +39,10 @@ final class StageClock {
         firstToken();
     }
 
-    Answer.Timings timings() {
+    AskResult.Timings timings() {
         // 生成从重排结束（有改写时从改写结束）开始算。
         long generationStart = rewriteFinished == 0 ? reranked : rewriteFinished;
-        return new Answer.Timings(millis(start, retrieved), reranked == 0 ? null : millis(retrieved, reranked),
+        return new AskResult.Timings(millis(start, retrieved), reranked == 0 ? null : millis(retrieved, reranked),
                 firstToken == 0 ? null : millis(generationStart, firstToken),
                 generated == 0 ? null : millis(generationStart, generated),
                 rewriteFinished == 0 ? null : millis(rewriteStarted, rewriteFinished));

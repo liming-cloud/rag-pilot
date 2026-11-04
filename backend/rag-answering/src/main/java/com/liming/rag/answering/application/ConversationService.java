@@ -158,7 +158,7 @@ public class ConversationService {
      */
     @Transactional
     ConversationViews.Turn recordTurn(TenantId tenantId, UserId userId, long id, long turnId, String question,
-            ConversationTurn.Status status, Answer answer, List<Long> knowledgeBaseIds, Long replacesTurnId) {
+            ConversationTurn.Status status, AskResult answer, List<Long> knowledgeBaseIds, Long replacesTurnId) {
         var conversation = owned(tenantId, userId, id);
         var recorded = answer == null ? null
                 : log.recordSearched(tenantId, userId, question, answer, knowledgeBaseIds);
@@ -223,15 +223,15 @@ public class ConversationService {
     }
 
     /** 这些轮次当时的回答，按回答记录 id。 */
-    private Map<Long, Answer> recordedAnswers(TenantId tenantId, List<ConversationTurn> turns) {
+    private Map<Long, AskResult> recordedAnswers(TenantId tenantId, List<ConversationTurn> turns) {
         var ids = turns.stream().map(ConversationTurn::answerRecordId).filter(Objects::nonNull).toList();
-        var answers = new HashMap<Long, Answer>();
-        this.answers.findAll(tenantId, ids).forEach((id, record) -> answers.put(id, Answer.of(record)));
+        var answers = new HashMap<Long, AskResult>();
+        this.answers.findAll(tenantId, ids).forEach((id, record) -> answers.put(id, AskResult.of(record)));
         return answers;
     }
 
     /** 引用原文按当前授权补上；授权已收回或文档已删时为 null。 */
-    private static Answer withExcerpts(Answer answer, Map<Long, String> excerpts) {
+    private static AskResult withExcerpts(AskResult answer, Map<Long, String> excerpts) {
         if (answer == null) {
             return null;
         }
@@ -239,7 +239,7 @@ public class ConversationService {
                 .map(citation -> new Citation(citation.index(), citation.chunkId(), citation.documentId(),
                         citation.documentName(), citation.headingPath(), excerpts.get(citation.chunkId())))
                 .toList();
-        return new Answer(answer.id(), answer.text(), answer.refused(), answer.refusalReason(), citations,
+        return new AskResult(answer.id(), answer.text(), answer.refused(), answer.refusalReason(), citations,
                 answer.topRelevance(), null, null);
     }
 

@@ -109,8 +109,8 @@ class AnswerLogServiceTest {
         assertReason(() -> service.review(TENANT, "all", "all", 91, null, 1, 20), AnsweringException.Reason.INVALID);
     }
 
-    private static Answer refused() {
-        return Answer.refused(RefusalReason.NO_EVIDENCE, null, TestSettings.RETAIL_REFUSAL);
+    private static AskResult refused() {
+        return AskResult.refused(RefusalReason.NO_EVIDENCE, null, TestSettings.RETAIL_REFUSAL);
     }
 
     private static void assertReason(ThrowingCallable call, AnsweringException.Reason reason) {

@@ -23,7 +23,7 @@ public final class ConversationViews {
      *
      * @param answer 停止时没留下可核对的内容、或出错时为 null
      */
-    public record Turn(long id, String question, ConversationTurn.Status status, Answer answer,
+    public record Turn(long id, String question, ConversationTurn.Status status, AskResult answer,
             List<Long> knowledgeBaseIds, Instant askedAt) {
     }
 

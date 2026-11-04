@@ -134,8 +134,8 @@ class KnowledgeGapServiceTest {
                 refused ? List.of() : List.of("陈列规范"), status, knowledgeBaseIds);
     }
 
-    private static Answer refused() {
-        return Answer.refused(RefusalReason.NO_EVIDENCE, null, TestSettings.RETAIL_REFUSAL);
+    private static AskResult refused() {
+        return AskResult.refused(RefusalReason.NO_EVIDENCE, null, TestSettings.RETAIL_REFUSAL);
     }
 
     private static void assertReason(ThrowingCallable call, AnsweringException.Reason reason) {

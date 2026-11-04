@@ -6,7 +6,7 @@ import static org.mockito.Mockito.when;
 
 import com.liming.rag.ai.EmbeddingClient;
 import com.liming.rag.ai.ModelCallException;
-import com.liming.rag.answering.application.Answer;
+import com.liming.rag.answering.application.AskResult;
 import com.liming.rag.answering.application.AnswerLogService;
 import com.liming.rag.answering.domain.Citation;
 import com.liming.rag.answering.domain.RefusalReason;
@@ -88,15 +88,15 @@ class KnowledgeGapTests {
         long resolved = refuse("营业到几点");
         log.markReview(TENANT, new UserId(1), resolved, "RESOLVED", "已补营业时间");
         long disliked = log.record(TENANT, new UserId(2), "餐补怎么报销",
-                Answer.answered("按月报销[1]", List.of(new Citation(1, 1, 1, "员工手册.md", "餐补", "摘录")), 0.8)).id();
+                AskResult.answered("按月报销[1]", List.of(new Citation(1, 1, 1, "员工手册.md", "餐补", "摘录")), 0.8)).id();
         log.rate(TENANT, new UserId(2), disliked, "DOWN", "流程不对");
         refuse("冷柜坏了找谁修");
         // 不该算：答上了且没被点踩、范围外、别的租户。
-        log.record(TENANT, new UserId(1), "营业到几点", Answer.answered("到 22 点[1]", List.of(), 0.9));
+        log.record(TENANT, new UserId(1), "营业到几点", AskResult.answered("到 22 点[1]", List.of(), 0.9));
         jdbc.update("UPDATE answer_record SET created_at = now() - interval '40 days' WHERE id = ?",
                 refuse("很久以前的问题"));
         log.record(new TenantId(2), new UserId(9), "门店几点打烊",
-                Answer.refused(RefusalReason.NO_EVIDENCE, null, "拒答"));
+                AskResult.refused(RefusalReason.NO_EVIDENCE, null, "拒答"));
 
         var report = http.getForObject("/api/answers/gaps?days=30&status=all", Map.class);
 
@@ -205,7 +205,7 @@ class KnowledgeGapTests {
 
     private long refuse(String question) {
         return log.record(TENANT, new UserId(1), question,
-                Answer.refused(RefusalReason.LOW_RELEVANCE, 0.01, "拒答")).id();
+                AskResult.refused(RefusalReason.LOW_RELEVANCE, 0.01, "拒答")).id();
     }
 
     private int staffSequence;

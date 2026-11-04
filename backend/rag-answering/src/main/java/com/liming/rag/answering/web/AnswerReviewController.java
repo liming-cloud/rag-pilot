@@ -3,7 +3,7 @@ package com.liming.rag.answering.web;
 import cn.dev33.satoken.annotation.SaCheckLogin;
 import cn.dev33.satoken.annotation.SaCheckPermission;
 import com.liming.rag.answering.api.AnsweringPermissions;
-import com.liming.rag.answering.application.Answer;
+import com.liming.rag.answering.application.AskResult;
 import com.liming.rag.answering.application.AnswerLogService;
 import com.liming.rag.answering.application.AnswerReview;
 import com.liming.rag.answering.application.AnswerService;
@@ -126,7 +126,7 @@ class AnswerReviewController {
      */
     @SaCheckPermission(AnsweringPermissions.ANSWER_RECHECK)
     @PostMapping("/{answerId}/recheck")
-    Answer recheck(@PathVariable long answerId) {
+    AskResult recheck(@PathVariable long answerId) {
         var question = log.questionOf(currentUser.tenantId(), answerId);
         return answers.ask(currentUser.tenantId(), currentUser.userId(), null, question);
     }

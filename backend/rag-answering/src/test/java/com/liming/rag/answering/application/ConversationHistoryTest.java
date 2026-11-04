@@ -10,7 +10,7 @@ import org.junit.jupiter.api.Test;
 class ConversationHistoryTest {
 
     private static ConversationHistory.Entry answered(String question, String text) {
-        return new ConversationHistory.Entry(question, Answer.answered(text, List.of(), 0.9));
+        return new ConversationHistory.Entry(question, AskResult.answered(text, List.of(), 0.9));
     }
 
     @Test
@@ -25,7 +25,7 @@ class ConversationHistoryTest {
     @DisplayName("拒答的轮次只带问题和一句说明，不带拒答话术；停止或出错的轮次也只带问题")
     void refusedTurnsKeepOnlyQuestion() {
         var history = ConversationHistory.of(List.of(
-                new ConversationHistory.Entry("年假怎么请？", Answer.refused(RefusalReason.LOW_RELEVANCE, 0.01, TestSettings.RETAIL_REFUSAL)),
+                new ConversationHistory.Entry("年假怎么请？", AskResult.refused(RefusalReason.LOW_RELEVANCE, 0.01, TestSettings.RETAIL_REFUSAL)),
                 new ConversationHistory.Entry("那病假呢？", null)), 6, 3000);
 
         assertThat(history.text()).isEqualTo("员工：年假怎么请？\n助手：（这一轮没有找到依据）\n员工：那病假呢？\n助手：（这一轮没有结果）");

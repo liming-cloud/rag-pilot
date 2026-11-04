@@ -2,7 +2,7 @@ package com.liming.rag.answering.web;
 
 import cn.dev33.satoken.annotation.SaCheckLogin;
 import cn.dev33.satoken.annotation.SaCheckPermission;
-import com.liming.rag.answering.application.Answer;
+import com.liming.rag.answering.application.AskResult;
 import com.liming.rag.answering.application.AnswerLogService;
 import com.liming.rag.answering.application.AnswerService;
 import com.liming.rag.identity.api.CurrentUser;
@@ -54,7 +54,7 @@ class AskController {
     }
 
     @PostMapping
-    Answer ask(@RequestBody AskRequest request) {
+    AskResult ask(@RequestBody AskRequest request) {
         var tenantId = currentUser.tenantId();
         var userId = currentUser.userId();
         var answer = answers.ask(tenantId, userId, request.knowledgeBaseIds(), request.question());
@@ -62,7 +62,7 @@ class AskController {
     }
 
     /**
-     * 流式问答（SSE）。事件依次是若干 {@code delta}（{"text": 片段}）和一个 {@code done}（完整的 Answer）；
+     * 流式问答（SSE）。事件依次是若干 {@code delta}（{"text": 片段}）和一个 {@code done}（完整的 AskResult）；
      * {@code done} 是最终结果，拒答时客户端要用它替换已显示的文字。出错时发 {@code error}（{"code", "detail"}，code 与 HTTP 接口的错误码相同）。
      * 处理中的状态（如低分时“换个说法再找找…”）发 {@code status}（{"text": 提示}）。
      */

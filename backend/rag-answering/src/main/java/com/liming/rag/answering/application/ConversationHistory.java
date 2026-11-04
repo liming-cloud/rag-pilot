@@ -15,7 +15,7 @@ record ConversationHistory(String text) {
     /**
      * @param answer 这一轮的回答；停止时没留下内容、或出错时为 null
      */
-    record Entry(String question, Answer answer) {
+    record Entry(String question, AskResult answer) {
     }
 
     static ConversationHistory empty() {
@@ -50,7 +50,7 @@ record ConversationHistory(String text) {
         return "员工：" + entry.question().strip() + "\n助手：" + reply(entry.answer());
     }
 
-    private static String reply(Answer answer) {
+    private static String reply(AskResult answer) {
         if (answer == null) {
             return "（这一轮没有结果）";
         }
