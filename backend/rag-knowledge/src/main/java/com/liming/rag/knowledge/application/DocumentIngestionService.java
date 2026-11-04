@@ -1,93 +1,70 @@
 package com.liming.rag.knowledge.application;
 
+import com.liming.rag.knowledge.application.KnowledgeQueries.DocumentRow;
 import com.liming.rag.knowledge.domain.Document;
 import com.liming.rag.knowledge.domain.DocumentRepository;
+import com.liming.rag.knowledge.domain.UploadedFile;
 import com.liming.rag.knowledge.domain.Validity;
 import com.liming.rag.shared.TenantId;
 import com.liming.rag.shared.UserId;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
-import java.util.HexFormat;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 文档入库：校验、存原文件、解析、分块、写入分块。
- *
- * <p>支持 UTF-8 的 TXT、Markdown，以及 PDF、Word（.docx）、Excel（.xlsx / .xls）。上传只做校验、存文件、记录文档，
+ * 文档入库：校验、存原文件、记录文档。文件能不能收下由 {@link UploadedFile} 判断（类型、大小、文件名）；
  * 读取、分块、向量化由 {@link IngestionWorker} 在后台按 {@link IngestionPipeline} 完成。
+ * 返回给管理端的是 {@link DocumentRow}，不带聚合。
  */
 @Service
 public class DocumentIngestionService {
-
-    /** 单个文件上限 50 MB，与 multipart 配置一致。 */
-    public static final long MAX_SIZE_BYTES = 50L * 1024 * 1024;
-
-    private static final Map<String, String> SUPPORTED_TYPES = Map.of(
-            "txt", "text/plain",
-            "md", "text/markdown",
-            "markdown", "text/markdown",
-            "pdf", "application/pdf",
-            "docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-            "xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            "xls", "application/vnd.ms-excel");
 
     private final KnowledgeBaseService knowledgeBases;
     private final DocumentRepository documents;
     private final FileStorage storage;
     private final ApplicationEventPublisher events;
     private final DocumentRemover remover;
+    private final DocumentCalendar calendar;
 
     DocumentIngestionService(KnowledgeBaseService knowledgeBases, DocumentRepository documents,
-            FileStorage storage, ApplicationEventPublisher events, DocumentRemover remover) {
+            FileStorage storage, ApplicationEventPublisher events, DocumentRemover remover, DocumentCalendar calendar) {
         this.knowledgeBases = knowledgeBases;
         this.documents = documents;
         this.storage = storage;
         this.events = events;
         this.remover = remover;
+        this.calendar = calendar;
     }
 
     /**
      * 上传一份文档；{@code replacesDocumentId} 不为空时作为该文档的新版本，解析成功后替换它，失败时旧版本保留。
      * 有效期（D-046）：日期为 yyyy-MM-dd，空串表示不限；不传（null）时新文档长期有效，新版本继承旧版本的失效日期。
      *
-     * 格式不支持、重复上传会直接拒绝；返回的文档状态是“解析中”。内容问题（编码不对、没有文字、文件损坏）在后台处理时
+     * <p>格式不支持、重复上传会直接拒绝；返回的文档状态是“解析中”。内容问题（编码不对、没有文字、文件损坏）在后台处理时
      * 发现，保存为失败文档，让管理员在列表里看到原因。
      *
      * @param actor 操作人：只能往自己能管理的库里上传（#135）
-     * @throws KnowledgeException 库不存在或操作人不能管理它、要替换的文档不在这个知识库里时为 NOT_FOUND；日期不合法时为 INVALID
+     * @throws KnowledgeException 库不存在或操作人不能管理它、要替换的文档不在这个知识库里时为 NOT_FOUND；
+     *         日期不合法、文件不合格时为 INVALID；类型不支持时为 UNSUPPORTED_TYPE；重复上传时为 CONFLICT
      */
     @Transactional
-    public Document ingest(TenantId tenantId, UserId actor, long knowledgeBaseId, String filename, byte[] content,
+    public DocumentRow ingest(TenantId tenantId, UserId actor, long knowledgeBaseId, String filename, byte[] content,
             Long replacesDocumentId, String effectiveFrom, String expiresOn) {
         var knowledgeBase = knowledgeBases.getManageable(tenantId, actor, knowledgeBaseId);
-        var previous = replacesDocumentId == null ? null : documents.find(tenantId, replacesDocumentId)
-                .filter(old -> old.knowledgeBaseId() == knowledgeBaseId)
-                .orElseThrow(() -> new KnowledgeException(KnowledgeException.Reason.NOT_FOUND, "要替换的文档不存在"));
+        var previous = replacesDocumentId == null ? null : inKnowledgeBase(tenantId, knowledgeBaseId,
+                replacesDocumentId, "要替换的文档不存在");
         var inheritedExpiry = previous == null ? null : previous.validity().expiresOn();
         var validity = validity(date(effectiveFrom, null), date(expiresOn, inheritedExpiry));
-        var mediaType = mediaTypeOf(filename);
-        if (content.length == 0) {
-            throw new KnowledgeException(KnowledgeException.Reason.INVALID, "文件是空的");
-        }
-        if (content.length > MAX_SIZE_BYTES) {
-            throw new KnowledgeException(KnowledgeException.Reason.INVALID, "单个文件不能超过 50 MB");
-        }
-        var sha256 = sha256(content);
-        if (documents.existsInKnowledgeBase(knowledgeBase.id(), sha256)) {
+        var file = uploaded(filename, content);
+        if (documents.existsInKnowledgeBase(knowledgeBase.id(), file.sha256())) {
             throw duplicate(filename);
         }
 
-        storage.store(tenantId, sha256, content);
-        var document = Document.received(tenantId, knowledgeBase.id(), filename, mediaType, sha256, content.length,
-                replacesDocumentId, validity);
+        storage.store(tenantId, file.sha256(), content);
+        var document = Document.received(tenantId, knowledgeBase.id(), file, replacesDocumentId, validity);
         try {
             documents.save(document);
         } catch (DuplicateKeyException e) {
@@ -97,7 +74,7 @@ public class DocumentIngestionService {
 
         // 解析、分块、向量化在事务提交后由后台完成，上传请求只返回“解析中”的文档。
         events.publishEvent(new DocumentReceived(tenantId, document.id()));
-        return document;
+        return row(document);
     }
 
     /**
@@ -108,9 +85,8 @@ public class DocumentIngestionService {
     @Transactional
     public void delete(TenantId tenantId, UserId actor, long knowledgeBaseId, long documentId) {
         knowledgeBases.getManageable(tenantId, actor, knowledgeBaseId);
-        var inKnowledgeBase = documents.find(tenantId, documentId)
-                .filter(document -> document.knowledgeBaseId() == knowledgeBaseId).isPresent();
-        if (!inKnowledgeBase || !remover.remove(tenantId, documentId)) {
+        inKnowledgeBase(tenantId, knowledgeBaseId, documentId, "文档不存在");
+        if (!remover.remove(tenantId, documentId)) {
             throw new KnowledgeException(KnowledgeException.Reason.NOT_FOUND, "文档不存在");
         }
     }
@@ -121,15 +97,34 @@ public class DocumentIngestionService {
      * @throws KnowledgeException 库不存在或操作人不能管理它、文档不在这个知识库里时为 NOT_FOUND；日期不合法时为 INVALID
      */
     @Transactional
-    public Document changeValidity(TenantId tenantId, UserId actor, long knowledgeBaseId, long documentId,
+    public DocumentRow changeValidity(TenantId tenantId, UserId actor, long knowledgeBaseId, long documentId,
             String effectiveFrom, String expiresOn) {
         knowledgeBases.getManageable(tenantId, actor, knowledgeBaseId);
-        var document = documents.find(tenantId, documentId)
-                .filter(found -> found.knowledgeBaseId() == knowledgeBaseId)
-                .orElseThrow(() -> new KnowledgeException(KnowledgeException.Reason.NOT_FOUND, "文档不存在"));
+        var document = inKnowledgeBase(tenantId, knowledgeBaseId, documentId, "文档不存在");
         document.changeValidity(validity(date(effectiveFrom, null), date(expiresOn, null)));
         documents.save(document);
-        return document;
+        return row(document);
+    }
+
+    /** 这个知识库里的文档；不在这个库里时按不存在处理。 */
+    private Document inKnowledgeBase(TenantId tenantId, long knowledgeBaseId, long documentId, String notFound) {
+        return documents.find(tenantId, documentId)
+                .filter(document -> document.knowledgeBaseId() == knowledgeBaseId)
+                .orElseThrow(() -> new KnowledgeException(KnowledgeException.Reason.NOT_FOUND, notFound));
+    }
+
+    private DocumentRow row(Document document) {
+        return DocumentRow.of(document, null, calendar.state(document.validity()));
+    }
+
+    private static UploadedFile uploaded(String filename, byte[] content) {
+        try {
+            return UploadedFile.of(filename, content);
+        } catch (UploadedFile.UnsupportedTypeException e) {
+            throw new KnowledgeException(KnowledgeException.Reason.UNSUPPORTED_TYPE, e.getMessage());
+        } catch (IllegalArgumentException e) {
+            throw new KnowledgeException(KnowledgeException.Reason.INVALID, e.getMessage());
+        }
     }
 
     private static KnowledgeException duplicate(String filename) {
@@ -156,28 +151,6 @@ public class DocumentIngestionService {
             return new Validity(effectiveFrom, expiresOn);
         } catch (IllegalArgumentException e) {
             throw new KnowledgeException(KnowledgeException.Reason.INVALID, e.getMessage());
-        }
-    }
-
-    private static String mediaTypeOf(String filename) {
-        if (filename != null && filename.length() > 255) {
-            throw new KnowledgeException(KnowledgeException.Reason.INVALID, "文件名不能超过 255 个字符");
-        }
-        var dot = filename == null ? -1 : filename.lastIndexOf('.');
-        var extension = dot < 0 ? "" : filename.substring(dot + 1).toLowerCase(Locale.ROOT);
-        var mediaType = SUPPORTED_TYPES.get(extension);
-        if (mediaType == null) {
-            throw new KnowledgeException(KnowledgeException.Reason.UNSUPPORTED_TYPE,
-                    "目前支持 PDF、Word（.docx）、Excel（.xlsx / .xls）、TXT 和 Markdown；旧版 .doc 请先另存为 .docx");
-        }
-        return mediaType;
-    }
-
-    private static String sha256(byte[] content) {
-        try {
-            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(content));
-        } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException("当前 JDK 不支持 SHA-256", e);
         }
     }
 }

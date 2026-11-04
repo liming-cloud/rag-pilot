@@ -49,8 +49,8 @@ class ValidityTest {
     @Test
     @DisplayName("文档默认长期有效，可以改有效期")
     void documentValidity() {
-        var document = Document.received(new com.liming.rag.shared.TenantId(1), 10, "规范.md", "text/markdown",
-                "a".repeat(64), 128);
+        var document = Document.received(new com.liming.rag.shared.TenantId(1), 10,
+                new UploadedFile("规范.md", "text/markdown", "a".repeat(64), 128), null, Validity.ALWAYS);
         assertThat(document.validity()).isEqualTo(Validity.ALWAYS);
 
         document.changeValidity(new Validity(null, TODAY));

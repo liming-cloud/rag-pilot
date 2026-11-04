@@ -1,5 +1,7 @@
 package com.liming.rag.knowledge.infrastructure.persistence;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.liming.rag.knowledge.api.KnowledgeBaseRef;
 import com.liming.rag.knowledge.application.Grantee;
 import com.liming.rag.knowledge.application.KnowledgeQueries;
 import com.liming.rag.knowledge.application.Paged;
@@ -12,17 +14,48 @@ import java.sql.Timestamp;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
+import java.time.temporal.ChronoUnit;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 import org.springframework.stereotype.Repository;
 
 @Repository
 class MybatisKnowledgeQueries implements KnowledgeQueries {
 
     private final KnowledgeQueryMapper mapper;
+    private final KnowledgeBaseMemberMapper members;
+    private final KnowledgeBaseMapper knowledgeBases;
 
-    MybatisKnowledgeQueries(KnowledgeQueryMapper mapper) {
+    MybatisKnowledgeQueries(KnowledgeQueryMapper mapper, KnowledgeBaseMemberMapper members,
+            KnowledgeBaseMapper knowledgeBases) {
         this.mapper = mapper;
+        this.members = members;
+        this.knowledgeBases = knowledgeBases;
+    }
+
+    @Override
+    public List<KnowledgeBaseRef> accessible(Grantee grantee) {
+        return members.accessible(grantee.tenantId().value(), grantee.userId().value(), grantee.roleIds()).stream()
+                .map(row -> new KnowledgeBaseRef(row.getId(), row.getName())).toList();
+    }
+
+    @Override
+    public boolean isAccessible(Grantee grantee, long knowledgeBaseId) {
+        return members.isAccessible(grantee.tenantId().value(), grantee.userId().value(), grantee.roleIds(),
+                knowledgeBaseId);
+    }
+
+    @Override
+    public Map<Long, String> names(TenantId tenantId, Collection<Long> knowledgeBaseIds) {
+        if (knowledgeBaseIds.isEmpty()) {
+            return Map.of();
+        }
+        return knowledgeBases.selectList(new LambdaQueryWrapper<KnowledgeBaseDO>()
+                        .eq(KnowledgeBaseDO::getTenantId, tenantId.value())
+                        .in(KnowledgeBaseDO::getId, knowledgeBaseIds))
+                .stream().collect(Collectors.toMap(KnowledgeBaseDO::getId, KnowledgeBaseDO::getName));
     }
 
     @Override
@@ -51,8 +84,12 @@ class MybatisKnowledgeQueries implements KnowledgeQueries {
                 window.warnUntil(), page.offset(), page.size());
         long total = mapper.countDocuments(tenantId.value(), knowledgeBaseId, keyword, statusName, state,
                 window.today(), window.warnUntil());
-        return new Paged<>(rows.stream().map(row -> new DocumentRow(toDocument(row),
-                (String) row.get("replaces_filename"))).toList(), total, page.page(), page.size());
+        int warningDays = (int) ChronoUnit.DAYS.between(window.today(), window.warnUntil());
+        return new Paged<>(rows.stream().map(row -> {
+            var document = toDocument(row);
+            return DocumentRow.of(document, (String) row.get("replaces_filename"),
+                    document.validity().state(window.today(), warningDays));
+        }).toList(), total, page.page(), page.size());
     }
 
     @Override

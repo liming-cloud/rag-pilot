@@ -12,6 +12,7 @@ import com.liming.rag.archfixture.application.ApplicationUsesInfrastructure;
 import com.liming.rag.archfixture.application.ApplicationUsesSaToken;
 import com.liming.rag.archfixture.domain.DomainOutsideCore;
 import com.liming.rag.archfixture.domain.DomainUsesSpring;
+import com.liming.rag.archfixture.web.WebUsesDomain;
 import com.liming.rag.archfixture.web.WebUsesInfrastructure;
 import com.liming.rag.knowledge.StrayAtModuleRoot;
 import com.tngtech.archunit.core.domain.JavaClasses;
@@ -65,6 +66,11 @@ class PackageLayoutTest {
             .should().dependOnClassesThat().resideInAPackage("..infrastructure..")
             .as("web 不依赖 infrastructure，经 application 调用");
 
+    static final ArchRule WEB_NOT_ON_DOMAIN = noClasses()
+            .that().resideInAPackage("..web..")
+            .should().dependOnClassesThat().resideInAPackage("..domain..")
+            .as("web 不依赖 domain：Controller 用 application 和 api 的类型，聚合不出应用层（#136）");
+
     static final ArchRule API_SELF_CONTAINED = noClasses()
             .that().resideInAPackage("..api..")
             .should().dependOnClassesThat().resideInAnyPackage(
@@ -82,7 +88,7 @@ class PackageLayoutTest {
 
     static final List<ArchRule> RULES = List.of(CONTEXT_CLASSES_IN_LAYERS, DOMAIN_IS_PURE, DOMAIN_ONLY_IN_CORE,
             APPLICATION_NOT_ON_SA_TOKEN,
-            APPLICATION_NOT_ON_ADAPTERS, WEB_NOT_ON_INFRASTRUCTURE, API_SELF_CONTAINED,
+            APPLICATION_NOT_ON_ADAPTERS, WEB_NOT_ON_INFRASTRUCTURE, WEB_NOT_ON_DOMAIN, API_SELF_CONTAINED,
             TECH_MODULES_EXPOSE_CONTRACTS_ONLY);
 
     @Test
@@ -104,6 +110,7 @@ class PackageLayoutTest {
         assertViolates(APPLICATION_NOT_ON_SA_TOKEN, ApplicationUsesSaToken.class);
         assertViolates(APPLICATION_NOT_ON_ADAPTERS, ApplicationUsesInfrastructure.class);
         assertViolates(WEB_NOT_ON_INFRASTRUCTURE, WebUsesInfrastructure.class);
+        assertViolates(WEB_NOT_ON_DOMAIN, WebUsesDomain.class, com.liming.rag.archfixture.domain.FixtureAggregate.class);
         assertViolates(API_SELF_CONTAINED, ApiLeaksDomain.class);
         assertViolates(TECH_MODULES_EXPOSE_CONTRACTS_ONLY, PublicImplementation.class);
     }

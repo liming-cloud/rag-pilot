@@ -10,7 +10,8 @@ import org.junit.jupiter.api.Test;
 class DocumentTest {
 
     private static Document received() {
-        return Document.received(new TenantId(1), 10, "规范.md", "text/markdown", "a".repeat(64), 128);
+        return Document.received(new com.liming.rag.shared.TenantId(1), 10,
+                new UploadedFile("规范.md", "text/markdown", "a".repeat(64), 128), null, Validity.ALWAYS);
     }
 
     @Test

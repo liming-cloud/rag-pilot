@@ -26,6 +26,14 @@
         ORDER BY kb.id
     </select>
 
+    <select id="isAccessible" resultType="boolean">
+        SELECT EXISTS (
+            SELECT 1 FROM knowledge_base kb
+            WHERE kb.tenant_id = #{tenantId} AND kb.id = #{knowledgeBaseId}
+              AND kb.id IN (<include refid="com.liming.rag.knowledge.infrastructure.persistence.ChunkSearchMapper.accessibleKnowledgeBases"/>)
+        )
+    </select>
+
     <insert id="insertRoleGrant">
         INSERT INTO knowledge_base_role_grant (tenant_id, knowledge_base_id, role_id)
         VALUES (#{tenantId}, #{knowledgeBaseId}, #{roleId})

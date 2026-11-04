@@ -49,7 +49,7 @@ class KnowledgeBaseServiceTest {
         var created = service.create(TENANT, ADMIN, "  门店规范  ");
 
         assertThat(created.name()).isEqualTo("门店规范");
-        assertThat(fixture.knowledgeBases.members.get(created.id())).containsExactly(ADMIN.value());
+        assertThat(fixture.knowledgeBases.rows.get(created.id()).members()).containsExactly(ADMIN.value());
     }
 
     @Test
@@ -65,7 +65,6 @@ class KnowledgeBaseServiceTest {
         assertReason(() -> service.create(TENANT, ADMIN, "并发同名"), KnowledgeException.Reason.CONFLICT);
 
         assertThat(fixture.knowledgeBases.rows).hasSize(1);
-        assertThat(fixture.knowledgeBases.members).hasSize(1);
     }
 
     @Test
@@ -79,7 +78,7 @@ class KnowledgeBaseServiceTest {
 
         assertThat(service.accessible(TENANT, STAFF)).containsExactly(
                 new KnowledgeBaseRef(direct.id(), "直接授权库"), new KnowledgeBaseRef(byRole.id(), "角色授权库"));
-        assertThat(service.listAccessible(TENANT, SUPER)).isEmpty();
+        assertThat(service.accessible(TENANT, SUPER)).isEmpty();
         assertThat(service.names(TENANT, List.of(direct.id(), 999L))).containsOnlyKeys(direct.id());
     }
 
@@ -135,8 +134,8 @@ class KnowledgeBaseServiceTest {
         assertReason(() -> service.revoke(TENANT, ADMIN, kb.id(), ADMIN), KnowledgeException.Reason.INVALID);
         service.revoke(TENANT, ADMIN, kb.id(), STAFF);
 
-        assertThat(service.listAccessible(TENANT, STAFF)).isEmpty();
-        assertThat(service.listAccessible(TENANT, ADMIN)).extracting(KnowledgeBase::id).containsExactly(kb.id());
+        assertThat(service.accessible(TENANT, STAFF)).isEmpty();
+        assertThat(service.accessible(TENANT, ADMIN)).extracting(KnowledgeBaseRef::id).containsExactly(kb.id());
     }
 
     @Test
@@ -147,10 +146,10 @@ class KnowledgeBaseServiceTest {
         assertReason(() -> service.grantRole(TENANT, ADMIN, kb.id(), 404), KnowledgeException.Reason.NOT_FOUND);
         service.grantRole(TENANT, ADMIN, kb.id(), STORE_ROLE);
         assertThat(service.roleGrants(TENANT, ADMIN, kb.id())).containsExactly(STORE_ROLE);
-        assertThat(service.listAccessible(TENANT, STAFF)).hasSize(1);
+        assertThat(service.accessible(TENANT, STAFF)).hasSize(1);
 
         service.revokeRole(TENANT, ADMIN, kb.id(), STORE_ROLE);
-        assertThat(service.listAccessible(TENANT, STAFF)).isEmpty();
+        assertThat(service.accessible(TENANT, STAFF)).isEmpty();
 
         service.grantRole(TENANT, ADMIN, kb.id(), STORE_ROLE);
         service.on(new RoleDeleted(TENANT, STORE_ROLE));

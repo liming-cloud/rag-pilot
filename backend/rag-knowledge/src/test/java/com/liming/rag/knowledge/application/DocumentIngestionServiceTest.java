@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.liming.rag.knowledge.domain.Document;
 import com.liming.rag.knowledge.domain.DocumentStatus;
+import com.liming.rag.knowledge.domain.UploadedFile;
 import com.liming.rag.knowledge.domain.Validity;
 import com.liming.rag.shared.UserId;
 import java.nio.charset.StandardCharsets;
@@ -29,7 +30,8 @@ class DocumentIngestionServiceTest {
     private final KnowledgeBaseService knowledgeBases = new KnowledgeBaseService(fixture.knowledgeBases,
             fixture.queries, fixture.users, fixture.calendar, query -> List.of());
     private final DocumentIngestionService service = new DocumentIngestionService(knowledgeBases,
-            fixture.documents, fixture.files, events::add, new DocumentRemover(fixture.documents, fixture.files));
+            fixture.documents, fixture.files, events::add, new DocumentRemover(fixture.documents, fixture.files),
+            fixture.calendar);
     private final long kb;
 
     {
@@ -43,10 +45,12 @@ class DocumentIngestionServiceTest {
         var document = service.ingest(TENANT, ADMIN, kb, "收银规范.txt", TEXT, null, null, null);
 
         assertThat(document.status()).isEqualTo(DocumentStatus.PARSING);
-        assertThat(document.mediaType()).isEqualTo("text/plain");
         assertThat(document.sizeBytes()).isEqualTo(TEXT.length);
-        assertThat(document.validity()).isEqualTo(Validity.ALWAYS);
-        assertThat(fixture.files.has(TENANT, document.sha256())).isTrue();
+        assertThat(document.validity()).isEqualTo(Validity.State.ACTIVE);
+        var stored = fixture.documents.rows.get(document.id());
+        assertThat(stored.mediaType()).isEqualTo("text/plain");
+        assertThat(stored.validity()).isEqualTo(Validity.ALWAYS);
+        assertThat(fixture.files.has(TENANT, stored.sha256())).isTrue();
         assertThat(events).containsExactly(new DocumentReceived(TENANT, document.id()));
     }
 
@@ -60,7 +64,7 @@ class DocumentIngestionServiceTest {
         assertReason(() -> service.ingest(TENANT, ADMIN, kb, "空.txt", new byte[0], null, null, null),
                 KnowledgeException.Reason.INVALID);
         assertReason(() -> service.ingest(TENANT, ADMIN, kb, "大.txt",
-                new byte[(int) DocumentIngestionService.MAX_SIZE_BYTES + 1], null, null, null),
+                new byte[(int) UploadedFile.MAX_SIZE_BYTES + 1], null, null, null),
                 KnowledgeException.Reason.INVALID);
         assertReason(() -> service.ingest(TENANT, ADMIN, kb, "长".repeat(252) + ".txt", TEXT, null, null, null),
                 KnowledgeException.Reason.INVALID);
@@ -73,13 +77,13 @@ class DocumentIngestionServiceTest {
     @Test
     @DisplayName("扩展名不区分大小写：.PDF、.Docx、.XLS、.markdown 都能识别")
     void recognizesExtensionsCaseInsensitively() {
-        assertThat(service.ingest(TENANT, ADMIN, kb, "a.PDF", bytes("a"), null, null, null).mediaType())
+        assertThat(mediaTypeOf(service.ingest(TENANT, ADMIN, kb, "a.PDF", bytes("a"), null, null, null)))
                 .isEqualTo("application/pdf");
-        assertThat(service.ingest(TENANT, ADMIN, kb, "b.Docx", bytes("b"), null, null, null).mediaType())
+        assertThat(mediaTypeOf(service.ingest(TENANT, ADMIN, kb, "b.Docx", bytes("b"), null, null, null)))
                 .isEqualTo("application/vnd.openxmlformats-officedocument.wordprocessingml.document");
-        assertThat(service.ingest(TENANT, ADMIN, kb, "c.XLS", bytes("c"), null, null, null).mediaType())
+        assertThat(mediaTypeOf(service.ingest(TENANT, ADMIN, kb, "c.XLS", bytes("c"), null, null, null)))
                 .isEqualTo("application/vnd.ms-excel");
-        assertThat(service.ingest(TENANT, ADMIN, kb, "d.markdown", bytes("d"), null, null, null).mediaType())
+        assertThat(mediaTypeOf(service.ingest(TENANT, ADMIN, kb, "d.markdown", bytes("d"), null, null, null)))
                 .isEqualTo("text/markdown");
     }
 
@@ -113,7 +117,8 @@ class DocumentIngestionServiceTest {
     @DisplayName("有效期：yyyy-MM-dd；不传时长期有效；格式不对、失效早于生效都是 INVALID")
     void parsesValidity() {
         var document = service.ingest(TENANT, ADMIN, kb, "a.txt", bytes("a"), null, "2026-11-01", " 2026-12-31 ");
-        assertThat(document.validity()).isEqualTo(new Validity(LocalDate.of(2026, 11, 1), LocalDate.of(2026, 12, 31)));
+        assertThat(List.of(document.effectiveFrom(), document.expiresOn()))
+                .containsExactly(LocalDate.of(2026, 11, 1), LocalDate.of(2026, 12, 31));
 
         assertReason(() -> service.ingest(TENANT, ADMIN, kb, "b.txt", bytes("b"), null, "2026/11/01", null),
                 KnowledgeException.Reason.INVALID);
@@ -131,8 +136,8 @@ class DocumentIngestionServiceTest {
         var cleared = service.ingest(TENANT, ADMIN, kb, "陈列规范-再版.txt", bytes("再版"), old.id(), null, "");
 
         assertThat(inherited.replacesDocumentId()).isEqualTo(old.id());
-        assertThat(inherited.validity().expiresOn()).isEqualTo(LocalDate.of(2026, 12, 31));
-        assertThat(cleared.validity().expiresOn()).isNull();
+        assertThat(inherited.expiresOn()).isEqualTo(LocalDate.of(2026, 12, 31));
+        assertThat(cleared.expiresOn()).isNull();
         assertReason(() -> service.ingest(TENANT, ADMIN, otherKb, "错库.txt", bytes("错库"), old.id(), null, null),
                 KnowledgeException.Reason.NOT_FOUND);
     }
@@ -144,10 +149,11 @@ class DocumentIngestionServiceTest {
         var otherKb = knowledgeBases.create(TENANT, ADMIN, "商品知识").id();
         var copy = service.ingest(TENANT, ADMIN, otherKb, "共用.txt", TEXT, null, null, null);
 
+        var sha256 = fixture.documents.rows.get(shared.id()).sha256();
         service.delete(TENANT, ADMIN, kb, shared.id());
-        assertThat(fixture.files.has(TENANT, shared.sha256())).as("另一个库还在用").isTrue();
+        assertThat(fixture.files.has(TENANT, sha256)).as("另一个库还在用").isTrue();
         service.delete(TENANT, ADMIN, otherKb, copy.id());
-        assertThat(fixture.files.has(TENANT, shared.sha256())).isFalse();
+        assertThat(fixture.files.has(TENANT, sha256)).isFalse();
 
         assertThat(fixture.documents.rows).isEmpty();
         assertReason(() -> service.delete(TENANT, ADMIN, kb, shared.id()), KnowledgeException.Reason.NOT_FOUND);
@@ -172,8 +178,13 @@ class DocumentIngestionServiceTest {
 
         var changed = service.changeValidity(TENANT, ADMIN, kb, document.id(), "2026-12-01", null);
 
-        assertThat(changed.validity()).isEqualTo(new Validity(LocalDate.of(2026, 12, 1), null));
-        assertThat(fixture.calendar.state(changed.validity())).isEqualTo(Validity.State.PENDING);
+        assertThat(fixture.documents.rows.get(document.id()).validity())
+                .isEqualTo(new Validity(LocalDate.of(2026, 12, 1), null));
+        assertThat(changed.validity()).as("按统计时区的今天算").isEqualTo(Validity.State.PENDING);
+    }
+
+    private String mediaTypeOf(KnowledgeQueries.DocumentRow row) {
+        return fixture.documents.rows.get(row.id()).mediaType();
     }
 
     private static byte[] bytes(String text) {

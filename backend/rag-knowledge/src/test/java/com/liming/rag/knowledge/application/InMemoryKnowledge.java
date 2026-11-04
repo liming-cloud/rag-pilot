@@ -1,6 +1,7 @@
 package com.liming.rag.knowledge.application;
 
 import com.liming.rag.identity.api.UserDirectory;
+import com.liming.rag.knowledge.api.KnowledgeBaseRef;
 import com.liming.rag.knowledge.api.SearchHit;
 import com.liming.rag.knowledge.domain.Chunk;
 import com.liming.rag.knowledge.domain.Document;
@@ -8,6 +9,7 @@ import com.liming.rag.knowledge.domain.DocumentRepository;
 import com.liming.rag.knowledge.domain.DocumentStatus;
 import com.liming.rag.knowledge.domain.KnowledgeBase;
 import com.liming.rag.knowledge.domain.KnowledgeBaseRepository;
+import com.liming.rag.knowledge.domain.UploadedFile;
 import com.liming.rag.knowledge.domain.Validity;
 import com.liming.rag.settings.api.StatsZone;
 import com.liming.rag.shared.TenantId;
@@ -58,15 +60,17 @@ final class InMemoryKnowledge {
                 Clock.fixed(Instant.parse("2026-11-04T02:00:00Z"), ZoneOffset.UTC));
     }
 
-    /** 知识库、直接授权和角色授权。 */
+    /** 知识库和授权：按库存直接授权、角色授权，保存时只写聚合记下的增减，口径同 {@code MybatisKnowledgeBaseRepository}。 */
     final class KnowledgeBases implements KnowledgeBaseRepository {
 
-        final Map<Long, KnowledgeBase> rows = new LinkedHashMap<>();
-        final Map<Long, Set<Long>> members = new HashMap<>();
-        final Map<Long, Set<Long>> roleGrants = new HashMap<>();
+        record Row(TenantId tenantId, String name, Set<Long> members, Set<Long> roles) {
+        }
+
+        final Map<Long, Row> rows = new LinkedHashMap<>();
         private final AtomicLong ids = new AtomicLong(100);
         /** 模拟并发时唯一约束冲突：下一次保存时抛出。 */
         RuntimeException failNextSave;
+        int saves;
 
         @Override
         public KnowledgeBase save(KnowledgeBase knowledgeBase) {
@@ -75,69 +79,44 @@ final class InMemoryKnowledge {
                 failNextSave = null;
                 throw failure;
             }
-            var saved = knowledgeBase.id() == null ? knowledgeBase.withId(ids.incrementAndGet()) : knowledgeBase;
-            rows.put(saved.id(), saved);
-            return saved;
+            saves++;
+            long id = knowledgeBase.id() == null ? ids.incrementAndGet() : knowledgeBase.id();
+            var row = rows.computeIfAbsent(id, key -> new Row(knowledgeBase.tenantId(), knowledgeBase.name(),
+                    new LinkedHashSet<>(), new LinkedHashSet<>()));
+            knowledgeBase.addedMembers().forEach(user -> row.members().add(user.value()));
+            knowledgeBase.removedMembers().forEach(user -> row.members().remove(user.value()));
+            knowledgeBase.addedRoles().forEach(row.roles()::add);
+            knowledgeBase.removedRoles().forEach(row.roles()::remove);
+            return restore(id, row);
         }
 
         @Override
         public Optional<KnowledgeBase> find(TenantId tenantId, long id) {
-            return Optional.ofNullable(rows.get(id)).filter(kb -> kb.tenantId().equals(tenantId));
-        }
-
-        @Override
-        public List<KnowledgeBase> listAccessible(TenantId tenantId, UserId userId, List<Long> roleIds) {
-            return rows.values().stream()
-                    .filter(kb -> kb.tenantId().equals(tenantId))
-                    .filter(kb -> members.getOrDefault(kb.id(), Set.of()).contains(userId.value())
-                            || roleGrants.getOrDefault(kb.id(), Set.of()).stream().anyMatch(roleIds::contains))
-                    .toList();
-        }
-
-        @Override
-        public List<KnowledgeBase> findAll(TenantId tenantId, Collection<Long> ids) {
-            return rows.values().stream().filter(kb -> kb.tenantId().equals(tenantId) && ids.contains(kb.id()))
-                    .toList();
-        }
-
-        @Override
-        public void addMember(TenantId tenantId, long knowledgeBaseId, UserId userId) {
-            members.computeIfAbsent(knowledgeBaseId, key -> new LinkedHashSet<>()).add(userId.value());
-        }
-
-        @Override
-        public void removeMember(TenantId tenantId, long knowledgeBaseId, UserId userId) {
-            members.getOrDefault(knowledgeBaseId, new HashSet<>()).remove(userId.value());
-        }
-
-        @Override
-        public List<UserId> members(TenantId tenantId, long knowledgeBaseId) {
-            return members.getOrDefault(knowledgeBaseId, Set.of()).stream().map(UserId::new).toList();
-        }
-
-        @Override
-        public void addRoleGrant(TenantId tenantId, long knowledgeBaseId, long roleId) {
-            roleGrants.computeIfAbsent(knowledgeBaseId, key -> new LinkedHashSet<>()).add(roleId);
-        }
-
-        @Override
-        public void removeRoleGrant(TenantId tenantId, long knowledgeBaseId, long roleId) {
-            roleGrants.getOrDefault(knowledgeBaseId, new HashSet<>()).remove(roleId);
-        }
-
-        @Override
-        public List<Long> roleGrants(TenantId tenantId, long knowledgeBaseId) {
-            return List.copyOf(roleGrants.getOrDefault(knowledgeBaseId, Set.of()));
-        }
-
-        @Override
-        public void removeGrantsOfRole(TenantId tenantId, long roleId) {
-            roleGrants.values().forEach(grants -> grants.remove(roleId));
+            return Optional.ofNullable(rows.get(id)).filter(row -> row.tenantId().equals(tenantId))
+                    .map(row -> restore(id, row));
         }
 
         @Override
         public boolean existsByName(TenantId tenantId, String name) {
-            return rows.values().stream().anyMatch(kb -> kb.tenantId().equals(tenantId) && kb.name().equals(name));
+            return rows.values().stream().anyMatch(row -> row.tenantId().equals(tenantId) && row.name().equals(name));
+        }
+
+        @Override
+        public void removeGrantsOfRole(TenantId tenantId, long roleId) {
+            rows.values().forEach(row -> row.roles().remove(roleId));
+        }
+
+        /** 授权口径：直接授权给本人的 ∪ 授权给其角色的。 */
+        boolean accessible(long id, Grantee grantee) {
+            var row = rows.get(id);
+            return row != null && row.tenantId().equals(grantee.tenantId())
+                    && (row.members().contains(grantee.userId().value())
+                            || row.roles().stream().anyMatch(grantee.roleIds()::contains));
+        }
+
+        private static KnowledgeBase restore(long id, Row row) {
+            return KnowledgeBase.restore(id, row.tenantId(), row.name(),
+                    row.members().stream().map(UserId::new).toList(), List.copyOf(row.roles()));
         }
     }
 
@@ -206,8 +185,8 @@ final class InMemoryKnowledge {
 
         /** 直接放一份已就绪的文档。 */
         Document ready(long knowledgeBaseId, String filename, String sha256, Validity validity) {
-            var document = Document.received(TENANT, knowledgeBaseId, filename, "text/plain", sha256, 10, null,
-                    validity);
+            var document = Document.received(TENANT, knowledgeBaseId,
+                    new UploadedFile(filename, "text/plain", sha256, 10), null, validity);
             save(document);
             document.markReady(1);
             return document;
@@ -243,8 +222,29 @@ final class InMemoryKnowledge {
         }
     }
 
-    /** 管理端查询：只记下调用参数，返回空页；分页和筛选的 SQL 由 rag-app 的集成测试覆盖。 */
-    static final class Queries implements KnowledgeQueries {
+    /** 只读查询：可访问的库按知识库的授权算；管理端列表只记下调用参数，返回空页（分页和筛选的 SQL 由 rag-app 的集成测试覆盖）。 */
+    final class Queries implements KnowledgeQueries {
+
+        @Override
+        public List<KnowledgeBaseRef> accessible(Grantee grantee) {
+            return knowledgeBases.rows.entrySet().stream()
+                    .filter(entry -> knowledgeBases.accessible(entry.getKey(), grantee))
+                    .map(entry -> new KnowledgeBaseRef(entry.getKey(), entry.getValue().name())).toList();
+        }
+
+        @Override
+        public boolean isAccessible(Grantee grantee, long knowledgeBaseId) {
+            return knowledgeBases.accessible(knowledgeBaseId, grantee);
+        }
+
+        @Override
+        public Map<Long, String> names(TenantId tenantId, Collection<Long> knowledgeBaseIds) {
+            var result = new HashMap<Long, String>();
+            knowledgeBaseIds.stream().filter(knowledgeBases.rows::containsKey)
+                    .filter(id -> knowledgeBases.rows.get(id).tenantId().equals(tenantId))
+                    .forEach(id -> result.put(id, knowledgeBases.rows.get(id).name()));
+            return result;
+        }
 
         Grantee grantee;
         boolean superAdminView;

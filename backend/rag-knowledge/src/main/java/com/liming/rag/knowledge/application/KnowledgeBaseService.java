@@ -22,16 +22,16 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
-import java.util.stream.Collectors;
 import org.springframework.context.event.EventListener;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 知识库与授权。能访问一个库 = 直接授权给本人，或授权给本人所属的某个角色（D-038）；建库的人自动获得直接授权。
- * 管理端也只能管理自己能访问的库（D-017），超级管理员例外：能看到并授权本租户全部的库，但检索同样按授权过滤。
- * 检索时的授权过滤不在这里，在检索 SQL 里，见 {@code ChunkSearchMapper}。
+ * 知识库与授权。能访问一个库 = 直接授权给本人，或授权给本人所属的某个角色（D-038）；授权的增减规则在
+ * {@link KnowledgeBase} 聚合上。管理端也只能管理自己能访问的库（D-017），超级管理员例外：能看到并授权本租户全部的库，
+ * 但检索同样按授权过滤。“能不能访问”的口径只在检索 SQL 的 {@code ChunkSearchMapper.accessibleKnowledgeBases} 一处，
+ * 这里经 {@link KnowledgeQueries} 用它。
  */
 @Service
 public class KnowledgeBaseService implements KnowledgeAccess {
@@ -55,40 +55,31 @@ public class KnowledgeBaseService implements KnowledgeAccess {
     public record Member(long userId, String username, String displayName) {
     }
 
+    /** 建库，建库的人自动获得直接授权。 */
     @Transactional
-    public KnowledgeBase create(TenantId tenantId, UserId creator, String name) {
+    public KnowledgeBaseRef create(TenantId tenantId, UserId creator, String name) {
         KnowledgeBase knowledgeBase;
         try {
-            knowledgeBase = KnowledgeBase.create(tenantId, name);
+            knowledgeBase = KnowledgeBase.create(tenantId, name, creator);
         } catch (IllegalArgumentException e) {
             throw new KnowledgeException(KnowledgeException.Reason.INVALID, e.getMessage());
         }
         if (knowledgeBases.existsByName(tenantId, knowledgeBase.name())) {
             throw nameTaken(knowledgeBase.name());
         }
-        KnowledgeBase saved;
         try {
-            saved = knowledgeBases.save(knowledgeBase);
+            return ref(knowledgeBases.save(knowledgeBase));
         } catch (DuplicateKeyException e) {
             // 查重之后、插入之前别人建了同名的库：靠唯一约束兜底（#135）。
             throw nameTaken(knowledgeBase.name());
         }
-        knowledgeBases.addMember(tenantId, saved.id(), creator);
-        return saved;
     }
 
-    /** 员工端选库用：授权给本人或其角色的库。超级管理员也一样。 */
-    @Transactional(readOnly = true)
-    public List<KnowledgeBase> listAccessible(TenantId tenantId, UserId userId) {
-        return knowledgeBases.listAccessible(tenantId, userId, users.roleIds(tenantId, userId));
-    }
-
+    /** 员工端选库用：授权给本人或其角色的库，按创建顺序。超级管理员也一样。 */
     @Override
     @Transactional(readOnly = true)
     public List<KnowledgeBaseRef> accessible(TenantId tenantId, UserId userId) {
-        return listAccessible(tenantId, userId).stream()
-                .map(knowledgeBase -> new KnowledgeBaseRef(knowledgeBase.id(), knowledgeBase.name()))
-                .toList();
+        return queries.accessible(grantee(tenantId, userId));
     }
 
     @Override
@@ -104,8 +95,7 @@ public class KnowledgeBaseService implements KnowledgeAccess {
     @Override
     @Transactional(readOnly = true)
     public Map<Long, String> names(TenantId tenantId, Collection<Long> knowledgeBaseIds) {
-        return knowledgeBases.findAll(tenantId, knowledgeBaseIds).stream()
-                .collect(Collectors.toMap(KnowledgeBase::id, KnowledgeBase::name));
+        return queries.names(tenantId, knowledgeBaseIds);
     }
 
     /**
@@ -138,20 +128,29 @@ public class KnowledgeBaseService implements KnowledgeAccess {
 
     /** 超级管理员看本租户全部的库（null），其他人只看授权给自己或自己角色的。 */
     private Grantee visibleTo(TenantId tenantId, UserId actor) {
-        return users.isSuperAdmin(tenantId, actor) ? null
-                : new Grantee(tenantId, actor, users.roleIds(tenantId, actor));
+        return users.isSuperAdmin(tenantId, actor) ? null : grantee(tenantId, actor);
     }
 
-    /** 管理操作的入口：库不存在、或操作人不能访问它时一律“不存在”，不暴露知识库是否存在。 */
+    /** 按谁的授权算：本人和他现在所属的角色（由 identity 查，D-038）。 */
+    private Grantee grantee(TenantId tenantId, UserId userId) {
+        return new Grantee(tenantId, userId, users.roleIds(tenantId, userId));
+    }
+
+    /** 管理端的知识库详情：库不存在、或操作人不能管理它时一律“不存在”。 */
     @Transactional(readOnly = true)
-    public KnowledgeBase getManageable(TenantId tenantId, UserId actor, long id) {
-        if (users.isSuperAdmin(tenantId, actor)) {
-            return knowledgeBases.find(tenantId, id).orElseThrow(KnowledgeBaseService::notFound);
+    public KnowledgeBaseRef manageable(TenantId tenantId, UserId actor, long id) {
+        return ref(getManageable(tenantId, actor, id));
+    }
+
+    /**
+     * 管理操作的入口：库不存在、或操作人不能访问它时一律“不存在”，不暴露知识库是否存在。超级管理员能管理本租户全部的库，
+     * 其他人按检索同一个口径判断能不能访问，只查这一个库。
+     */
+    KnowledgeBase getManageable(TenantId tenantId, UserId actor, long id) {
+        if (!users.isSuperAdmin(tenantId, actor) && !queries.isAccessible(grantee(tenantId, actor), id)) {
+            throw notFound();
         }
-        return listAccessible(tenantId, actor).stream()
-                .filter(knowledgeBase -> knowledgeBase.id() == id)
-                .findFirst()
-                .orElseThrow(KnowledgeBaseService::notFound);
+        return knowledgeBases.find(tenantId, id).orElseThrow(KnowledgeBaseService::notFound);
     }
 
     /**
@@ -178,27 +177,29 @@ public class KnowledgeBaseService implements KnowledgeAccess {
 
     @Transactional
     public void grant(TenantId tenantId, UserId actor, long knowledgeBaseId, UserId userId) {
-        getManageable(tenantId, actor, knowledgeBaseId);
+        var knowledgeBase = getManageable(tenantId, actor, knowledgeBaseId);
         if (!users.exists(tenantId, userId)) {
             throw new KnowledgeException(KnowledgeException.Reason.NOT_FOUND, "账号不存在");
         }
-        knowledgeBases.addMember(tenantId, knowledgeBaseId, userId);
+        knowledgeBase.grant(userId);
+        knowledgeBases.save(knowledgeBase);
     }
 
-    /** 不能撤销自己：撤销后这个库可能从自己的管理界面上消失，也无法再授权回来。 */
+    /** 不能撤销自己，规则见 {@link KnowledgeBase#revoke}。 */
     @Transactional
     public void revoke(TenantId tenantId, UserId actor, long knowledgeBaseId, UserId userId) {
-        getManageable(tenantId, actor, knowledgeBaseId);
-        if (userId.equals(actor)) {
-            throw new KnowledgeException(KnowledgeException.Reason.INVALID, "不能撤销自己的权限");
+        var knowledgeBase = getManageable(tenantId, actor, knowledgeBaseId);
+        try {
+            knowledgeBase.revoke(actor, userId);
+        } catch (IllegalArgumentException e) {
+            throw new KnowledgeException(KnowledgeException.Reason.INVALID, e.getMessage());
         }
-        knowledgeBases.removeMember(tenantId, knowledgeBaseId, userId);
+        knowledgeBases.save(knowledgeBase);
     }
 
     @Transactional(readOnly = true)
     public List<Member> members(TenantId tenantId, UserId actor, long knowledgeBaseId) {
-        getManageable(tenantId, actor, knowledgeBaseId);
-        var ids = knowledgeBases.members(tenantId, knowledgeBaseId).stream().map(UserId::value).toList();
+        var ids = getManageable(tenantId, actor, knowledgeBaseId).members().stream().map(UserId::value).toList();
         var summaries = users.summaries(tenantId, ids);
         return ids.stream().map(id -> {
             var summary = summaries.get(id);
@@ -209,25 +210,26 @@ public class KnowledgeBaseService implements KnowledgeAccess {
 
     @Transactional(readOnly = true)
     public List<Long> roleGrants(TenantId tenantId, UserId actor, long knowledgeBaseId) {
-        getManageable(tenantId, actor, knowledgeBaseId);
-        return knowledgeBases.roleGrants(tenantId, knowledgeBaseId);
+        return List.copyOf(getManageable(tenantId, actor, knowledgeBaseId).roleGrants());
     }
 
     /** 授权给角色：属于这个角色的账号立即能检索到这个库。 */
     @Transactional
     public void grantRole(TenantId tenantId, UserId actor, long knowledgeBaseId, long roleId) {
-        getManageable(tenantId, actor, knowledgeBaseId);
+        var knowledgeBase = getManageable(tenantId, actor, knowledgeBaseId);
         if (!users.roleExists(tenantId, roleId)) {
             throw new KnowledgeException(KnowledgeException.Reason.NOT_FOUND, "角色不存在");
         }
-        knowledgeBases.addRoleGrant(tenantId, knowledgeBaseId, roleId);
+        knowledgeBase.grantRole(roleId);
+        knowledgeBases.save(knowledgeBase);
     }
 
     /** 收回角色授权：属于这个角色、又没有其他途径获得授权的账号立即检索不到。 */
     @Transactional
     public void revokeRole(TenantId tenantId, UserId actor, long knowledgeBaseId, long roleId) {
-        getManageable(tenantId, actor, knowledgeBaseId);
-        knowledgeBases.removeRoleGrant(tenantId, knowledgeBaseId, roleId);
+        var knowledgeBase = getManageable(tenantId, actor, knowledgeBaseId);
+        knowledgeBase.revokeRole(roleId);
+        knowledgeBases.save(knowledgeBase);
     }
 
     /** 角色被删除时一并收回授权给它的库，在删除角色的事务里执行。 */
@@ -261,6 +263,10 @@ public class KnowledgeBaseService implements KnowledgeAccess {
 
     private static String blankToNull(String value) {
         return value == null || value.isBlank() ? null : value.strip();
+    }
+
+    private static KnowledgeBaseRef ref(KnowledgeBase knowledgeBase) {
+        return new KnowledgeBaseRef(knowledgeBase.id(), knowledgeBase.name());
     }
 
     private static KnowledgeException nameTaken(String name) {

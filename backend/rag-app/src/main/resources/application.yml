@@ -13,7 +13,7 @@ spring:
         await-termination-period: 30s
   servlet:
     multipart:
-      # 与 DocumentIngestionService.MAX_SIZE_BYTES 一致。
+      # 与 knowledge 的 UploadedFile.MAX_SIZE_BYTES 一致。
       max-file-size: 50MB
       max-request-size: 55MB
   datasource:
