@@ -311,3 +311,16 @@ Compose 增加 web 服务（`deploy/web.Dockerfile`）：Node 24 构建前端，
 - **单租户**（Q11）：部署是单租户，`TenantId` 为以后多租户预留，不改签名。不带租户的有：identity 的 `Accounts`（按 id 查、启停、改密码、登录失败计数，用户名全局唯一，登录时不选租户）、`Roles` 的 `delete`、`rolesOf`、`userIds`、`setUserRoles`，answering 的 `ConversationRepository.addTurn`、`mainLine`、`deleteInactiveSince`，靠调用方先按租户查到聚合或账号再调用；settings 的模型管理、系统设置、行业包和统计时区都是部署级的。真做多租户时，这些端口要补租户参数，用户名改为租户内唯一（数据库变更）。
 - **角色删除不用领域事件**：identity 发布 `RoleDeleted`，knowledge 在同一事务里同步收回这个角色的知识库授权，删角色和收回授权要么都成功、要么都不做。目前没有其他领域事件，也不引入事件发布表。
 - **不做的**：id 类型化（E6）记进 ROADMAP 待办；不合并各上下文的 `Paged`（D-041），不往 rag-shared 加类型（D-034）。
+
+## D-052 1.0 质量收尾：AI 能力收进防腐层、后端分三层聚合（2026-11-04）
+
+#145 经人答复（合并了 #141–#144 和后端开发视图调整）。本条按实施步骤逐步补充。
+
+**开发视图（第 1 步）**
+
+- **框架选用原则**（人提出的思路）：上下文只依赖能力接口，不直接用第三方框架。只有一个上下文用的库放在它的 `infrastructure`，多个上下文要用的做成平台层的能力模块；Spring 全家（Boot、Web、Tx、Modulith）和 web 层的 Sa-Token 注解是应用框架，例外。按这个标准盘点，当时只有 Spring AI 违反：answering 的应用层用它的 RAG 类型，knowledge 的入库用它的 ETL 接口，而且 knowledge 是经 rag-ai 间接带进来的。PDFBox、POI、MyBatis-Plus、Sa-Token 都已关在各自的 `infrastructure` 里。#136 Q13（文件解析放在 knowledge）按这个标准仍然成立。
+- **rag-ai 是 Spring AI 防腐层，按能力而不是按调用设计接口**：原来的 `ChatGateway` 只有“给提示词拿文字”，框架的 `ChatClient`、观测、结构化输出都用不上（人答复：要充分使用框架的能力）。现在对外是 `TextGeneration`（一次性、流式含备用请求和停止、结构化输出）、`QueryRewriting`（内部是 `RewriteQueryTransformer`）、`EmbeddingClient`、`RerankClient`、`ModelProbe`；内部用 `ChatClient`，模型和客户端带上观测注册表，Spring AI 自带的耗时、token 用量观测由 Actuator 汇总。提示词按消息整段交给框架，不走它的模板渲染（资料和问题里可能有花括号）。防腐层只管机制，提示词内容、门槛、何时改写、引用校验这些策略留在上下文。
+- **问答编排留在 answering**：不用 `RetrievalAugmentationAdvisor` 编排整条链路，拒答门槛、引用校验、寒暄判断是业务规则；证据、检索请求改用自己的带类型 record，检索、重排、拼证据不再实现框架接口。这修订了原来“流程骨架用 Spring AI 的阶段接口”的做法（D-020）。
+- **实施时的三处取舍**：`EmbeddingClient` 保留原名（它本来就是“向量化”能力，只换内部实现）；追问的检索规划不拆成 `CompressionQueryTransformer` 加 `MultiQueryExpander`，改为一次调用加结构化输出（拆开要调两次模型，首字变慢，且框架组件不判断寒暄）；评判不用结构化输出（要兼容先输出思考过程的模型，提示词和解析已经过评判自检校准），评判规则移到 rag-evaluation，模型调用经 `TextGeneration.fixed`。框架的改写组件只发一条用户消息，规则和问题都在里面（原来是系统提示词加用户消息），效果以评测为准。
+- **Maven 分三层聚合**：`backend/platform`（rag-shared、rag-ai）、`backend/contexts`（五个上下文）、`backend/boot`（rag-app），Java 包名不变。rag-ai 把 Spring AI 声明为 optional，不传给上下文，运行时由 rag-app 带上；`backend/contexts/pom.xml` 用 `maven-enforcer-plugin` 禁止 `org.springframework.ai`（含传递依赖）；架构规则改为“Spring AI 只在 rag-ai”。
+- **不加 `maven-dependency-plugin:analyze`**（原计划要加）：试跑时每个模块都报十几项 Spring 底层包“用了没声明”、starter“声明了没用”，要让它通过就得在每个模块声明 `spring-context`、`spring-beans`、`slf4j` 等并去掉 starter，与 Spring Boot 的常规做法相反、维护成本高；它要防的“经传递依赖用 Spring AI”已由 optional、Enforcer、ArchUnit 三层拦住。

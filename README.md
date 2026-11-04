@@ -21,16 +21,18 @@ JDK 25、Spring Boot 4.1、Spring AI 2.0、Spring Modulith 2.1、MyBatis-Plus、
 
 ## 模块
 
-| 模块 | 职责 |
-| --- | --- |
-| `rag-shared` | 共享内核：租户和用户标识、错误分类、聚合根标记，只依赖 JDK |
-| `rag-ai` | 外部 AI 系统适配：模型调用、重排、连通测试、答案评判 |
-| `rag-identity` | 账号、登录、角色与权限点（按钮级 RBAC） |
-| `rag-knowledge` | 核心：知识库、文档解析与分块、授权、混合检索 |
-| `rag-answering` | 核心：会话、回答、引用校验、拒答、反馈、知识缺口与运营统计 |
-| `rag-evaluation` | 评测集、评测运行、指标 |
-| `rag-settings` | 系统设置：模型管理（服务商、各用途的模型、变更记录）、行业包与界面文案 |
-| `rag-app` | 唯一的启动模块，只负责组装和配置 |
+后端按类型分三层聚合：`backend/platform`（平台层）、`backend/contexts`（上下文层）、`backend/boot`（启动层），规则见 AGENTS.md“目录结构”。
+
+| 模块 | 层 | 职责 |
+| --- | --- | --- |
+| `rag-shared` | 平台 | 共享内核：租户和用户标识、错误分类、聚合根标记，只依赖 JDK |
+| `rag-ai` | 平台 | Spring AI 防腐层：按能力提供文字生成、问题改写、向量化、重排、连通测试，上下文不接触 Spring AI |
+| `rag-identity` | 上下文 | 账号、登录、角色与权限点（按钮级 RBAC） |
+| `rag-knowledge` | 上下文 | 核心：知识库、文档解析与分块、授权、混合检索 |
+| `rag-answering` | 上下文 | 核心：会话、回答、引用校验、拒答、反馈、知识缺口与运营统计 |
+| `rag-evaluation` | 上下文 | 评测集、指标、报告，答案评判的规则 |
+| `rag-settings` | 上下文 | 系统设置：模型管理（服务商、各用途的模型、变更记录）、行业包与界面文案 |
+| `rag-app` | 启动 | 唯一的启动模块，只负责组装和配置 |
 
 ## 本地运行
 
