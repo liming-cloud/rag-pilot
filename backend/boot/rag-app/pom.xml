@@ -23,6 +23,19 @@
             <groupId>${project.groupId}</groupId>
             <artifactId>rag-ai</artifactId>
         </dependency>
+        <!-- rag-ai 把 Spring AI 声明为 optional（#145，不传给上下文），运行时由启动模块带上。 -->
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-openai</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-client-chat</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-rag</artifactId>
+        </dependency>
         <dependency>
             <groupId>${project.groupId}</groupId>
             <artifactId>rag-identity</artifactId>

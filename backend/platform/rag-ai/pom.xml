@@ -27,20 +27,26 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-autoconfigure</artifactId>
         </dependency>
-        <!-- 只用模型实现，不用 starter 的自动配置：模型对象由 AiConfiguration 按 rag.ai 配置显式构造。 -->
+        <!--
+          Spring AI 只在这里用（#145）：声明为 optional，不传给依赖 rag-ai 的上下文，它们只看得到 rag-ai 的能力接口；
+          运行时由启动模块 rag-app 带上。只用模型实现，不用 starter 的自动配置：模型对象由 AiConfiguration 按 rag.ai 配置显式构造。
+        -->
         <dependency>
             <groupId>org.springframework.ai</groupId>
             <artifactId>spring-ai-openai</artifactId>
+            <optional>true</optional>
         </dependency>
         <!-- ChatClient、结构化输出（#145：Spring AI 只在防腐层 rag-ai 里用）。 -->
         <dependency>
             <groupId>org.springframework.ai</groupId>
             <artifactId>spring-ai-client-chat</artifactId>
+            <optional>true</optional>
         </dependency>
         <!-- 问题改写用框架的 RewriteQueryTransformer（原来在 rag-answering，#145 收进防腐层）。 -->
         <dependency>
             <groupId>org.springframework.ai</groupId>
             <artifactId>spring-ai-rag</artifactId>
+            <optional>true</optional>
         </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>

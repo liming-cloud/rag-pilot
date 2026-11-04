@@ -1,7 +1,6 @@
 package com.liming.rag;
 
 import static com.tngtech.archunit.base.DescribedPredicate.describe;
-import static com.tngtech.archunit.core.domain.properties.HasName.Predicates.nameMatching;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.methods;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
@@ -10,6 +9,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.liming.rag.archfixture.FixtureDO;
 import com.liming.rag.archfixture.answering.CallsChatModelDirectly;
+import com.liming.rag.archfixture.answering.UsesSpringAiDocument;
 import com.liming.rag.archfixture.application.ReadsConfigWithValue;
 import com.liming.rag.archfixture.application.UsesQueryWrapper;
 import com.liming.rag.archfixture.infrastructure.AnnotatedSqlMapper;
@@ -52,14 +52,11 @@ class ArchitectureRulesTest {
             .should().resideInAPackage("..infrastructure..")
             .as("DO 只放在 infrastructure 包");
 
-    static final ArchRule MODEL_CALLS_ONLY_IN_RAG_AI = noClasses()
+    /** 框架选用（#145）：Spring AI 只在防腐层 rag-ai 里用，其他模块经它的能力接口使用 AI 能力。 */
+    static final ArchRule SPRING_AI_ONLY_IN_RAG_AI = noClasses()
             .that().resideOutsideOfPackage("com.liming.rag.ai..")
-            .should().dependOnClassesThat(nameMatching("org\\.springframework\\.ai\\.("
-                    + "chat\\.model\\.(ChatModel|StreamingChatModel)"
-                    + "|chat\\.client\\..*"
-                    + "|embedding\\.EmbeddingModel"
-                    + "|openai\\..*)"))
-            .as("模型调用（ChatModel、ChatClient、EmbeddingModel、OpenAI 实现）只在 rag-ai 模块");
+            .should().dependOnClassesThat().resideInAPackage("org.springframework.ai..")
+            .as("Spring AI 只在 rag-ai 模块（防腐层）里使用");
 
     static final String CHUNK_SEARCH_MAPPER =
             "com.liming.rag.knowledge.infrastructure.persistence.ChunkSearchMapper";
@@ -153,7 +150,7 @@ class ArchitectureRulesTest {
             .as("配置只通过各模块的 @ConfigurationProperties record 读取（带取值校验），不用 @Value");
 
     static final List<ArchRule> RULES = List.of(MYBATIS_ONLY_IN_INFRASTRUCTURE, DO_ONLY_IN_INFRASTRUCTURE,
-            MODEL_CALLS_ONLY_IN_RAG_AI, SEARCH_FILTER_IN_ONE_PLACE, LOGIN_AND_ROLE_ONLY_BY_ANNOTATION,
+            SPRING_AI_ONLY_IN_RAG_AI, SEARCH_FILTER_IN_ONE_PLACE, LOGIN_AND_ROLE_ONLY_BY_ANNOTATION,
             NO_SQL_ANNOTATIONS, NO_RAW_SQL_IN_WRAPPER, ONE_EXCEPTION_HANDLER, NO_VALUE_INJECTION,
             ENDPOINTS_NEED_PERMISSION, PERMISSIONS_IN_CATALOG);
 
@@ -172,7 +169,8 @@ class ArchitectureRulesTest {
     void rulesCatchViolations() {
         assertViolates(MYBATIS_ONLY_IN_INFRASTRUCTURE, UsesQueryWrapper.class);
         assertViolates(DO_ONLY_IN_INFRASTRUCTURE, FixtureDO.class);
-        assertViolates(MODEL_CALLS_ONLY_IN_RAG_AI, CallsChatModelDirectly.class);
+        assertViolates(SPRING_AI_ONLY_IN_RAG_AI, CallsChatModelDirectly.class);
+        assertViolates(SPRING_AI_ONLY_IN_RAG_AI, UsesSpringAiDocument.class);
         assertViolates(SEARCH_FILTER_IN_ONE_PLACE, BypassesSearchFilter.class);
         assertViolates(LOGIN_AND_ROLE_ONLY_BY_ANNOTATION, ChecksRoleByHand.class);
         assertViolates(NO_SQL_ANNOTATIONS, AnnotatedSqlMapper.class);
