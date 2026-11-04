@@ -1,6 +1,6 @@
 {
   "说明" : "由后端 ApiContractTests 生成，不要手改；接口变了用 -Dcontract.update=true 重新生成",
-  "permissions" : [ "answer:export", "answer:recheck", "answer:review", "answer:view", "chat:use", "doc:delete", "doc:replace", "doc:update", "doc:upload", "kb:create", "kb:delete", "kb:grant", "kb:update", "kb:view", "model:test", "model:update", "model:view", "role:create", "role:delete", "role:update", "role:view", "setting:update", "setting:view", "stats:export", "stats:view", "user:assign-role", "user:create", "user:disable", "user:import", "user:reset-password", "user:update", "user:view" ],
+  "permissions" : [ "answer:export", "answer:recheck", "answer:review", "answer:view", "audit:view", "chat:use", "doc:delete", "doc:replace", "doc:update", "doc:upload", "kb:create", "kb:delete", "kb:grant", "kb:update", "kb:view", "model:test", "model:update", "model:view", "role:create", "role:delete", "role:update", "role:view", "setting:update", "setting:view", "stats:export", "stats:view", "user:assign-role", "user:create", "user:disable", "user:import", "user:reset-password", "user:update", "user:view" ],
   "endpoints" : {
     "GET /api/answers" : {
       "items" : [ {

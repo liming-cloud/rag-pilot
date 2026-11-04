@@ -49,6 +49,11 @@ export const permissionCatalog: PermissionGroup[] = [
     ],
   },
   {
+    menu: "审计记录",
+    view: { code: "audit:view", label: "查看审计记录" },
+    buttons: [],
+  },
+  {
     menu: "模型管理",
     view: { code: "model:view", label: "进入页面" },
     buttons: [
@@ -78,7 +83,7 @@ export const permissionCatalog: PermissionGroup[] = [
 ];
 
 const ALL = permissionCatalog.flatMap((group) => [group.view.code, ...group.buttons.map((button) => button.code)]);
-const ADMIN_DEFAULT = ALL.filter((code) => /^(chat|kb|doc|user|answer|stats):/.test(code));
+const ADMIN_DEFAULT = ALL.filter((code) => /^(chat|kb|doc|user|answer|stats|audit):/.test(code));
 
 type StoredAccount = Omit<Account, "roles"> & { roleIds: number[]; mustChangePassword: boolean; failures: number };
 

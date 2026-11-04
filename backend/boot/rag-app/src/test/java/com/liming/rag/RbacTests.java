@@ -64,13 +64,13 @@ class RbacTests {
                 List.class).getBody();
 
         assertThat(catalog).extracting(group -> ((Map<String, Object>) group).get("menu")).containsExactly(
-                "对话", "知识库管理", "用户管理", "角色与权限", "模型管理", "回答记录", "运营概览", "系统设置");
+                "对话", "知识库管理", "用户管理", "角色与权限", "审计记录", "模型管理", "回答记录", "运营概览", "系统设置");
         var codes = new ArrayList<String>();
         for (var group : (List<Map<String, Object>>) catalog) {
             codes.add((String) ((Map<String, Object>) group.get("view")).get("code"));
             ((List<Map<String, Object>>) group.get("buttons")).forEach(button -> codes.add((String) button.get("code")));
         }
-        assertThat(codes).containsExactlyElementsOf(AllPermissions.ALL).hasSize(32);
+        assertThat(codes).containsExactlyElementsOf(AllPermissions.ALL).hasSize(33);
     }
 
     @Test
@@ -119,6 +119,7 @@ class RbacTests {
                 new Endpoint(IdentityPermissions.USER_IMPORT, HttpMethod.POST, "/api/users/import",
                         Map.of("rows", List.of(), "password", "import-password")),
                 new Endpoint(IdentityPermissions.ROLE_VIEW, HttpMethod.GET, "/api/permissions", null),
+                new Endpoint(IdentityPermissions.AUDIT_VIEW, HttpMethod.GET, "/api/audit-logs", null),
                 new Endpoint(IdentityPermissions.ROLE_CREATE, HttpMethod.POST, "/api/roles",
                         Map.of("name", "临时角色", "permissions", List.of())),
                 new Endpoint(IdentityPermissions.ROLE_UPDATE, HttpMethod.PATCH, "/api/roles/{role}",

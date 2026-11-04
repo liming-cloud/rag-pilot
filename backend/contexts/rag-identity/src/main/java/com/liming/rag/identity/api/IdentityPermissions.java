@@ -30,6 +30,9 @@ public final class IdentityPermissions {
     public static final String ROLE_UPDATE = "role:update";
     public static final String ROLE_DELETE = "role:delete";
 
+    /** 查看管理操作的审计记录（#145）。 */
+    public static final String AUDIT_VIEW = "audit:view";
+
     public static final List<Section> SECTIONS = List.of(
             new Section(10, new Group("对话", permission(CHAT_USE, "使用问答"), List.of())),
             new Section(30, new Group("用户管理", permission(USER_VIEW, "进入页面"), List.of(
@@ -38,11 +41,12 @@ public final class IdentityPermissions {
                     permission(USER_ASSIGN_ROLE, "分配角色"), permission(USER_IMPORT, "批量导入")))),
             new Section(40, new Group("角色与权限", permission(ROLE_VIEW, "进入页面"), List.of(
                     permission(ROLE_CREATE, "新建角色"), permission(ROLE_UPDATE, "修改角色"),
-                    permission(ROLE_DELETE, "删除角色")))));
+                    permission(ROLE_DELETE, "删除角色")))),
+            new Section(45, new Group("审计记录", permission(AUDIT_VIEW, "查看审计记录"), List.of())));
 
-    /** 内置“管理员”默认能问答、管理账号，不能改角色与权限。 */
+    /** 内置“管理员”默认能问答、管理账号、查看审计记录，不能改角色与权限。 */
     public static final Set<String> ADMIN_DEFAULTS = Set.of(CHAT_USE, USER_VIEW, USER_CREATE, USER_UPDATE, USER_DISABLE,
-            USER_RESET_PASSWORD, USER_ASSIGN_ROLE, USER_IMPORT);
+            USER_RESET_PASSWORD, USER_ASSIGN_ROLE, USER_IMPORT, AUDIT_VIEW);
 
     /** 内置“员工”默认只能问答。 */
     public static final Set<String> STAFF_DEFAULTS = Set.of(CHAT_USE);

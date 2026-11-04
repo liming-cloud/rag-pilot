@@ -7,6 +7,13 @@ public interface AuditLogs {
 
     void add(AuditEntry entry);
 
+    /**
+     * 一页审计记录，新的在前，带操作人的显示名。
+     *
+     * @param action 只看这一类操作，为 null 不限
+     */
+    Paged<AuditRecord> page(long tenantId, OffsetDateTime since, String action, Paged.Request page);
+
     /** 删掉 {@code before} 之前的记录，返回删除的条数。 */
     int deleteBefore(OffsetDateTime before);
 }
