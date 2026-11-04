@@ -19,6 +19,17 @@
         WHERE tenant_id = #{tenantId} AND id = #{id} AND version = #{version}
     </update>
 
+    <!-- knowledge_base_ids 是 bigint[]，按数组读成 Long[]（#136）。 -->
+    <resultMap id="conversation" type="com.liming.rag.answering.infrastructure.persistence.ConversationDO" autoMapping="true">
+        <result column="knowledge_base_ids" property="knowledgeBaseIds"
+                typeHandler="org.apache.ibatis.type.ArrayTypeHandler"/>
+    </resultMap>
+
+    <resultMap id="turn" type="com.liming.rag.answering.infrastructure.persistence.ConversationTurnDO" autoMapping="true">
+        <result column="knowledge_base_ids" property="knowledgeBaseIds"
+                typeHandler="org.apache.ibatis.type.ArrayTypeHandler"/>
+    </resultMap>
+
     <sql id="columns">
         c.id, c.tenant_id, c.user_id, c.version, c.title, c.title_source, c.knowledge_base_ids, c.last_asked_at,
         c.last_turn_id, t.parent_turn_id AS last_turn_parent_id
@@ -26,12 +37,12 @@
         LEFT JOIN conversation_turn t ON t.id = c.last_turn_id
     </sql>
 
-    <select id="find" resultType="map">
+    <select id="find" resultMap="conversation">
         SELECT <include refid="columns"/>
         WHERE c.tenant_id = #{tenantId} AND c.id = #{id}
     </select>
 
-    <select id="listOwned" resultType="map">
+    <select id="listOwned" resultMap="conversation">
         SELECT <include refid="columns"/>
         WHERE c.tenant_id = #{tenantId} AND c.user_id = #{userId}
         ORDER BY c.last_asked_at DESC, c.id DESC
@@ -63,7 +74,7 @@
     </insert>
 
     <!-- 主线：从会话记下的最后一轮沿 parent_turn_id 往回找，再按先后排列（#135）。 -->
-    <select id="mainLine" resultType="map">
+    <select id="mainLine" resultMap="turn">
         WITH RECURSIVE chain AS (
             SELECT t.id, t.parent_turn_id, t.question, t.status, t.answer_record_id, t.knowledge_base_ids, t.asked_at,
                    0 AS depth

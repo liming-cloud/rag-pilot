@@ -16,8 +16,19 @@
         VALUES (#{answerId}, #{index}, #{chunkId}, #{documentId}, #{documentName}, #{headingPath})
     </insert>
 
+    <!-- knowledge_base_ids 是 bigint[]，按数组读成 Long[]（#136）。 -->
+    <resultMap id="answerRecord" type="com.liming.rag.answering.infrastructure.persistence.AnswerRecordDO" autoMapping="true">
+        <result column="knowledge_base_ids" property="knowledgeBaseIds"
+                typeHandler="org.apache.ibatis.type.ArrayTypeHandler"/>
+    </resultMap>
+
+    <resultMap id="gapRecord" type="com.liming.rag.answering.infrastructure.persistence.GapRecordDO" autoMapping="true">
+        <result column="knowledge_base_ids" property="knowledgeBaseIds"
+                typeHandler="org.apache.ibatis.type.ArrayTypeHandler"/>
+    </resultMap>
+
     <!-- 回答记录的全部字段，加载聚合用（#136）。 -->
-    <select id="records" resultType="map">
+    <select id="records" resultMap="answerRecord">
         SELECT id, tenant_id, user_id, question, answer_text, refused, refusal_reason, top_relevance,
                rewritten_question, knowledge_base_ids, rating, feedback_comment, review_status, resolution_note,
                resolved_by
@@ -26,7 +37,7 @@
           AND id IN <foreach collection="ids" item="id" open="(" separator="," close=")">#{id}</foreach>
     </select>
 
-    <select id="citations" resultType="map">
+    <select id="citations" resultType="com.liming.rag.answering.infrastructure.persistence.CitationDO">
         SELECT c.answer_id, c.citation_index, c.chunk_id, c.document_id, c.document_name, c.heading_path
         FROM answer_citation c JOIN answer_record r ON r.id = c.answer_id
         WHERE r.tenant_id = #{tenantId}
@@ -43,7 +54,7 @@
         <if test="keyword != null">AND r.question ILIKE '%' || #{keyword} || '%'</if>
     </sql>
 
-    <select id="list" resultType="map">
+    <select id="list" resultType="com.liming.rag.answering.infrastructure.persistence.AnswerReviewDO">
         SELECT r.id, r.user_id, r.question, r.answer_text, r.refused, r.refusal_reason, r.top_relevance,
                r.rating, r.feedback_comment, r.created_at, r.rewritten_question, r.review_status,
                r.resolution_note, r.resolved_at,
@@ -60,7 +71,7 @@
         <include refid="reviewFilter"/>
     </select>
 
-    <select id="totals" resultType="map">
+    <select id="totals" resultType="com.liming.rag.answering.infrastructure.persistence.UsageTotalsDO">
         <![CDATA[
         SELECT count(*) AS questions, count(DISTINCT user_id) AS askers,
                count(*) FILTER (WHERE refused) AS refused,
@@ -73,7 +84,7 @@
         ]]>
     </select>
 
-    <select id="daily" resultType="map">
+    <select id="daily" resultType="com.liming.rag.answering.infrastructure.persistence.DailyUsageDO">
         <![CDATA[
         SELECT CAST(created_at AT TIME ZONE #{zone} AS date) AS day, count(*) AS questions,
                count(*) FILTER (WHERE refused) AS refused,
@@ -84,7 +95,7 @@
         ]]>
     </select>
 
-    <select id="refusalReasons" resultType="map">
+    <select id="refusalReasons" resultType="com.liming.rag.answering.infrastructure.persistence.LabelCountDO">
         <![CDATA[
         SELECT refusal_reason AS label, count(*) AS count
         FROM answer_record
@@ -94,7 +105,7 @@
         ]]>
     </select>
 
-    <select id="topCitedDocuments" resultType="map">
+    <select id="topCitedDocuments" resultType="com.liming.rag.answering.infrastructure.persistence.LabelCountDO">
         <![CDATA[
         SELECT c.document_name AS label, count(DISTINCT c.answer_id) AS count
         FROM answer_citation c
@@ -112,9 +123,9 @@
           AND (r.refused OR r.rating = 'DOWN')
     </sql>
 
-    <select id="gapRecords" resultType="map">
+    <select id="gapRecords" resultMap="gapRecord">
         SELECT r.id, r.user_id, r.question, r.created_at, r.refused, r.feedback_comment, r.review_status,
-               array_to_string(r.knowledge_base_ids, ',') AS knowledge_base_ids,
+               r.knowledge_base_ids,
                (SELECT string_agg(DISTINCT c.document_name, chr(31)) FROM answer_citation c
                  WHERE c.answer_id = r.id) AS cited_documents
         FROM answer_record r
@@ -129,7 +140,7 @@
     </select>
 
     <!-- 运营明细导出（#125）：一段时间内的全部问答，按时间先后。 -->
-    <select id="between" resultType="map">
+    <select id="between" resultType="com.liming.rag.answering.infrastructure.persistence.AnswerReviewDO">
         SELECT r.id, r.user_id, r.question, r.answer_text, r.refused, r.refusal_reason, r.top_relevance,
                r.rating, r.feedback_comment, r.created_at, r.rewritten_question, r.review_status,
                r.resolution_note, r.resolved_at,

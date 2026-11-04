@@ -5,14 +5,10 @@ import com.liming.rag.answering.domain.ConversationRepository;
 import com.liming.rag.answering.domain.ConversationTurn;
 import com.liming.rag.shared.TenantId;
 import com.liming.rag.shared.UserId;
-import java.sql.Array;
-import java.sql.SQLException;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
-import java.util.Arrays;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import org.springframework.stereotype.Repository;
 
@@ -82,49 +78,17 @@ class MybatisConversationRepository implements ConversationRepository {
     @Override
     public List<ConversationTurn> mainLine(long conversationId) {
         return mapper.mainLine(conversationId).stream()
-                .map(row -> new ConversationTurn(
-                        ((Number) row.get("id")).longValue(),
-                        row.get("parent_turn_id") == null ? null : ((Number) row.get("parent_turn_id")).longValue(),
-                        (String) row.get("question"),
-                        ConversationTurn.Status.valueOf((String) row.get("status")),
-                        row.get("answer_record_id") == null ? null : ((Number) row.get("answer_record_id")).longValue(),
-                        longs(row.get("knowledge_base_ids")),
-                        instant(row.get("asked_at"))))
+                .map(row -> new ConversationTurn(row.id, row.parentTurnId, row.question,
+                        ConversationTurn.Status.valueOf(row.status), row.answerRecordId,
+                        List.of(row.knowledgeBaseIds), row.askedAt.toInstant()))
                 .toList();
     }
 
-    private static Conversation toDomain(Map<String, Object> row) {
-        var lastTurn = (Number) row.get("last_turn_id");
-        var lastTurnParent = (Number) row.get("last_turn_parent_id");
-        return Conversation.restore(((Number) row.get("id")).longValue(),
-                new TenantId(((Number) row.get("tenant_id")).longValue()),
-                new UserId(((Number) row.get("user_id")).longValue()),
-                ((Number) row.get("version")).longValue(),
-                (String) row.get("title"),
-                Conversation.TitleSource.valueOf((String) row.get("title_source")),
-                longs(row.get("knowledge_base_ids")),
-                instant(row.get("last_asked_at")),
-                lastTurn == null ? null : new Conversation.MainLineTail(lastTurn.longValue(),
-                        lastTurnParent == null ? null : lastTurnParent.longValue()));
-    }
-
-    /** bigint[] 列：驱动可能直接给出 Long[]，也可能给出 {@link Array}。 */
-    private static List<Long> longs(Object value) {
-        Object[] array;
-        try {
-            array = value instanceof Array sqlArray ? (Object[]) sqlArray.getArray() : (Object[]) value;
-        } catch (SQLException e) {
-            throw new IllegalStateException("读取知识库 id 数组失败", e);
-        }
-        return Arrays.stream(array).map(item -> ((Number) item).longValue()).toList();
-    }
-
-    private static Instant instant(Object value) {
-        return switch (value) {
-            case OffsetDateTime time -> time.toInstant();
-            case java.sql.Timestamp time -> time.toInstant();
-            default -> throw new IllegalStateException("不认识的时间类型：" + value.getClass());
-        };
+    private static Conversation toDomain(ConversationDO row) {
+        return Conversation.restore(row.id, new TenantId(row.tenantId), new UserId(row.userId), row.version,
+                row.title, Conversation.TitleSource.valueOf(row.titleSource), List.of(row.knowledgeBaseIds),
+                row.lastAskedAt.toInstant(), row.lastTurnId == null ? null
+                        : new Conversation.MainLineTail(row.lastTurnId, row.lastTurnParentId));
     }
 
     private static OffsetDateTime time(Instant instant) {
