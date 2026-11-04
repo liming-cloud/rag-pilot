@@ -40,11 +40,12 @@
 
 - 权限过滤只在 rag-knowledge 的检索服务里写一处，禁止绕过。
 - 模型调用只经 rag-ai 模块（Spring AI 的 ChatClient / EmbeddingModel 和 RerankClient）；各用途用哪个服务商和模型由 rag-settings 经 `ModelRouting` 提供（D-043、D-044）。服务商密钥用 AES-GCM 加密存库，主密钥只从环境变量 `RAG_MASTER_KEY` 读；环境变量里的密钥同样只从环境变量读；接口、日志都不返回密钥明文，界面只显示后 4 位。
-- DDD：聚合只在 knowledge、answering；上下文模块之间只用对方的 `api` 包或监听事件。
-- MyBatis-Plus 的 DO、Wrapper、Page 只出现在 infrastructure 包；不引入 MapStruct，不做多层 DTO 转换。
+- DDD：聚合只在 knowledge、answering；上下文模块之间只用对方的 `api` 包或监听事件，依赖方向见下面的“上下文依赖”。
+- MyBatis-Plus 的 DO、Wrapper、Page 只出现在 infrastructure 包；查询结果映射到 infrastructure 里只有字段的 `XxxDO`，不用 `Map` 加强转（`bigint[]` 列在 `resultMap` 里指定 `ArrayTypeHandler`）；不引入 MapStruct，不做多层 DTO 转换。
 - SQL 只写在 Mapper XML（`src/main/resources/mapper/<模块名>/<Mapper 名>.xml`）里；不用 `@Select` 等 SQL 注解，条件构造器不拼原始 SQL（`apply`、`last`、`inSql` 等）。简单的单表条件用 `LambdaQueryWrapper`。
 - 配置只通过各模块的 `@ConfigurationProperties` record 读取（如 `AnsweringProperties`），取值在构造时校验，非法配置启动失败；不用 `@Value`。
-- 登录和角色校验只用 Sa-Token 注解。
+- 要当前时间的类注入 rag-app 声明的 `Clock`（UTC），不直接调用 `now()`，测试传固定时钟。
+- 登录和角色校验只用 Sa-Token 注解；登录会话和密码摘要经 identity 的端口 `Sessions`、`PasswordHasher`，application、domain 不依赖 Sa-Token。权限点由各上下文在自己的 `api` 包里声明（实现 identity 的 `PermissionCatalog`），identity 运行时汇总。
 - 不新增 Maven 模块、外部服务、依赖或抽象层，除非 DECISIONS.md 已记录理由。
 - Flyway 迁移放在所属模块的 `db/migration/<模块名>/`，版本号用 `V<yyyyMMddNNNN>__说明.sql`。
 - 界面只用 shadcn/ui 组件（`components/ui`：Button、Input、Label、NativeSelect、Checkbox、Table，缺的先按 shadcn 加进来）和 tokens.css 变量，feature 里不直接写 `<input>`、`<select>`、`<table>` 等原生元素；新页面先做 MSW 假数据原型，确认后再接接口；不做像素级调整。
@@ -59,10 +60,13 @@
 - **上下文模块**（identity、knowledge、answering、evaluation、settings）：根包只放 `package-info.java`，类只能在五个子包里：
   - `api`：对其他模块公开的合同（接口、record、枚举、事件），不暴露模块内部类型；
   - `web`：Controller、请求响应 record；
-  - `application`：用例服务，以及它需要的端口接口（如 `ChunkIndex`、`FileStorage`）；
+  - `application`：用例服务，以及它需要的端口接口（如 `ChunkIndex`、`FileStorage`）；用例多时按业务分子包（如 answering 的 `ask`、`conversation`、`review`、`insight`），共用的类留在 `application`；
   - `domain`：聚合、值对象、领域规则，只在 knowledge、answering；
-  - `infrastructure`：端口的实现，按技术分子包（`persistence`、`storage`）。
-- **依赖方向**：`domain` 只依赖 JDK、rag-shared 和本模块的 `domain`、`api`；`application` 不依赖 `infrastructure`、`web`；`web` 不依赖 `infrastructure`；`api` 不依赖本模块其他子包。
+  - `infrastructure`：端口的实现，按技术分子包（`persistence`、`storage`、`parsing`、`security`）。
+- **依赖方向**：`domain` 只依赖 JDK、rag-shared 和本模块的 `domain`、`api`；`application` 不依赖 `infrastructure`、`web`；`web` 不依赖 `infrastructure`、`domain`（展示用 application 的查询结果 record）；`api` 不依赖本模块其他子包。
+- **上下文依赖**：identity 不依赖其他上下文；settings 依赖 identity；knowledge 依赖 identity、settings；answering 依赖 identity、knowledge、settings；evaluation 不依赖其他上下文。技术模块 shared、ai 都可以用，ai 不依赖上下文。各上下文在根包 `package-info.java` 的 `allowedDependencies` 里声明，`ModularityTests` 检查。上游要用到下游的东西时（如权限点清单），由上游在 `api` 里定义接口、下游实现，不反向依赖。
+- **输入**：web 只转交原始值（路径、查询参数和请求体里的字符串、数字），application 解析成枚举或值对象，不合规时抛本模块的业务异常；每个模块的解析写在一处。
+- **租户**：单租户部署，`TenantId` 为以后多租户预留；哪些端口和设置不分租户见 D-051。
 - **共享内核**（rag-shared）：只放多个上下文共同依赖、用纯 Java 表达、很少变动的模型概念——租户和用户标识、错误分类 `ErrorKind` 与 `BusinessException`、聚合根标记 `AggregateRoot`。只依赖 JDK，没有资源文件（迁移、配置归各自模块），不放业务规则；当前用户、权限码、各上下文自己的标识不放这里。新增类型前先在 DECISIONS.md 记录理由（D-034）。
 - **技术模块**（shared、ai）扁平：对外只公开接口、record、枚举和异常，实现类包内可见；rag-app 只放启动类和全局配置（含唯一的异常出口 `ApiExceptionHandler`）。
 - **聚合**：聚合根实现 `AggregateRoot`，只在 knowledge、answering 的 `domain` 包；`domain` 里的 `XxxRepository` 只为同包的聚合根 `Xxx` 而建。

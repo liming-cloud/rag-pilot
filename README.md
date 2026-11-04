@@ -24,12 +24,12 @@ JDK 25、Spring Boot 4.1、Spring AI 2.0、Spring Modulith 2.1、MyBatis-Plus、
 | 模块 | 职责 |
 | --- | --- |
 | `rag-shared` | 共享内核：租户和用户标识、错误分类、聚合根标记，只依赖 JDK |
-| `rag-ai` | 外部 AI 系统适配：模型调用、重排、文档解析 |
+| `rag-ai` | 外部 AI 系统适配：模型调用、重排、连通测试、答案评判 |
 | `rag-identity` | 账号、登录、角色与权限点（按钮级 RBAC） |
-| `rag-knowledge` | 核心：知识库、文档、分块、授权、混合检索 |
-| `rag-answering` | 核心：会话、回答、引用校验、拒答、反馈 |
+| `rag-knowledge` | 核心：知识库、文档解析与分块、授权、混合检索 |
+| `rag-answering` | 核心：会话、回答、引用校验、拒答、反馈、知识缺口与运营统计 |
 | `rag-evaluation` | 评测集、评测运行、指标 |
-| `rag-settings` | 系统设置：模型管理（服务商、各用途的模型、变更记录） |
+| `rag-settings` | 系统设置：模型管理（服务商、各用途的模型、变更记录）、行业包与界面文案 |
 | `rag-app` | 唯一的启动模块，只负责组装和配置 |
 
 ## 本地运行

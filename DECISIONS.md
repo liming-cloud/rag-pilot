@@ -297,3 +297,17 @@ Compose 增加 web 服务（`deploy/web.Dockerfile`）：Node 24 构建前端，
 - **基础镜像从仓库拉**（人答复）：JRE（`eclipse-temurin:25-jre`）、Nginx（`nginx:1.28-alpine`）和数据库（ParadeDB）三个镜像按摘要锁定在 `compose.yml`，第一次和摘要变化时才下载。服务器不能直接访问 Docker Hub 时，在 `.env` 里用 `RAG_DB_IMAGE`、`RAG_JRE_IMAGE`、`RAG_NGINX_IMAGE` 改成镜像源或内网仓库的地址，摘要不变。D-048 的“安装不需要访问外网”相应改为：安装和升级时要能访问镜像仓库。数据库镜像不再重新打成 `rag-pilot-db:<版本>`。
 - **打包**：`deploy/package.sh` 编译 jar（JDK 25）和 dist（Node 24），组装发布包，不构建、不导出镜像。开发时也用它打本地发布包再安装，仓库里的 `deploy/` 不再能直接 `up --build`，开发和客户现场只有一条路径。
 - **CI**：`ci.yml` 的 `image` 任务改为打发布包、在解压后的目录里用 Compose 构建两个镜像并校验 Nginx 配置（任务名不变，分支保护不用改）。`deploy.yml` 检查发布包内容（有 jar、dist、Dockerfile、脚本，没有镜像文件），三个场景都由 `build.sh` 构建镜像；迁移失败的场景改为在发布包的 `app.Dockerfile` 里追加一个必然失败的迁移。升级场景兼容从 0.9.0.1 的旧格式离线包（带镜像文件）升级。
+
+## D-051 后端结构：上下文依赖方向自动检查、领域规则回到聚合和值对象、应用层经端口用外部能力（2026-11-04）
+
+#136 经人逐条答复（Q1–Q16），行为、接口和评测指标不变，规则写进 AGENTS.md 的“约束”和“目录结构”：
+
+- **依赖方向**：各上下文在 `package-info` 的 `allowedDependencies` 声明可以依赖谁，`ModularityTests` 检查，并有一个违反方向的样例模块（`com.liming.archmodules`）证明能拦下。settings 的 api 拆出 `StatsZone`，knowledge 只为统计时区依赖它；`AnsweringSettings` 只留行业包和拒答话术。“实际检索了哪些库”由 `KnowledgeAccess.scope` 一处计算（只用于记录和展示，检索时的过滤仍只在 `ChunkSearchMapper`）。
+- **权限点归各上下文**（Q12）：identity 的 api 定义 `PermissionCatalog`，各上下文在自己的 api 里声明权限点常量和清单，identity 运行时汇总，编码或位置重复时启动失败。权限点编码不变，库里的角色数据不用迁移。问答页用的 `chat:use` 归 identity（三个上下文都要用它）。越权规则（能授予哪些权限点和角色）只由 `AccessService.rulesFor` 给出。
+- **领域规则回到聚合和值对象**：知识库授权放进 `KnowledgeBase` 聚合（Q6），聚合记下这次加了谁、去了谁，仓储只写变化的部分；“建库的人自动获得授权”“不能撤销自己”在聚合里，账号和角色是否存在由 identity 判断，“能否访问”仍只按检索 SQL 的同一个片段判断。回答记录经 `AnswerRecord` 聚合新建、带全部字段加载；问题长度收进 `Question`，上传文件的规则收进 `UploadedFile`；identity 没有 domain 包，账号规则收进 application 的 `AccountRules`。
+- **回答的位置**：引用 `Citation` 和拒答原因 `RefusalReason` 在 answering 的 domain，回答本身是 `AnswerRecord.Reply`；提问用例的返回值叫 `AskResult`，放在 `application.ask`（经人选择，不放 domain：它带着计时和改写过程，是用例结果，不是领域概念）。`answering.api` 只剩权限点。
+- **端口**（Q7）：identity 的应用层经 `Sessions`、`PasswordHasher` 使用登录会话和密码摘要，Sa-Token 的适配（含 `StpInterface`、`CurrentUser` 的实现）在 `identity.infrastructure.security`。文件解析（PDFBox、POI）从 rag-ai 挪到 knowledge 的 `infrastructure.parsing`（Q13），rag-ai 只调外部 AI 系统。新增三条架构规则：domain 包只在 knowledge、answering；application、domain 不依赖 Sa-Token；web 不依赖 domain（Q8），各有 `archfixture` 违规样例。
+- **同类事情一种写法**：查询结果映射到 infrastructure 里只有字段的 DO（Q14）；时间从 rag-app 的 UTC `Clock` 取（Q15）；web 只转交原始值，application 解析；两个流式接口共用 `SseChannel`（断开后是否继续生成由调用方指定，D-036）；知识缺口整类标记已处理改为一条 SQL 批量更新。answering 的应用层按业务分成 `ask`、`conversation`、`review`、`insight` 四个子包，不新增模块（Q5）；rag-evaluation 保留为模块（Q9）。
+- **单租户**（Q11）：部署是单租户，`TenantId` 为以后多租户预留，不改签名。不带租户的有：identity 的 `Accounts`（按 id 查、启停、改密码、登录失败计数，用户名全局唯一，登录时不选租户）、`Roles` 的 `delete`、`rolesOf`、`userIds`、`setUserRoles`，answering 的 `ConversationRepository.addTurn`、`mainLine`、`deleteInactiveSince`，靠调用方先按租户查到聚合或账号再调用；settings 的模型管理、系统设置、行业包和统计时区都是部署级的。真做多租户时，这些端口要补租户参数，用户名改为租户内唯一（数据库变更）。
+- **角色删除不用领域事件**：identity 发布 `RoleDeleted`，knowledge 在同一事务里同步收回这个角色的知识库授权，删角色和收回授权要么都成功、要么都不做。目前没有其他领域事件，也不引入事件发布表。
+- **不做的**：id 类型化（E6）记进 ROADMAP 待办；不合并各上下文的 `Paged`（D-041），不往 rag-shared 加类型（D-034）。
