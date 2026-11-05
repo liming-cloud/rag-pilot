@@ -362,6 +362,27 @@ describe("提问", () => {
 
     expect(await screen.findByRole("alert")).toHaveTextContent("问题不能超过 500 字");
   });
+
+  it("会话刚在别处更新过（409）时显示服务端给的原因，问题还在、可以重试（#145 A2）", async () => {
+    server.use(
+      http.post(
+        "/api/conversations/:id/turns/stream",
+        () =>
+          HttpResponse.json(
+            { status: 409, code: "ANSWERING_CONFLICT", detail: "这段对话刚在别处更新过，请刷新后重试" },
+            { status: 409 },
+          ),
+        { once: true },
+      ),
+    );
+    renderPage("/chat/901");
+    await screen.findByRole("region", { name: "问答：临期商品怎么处理？" });
+    ask("那报损呢？");
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("这段对话刚在别处更新过，请刷新后重试");
+    const failed = screen.getByRole("region", { name: "问答：那报损呢？" });
+    expect(within(failed).getByRole("button", { name: "重试" })).toBeInTheDocument();
+  });
 });
 
 describe("输入框（#145 A3、A4、A6）", () => {
