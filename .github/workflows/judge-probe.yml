@@ -15,7 +15,7 @@ on:
   pull_request:
     paths:
       - backend/contexts/rag-evaluation/src/main/java/com/liming/rag/evaluation/api/ModelAnswerJudge.java
-      - backend/contexts/rag-evaluation/src/test/java/com/liming/rag/evaluation/api/JudgeProbeRun.java
+      - backend/boot/rag-app/src/test/java/com/liming/rag/JudgeProbeRun.java
       - scripts/eval/judge_probe.py
       - .github/workflows/judge-probe.yml
 
@@ -55,6 +55,6 @@ jobs:
           EVAL_JUDGE_PROBE: ${{ runner.temp }}/judge-probe.json
           EVAL_JUDGE_MODEL: ${{ inputs.judge_model || 'THUDM/GLM-4-9B-0414' }}
         run: >
-          ./mvnw -B -ntp verify -pl backend/contexts/rag-evaluation -am
+          ./mvnw -B -ntp verify -pl backend/boot/rag-app -am
           -Dtest.groups=eval -Dtest.excludedGroups=none
           -Dtest=JudgeProbeRun -Dsurefire.failIfNoSpecifiedTests=false

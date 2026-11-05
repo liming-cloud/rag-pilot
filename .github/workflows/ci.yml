@@ -81,6 +81,7 @@ jobs:
         env:
           DB_PASSWORD: ci
           MODEL_API_KEY: ci
+          REDIS_PASSWORD: ci
         run: |
           docker compose -f compose.yml --env-file release.env config --quiet
           docker compose -f compose.yml --env-file release.env build app web
