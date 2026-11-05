@@ -61,7 +61,7 @@ class JsonCachesTest {
     @Test
     void nullIsNotCached() {
         assertThat(cache.get("9", () -> null)).isNull();
-        assertThat(store.values).isEmpty();
+        assertThat(cacheKeys()).isEmpty();
     }
 
     @Test
@@ -69,7 +69,7 @@ class JsonCachesTest {
         cache.get("1", () -> load("kb:view"));
         cache.evict("1");
 
-        assertThat(store.values).isEmpty();
+        assertThat(cacheKeys()).isEmpty();
         assertThat(cache.get("1", () -> load("user:view"))).isEqualTo(new Access(1, List.of("user:view")));
     }
 
@@ -98,7 +98,7 @@ class JsonCachesTest {
 
         cache.clear();
 
-        assertThat(store.values).containsOnlyKeys("rag:cache:settings:all");
+        assertThat(cacheKeys()).containsOnly("rag:cache:settings:all");
     }
 
     @Test
@@ -155,6 +155,56 @@ class JsonCachesTest {
                 .isThrownBy(() -> new CacheSpec<>("access", Access.class, Duration.ZERO));
     }
 
+    @Test
+    void staleLoadIsNotWrittenBackWhenEvictedWhileLoading() {
+        // 读请求加载时读到的是旧权限；加载期间管理员收回权限、提交并清除；旧值不能写回缓存。
+        var stale = cache.get("1", () -> {
+            var old = load("kb:view");
+            cache.evict("1");
+            return old;
+        });
+
+        assertThat(stale).isEqualTo(new Access(1, List.of("kb:view")));
+        assertThat(cacheKeys()).doesNotContain("rag:cache:access:1");
+        assertThat(cache.get("1", () -> load())).isEqualTo(new Access(1, List.of()));
+        assertThat(rejectedWrites()).isEqualTo(1);
+    }
+
+    @Test
+    void staleLoadIsNotWrittenBackWhenClearedWhileLoading() {
+        cache.get("1", () -> {
+            var old = load("kb:view");
+            cache.clear();
+            return old;
+        });
+
+        assertThat(cacheKeys()).doesNotContain("rag:cache:access:1");
+    }
+
+    @Test
+    void evictionInTransactionRejectsLoadThatStartedBeforeCommit() {
+        TransactionSynchronizationManager.initSynchronization();
+        cache.evict("1");
+        // 另一个请求在提交前开始加载（读到旧数据），提交后才写回。
+        var stale = cache.get("1", () -> {
+            var old = load("kb:view");
+            commit();
+            return old;
+        });
+
+        assertThat(stale).isNotNull();
+        assertThat(cacheKeys()).doesNotContain("rag:cache:access:1");
+    }
+
+    private List<String> cacheKeys() {
+        return store.values.keySet().stream().filter(key -> key.startsWith("rag:cache:")).toList();
+    }
+
+    private double rejectedWrites() {
+        var counter = meters.find("rag.cache.rejected_writes").tag("cache", "access").counter();
+        return counter == null ? 0 : counter.count();
+    }
+
     private double count(String result) {
         var counter = meters.find("rag.cache.gets").tag("cache", "access").tag("result", result).counter();
         return counter == null ? 0 : counter.count();
@@ -170,9 +220,9 @@ class JsonCachesTest {
         TransactionSynchronizationManager.clearSynchronization();
     }
 
-    private static final class MemoryStore implements CacheStore {
+    /** 内存存储，加上调用计数、记下过期时间和模拟出错。 */
+    private static final class MemoryStore extends MemoryCacheStore {
 
-        final Map<String, String> values = new ConcurrentHashMap<>();
         final Map<String, Duration> ttls = new ConcurrentHashMap<>();
         final AtomicInteger calls = new AtomicInteger();
         volatile boolean failing;
@@ -187,26 +237,35 @@ class JsonCachesTest {
         @Override
         public @Nullable String get(String key) {
             touch();
-            return values.get(key);
+            return super.get(key);
         }
 
         @Override
-        public void set(String key, String value, Duration ttl) {
+        public String generation(String generationKey) {
             touch();
-            values.put(key, value);
-            ttls.put(key, ttl);
+            return super.generation(generationKey);
         }
 
         @Override
-        public void delete(String key) {
+        public boolean setIfGeneration(String key, String value, Duration ttl, String generationKey, String expected) {
             touch();
-            values.remove(key);
+            var written = super.setIfGeneration(key, value, ttl, generationKey, expected);
+            if (written) {
+                ttls.put(key, ttl);
+            }
+            return written;
         }
 
         @Override
-        public void deleteByPrefix(String prefix) {
+        public void bumpAndDelete(String generationKey, String key) {
             touch();
-            values.keySet().removeIf(key -> key.startsWith(prefix));
+            super.bumpAndDelete(generationKey, key);
+        }
+
+        @Override
+        public void bumpAndDeleteByPrefix(String generationKey, String prefix) {
+            touch();
+            super.bumpAndDeleteByPrefix(generationKey, prefix);
         }
     }
 

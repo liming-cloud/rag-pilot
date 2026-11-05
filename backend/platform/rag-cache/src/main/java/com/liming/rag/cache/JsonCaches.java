@@ -19,7 +19,12 @@ import tools.jackson.databind.json.JsonMapper;
  * 存储；出错期间的清除可能没做成，所以恢复后第一次访问前先清掉本前缀下的全部缓存，再照常使用。存的 JSON 读不回来
  * （如升级后 record 改了字段）按没有缓存处理，加载后覆盖。
  *
- * <p>指标 {@code rag.cache.gets}，标签 {@code cache}（缓存名）和 {@code result}（hit、miss、error）。
+ * <p>一致性：清除在事务提交后做；清除前先把全局代数（{@code <前缀>@generation}）加一，读不到时先记下代数再加载，写回时
+ * 代数没变才写（Redis 里用 Lua 原子比较）。所以“加载时读到旧数据、清除之后才写回”的写入会被拒绝，不会把刚收回的权限
+ * 又放回缓存。代数是全局一个：清除很少（管理操作），代价只是同时在加载的其他键这次不写回。
+ *
+ * <p>指标 {@code rag.cache.gets}，标签 {@code cache}（缓存名）和 {@code result}（hit、miss、error）；
+ * {@code rag.cache.rejected_writes}：因为期间有清除而没有写回的次数。
  */
 final class JsonCaches implements Caches {
 
@@ -30,6 +35,7 @@ final class JsonCaches implements Caches {
     private final CacheProperties properties;
     private final Clock clock;
     private final @Nullable MeterRegistry meters;
+    private final String generationKey;
 
     /** 在这个时刻（毫秒）之前不访问存储。 */
     private volatile long skipUntil;
@@ -46,6 +52,7 @@ final class JsonCaches implements Caches {
         this.properties = properties;
         this.clock = clock;
         this.meters = meters;
+        this.generationKey = properties.prefix() + "@generation";
     }
 
     @Override
@@ -71,8 +78,11 @@ final class JsonCaches implements Caches {
                 return loader.get();
             }
             String cached;
+            String generation;
             try {
                 cached = store.get(fullKey);
+                // 加载之前记下代数：加载期间有清除时，写回会被拒绝。
+                generation = cached == null ? store.generation(generationKey) : "";
             } catch (RuntimeException e) {
                 failed("get", e);
                 count("error");
@@ -84,23 +94,30 @@ final class JsonCaches implements Caches {
                     count("hit");
                     return value;
                 }
+                try {
+                    generation = store.generation(generationKey);
+                } catch (RuntimeException e) {
+                    failed("get", e);
+                    count("error");
+                    return loader.get();
+                }
             }
             count("miss");
             var loaded = loader.get();
             if (loaded != null) {
-                write(fullKey, loaded);
+                write(fullKey, loaded, generation);
             }
             return loaded;
         }
 
         @Override
         public void evict(String key) {
-            afterCommit("evict", () -> store.delete(namespace + key));
+            afterCommit("evict", () -> store.bumpAndDelete(generationKey, namespace + key));
         }
 
         @Override
         public void clear() {
-            afterCommit("clear", () -> store.deleteByPrefix(namespace));
+            afterCommit("clear", () -> store.bumpAndDeleteByPrefix(generationKey, namespace));
         }
 
         private @Nullable V parse(String cached) {
@@ -112,9 +129,12 @@ final class JsonCaches implements Caches {
             }
         }
 
-        private void write(String fullKey, V value) {
+        private void write(String fullKey, V value, String generation) {
             try {
-                store.set(fullKey, json.writeValueAsString(value), spec.ttl());
+                if (!store.setIfGeneration(fullKey, json.writeValueAsString(value), spec.ttl(), generationKey, generation)
+                        && meters != null) {
+                    Counter.builder("rag.cache.rejected_writes").tag("cache", spec.name()).register(meters).increment();
+                }
             } catch (RuntimeException e) {
                 failed("set", e);
             }
@@ -164,7 +184,7 @@ final class JsonCaches implements Caches {
         }
         if (flushPending) {
             try {
-                store.deleteByPrefix(properties.prefix() + ":");
+                store.bumpAndDeleteByPrefix(generationKey, properties.prefix() + ":");
                 flushPending = false;
                 log.info("event=cache_recovered prefix={}", properties.prefix());
             } catch (RuntimeException e) {

@@ -183,6 +183,7 @@ cd /opt/rag-pilot/rag-pilot-1.0.0.1
 | 提问都答“找不到”，或上传的文档一直“失败：向量化失败” | 模型服务不可用或密钥失效：`grep event=model_call_failed` 看是哪个用途、什么错误；在管理端“模型管理”测试连通，检查 `MODEL_API_KEY` 和服务器能否访问模型服务。恢复后在知识库里点“重新处理”，或等自动重试 |
 | `app` 反复重启，日志里有 `Flyway` / `Migration` 报错 | 数据库结构升级失败：按“六、回退”用升级前的备份恢复，把日志发给开发方 |
 | 所有人都登录不了，或刚登录就被退出；`logs app` 里有 `RedisConnectionException` 或 `event=cache_failure` | Redis 没在运行或密码不对：`docker compose ... ps redis` 看状态，`logs redis` 看原因；检查 `.env` 的 `REDIS_PASSWORD`，改了以后 `up -d redis app`。Redis 恢复后不用做别的，缓存会自动清空重建 |
+| 在数据库里手工改了账号、角色、系统设置或模型配置，界面上没变 | 这些数据有缓存，只有经界面改才会立即清除：`up -d --force-recreate app` 重启后端（启动后先清空缓存），或等 1 小时缓存过期 |
 | `app` 启动失败，日志里有“rag.xxx 必须…” | `.env` 里的配置值不合法，按提示改正后 `up -d app` |
 | `build.sh` 拉镜像失败（`pull access denied`、超时） | 服务器访问不了镜像仓库：配置 Docker 的镜像源，或在 `.env` 里把 `RAG_DB_IMAGE`、`RAG_REDIS_IMAGE`、`RAG_JRE_IMAGE`、`RAG_NGINX_IMAGE` 改成能访问的仓库地址（摘要不变），再运行一次 |
 | 磁盘满 | `df -h` 看哪个分区；清理旧备份（`backups/`）和不用的镜像（`docker image prune`，不要删正在用的版本；旧版本的镜像删了，回退时 `restore.sh` 会重新构建） |

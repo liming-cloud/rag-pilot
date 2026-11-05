@@ -366,7 +366,8 @@ Compose 增加 web 服务（`deploy/web.Dockerfile`）：Node 24 构建前端，
 
 - **缓存做成平台组件 `rag-cache`**（人答复：用 Redis，把缓存能力发布出来；客户端用 Redisson）：做法同 rag-ai（D-052），对外只有 `Caches`、`TypedCache`、`CacheSpec` 和单元测试用的 `Caches.inMemory()`。Redisson 在里面声明为 optional，由 rag-app 带上 `redisson-spring-boot-starter`（4.8.0，按 Spring Boot 4.1 构建，按 `spring.data.redis.*` 建 `RedissonClient`）；上下文层用 Enforcer 禁止依赖 Redisson、Spring Data Redis、Lettuce、Jedis，`ArchitectureRulesTest` 禁止引用（违规样例 `UsesRedissonDirectly`）。机制都在平台里：
   - 键是 `rag:cache:<缓存名>:<键>`，值存 JSON；读不到时加载再写入，加载结果为 null 不缓存；读回的 JSON 解析不了（升级后 record 改了字段）按没有缓存处理。
-  - 在事务里清除的等提交后再清，回滚不清。剩下一个窄窗口：别的请求在提交前读到旧值、在清除之后才写回缓存。过期时间（权限、设置、路由 1 小时，问题向量 1 天）兜底，不加分布式锁。
+  - 在事务里清除的等提交后再清，回滚不清。防止旧值写回：清除前先把全局代数 `rag:cache@generation` 加一（和删除在一个 Lua 脚本里原子执行）；读不到时先记下代数再从库里加载，写回时用 Lua 比较代数，变了就不写（指标 `rag.cache.rejected_writes`）。这样“提交前从库里读到旧权限、清除之后才写回”的那次写入被拒绝，收回的权限不会被放回缓存。代数全局一个、不随清除删除：清除很少（管理操作），代价只是同时在加载的其他键这次不写回。验证：`JsonCachesTest` 的三个竞态用例；`CacheConsistencyTests` 对着真实 Redis，加载较慢时并发读写 60 轮没有读到旧版本（去掉代数比较后同一用例失败：“清除第 2 版之后开始读，却读到第 1 版”），并发收回权限 15 轮后发出的请求全部 403。过期时间（权限、设置、路由 1 小时，问题向量 1 天）只是兜底。
+  - 不经应用直接改库（运维手工执行 SQL）时缓存不知道，要重启 app（启动后先清空缓存）或等过期，运维手册写明。
   - Redis 出错或超时（命令超时 500ms）记 `event=cache_failure`，读直接走加载，之后 `rag.cache.retry-after`（30 秒）内不再访问 Redis，免得每次都等超时；出错期间的清除可能没做成，所以恢复后第一次访问前先清掉 `rag:cache:` 下的全部键。启动后第一次访问前也清一次：升级时的迁移、停机期间的改动都可能让留在 Redis 里的值过时。缓存不是问答的硬依赖（`CacheOutageTests`）。
   - 指标 `rag.cache.gets`（标签 `cache`、`result`=hit/miss/error）。
   - Redisson 在启动时就连 Redis，Redis 不在时应用起不来；Compose 里 app 等 redis 健康检查通过再启动。
