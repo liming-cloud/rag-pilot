@@ -2,6 +2,12 @@ package com.liming.rag;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.liming.rag.answering.application.ask.AskResult;
+import com.liming.rag.answering.application.ask.Rewrite;
+import com.liming.rag.answering.application.review.AnswerLogService;
+import com.liming.rag.answering.domain.RefusalReason;
+import com.liming.rag.shared.TenantId;
+import com.liming.rag.shared.UserId;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
@@ -27,7 +33,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
 /**
- * 出了问题看得出来（#145 C1）：Actuator 开放指标；拒答、入库失败、登录失败和锁定、越权拒绝各留一行 {@code event=…} 日志，
+ * 出了问题看得出来（#145 C1）：Actuator 开放指标；拒答、低分改写、入库失败、登录失败和锁定、越权拒绝各留一行 {@code event=…} 日志，
  * 不记密码和问题原文。
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
@@ -43,6 +49,9 @@ class ObservabilityTests {
 
     @Autowired
     private TestRestTemplate http;
+
+    @Autowired
+    private AnswerLogService answers;
 
     @Test
     @DisplayName("Actuator 开放指标：有接口请求的统计")
@@ -112,6 +121,18 @@ class ObservabilityTests {
         assertThat(TestDocuments.awaitProcessed(http, kb, uploaded, null)).containsEntry("status", "FAILED");
         assertThat(output.getAll()).containsPattern(
                 "event=document_failed document=" + uploaded.get("id") + " kind=content attempts=1");
+    }
+
+    @Test
+    @DisplayName("低分改写留下 query_rewritten（带回答和改写结果），不带原问题和改写后的问题")
+    void logsRewrites(CapturedOutput output) {
+        // 本地确定性模型不会真的改写，这里直接记一条带改写结果的回答（同 AnswerReviewLoopTests）。
+        var answer = AskResult.refused(RefusalReason.LOW_RELEVANCE, 0.01, "拒答").withRewrite(new Rewrite(
+                Rewrite.Outcome.REWRITTEN, "观测用的改写问题临期商品打几折", 9, 800L, 100L, 200L));
+        long id = answers.record(new TenantId(1), new UserId(1), "观测用的原问题临其商品打几着", answer).id();
+
+        assertThat(output.getAll()).contains("event=query_rewritten answer=" + id + " outcome=REWRITTEN")
+                .doesNotContain("观测用的原问题").doesNotContain("观测用的改写问题");
     }
 
     private long createStaff(String username) {
