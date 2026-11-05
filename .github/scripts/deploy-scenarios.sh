@@ -68,6 +68,27 @@ status="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 10 -H "Authorizatio
 [ "$status" = "200" ] || { echo "重启 app 后会话失效了（HTTP $status）" >&2; exit 1; }
 echo "重启后同一个令牌仍能访问 /api/auth/me"
 
+title "(a) Redis 停掉：已登录的请求被拒绝、app 不挂；恢复后同一个令牌继续有效"
+compose() { (cd "$current" && docker compose -f compose.yml --env-file .env --env-file release.env "$@"); }
+compose stop redis
+status="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 30 -H "Authorization: Bearer $token" "$app_url/api/auth/me" || true)"
+echo "Redis 停掉时 /api/auth/me 返回 HTTP $status"
+[ "$status" != "200" ] && [ "$status" != "000" ] || { echo "Redis 停掉时应拒绝请求并及时返回（HTTP $status）" >&2; exit 1; }
+curl -fsS --max-time 10 "$app_url/actuator/health/liveness" | grep -q '"status":"UP"' || { echo "Redis 停掉后 app 进程不应退出或失去存活" >&2; exit 1; }
+compose start redis
+for _ in $(seq 30); do
+  [ "$(compose ps --format '{{.Health}}' redis)" = "healthy" ] && break
+  sleep 2
+done
+# 缓存出错后 30 秒内跳过 Redis；会话没有这个窗口，恢复后立即可用，这里留出重连时间。
+for _ in $(seq 15); do
+  status="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 10 -H "Authorization: Bearer $token" "$app_url/api/auth/me" || true)"
+  [ "$status" = "200" ] && break
+  sleep 2
+done
+[ "$status" = "200" ] || { echo "Redis 恢复后同一个令牌没有恢复有效（HTTP $status）" >&2; exit 1; }
+echo "Redis 恢复后同一个令牌仍有效"
+
 title "(b) 停服务备份 → 删卷 → 恢复"
 backup="$("$current/backup.sh" | tail -n 1)"
 (cd "$current" && docker compose -f compose.yml --env-file .env --env-file release.env down -v)
