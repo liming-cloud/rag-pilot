@@ -73,6 +73,7 @@ services:
       DB_URL: jdbc:postgresql://db:5432/rag
       DB_USERNAME: rag
       DB_PASSWORD: ${DB_PASSWORD}
+      RAG_CACHE_REDIS_ENABLED: "true"
       REDIS_HOST: redis
       REDIS_PORT: 6379
       REDIS_PASSWORD: ${REDIS_PASSWORD}

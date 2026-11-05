@@ -13,8 +13,10 @@
 
     <artifactId>rag-cache</artifactId>
     <!--
-      缓存平台组件（D-053）：对外只有 Caches、TypedCache、CacheSpec，读不到时加载、事务提交后清除、Redis 出错时降级读库、
-      命中率指标都在这里。Redis 客户端 Redisson 声明为 optional，不传给依赖本模块的上下文；运行时由启动模块 rag-app 带上。
+      缓存平台组件（D-053、D-054）：对外只有 Caches、TypedCache、CacheSpec 和键值存储 KeyValueStores、KeyValueStore；
+      一级缓存（Caffeine）、二级缓存（Redis）、读不到时加载、事务提交后清除、Redis 出错时降级、命中率指标都在这里。
+      Caffeine 只在本模块里用（ArchitectureRulesTest 检查）。Redis 客户端 Redisson 声明为 optional，不传给依赖本模块的上下文；
+      运行时由启动模块 rag-app 带上，rag.cache.redis.enabled 打开时才连 Redis。
     -->
 
     <dependencies>
@@ -37,6 +39,10 @@
         <dependency>
             <groupId>io.micrometer</groupId>
             <artifactId>micrometer-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.github.ben-manes.caffeine</groupId>
+            <artifactId>caffeine</artifactId>
         </dependency>
         <dependency>
             <groupId>org.redisson</groupId>

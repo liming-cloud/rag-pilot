@@ -11,9 +11,6 @@ import com.liming.rag.settings.application.pack.IndustryPackFile;
 import com.liming.rag.settings.application.SettingsException;
 import com.liming.rag.settings.application.SettingsProperties;
 
-import com.liming.rag.cache.CacheSpec;
-import com.liming.rag.cache.Caches;
-import com.liming.rag.cache.TypedCache;
 import com.liming.rag.identity.api.AuditTrail;
 import com.liming.rag.identity.api.UserDirectory;
 import com.liming.rag.settings.api.AnsweringSettings;
@@ -22,7 +19,6 @@ import com.liming.rag.settings.api.StatsZone;
 import com.liming.rag.shared.TenantId;
 import com.liming.rag.shared.UserId;
 import java.time.Clock;
-import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.util.Arrays;
@@ -44,12 +40,6 @@ public class SystemSettingsService implements AnsweringSettings, StatsZone {
     private record Fallback(List<String> value, SettingSource source) {
     }
 
-    /** 缓存里的界面保存值；过期时间只是兜底，以清除为准。 */
-    record SavedSettings(List<SystemSettingsStore.Saved> items) {
-    }
-
-    static final CacheSpec<SavedSettings> SETTINGS = new CacheSpec<>("settings", SavedSettings.class, Duration.ofHours(1));
-    private static final String ALL = "all";
 
     private final SystemSettingsStore store;
     private final AuditTrail audit;
@@ -59,10 +49,10 @@ public class SystemSettingsService implements AnsweringSettings, StatsZone {
     private final SettingsProperties.Branding branding;
     private final ZoneId statsZone;
     private final Clock clock;
-    private final TypedCache<SavedSettings> cache;
+    private final SavedSettingsCache cache;
 
     SystemSettingsService(SystemSettingsStore store, UserDirectory users, SettingsProperties properties, Clock clock,
-            AuditTrail audit, Caches caches) {
+            AuditTrail audit, SavedSettingsCache cache) {
         this.audit = audit;
         this.store = store;
         this.users = users;
@@ -71,7 +61,7 @@ public class SystemSettingsService implements AnsweringSettings, StatsZone {
         this.branding = properties.branding();
         this.statsZone = ZoneId.of(properties.statsZone());
         this.clock = clock;
-        this.cache = caches.cache(SETTINGS);
+        this.cache = cache;
     }
 
     @Override
@@ -126,7 +116,7 @@ public class SystemSettingsService implements AnsweringSettings, StatsZone {
         store.save(key, stripped, actor.value(), SettingsInputs.actorName(users, tenantId, actor), OffsetDateTime.now(clock));
         audit.record(tenantId, actor, "SETTING_CHANGED", "SETTING", key.name(),
                 "修改系统设置 " + key.name() + "：" + String.join(" / ", stripped));
-        cache.evict(ALL);
+        cache.forget();
         return item(store.all(), key);
     }
 
@@ -138,15 +128,14 @@ public class SystemSettingsService implements AnsweringSettings, StatsZone {
 
     SettingItem restore(TenantId tenantId, UserId actor, SettingKey key) {
         store.delete(key);
-        cache.evict(ALL);
+        cache.forget();
         audit.record(tenantId, actor, "SETTING_RESTORED", "SETTING", key.name(), "系统设置 " + key.name() + " 恢复为默认值");
         return item(store.all(), key);
     }
 
     /** 界面保存过的值，读缓存；一条语句读出，不用开事务。 */
     private Map<SettingKey, SystemSettingsStore.Saved> saved() {
-        var cached = cache.get(ALL, () -> new SavedSettings(List.copyOf(store.all().values())));
-        return cached == null ? store.all() : cached.items().stream()
+        return cache.get(() -> List.copyOf(store.all().values())).stream()
                 .collect(Collectors.toMap(SystemSettingsStore.Saved::key, Function.identity()));
     }
 

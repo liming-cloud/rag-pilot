@@ -12,6 +12,7 @@ import com.liming.rag.archfixture.api.ApiLeaksDomain;
 import com.liming.rag.archfixture.application.ApplicationUsesInfrastructure;
 import com.liming.rag.archfixture.application.ApplicationUsesSaToken;
 import com.liming.rag.archfixture.domain.DomainOutsideCore;
+import com.liming.rag.archfixture.domain.DomainUsesPlatform;
 import com.liming.rag.archfixture.domain.DomainUsesSpring;
 import com.liming.rag.archfixture.web.WebUsesDomain;
 import com.liming.rag.archfixture.web.WebUsesInfrastructure;
@@ -51,7 +52,7 @@ class PackageLayoutTest {
     static final ArchRule DOMAIN_IS_PURE = noClasses()
             .that().resideInAPackage("..domain..")
             .should().dependOnClassesThat(nameMatching("(org\\.springframework|com\\.baomidou|org\\.apache\\.ibatis"
-                    + "|cn\\.dev33\\.satoken|com\\.liming\\.rag\\.ai)\\..*"
+                    + "|cn\\.dev33\\.satoken|com\\.liming\\.rag\\.(ai|cache|persistence))\\..*"
                     + "|.*\\.(application|infrastructure|web)\\..*"))
             .as("domain 只依赖 JDK、rag-shared 和本模块的 domain、api，不依赖框架和其他层");
 
@@ -150,6 +151,7 @@ class PackageLayoutTest {
     void rulesCatchViolations() {
         assertViolates(CONTEXT_CLASSES_IN_LAYERS, StrayAtModuleRoot.class);
         assertViolates(DOMAIN_IS_PURE, DomainUsesSpring.class);
+        assertViolates(DOMAIN_IS_PURE, DomainUsesPlatform.class);
         assertViolates(DOMAIN_ONLY_IN_CORE, DomainOutsideCore.class);
         assertViolates(APPLICATION_NOT_ON_SA_TOKEN, ApplicationUsesSaToken.class);
         assertViolates(APPLICATION_NOT_ON_ADAPTERS, ApplicationUsesInfrastructure.class);

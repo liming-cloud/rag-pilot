@@ -9,15 +9,11 @@ import com.liming.rag.ai.ModelProbe;
 import com.liming.rag.ai.ModelRoute;
 import com.liming.rag.ai.ModelRouting;
 import com.liming.rag.ai.ModelUsage;
-import com.liming.rag.cache.CacheSpec;
-import com.liming.rag.cache.Caches;
-import com.liming.rag.cache.TypedCache;
 import com.liming.rag.identity.api.UserDirectory;
 import com.liming.rag.shared.TenantId;
 import com.liming.rag.shared.UserId;
 import java.net.URI;
 import java.time.Clock;
-import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -41,43 +37,34 @@ public class ModelSettingsService implements ModelRouting {
 
     static final int MAX_MODEL_LENGTH = 200;
 
-    /**
-     * 一个用途的路由在缓存里的样子：没在界面配置过时 {@code setting} 为 null；{@code provider} 是它用的服务商（密钥是密文），
-     * 用环境变量的服务商或服务商已被删除时为 null。过期时间只是兜底，以清除为准。
-     */
-    record CachedRoute(@Nullable PurposeSetting setting, @Nullable ModelProvider provider) {
-    }
-
-    static final CacheSpec<CachedRoute> ROUTES = new CacheSpec<>("model-routes", CachedRoute.class, Duration.ofHours(1));
-
     private final ModelSettingsStore store;
     private final ModelProbe probe;
     private final KeyCipher cipher;
     private final UserDirectory users;
     private final TransactionOperations transactions;
     private final Clock clock;
-    private final TypedCache<CachedRoute> routes;
+    private final ModelRouteCache routes;
 
     ModelSettingsService(ModelSettingsStore store, ModelProbe probe, KeyCipher cipher, UserDirectory users,
-            TransactionOperations transactions, Clock clock, Caches caches) {
+            TransactionOperations transactions, Clock clock, ModelRouteCache routes) {
         this.store = store;
         this.probe = probe;
         this.cipher = cipher;
         this.users = users;
         this.transactions = transactions;
         this.clock = clock;
-        this.routes = caches.cache(ROUTES);
+        this.routes = routes;
     }
 
     /** 读缓存；没有时查用途和服务商两条语句，不开事务，不占着连接等模型。 */
     @Override
     public Optional<ModelRoute> override(ModelUsage usage) {
-        var cached = routes.get(usage.name(), () -> {
+        var cached = routes.get(usage, () -> {
             var setting = store.purpose(usage).orElse(null);
             var providerId = setting == null ? null : setting.providerId();
-            return new CachedRoute(setting, providerId == null ? null : store.provider(providerId).orElse(null));
+            return new SavedRoute(setting, providerId == null ? null : store.provider(providerId).orElse(null));
         });
-        if (cached == null || cached.setting() == null) {
+        if (cached.setting() == null) {
             return Optional.empty();
         }
         var setting = cached.setting();
@@ -159,7 +146,7 @@ public class ModelSettingsService implements ModelRouting {
         return transactions.execute(status -> {
             var before = view(usage);
             store.savePurpose(new PurposeSetting(usage, providerId, model, actorName, OffsetDateTime.now(clock)));
-            routes.clear();
+            routes.forgetAll();
             store.insertChange(new ModelChange(null, usage, before.providerName(), before.model(), providerId,
                     providerName(providerId), model, actor.value(), actorName, OffsetDateTime.now(clock), restoredFrom));
             return view(usage);
@@ -190,7 +177,7 @@ public class ModelSettingsService implements ModelRouting {
 
     /** 改或删了服务商：用到它的用途要重新读，提交后清除全部路由（D-053）。 */
     void forgetRoutes() {
-        routes.clear();
+        routes.forgetAll();
     }
 
     private String providerName(@Nullable Long providerId) {

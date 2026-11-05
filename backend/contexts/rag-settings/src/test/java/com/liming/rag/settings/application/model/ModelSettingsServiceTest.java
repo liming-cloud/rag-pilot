@@ -1,6 +1,5 @@
 package com.liming.rag.settings.application.model;
 
-import com.liming.rag.cache.Caches;
 import com.liming.rag.settings.application.SettingsException;
 import com.liming.rag.settings.application.SettingsProperties;
 import com.liming.rag.shared.Paged;
@@ -39,7 +38,7 @@ class ModelSettingsServiceTest {
     private final FakeProbe probe = new FakeProbe();
     private final ModelSettingsService service = new ModelSettingsService(store, probe,
             new KeyCipher(new SettingsProperties(KeyCipherTest.MASTER_KEY)), new FakeUsers(),
-            TransactionOperations.withoutTransaction(), Clock.systemUTC(), Caches.inMemory());
+            TransactionOperations.withoutTransaction(), Clock.systemUTC(), new PassThroughModelRouteCache());
     private final ModelProviderService providers = new ModelProviderService(store,
             new KeyCipher(new SettingsProperties(KeyCipherTest.MASTER_KEY)), service);
 
@@ -132,7 +131,7 @@ class ModelSettingsServiceTest {
     void masterKeyMissing() {
         var noKey = new KeyCipher(new SettingsProperties(""));
         var withoutKey = new ModelSettingsService(store, probe, noKey, new FakeUsers(),
-                TransactionOperations.withoutTransaction(), Clock.systemUTC(), Caches.inMemory());
+                TransactionOperations.withoutTransaction(), Clock.systemUTC(), new PassThroughModelRouteCache());
         var providersWithoutKey = new ModelProviderService(store, noKey, withoutKey);
 
         assertThatThrownBy(() -> providersWithoutKey.createProvider("云服务", "https://x/v1", "sk-1234567890"))

@@ -5,7 +5,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import org.jspecify.annotations.Nullable;
 
-/** 单元测试用的内存存储（{@link Caches#inMemory()}），不过期；比较代数再写入等操作加锁，和 Redis 里一样是原子的。 */
+/** 测试二级缓存机制用的内存存储，不过期；比较代数再写入等操作加锁，和 Redis 里一样是原子的。 */
 class MemoryCacheStore implements CacheStore {
 
     final Map<String, String> values = new ConcurrentHashMap<>();

@@ -1,6 +1,7 @@
 package com.liming.rag.cache;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
@@ -24,13 +25,16 @@ class JsonCachesTest {
     record Access(long accountId, List<String> permissions) {
     }
 
-    private static final CacheSpec<Access> SPEC = new CacheSpec<>("access", Access.class, Duration.ofMinutes(10));
+    private static final CacheSpec<Access> SPEC = new CacheSpec<>("access", Access.class);
+    private static final CacheProperties.Redis REDIS =
+            new CacheProperties.Redis(true, "localhost", 6379, null, Duration.ofMillis(500), Duration.ofSeconds(2));
 
     private final MemoryStore store = new MemoryStore();
     private final MutableClock clock = new MutableClock();
     private final SimpleMeterRegistry meters = new SimpleMeterRegistry();
-    private final JsonCaches caches = new JsonCaches(store, JsonMapper.builder().build(),
-            new CacheProperties("rag:cache", Duration.ofSeconds(30)), clock, meters);
+    /** 这一组用例测二级缓存的机制，默认关掉一级。 */
+    private final JsonCaches caches = new JsonCaches(store, JsonMapper.builder().build(), properties(false, null), clock,
+            meters);
     private final TypedCache<Access> cache = caches.cache(SPEC);
     private final AtomicInteger loads = new AtomicInteger();
 
@@ -39,6 +43,14 @@ class JsonCachesTest {
         if (TransactionSynchronizationManager.isSynchronizationActive()) {
             TransactionSynchronizationManager.clearSynchronization();
         }
+    }
+
+    private static CacheProperties properties(boolean local,
+            @Nullable Map<String, CacheProperties.Tiers> caches) {
+        return new CacheProperties("rag:cache", Duration.ofSeconds(30), REDIS,
+                new CacheProperties.Tiers(new CacheProperties.Local(local, 100L, Duration.ofMinutes(5)),
+                        new CacheProperties.Remote(true, Duration.ofMinutes(10))),
+                caches);
     }
 
     private Access load(String... permissions) {
@@ -91,7 +103,7 @@ class JsonCachesTest {
 
     @Test
     void clearRemovesOnlyThisCache() {
-        var other = caches.cache(new CacheSpec<>("settings", Access.class, Duration.ofMinutes(10)));
+        var other = caches.cache(new CacheSpec<>("settings", Access.class));
         cache.get("1", () -> load("a"));
         cache.get("2", () -> load("b"));
         other.get("all", () -> load("c"));
@@ -148,11 +160,100 @@ class JsonCachesTest {
     }
 
     @Test
-    void specRejectsBadNamesAndTtl() {
-        org.assertj.core.api.Assertions.assertThatIllegalArgumentException()
-                .isThrownBy(() -> new CacheSpec<>("Access:*", Access.class, Duration.ofMinutes(1)));
-        org.assertj.core.api.Assertions.assertThatIllegalArgumentException()
-                .isThrownBy(() -> new CacheSpec<>("access", Access.class, Duration.ZERO));
+    void specRejectsBadNames() {
+        assertThatIllegalArgumentException().isThrownBy(() -> new CacheSpec<>("Access:*", Access.class));
+    }
+
+    @Test
+    void sameNameWithAnotherTypeIsRejected() {
+        assertThat(caches.cache(new CacheSpec<>("access", Access.class))).isSameAs(cache);
+        assertThatIllegalArgumentException().isThrownBy(() -> caches.cache(new CacheSpec<>("access", String.class)));
+    }
+
+    @Test
+    void invalidTierConfigurationFailsAtStartup() {
+        assertThatIllegalArgumentException().isThrownBy(() -> properties(true,
+                Map.of("access", new CacheProperties.Tiers(new CacheProperties.Local(false, null, null),
+                        new CacheProperties.Remote(false, null)))));
+        assertThatIllegalArgumentException().isThrownBy(() -> properties(true,
+                Map.of("access", new CacheProperties.Tiers(new CacheProperties.Local(null, 0L, null), null))));
+        assertThatIllegalArgumentException().isThrownBy(() -> new CacheProperties("rag:cache", Duration.ofSeconds(30),
+                REDIS, new CacheProperties.Tiers(new CacheProperties.Local(true, 10L, null), null), null));
+    }
+
+    // ---- 一级缓存 ----
+
+    private final JsonCaches tiered = new JsonCaches(store, JsonMapper.builder().build(), properties(true,
+            Map.of("vectors", new CacheProperties.Tiers(new CacheProperties.Local(false, null, null), null))), clock,
+            meters);
+    private final TypedCache<Access> both = tiered.cache(SPEC);
+
+    @Test
+    void localHitDoesNotTouchRedis() {
+        both.get("1", () -> load("kb:view"));
+        int calls = store.calls.get();
+
+        assertThat(both.get("1", () -> load("changed"))).isEqualTo(new Access(1, List.of("kb:view")));
+        assertThat(store.calls).hasValue(calls);
+        assertThat(loads).hasValue(1);
+        assertThat(count("local_hit")).isEqualTo(1);
+    }
+
+    @Test
+    void evictClearsBothTiers() {
+        both.get("1", () -> load("kb:view"));
+        both.evict("1");
+
+        assertThat(cacheKeys()).isEmpty();
+        assertThat(both.get("1", () -> load("user:view"))).isEqualTo(new Access(1, List.of("user:view")));
+    }
+
+    @Test
+    void staleLoadIsNotKeptInEitherTierWhenEvictedWhileLoading() {
+        both.get("1", () -> {
+            var old = load("kb:view");
+            both.evict("1");
+            return old;
+        });
+
+        assertThat(cacheKeys()).doesNotContain("rag:cache:access:1");
+        assertThat(both.get("1", () -> load())).as("一级也没留下旧值").isEqualTo(new Access(1, List.of()));
+        assertThat(rejected("local")).isEqualTo(1);
+    }
+
+    @Test
+    void remoteOnlyCacheSkipsLocalTier() {
+        var vectors = tiered.cache(new CacheSpec<>("vectors", Access.class));
+        vectors.get("q", () -> load("v"));
+        int calls = store.calls.get();
+
+        vectors.get("q", () -> load("v"));
+
+        assertThat(store.calls.get()).as("每次都读 Redis").isGreaterThan(calls);
+        assertThat(loads).hasValue(1);
+    }
+
+    @Test
+    void localTierStillServesWhileRedisIsDown() {
+        both.get("1", () -> load("kb:view"));
+        store.failing = true;
+
+        assertThat(both.get("1", () -> load("changed"))).isEqualTo(new Access(1, List.of("kb:view")));
+        both.evict("1");
+        assertThat(both.get("1", () -> load("revoked"))).as("Redis 出错时本进程的清除仍然生效")
+                .isEqualTo(new Access(1, List.of("revoked")));
+    }
+
+    @Test
+    void withoutRedisOnlyTheLocalTierIsUsed() {
+        var local = new JsonCaches(null, JsonMapper.builder().build(), CacheProperties.localOnly(), clock, meters)
+                .cache(SPEC);
+        local.get("1", () -> load("kb:view"));
+
+        assertThat(local.get("1", () -> load("changed"))).isEqualTo(new Access(1, List.of("kb:view")));
+        local.evict("1");
+        assertThat(local.get("1", () -> load("revoked"))).isEqualTo(new Access(1, List.of("revoked")));
+        assertThat(store.calls).hasValue(0);
     }
 
     @Test
@@ -201,7 +302,11 @@ class JsonCachesTest {
     }
 
     private double rejectedWrites() {
-        var counter = meters.find("rag.cache.rejected_writes").tag("cache", "access").counter();
+        return rejected("remote");
+    }
+
+    private double rejected(String tier) {
+        var counter = meters.find("rag.cache.rejected_writes").tag("cache", "access").tag("tier", tier).counter();
         return counter == null ? 0 : counter.count();
     }
 

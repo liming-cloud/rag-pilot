@@ -1,7 +1,10 @@
 package com.liming.rag;
 
+import java.lang.annotation.ElementType;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+import java.lang.annotation.Target;
 import java.util.List;
-import org.redisson.api.RedissonClient;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.util.TestPropertyValues;
 import org.springframework.context.ConfigurableApplicationContext;
@@ -21,6 +24,12 @@ import org.testcontainers.utility.DockerImageName;
  */
 final class TestRedis {
 
+    /** 标在测试类上：不起 Redis，按默认的本地模式（缓存只有一级、会话在进程内）启动。 */
+    @Retention(RetentionPolicy.RUNTIME)
+    @Target(ElementType.TYPE)
+    @interface WithoutRedis {
+    }
+
     static final DockerImageName IMAGE =
             DockerImageName.parse("redis@sha256:489a769e0a54dc245896132a15c72d2bc7296719954da99398f43a3877e5f8eb");
     static final String BEAN = "testRedisContainer";
@@ -37,14 +46,10 @@ final class TestRedis {
 
     /** 连到这个容器的配置项，按命令行参数的写法。 */
     static List<String> arguments(GenericContainer<?> redis) {
-        return List.of("--spring.data.redis.host=" + redis.getHost(),
-                "--spring.data.redis.port=" + redis.getMappedPort(6379),
-                "--spring.data.redis.password=" + PASSWORD);
-    }
-
-    /** 测试绕过应用直接改了库里被缓存的表（账号、角色、设置、模型）时，清掉全部缓存，不动会话。 */
-    static void clearCaches(RedissonClient redis) {
-        redis.getKeys().deleteByPattern("rag:cache:*");
+        return List.of("--rag.cache.redis.enabled=true",
+                "--rag.cache.redis.host=" + redis.getHost(),
+                "--rag.cache.redis.port=" + redis.getMappedPort(6379),
+                "--rag.cache.redis.password=" + PASSWORD);
     }
 
     static final class Factory implements ContextCustomizerFactory {
@@ -52,9 +57,9 @@ final class TestRedis {
         @Override
         public ContextCustomizer createContextCustomizer(Class<?> testClass,
                 List<ContextConfigurationAttributes> configAttributes) {
-            var springBootTest = MergedAnnotations.from(testClass, MergedAnnotations.SearchStrategy.TYPE_HIERARCHY)
-                    .isPresent(SpringBootTest.class);
-            return springBootTest ? new Customizer() : null;
+            var annotations = MergedAnnotations.from(testClass, MergedAnnotations.SearchStrategy.TYPE_HIERARCHY);
+            return annotations.isPresent(SpringBootTest.class) && !annotations.isPresent(WithoutRedis.class)
+                    ? new Customizer() : null;
         }
     }
 
@@ -66,9 +71,10 @@ final class TestRedis {
             var redis = container();
             redis.start();
             TestPropertyValues.of(
-                    "spring.data.redis.host=" + redis.getHost(),
-                    "spring.data.redis.port=" + redis.getMappedPort(6379),
-                    "spring.data.redis.password=" + PASSWORD).applyTo(context);
+                    "rag.cache.redis.enabled=true",
+                    "rag.cache.redis.host=" + redis.getHost(),
+                    "rag.cache.redis.port=" + redis.getMappedPort(6379),
+                    "rag.cache.redis.password=" + PASSWORD).applyTo(context);
             context.getBeanFactory().registerSingleton(BEAN, redis);
             context.addApplicationListener(event -> {
                 if (event instanceof ContextClosedEvent) {

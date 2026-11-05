@@ -5,7 +5,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.liming.rag.cache.CacheSpec;
 import com.liming.rag.cache.Caches;
 import com.liming.rag.identity.api.IdentityPermissions;
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -44,7 +43,7 @@ class CacheConsistencyTests {
     record Probe(String value) {
     }
 
-    private static final CacheSpec<Probe> PROBE = new CacheSpec<>("consistency-probe", Probe.class, Duration.ofMinutes(5));
+    private static final CacheSpec<Probe> PROBE = new CacheSpec<>("consistency-probe", Probe.class);
     private static final String PASSWORD = "member-password";
     private static final int ROUNDS = 15;
     private static final int READERS = 6;
@@ -80,7 +79,7 @@ class CacheConsistencyTests {
     @Test
     @DisplayName("并发且加载较慢时：开始读的时刻在某次清除之后，就读不到那次改动之前的值（真实 Redis，多轮）")
     void concurrentSlowLoadsNeverResurrectOldValues() throws Exception {
-        var cache = caches.cache(new CacheSpec<>("consistency-race", Probe.class, Duration.ofMinutes(5)));
+        var cache = caches.cache(new CacheSpec<>("consistency-race", Probe.class));
         var source = new java.util.concurrent.atomic.AtomicInteger();
         var committed = new java.util.concurrent.atomic.AtomicInteger();
         var stop = new AtomicBoolean();

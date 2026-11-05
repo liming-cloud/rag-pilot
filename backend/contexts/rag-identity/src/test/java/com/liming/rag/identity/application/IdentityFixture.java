@@ -1,6 +1,5 @@
 package com.liming.rag.identity.application;
 
-import com.liming.rag.cache.Caches;
 import com.liming.rag.identity.application.account.Account;
 import com.liming.rag.identity.application.role.AccessService;
 import com.liming.rag.identity.application.role.Role;
@@ -18,7 +17,7 @@ public final class IdentityFixture {
     public static final String PASSWORD = "test-password";
 
     public final InMemoryIdentity store = new InMemoryIdentity();
-    public final AccessService access = new AccessService(store, store, TestCatalog.REGISTRY, Caches.inMemory());
+    public final AccessService access = new AccessService(store, store, TestCatalog.REGISTRY, new MapAccessSnapshotCache());
     public final FakeSessions sessions = new FakeSessions();
     public final PlainPasswordHasher passwords = new PlainPasswordHasher();
     /** 记下的审计：每条是“操作 说明”（#145 C2）。 */

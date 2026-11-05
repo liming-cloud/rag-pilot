@@ -6,7 +6,6 @@ import com.liming.rag.cache.TypedCache;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.time.Duration;
 import java.util.HexFormat;
 import java.util.List;
 
@@ -19,8 +18,7 @@ final class CachedQuestionEmbeddings implements EmbeddingClient {
     record QuestionVector(float[] vector) {
     }
 
-    static final CacheSpec<QuestionVector> VECTORS =
-            new CacheSpec<>("question-vectors", QuestionVector.class, Duration.ofDays(1));
+    static final CacheSpec<QuestionVector> VECTORS = new CacheSpec<>("question-vectors", QuestionVector.class);
 
     private final EmbeddingClient delegate;
     private final String model;

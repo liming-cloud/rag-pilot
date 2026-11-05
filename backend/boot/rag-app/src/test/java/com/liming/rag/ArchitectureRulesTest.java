@@ -9,7 +9,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.liming.rag.archfixture.FixtureDO;
 import com.liming.rag.archfixture.answering.CallsChatModelDirectly;
+import com.liming.rag.archfixture.answering.UsesCaffeineDirectly;
 import com.liming.rag.archfixture.answering.UsesRedissonDirectly;
+import com.liming.rag.archfixture.application.ApplicationUsesCaches;
 import com.liming.rag.archfixture.answering.UsesSpringAiDocument;
 import com.liming.rag.archfixture.application.ReadsConfigWithValue;
 import com.liming.rag.archfixture.application.UsesQueryWrapper;
@@ -62,12 +64,21 @@ class ArchitectureRulesTest {
             .should().dependOnClassesThat().resideInAPackage("org.springframework.ai..")
             .as("Spring AI 只在 rag-ai 模块（防腐层）里使用");
 
-    /** 缓存平台组件（D-053）：Redis 客户端只在 rag-cache 里用，其他模块经 {@code Caches}；会话存储由 Sa-Token 插件提供。 */
-    static final ArchRule REDIS_ONLY_IN_RAG_CACHE = noClasses()
+    /** 缓存平台组件（D-053、D-054）：Redis 客户端和一级缓存 Caffeine 只在 rag-cache 里用，其他模块经它的能力接口。 */
+    static final ArchRule CACHE_CLIENTS_ONLY_IN_RAG_CACHE = noClasses()
             .that().resideOutsideOfPackage("com.liming.rag.cache..")
             .should().dependOnClassesThat().resideInAnyPackage("org.redisson..", "org.springframework.data.redis..",
-                    "io.lettuce..", "redis.clients..")
-            .as("Redis 客户端只在 rag-cache 模块（缓存防腐层）里使用");
+                    "io.lettuce..", "redis.clients..", "com.github.benmanes.caffeine..")
+            .as("Redis 客户端和 Caffeine 只在 rag-cache 模块里使用");
+
+    /**
+     * 松耦合（D-054）：上下文只在 infrastructure 层用缓存组件，实现 application 声明的业务化缓存端口；
+     * api、web、application、domain 不知道缓存怎么实现。
+     */
+    static final ArchRule CACHE_ONLY_IN_INFRASTRUCTURE = noClasses()
+            .that().resideInAnyPackage("..api..", "..web..", "..application..", "..domain..")
+            .should().dependOnClassesThat().resideInAPackage("com.liming.rag.cache..")
+            .as("缓存组件 rag-cache 只在上下文的 infrastructure 层使用，application 经自己声明的缓存端口");
 
     static final String CHUNK_SEARCH_MAPPER =
             "com.liming.rag.knowledge.infrastructure.persistence.ChunkSearchMapper";
@@ -182,7 +193,7 @@ class ArchitectureRulesTest {
     }
 
     static final List<ArchRule> RULES = List.of(MYBATIS_ONLY_IN_INFRASTRUCTURE, DO_ONLY_IN_INFRASTRUCTURE,
-            SPRING_AI_ONLY_IN_RAG_AI, REDIS_ONLY_IN_RAG_CACHE, SEARCH_FILTER_IN_ONE_PLACE, LOGIN_AND_ROLE_ONLY_BY_ANNOTATION,
+            SPRING_AI_ONLY_IN_RAG_AI, CACHE_CLIENTS_ONLY_IN_RAG_CACHE, CACHE_ONLY_IN_INFRASTRUCTURE, SEARCH_FILTER_IN_ONE_PLACE, LOGIN_AND_ROLE_ONLY_BY_ANNOTATION,
             NO_SQL_ANNOTATIONS, NO_RAW_SQL_IN_WRAPPER, ONE_EXCEPTION_HANDLER, NO_VALUE_INJECTION,
             ENDPOINTS_NEED_PERMISSION, PERMISSIONS_IN_CATALOG, WEB_NOT_USING_SERVICE_NESTED_TYPES);
 
@@ -203,7 +214,9 @@ class ArchitectureRulesTest {
         assertViolates(DO_ONLY_IN_INFRASTRUCTURE, FixtureDO.class);
         assertViolates(SPRING_AI_ONLY_IN_RAG_AI, CallsChatModelDirectly.class);
         assertViolates(SPRING_AI_ONLY_IN_RAG_AI, UsesSpringAiDocument.class);
-        assertViolates(REDIS_ONLY_IN_RAG_CACHE, UsesRedissonDirectly.class);
+        assertViolates(CACHE_CLIENTS_ONLY_IN_RAG_CACHE, UsesRedissonDirectly.class);
+        assertViolates(CACHE_CLIENTS_ONLY_IN_RAG_CACHE, UsesCaffeineDirectly.class);
+        assertViolates(CACHE_ONLY_IN_INFRASTRUCTURE, ApplicationUsesCaches.class);
         assertViolates(SEARCH_FILTER_IN_ONE_PLACE, BypassesSearchFilter.class);
         assertViolates(LOGIN_AND_ROLE_ONLY_BY_ANNOTATION, ChecksRoleByHand.class);
         assertViolates(NO_SQL_ANNOTATIONS, AnnotatedSqlMapper.class);

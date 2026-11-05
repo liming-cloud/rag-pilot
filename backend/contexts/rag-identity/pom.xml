@@ -33,7 +33,7 @@
             <groupId>${project.groupId}</groupId>
             <artifactId>rag-persistence</artifactId>
         </dependency>
-        <!-- 账号权限缓存经平台组件 rag-cache（D-053），看不到 Redis。 -->
+        <!-- 账号权限缓存和登录会话经平台组件 rag-cache（D-053、D-054），只在 infrastructure 里用，看不到 Redis。 -->
         <dependency>
             <groupId>${project.groupId}</groupId>
             <artifactId>rag-cache</artifactId>

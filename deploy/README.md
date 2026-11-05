@@ -51,7 +51,7 @@ vi .env                                           # 至少填 DB_PASSWORD、REDI
 - `RAG_MASTER_KEY`：用 `openssl rand -base64 32` 生成，**装好后不要再改**，并抄存一份到安全的地方（见“七、主密钥”）。
 - `RAG_ADMIN_PASSWORD`：只在第一次启动时用来创建超级管理员，之后在界面上改密码；改了以后 `verify.sh` 要用环境变量 `VERIFY_ADMIN_PASSWORD` 给新密码。
 - `.env` 里有密码和密钥，不要发给别人，不要放进备份。构建镜像时只用到 jar、dist 和 `nginx.conf`，`.env` 不会进镜像（见包里的 `.dockerignore`）。
-- `REDIS_PASSWORD`：Redis 的密码，用 `openssl rand -hex 24` 生成。Redis 存缓存和登录会话，只在 Compose 内部网络里，不对外开放端口。
+- `REDIS_PASSWORD`：Redis 的密码，用 `openssl rand -hex 24` 生成。Redis 存二级缓存和登录会话，只在 Compose 内部网络里，不对外开放端口。`compose.yml` 已给 app 设好 `RAG_CACHE_REDIS_ENABLED=true`；不经 Compose 直接运行 jar 时默认不连 Redis，缓存只在进程内、重启后要重新登录（D-054）。
 - `RAG_DB_IMAGE`、`RAG_REDIS_IMAGE`、`RAG_JRE_IMAGE`、`RAG_NGINX_IMAGE`：服务器不能直接访问 Docker Hub 时，改成镜像源或内网仓库里的地址，`@sha256:` 后面的摘要保持与 `compose.yml` 里的一致。不填时从 Docker Hub 拉。
 
 `verify.sh` 会建一个叫“部署验证”的知识库和一个测试账号 `deploy-verify`，用来检查检索、问答和权限；以后每次运行都复用它们。不想留可以在管理端删掉，下次运行会重新建。
@@ -79,13 +79,13 @@ docker compose --env-file .env --env-file release.env logs --tail 200 app   # �
 | `event=document_failed` | 文档入库失败：`kind=content` 是文件本身的问题，`kind=model` 是模型暂时不可用（10 分钟后自动重试一次） |
 | `event=login_failed`、`event=account_locked` | 登录失败（`reason`）、连续输错被锁 |
 | `event=access_denied` | 越权被拒：缺的权限点（`permission`）或不能管理的知识库（`knowledgeBase`） |
-| `event=cache_failure` | Redis 出错或超时：`cache` 是哪种缓存、`op` 是什么操作。之后 30 秒内直接读数据库、不再访问 Redis，问答照常；恢复后先清空缓存再用。登录会话也在 Redis 里，Redis 不可用时**不能登录、已登录的请求会被拒绝** |
+| `event=cache_failure` | Redis 出错或超时：`cache` 是哪种缓存、`op` 是什么操作。之后 30 秒内跳过 Redis（进程内的一级缓存照常用，没有时读数据库），问答照常；恢复后先清空 Redis 里的缓存再用。登录会话也在 Redis 里，Redis 不可用时**不能登录、已登录的请求会被拒绝** |
 
 ```bash
 docker compose --env-file .env --env-file release.env logs --since 24h app | grep 'event=model_call_failed'
 curl -s http://127.0.0.1:8080/actuator/metrics/gen_ai.client.operation         # 模型调用次数和耗时
 curl -s 'http://127.0.0.1:8080/actuator/metrics/http.server.requests?tag=status:500'   # 出错的接口请求
-curl -s 'http://127.0.0.1:8080/actuator/metrics/rag.cache.gets?tag=result:hit'        # 缓存命中次数（result 还有 miss、error）
+curl -s 'http://127.0.0.1:8080/actuator/metrics/rag.cache.gets?tag=result:local_hit'  # 进程内一级缓存命中次数（result 还有 hit=Redis 命中、miss、error）
 ```
 
 指标只在服务器本机的 8080 端口能看，页面所在的 80 端口不转发。

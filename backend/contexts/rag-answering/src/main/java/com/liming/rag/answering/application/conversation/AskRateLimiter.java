@@ -17,7 +17,7 @@ import org.springframework.stereotype.Component;
 
 /**
  * 每个账号的提问频率（#145 B5，OWASP LLM10“无限制消耗”）：最近 1 分钟、最近 24 小时各不超过上限，超过时拒绝（429），
- * 不调用模型。单实例部署，计数在内存里，应用重启后清零（与登录会话一样，见 application.yml 的 sa-token）。
+ * 不调用模型。单实例部署，计数在内存里，应用重启后清零。
  * 管理员的“重新回答”不经这里。
  */
 @Component

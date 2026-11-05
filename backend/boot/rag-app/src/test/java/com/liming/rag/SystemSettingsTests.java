@@ -1,5 +1,6 @@
 package com.liming.rag;
 
+import com.liming.rag.settings.application.system.SavedSettingsCache;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.List;
@@ -43,13 +44,13 @@ class SystemSettingsTests {
     private JdbcTemplate jdbc;
 
     @Autowired
-    private org.redisson.api.RedissonClient redis;
+    private SavedSettingsCache settingsCache;
 
     @BeforeEach
     void signIn() {
         TestLogin.asAdmin(http);
         jdbc.update("DELETE FROM system_setting");
-        TestRedis.clearCaches(redis);
+        settingsCache.forget();
     }
 
     @Test

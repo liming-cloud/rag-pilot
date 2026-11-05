@@ -1,6 +1,5 @@
 package com.liming.rag.settings.application.system;
 
-import com.liming.rag.cache.Caches;
 import com.liming.rag.settings.application.SettingKey;
 
 import com.liming.rag.settings.application.pack.KernelDefaults;
@@ -38,7 +37,7 @@ class SystemSettingsServiceTest {
         return new SystemSettingsService(store, new OneUser(),
                 new SettingsProperties("", pack, branding, "Asia/Shanghai"), Clock.systemUTC(),
                 (tenantId, actor, action, targetType, targetId, detail) -> audited.add(action + " " + detail),
-                Caches.inMemory());
+                new PassThroughSavedSettingsCache());
     }
 
     private SystemSettingsService retail() {

@@ -68,7 +68,7 @@ class CacheOutageTests {
     private GenericContainer<?> redis;
 
     @Test
-    @DisplayName("Redis 停掉后问答照常、带引用；停掉期间改的权限下一次就按库里判定；记下 cache_failure")
+    @DisplayName("Redis 停掉后问答照常、带引用；停掉期间改了权限，一级缓存照样清除、下一次按库里判定；记下 cache_failure")
     void answersWhileRedisIsDown(CapturedOutput output) {
         TestLogin.asAdmin(http);
         long admin = ((Number) http.getForObject("/api/auth/me", Map.class).get("id")).longValue();
@@ -87,8 +87,9 @@ class CacheOutageTests {
         assertThat(answered.citations()).isNotEmpty();
         assertThat(output).contains("event=cache_failure");
 
-        // 停掉期间直接在库里停用：清除做不成，但读库判定，不会用到停掉前缓存的权限。
+        // 停掉期间停用（库里改，再像用例那样清除）：Redis 里的清除做不成，一级缓存照样清掉，不会用到停掉前缓存的权限。
         jdbc.update("update app_user set enabled = false where id = ?", admin);
+        access.forget(admin);
         assertThat(access.permissionsOf(admin)).isEmpty();
         assertThat(access.exists(TENANT, new UserId(admin))).isFalse();
         assertThat(access.roleIds(TENANT, new UserId(admin))).isEmpty();

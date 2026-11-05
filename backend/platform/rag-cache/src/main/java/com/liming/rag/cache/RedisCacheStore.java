@@ -81,7 +81,7 @@ final class RedisCacheStore implements CacheStore {
     }
 
     /** SCAN 的匹配模式里 {@code * ? [ ] \} 是通配符，前缀里的要转义。 */
-    private static String escape(String prefix) {
+    static String escape(String prefix) {
         return prefix.replaceAll("([*?\\[\\]\\\\])", "\\\\$1");
     }
 }

@@ -60,7 +60,7 @@ class AccessCacheTests {
         assertThat(listUsers(token).getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(keys("rag:cache:access:*")).contains("rag:cache:access:" + user);
         // Sa-Token 的键以 token-name 开头：Authorization:login:token:<令牌>。
-        assertThat(keys("Authorization:login:token:*")).as("会话存在 Redis 里（修订 D-005）").isNotEmpty();
+        assertThat(keys("rag:store:sessions:Authorization:login:token:*")).as("会话存在 Redis 里（修订 D-005）").isNotEmpty();
 
         assertThat(call(root, HttpMethod.PATCH, "/api/roles/" + role, Map.of("permissions", List.of()))
                 .getStatusCode()).isEqualTo(HttpStatus.OK);

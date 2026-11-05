@@ -1,22 +1,18 @@
 package com.liming.rag.cache;
 
-import java.time.Duration;
 import java.util.regex.Pattern;
 
 /**
- * 一种缓存：名字（小写字母、数字和连字符，作为键的一段）、值的类型（record，存成 JSON）和过期时间。
- * 过期时间是清除之外的兜底，值以清除为准。
+ * 一种缓存：名字（小写字母、数字和连字符，作为键的一段）和值的类型（record，存进 Redis 时是 JSON）。
+ * 用哪几层、过期时间、容量由配置 {@code rag.cache} 决定，不在这里写（D-054）。
  */
-public record CacheSpec<V>(String name, Class<V> type, Duration ttl) {
+public record CacheSpec<V>(String name, Class<V> type) {
 
     private static final Pattern NAME = Pattern.compile("[a-z][a-z0-9-]{0,39}");
 
     public CacheSpec {
         if (!NAME.matcher(name).matches()) {
             throw new IllegalArgumentException("缓存名只能用小写字母、数字和连字符，以字母开头：" + name);
-        }
-        if (ttl.isNegative() || ttl.isZero()) {
-            throw new IllegalArgumentException("缓存 " + name + " 的过期时间必须大于 0");
         }
     }
 }

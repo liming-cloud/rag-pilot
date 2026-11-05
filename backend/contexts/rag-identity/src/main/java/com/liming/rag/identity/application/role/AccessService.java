@@ -5,13 +5,9 @@ import com.liming.rag.identity.application.account.Account;
 
 import com.liming.rag.identity.application.IdentityException;
 
-import com.liming.rag.cache.CacheSpec;
-import com.liming.rag.cache.Caches;
-import com.liming.rag.cache.TypedCache;
 import com.liming.rag.identity.api.UserDirectory;
 import com.liming.rag.shared.TenantId;
 import com.liming.rag.shared.UserId;
-import java.time.Duration;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
@@ -29,48 +25,37 @@ import org.springframework.stereotype.Service;
  * Sa-Token 的权限来源和“当前登录人”在 {@code infrastructure.security}，都以这里的判定为准。
  *
  * <p>每个账号的状态、角色和权限点缓存成一份 {@link AccessSnapshot}（D-053，修订 D-041 的“每次读库”）。停用、启用、
- * 改角色、改密码、重置密码后由改动方调 {@link #forget(long)}，改角色的权限点、删角色后调 {@link #forgetAll()}，
- * 都在事务提交后清除，下一个请求按新权限判定，仍是立即生效。
+ * 改角色、改密码、重置密码后由改动方调 {@link #forget(long)}，改角色的权限点后调 {@link #forgetAll()}（删角色前要求
+ * 角色下没有账号，不影响任何快照），都在事务提交后清除，下一个请求按新权限判定，仍是立即生效。
  */
 @Service
 public class AccessService implements UserDirectory {
 
-    /** 过期时间只是兜底，以清除为准。 */
-    static final CacheSpec<AccessSnapshot> ACCESS = new CacheSpec<>("access", AccessSnapshot.class, Duration.ofHours(1));
-
     private final Accounts accounts;
     private final Roles roles;
     private final PermissionRegistry permissions;
-    private final TypedCache<AccessSnapshot> snapshots;
+    private final AccessSnapshotCache snapshots;
 
-    public AccessService(Accounts accounts, Roles roles, PermissionRegistry permissions, Caches caches) {
+    public AccessService(Accounts accounts, Roles roles, PermissionRegistry permissions,
+            AccessSnapshotCache snapshots) {
         this.accounts = accounts;
         this.roles = roles;
         this.permissions = permissions;
-        this.snapshots = caches.cache(ACCESS);
-    }
-
-    /**
-     * 一个账号判定权限要用的全部信息。
-     *
-     * @param permissions 现在能用的权限点（已按账号状态算好）
-     */
-    record AccessSnapshot(long accountId, long tenantId, boolean enabled, List<Long> roleIds, boolean superAdmin,
-            List<String> permissions) {
+        this.snapshots = snapshots;
     }
 
     /** 账号的状态、角色或权限变了，提交后清除它的缓存。 */
     public void forget(long accountId) {
-        snapshots.evict(String.valueOf(accountId));
+        snapshots.forget(accountId);
     }
 
-    /** 角色的权限点变了或角色删了，影响的账号可能很多，提交后清除全部账号的缓存。 */
+    /** 角色的权限点变了，影响的账号可能很多，提交后清除全部账号的缓存。 */
     public void forgetAll() {
-        snapshots.clear();
+        snapshots.forgetAll();
     }
 
     private @Nullable AccessSnapshot snapshot(long accountId) {
-        return snapshots.get(String.valueOf(accountId), () -> accounts.find(accountId).map(account -> {
+        return snapshots.get(accountId, () -> accounts.find(accountId).map(account -> {
             var assigned = roles.rolesOf(account.id());
             return new AccessSnapshot(account.id(), account.tenantId().value(), account.enabled(),
                     assigned.stream().map(Role::id).toList(), assigned.stream().anyMatch(Role::superAdmin),

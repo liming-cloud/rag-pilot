@@ -78,8 +78,8 @@
             <artifactId>sa-token-spring-boot4-starter</artifactId>
         </dependency>
         <!--
-          Redis 客户端用 Redisson（D-053）：starter 按 spring.data.redis.* 创建 RedissonClient，缓存（rag-cache 里声明为
-          optional）和会话都用它；会话存储由 Sa-Token 的 Redisson 插件提供。
+          Redis 客户端用 Redisson（D-053），rag-cache 里声明为 optional，这里带上；rag.cache.redis.enabled 打开时由 rag-cache
+          创建客户端，缓存的二级和会话（identity 经 rag-cache 的键值存储）都用它（D-054）。
         -->
         <dependency>
             <groupId>${project.groupId}</groupId>
@@ -87,11 +87,7 @@
         </dependency>
         <dependency>
             <groupId>org.redisson</groupId>
-            <artifactId>redisson-spring-boot-starter</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>cn.dev33</groupId>
-            <artifactId>sa-token-redisson-spring-boot-starter</artifactId>
+            <artifactId>redisson</artifactId>
         </dependency>
         <dependency>
             <groupId>org.springframework.modulith</groupId>
