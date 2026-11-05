@@ -1,5 +1,6 @@
 package com.liming.rag.identity.infrastructure.persistence;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.liming.rag.identity.application.role.Role;
 import com.liming.rag.identity.application.role.Roles;
 import com.liming.rag.shared.TenantId;
@@ -12,15 +13,20 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Repository;
 
+/** 每张表一个 Mapper：单表读写用 MyBatis-Plus 的通用方法，连表查询和一次插入多行写在 XML 里。 */
 @Repository
 class MybatisRoles implements Roles {
 
     private static final String SEPARATOR = "\u001F";
 
     private final AppRoleMapper mapper;
+    private final AppRolePermissionMapper permissions;
+    private final AppUserRoleMapper userRoles;
 
-    MybatisRoles(AppRoleMapper mapper) {
+    MybatisRoles(AppRoleMapper mapper, AppRolePermissionMapper permissions, AppUserRoleMapper userRoles) {
         this.mapper = mapper;
+        this.permissions = permissions;
+        this.userRoles = userRoles;
     }
 
     @Override
@@ -40,31 +46,41 @@ class MybatisRoles implements Roles {
 
     @Override
     public boolean existsByName(TenantId tenantId, String name) {
-        return mapper.existsByName(tenantId.value(), name);
+        return mapper.exists(new LambdaQueryWrapper<AppRoleDO>()
+                .eq(AppRoleDO::getTenantId, tenantId.value())
+                .eq(AppRoleDO::getName, name));
     }
 
     @Override
     public Role insert(Role role) {
-        long id = mapper.insert(role.tenantId().value(), role.name(),
-                role.builtIn() == null ? null : role.builtIn().name());
+        var row = new AppRoleDO();
+        row.tenantId = role.tenantId().value();
+        row.name = role.name();
+        row.builtin = role.builtIn() == null ? null : role.builtIn().name();
+        mapper.insert(row);
+        long id = row.id;
         if (!role.permissions().isEmpty()) {
-            mapper.insertPermissions(id, role.permissions());
+            permissions.insertAll(id, role.permissions());
         }
         return new Role(id, role.tenantId(), role.name(), role.builtIn(), role.permissions());
     }
 
     @Override
     public void update(Role role) {
-        mapper.rename(role.id(), role.name());
-        mapper.deletePermissions(role.id());
+        var row = new AppRoleDO();
+        row.id = role.id();
+        row.name = role.name();
+        mapper.updateById(row);
+        permissions.delete(new LambdaQueryWrapper<AppRolePermissionDO>()
+                .eq(AppRolePermissionDO::getRoleId, role.id()));
         if (!role.permissions().isEmpty()) {
-            mapper.insertPermissions(role.id(), role.permissions());
+            permissions.insertAll(role.id(), role.permissions());
         }
     }
 
     @Override
     public void delete(long id) {
-        mapper.delete(id);
+        mapper.deleteById(id);
     }
 
     @Override
@@ -90,14 +106,16 @@ class MybatisRoles implements Roles {
 
     @Override
     public List<Long> userIds(long roleId) {
-        return mapper.userIds(roleId);
+        return userRoles.selectList(new LambdaQueryWrapper<AppUserRoleDO>()
+                        .eq(AppUserRoleDO::getRoleId, roleId).orderByAsc(AppUserRoleDO::getUserId))
+                .stream().map(row -> row.userId).toList();
     }
 
     @Override
     public void setUserRoles(long userId, Collection<Long> roleIds) {
-        mapper.deleteUserRoles(userId);
+        userRoles.delete(new LambdaQueryWrapper<AppUserRoleDO>().eq(AppUserRoleDO::getUserId, userId));
         if (!roleIds.isEmpty()) {
-            mapper.insertUserRoles(userId, roleIds);
+            userRoles.insertAll(userId, roleIds);
         }
     }
 

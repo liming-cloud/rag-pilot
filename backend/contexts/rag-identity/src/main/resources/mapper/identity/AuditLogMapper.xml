@@ -2,10 +2,6 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.liming.rag.identity.infrastructure.persistence.AuditLogMapper">
 
-    <insert id="insert">
-        INSERT INTO audit_log (tenant_id, actor_id, action, target_type, target_id, detail, occurred_at)
-        VALUES (#{tenantId}, #{actorId}, #{action}, #{targetType}, #{targetId}, #{detail}, #{occurredAt})
-    </insert>
 
     <sql id="pageFilter">
         WHERE a.tenant_id = #{tenantId} AND a.occurred_at &gt;= #{since}
@@ -27,9 +23,4 @@
         <include refid="pageFilter"/>
     </select>
 
-    <delete id="deleteBefore">
-        <![CDATA[
-        DELETE FROM audit_log WHERE occurred_at < #{before}
-        ]]>
-    </delete>
 </mapper>

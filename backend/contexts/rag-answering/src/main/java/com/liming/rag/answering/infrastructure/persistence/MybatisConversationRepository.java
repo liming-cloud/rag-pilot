@@ -1,5 +1,7 @@
 package com.liming.rag.answering.infrastructure.persistence;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.liming.rag.answering.domain.Conversation;
 import com.liming.rag.answering.domain.ConversationRepository;
 import com.liming.rag.answering.domain.ConversationTurn;
@@ -13,13 +15,18 @@ import java.util.Optional;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Repository;
 
+/** 单表写入用 MyBatis-Plus 的通用方法；带上一轮的查询、按主线递归查轮次写在 XML 里。 */
 @Repository
 class MybatisConversationRepository implements ConversationRepository {
 
-    private final ConversationMapper mapper;
+    private static final String ARRAY = "typeHandler=org.apache.ibatis.type.ArrayTypeHandler";
 
-    MybatisConversationRepository(ConversationMapper mapper) {
+    private final ConversationMapper mapper;
+    private final ConversationTurnMapper turns;
+
+    MybatisConversationRepository(ConversationMapper mapper, ConversationTurnMapper turns) {
         this.mapper = mapper;
+        this.turns = turns;
     }
 
     @Override
@@ -27,14 +34,28 @@ class MybatisConversationRepository implements ConversationRepository {
         var ids = conversation.knowledgeBaseIds().toArray(Long[]::new);
         var lastAskedAt = time(conversation.lastAskedAt());
         if (conversation.id() == null) {
-            long id = mapper.insert(conversation.tenantId().value(), conversation.owner().value(), conversation.title(),
-                    conversation.titleSource().name(), ids, lastAskedAt);
-            return conversation.withId(id);
+            var row = new ConversationDO();
+            row.tenantId = conversation.tenantId().value();
+            row.userId = conversation.owner().value();
+            row.title = conversation.title();
+            row.titleSource = conversation.titleSource().name();
+            row.knowledgeBaseIds = ids;
+            row.lastAskedAt = lastAskedAt;
+            mapper.insert(row);
+            return conversation.withId(row.id);
         }
         var tail = conversation.tail();
-        int updated = mapper.update(conversation.tenantId().value(), conversation.id(), conversation.version(),
-                conversation.title(), conversation.titleSource().name(), ids, lastAskedAt,
-                tail == null ? null : tail.turnId());
+        // 乐观锁：版本号不是加载时的那个，说明会话已被别的操作改过，不更新（0 行）。
+        int updated = mapper.update(new LambdaUpdateWrapper<ConversationDO>()
+                .set(ConversationDO::getTitle, conversation.title())
+                .set(ConversationDO::getTitleSource, conversation.titleSource().name())
+                .set(ConversationDO::getKnowledgeBaseIds, ids, ARRAY)
+                .set(ConversationDO::getLastAskedAt, lastAskedAt)
+                .set(ConversationDO::getLastTurnId, tail == null ? null : tail.turnId())
+                .set(ConversationDO::getVersion, conversation.version() + 1)
+                .eq(ConversationDO::getTenantId, conversation.tenantId().value())
+                .eq(ConversationDO::getId, conversation.id())
+                .eq(ConversationDO::getVersion, conversation.version()));
         if (updated == 0) {
             throw new Conversation.ConcurrentChangeException();
         }
@@ -54,12 +75,14 @@ class MybatisConversationRepository implements ConversationRepository {
 
     @Override
     public void delete(TenantId tenantId, long id) {
-        mapper.delete(tenantId.value(), id);
+        mapper.delete(new LambdaQueryWrapper<ConversationDO>()
+                .eq(ConversationDO::getTenantId, tenantId.value())
+                .eq(ConversationDO::getId, id));
     }
 
     @Override
     public int deleteInactiveSince(Instant before) {
-        return mapper.deleteInactiveSince(time(before));
+        return mapper.delete(new LambdaQueryWrapper<ConversationDO>().lt(ConversationDO::getLastAskedAt, time(before)));
     }
 
     @Override
@@ -70,10 +93,21 @@ class MybatisConversationRepository implements ConversationRepository {
     @Override
     public void addTurn(long conversationId, ConversationTurn turn, @Nullable Long replacesTurnId) {
         if (replacesTurnId != null) {
-            mapper.markSuperseded(conversationId, replacesTurnId);
+            turns.update(new LambdaUpdateWrapper<ConversationTurnDO>()
+                    .set(ConversationTurnDO::getSuperseded, true)
+                    .eq(ConversationTurnDO::getConversationId, conversationId)
+                    .eq(ConversationTurnDO::getId, replacesTurnId));
         }
-        mapper.insertTurn(turn.id(), conversationId, turn.parentTurnId(), turn.question(), turn.status().name(),
-                turn.answerRecordId(), turn.knowledgeBaseIds().toArray(Long[]::new), time(turn.askedAt()));
+        var row = new ConversationTurnDO();
+        row.id = turn.id();
+        row.conversationId = conversationId;
+        row.parentTurnId = turn.parentTurnId();
+        row.question = turn.question();
+        row.status = turn.status().name();
+        row.answerRecordId = turn.answerRecordId();
+        row.knowledgeBaseIds = turn.knowledgeBaseIds().toArray(Long[]::new);
+        row.askedAt = time(turn.askedAt());
+        turns.insert(row);
     }
 
     @Override

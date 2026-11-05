@@ -18,12 +18,6 @@ public interface AppUserMapper extends BaseMapper<AppUserDO> {
     long countPage(@Param("tenantId") long tenantId, @Param("keyword") String keyword,
             @Param("roleId") Long roleId, @Param("status") String status, @Param("now") OffsetDateTime now);
 
-    void updatePassword(@Param("id") long id, @Param("passwordHash") String passwordHash,
-            @Param("mustChangePassword") boolean mustChangePassword);
     /** 失败次数原子加一，返回加一后的次数。 */
     int incrementFailedLogins(@Param("id") long id);
-
-
-    void updateFailedLogins(@Param("id") long id, @Param("failedAttempts") int failedAttempts,
-            @Param("lockedUntil") OffsetDateTime lockedUntil);
 }

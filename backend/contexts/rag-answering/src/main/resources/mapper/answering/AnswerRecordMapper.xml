@@ -2,42 +2,12 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.liming.rag.answering.infrastructure.persistence.AnswerRecordMapper">
 
-    <!-- INSERT … RETURNING 要用 select 取回主键；每次都执行，不用一级缓存。 -->
-    <select id="insert" resultType="long" flushCache="true" useCache="false">
-        INSERT INTO answer_record (tenant_id, user_id, question, answer_text, refused, refusal_reason, top_relevance,
-                                   rewritten_question, knowledge_base_ids)
-        VALUES (#{tenantId}, #{userId}, #{question}, #{answerText}, #{refused}, #{refusalReason}, #{topRelevance},
-                #{rewrittenQuestion}, #{knowledgeBaseIds, typeHandler=org.apache.ibatis.type.ArrayTypeHandler})
-        RETURNING id
-    </select>
-
-    <insert id="insertCitation">
-        INSERT INTO answer_citation (answer_id, citation_index, chunk_id, document_id, document_name, heading_path)
-        VALUES (#{answerId}, #{index}, #{chunkId}, #{documentId}, #{documentName}, #{headingPath})
-    </insert>
-
-    <!-- knowledge_base_ids 是 bigint[]，按数组读成 Long[]（#136）。 -->
-    <resultMap id="answerRecord" type="com.liming.rag.answering.infrastructure.persistence.AnswerRecordDO" autoMapping="true">
-        <result column="knowledge_base_ids" property="knowledgeBaseIds"
-                typeHandler="org.apache.ibatis.type.ArrayTypeHandler"/>
-    </resultMap>
-
     <resultMap id="gapRecord" type="com.liming.rag.answering.infrastructure.persistence.GapRecordDO" autoMapping="true">
         <result column="knowledge_base_ids" property="knowledgeBaseIds"
                 typeHandler="org.apache.ibatis.type.ArrayTypeHandler"/>
         <result column="question_embedding" property="questionEmbedding"
                 typeHandler="org.apache.ibatis.type.ArrayTypeHandler"/>
     </resultMap>
-
-    <!-- 回答记录的全部字段，加载聚合用（#136）。 -->
-    <select id="records" resultMap="answerRecord">
-        SELECT id, tenant_id, user_id, question, answer_text, refused, refusal_reason, top_relevance,
-               rewritten_question, knowledge_base_ids, rating, feedback_comment, review_status, resolution_note,
-               resolved_by
-        FROM answer_record
-        WHERE tenant_id = #{tenantId}
-          AND id IN <foreach collection="ids" item="id" open="(" separator="," close=")">#{id}</foreach>
-    </select>
 
     <select id="citations" resultType="com.liming.rag.answering.infrastructure.persistence.CitationDO">
         SELECT c.answer_id, c.citation_index, c.chunk_id, c.document_id, c.document_name, c.heading_path
@@ -165,25 +135,4 @@
         LIMIT #{limit}
     </select>
 
-    <update id="updateReview">
-        UPDATE answer_record
-        SET review_status = #{status}, resolution_note = #{note}, resolved_by = #{resolvedBy},
-            resolved_at = CASE WHEN #{status} = 'RESOLVED' THEN now() ELSE NULL END
-        WHERE tenant_id = #{tenantId} AND id = #{id}
-    </update>
-
-    <update id="updateReviews">
-        UPDATE answer_record
-        SET review_status = #{status}, resolution_note = #{note}, resolved_by = #{resolvedBy},
-            resolved_at = CASE WHEN #{status} = 'RESOLVED' THEN now() ELSE NULL END
-        WHERE tenant_id = #{tenantId}
-          AND id IN <foreach collection="ids" item="id" open="(" separator="," close=")">#{id}</foreach>
-    </update>
-
-    <update id="updateFeedback">
-        UPDATE answer_record
-        SET rating = #{rating}, feedback_comment = #{comment},
-            rated_at = CASE WHEN CAST(#{rating} AS varchar) IS NULL THEN NULL ELSE now() END
-        WHERE tenant_id = #{tenantId} AND id = #{id}
-    </update>
 </mapper>

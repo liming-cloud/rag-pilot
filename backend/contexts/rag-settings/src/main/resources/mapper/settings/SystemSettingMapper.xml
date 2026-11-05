@@ -2,10 +2,6 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.liming.rag.settings.infrastructure.persistence.SystemSettingMapper">
 
-    <select id="all" resultType="com.liming.rag.settings.infrastructure.persistence.SystemSettingDO">
-        SELECT setting_key, value, updated_by_name, updated_at FROM system_setting
-    </select>
-
     <insert id="save">
         INSERT INTO system_setting (setting_key, value, updated_by, updated_by_name, updated_at)
         VALUES (#{key}, #{value}, #{updatedBy}, #{updatedByName}, #{updatedAt})
@@ -13,8 +9,4 @@
         SET value = EXCLUDED.value, updated_by = EXCLUDED.updated_by, updated_by_name = EXCLUDED.updated_by_name,
             updated_at = EXCLUDED.updated_at
     </insert>
-
-    <delete id="delete">
-        DELETE FROM system_setting WHERE setting_key = #{key}
-    </delete>
 </mapper>

@@ -2,22 +2,11 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.liming.rag.knowledge.infrastructure.persistence.KnowledgeBaseMemberMapper">
 
-    <insert id="insert">
+    <insert id="grant">
         INSERT INTO knowledge_base_member (tenant_id, knowledge_base_id, user_id)
         VALUES (#{tenantId}, #{knowledgeBaseId}, #{userId})
         ON CONFLICT DO NOTHING
     </insert>
-
-    <delete id="delete">
-        DELETE FROM knowledge_base_member
-        WHERE tenant_id = #{tenantId} AND knowledge_base_id = #{knowledgeBaseId} AND user_id = #{userId}
-    </delete>
-
-    <select id="members" resultType="long">
-        SELECT user_id FROM knowledge_base_member
-        WHERE tenant_id = #{tenantId} AND knowledge_base_id = #{knowledgeBaseId}
-        ORDER BY created_at, user_id
-    </select>
 
     <select id="accessible" resultType="com.liming.rag.knowledge.infrastructure.persistence.KnowledgeBaseDO">
         SELECT kb.id, kb.tenant_id, kb.name FROM knowledge_base kb
@@ -34,24 +23,4 @@
         )
     </select>
 
-    <insert id="insertRoleGrant">
-        INSERT INTO knowledge_base_role_grant (tenant_id, knowledge_base_id, role_id)
-        VALUES (#{tenantId}, #{knowledgeBaseId}, #{roleId})
-        ON CONFLICT DO NOTHING
-    </insert>
-
-    <delete id="deleteRoleGrant">
-        DELETE FROM knowledge_base_role_grant
-        WHERE tenant_id = #{tenantId} AND knowledge_base_id = #{knowledgeBaseId} AND role_id = #{roleId}
-    </delete>
-
-    <select id="roleGrants" resultType="long">
-        SELECT role_id FROM knowledge_base_role_grant
-        WHERE tenant_id = #{tenantId} AND knowledge_base_id = #{knowledgeBaseId}
-        ORDER BY created_at, role_id
-    </select>
-
-    <delete id="deleteGrantsOfRole">
-        DELETE FROM knowledge_base_role_grant WHERE tenant_id = #{tenantId} AND role_id = #{roleId}
-    </delete>
 </mapper>

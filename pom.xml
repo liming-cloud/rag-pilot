@@ -72,6 +72,12 @@
                 <artifactId>mybatis-plus-spring-boot4-starter</artifactId>
                 <version>${mybatis-plus.version}</version>
             </dependency>
+            <!-- 分页插件 PaginationInnerInterceptor（3.5.9 起单独成包），只在 rag-persistence 里用（D-053）。 -->
+            <dependency>
+                <groupId>com.baomidou</groupId>
+                <artifactId>mybatis-plus-jsqlparser</artifactId>
+                <version>${mybatis-plus.version}</version>
+            </dependency>
             <dependency>
                 <groupId>cn.dev33</groupId>
                 <artifactId>sa-token-spring-boot4-starter</artifactId>
@@ -95,6 +101,11 @@
             <dependency>
                 <groupId>${project.groupId}</groupId>
                 <artifactId>rag-ai</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>${project.groupId}</groupId>
+                <artifactId>rag-persistence</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>

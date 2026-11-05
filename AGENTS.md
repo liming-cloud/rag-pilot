@@ -40,11 +40,11 @@
 ## 约束
 
 - 权限过滤只在 rag-knowledge 的检索服务里写一处，禁止绕过。
-- 框架选用：上下文只依赖能力接口，不直接用第三方框架。只有一个上下文用的库放在它的 `infrastructure`（如 PDFBox、POI、MyBatis-Plus、Sa-Token 的会话和密码摘要），多个上下文要用的做成平台层的能力模块；Spring 全家（Boot、Web、Tx、Modulith）和 web 层的 Sa-Token 注解例外。
+- 框架选用：上下文只依赖能力接口，不直接用第三方框架。只有一个上下文用的库放在它的 `infrastructure`（如 PDFBox、POI、Sa-Token 的会话和密码摘要），多个上下文要用的做成平台层的能力模块（如 rag-ai、rag-persistence）；Spring 全家（Boot、Web、Tx、Modulith）和 web 层的 Sa-Token 注解例外。
 - AI 能力只经平台层的 rag-ai（Spring AI 防腐层，D-052）：按能力提供文字生成（一次性、流式）、问题改写、向量化、重排、连通测试，参数和返回值都是自己的类型，内部用足 Spring AI 并打开它自带的观测；提示词和判断规则是上下文的策略，不放进 rag-ai。上下文层用 Enforcer 禁止依赖 Spring AI，`ArchitectureRulesTest` 检查代码。各用途用哪个服务商和模型由 rag-settings 经 `ModelRouting` 提供（D-043、D-044）。服务商密钥用 AES-GCM 加密存库，主密钥只从环境变量 `RAG_MASTER_KEY` 读；环境变量里的密钥同样只从环境变量读；接口、日志都不返回密钥明文，界面只显示后 4 位。
 - DDD：聚合只在 knowledge、answering；上下文模块之间只用对方的 `api` 包或监听事件，依赖方向见下面的“上下文依赖”。
-- MyBatis-Plus 的 DO、Wrapper、Page 只出现在 infrastructure 包；查询结果映射到 infrastructure 里只有字段的 `XxxDO`，不用 `Map` 加强转（`bigint[]` 列在 `resultMap` 里指定 `ArrayTypeHandler`）；不引入 MapStruct，不做多层 DTO 转换。
-- SQL 只写在 Mapper XML（`src/main/resources/mapper/<模块名>/<Mapper 名>.xml`）里；不用 `@Select` 等 SQL 注解，条件构造器不拼原始 SQL（`apply`、`last`、`inSql` 等）。简单的单表条件用 `LambdaQueryWrapper`。
+- MyBatis-Plus 经平台组件 rag-persistence 引入，全局配置（Mapper XML 位置、分页插件）和分页转换 `Pages` 都在那里，上下文不自己声明 MyBatis-Plus（D-053）。它的 DO、Wrapper、Page 只出现在 infrastructure 包和 rag-persistence；查询结果映射到 infrastructure 里只有字段的 `XxxDO`，不用 `Map` 加强转（`bigint[]` 列在 `resultMap` 里指定 `ArrayTypeHandler`）；不引入 MapStruct，不做多层 DTO 转换。
+- SQL 只写在 Mapper XML（`src/main/resources/mapper/<模块名>/<Mapper 名>.xml`）里；不用 `@Select` 等 SQL 注解，条件构造器不拼原始 SQL（`apply`、`last`、`inSql`、`setSql` 等）；SQL 里不取数据库的当前时间（`now()` 等），时间由 `Clock` 传入。单表的增删改查、存在判断、计数和分页用 `BaseMapper` 加 `LambdaQueryWrapper`/`LambdaUpdateWrapper`，一张表一个 Mapper；XML 只写 upsert、多行插入、多表、聚合、递归和检索（D-053）。
 - 配置只通过各模块的 `@ConfigurationProperties` record 读取（如 `AnsweringProperties`），取值在构造时校验，非法配置启动失败；不用 `@Value`。
 - 要当前时间的类注入 rag-app 声明的 `Clock`（UTC），不直接调用 `now()`，测试传固定时钟。
 - 编译开 `-Xlint:all`，保持零告警；确实要留的用 `@SuppressWarnings` 写在最小范围并注明原因（测试里读 JSON 的 `unchecked`、`rawtypes` 按方法抑制）。每个主代码包的 `package-info.java` 标 JSpecify 的 `@NullMarked`，可以为 null 的参数、返回值、字段写 `@Nullable`（包装类型的参数和 record 组件都表示可空），MyBatis 的 `XxxDO` 标 `@NullUnmarked`；`PackageLayoutTest` 检查每个包都有 `@NullMarked`（D-052）。
@@ -60,7 +60,7 @@
 
 ## 目录结构
 
-后端按类型分三层聚合（D-052）：`backend/platform`（平台层：rag-shared、rag-ai）、`backend/contexts`（上下文层：五个上下文）、`backend/boot`（启动层：rag-app）。每个 Maven 模块 `rag-<名>` 对应根包 `com.liming.rag.<名>`：
+后端按类型分三层聚合（D-052）：`backend/platform`（平台层：rag-shared、rag-ai、rag-persistence）、`backend/contexts`（上下文层：五个上下文）、`backend/boot`（启动层：rag-app）。每个 Maven 模块 `rag-<名>` 对应根包 `com.liming.rag.<名>`：
 
 - **上下文模块**（identity、knowledge、answering、evaluation、settings）：根包只放 `package-info.java`，类只能在五个子包里：
   - `api`：对其他模块公开的合同（接口、record、枚举、事件），不暴露模块内部类型；

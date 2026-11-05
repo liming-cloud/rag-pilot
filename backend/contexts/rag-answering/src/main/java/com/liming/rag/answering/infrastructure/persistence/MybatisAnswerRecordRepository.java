@@ -1,11 +1,15 @@
 package com.liming.rag.answering.infrastructure.persistence;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.liming.rag.answering.domain.AnswerRecord;
 import com.liming.rag.answering.domain.AnswerRecordRepository;
 import com.liming.rag.answering.domain.Citation;
 import com.liming.rag.answering.domain.RefusalReason;
 import com.liming.rag.shared.TenantId;
 import com.liming.rag.shared.UserId;
+import java.time.Clock;
+import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -15,28 +19,48 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Repository;
 
+/** 单表读写用 MyBatis-Plus 的通用方法；按回答查出处要连表核对租户，写在 XML 里。处理、评价的时间由 {@link Clock} 给出。 */
 @Repository
 class MybatisAnswerRecordRepository implements AnswerRecordRepository {
 
     private final AnswerRecordMapper mapper;
+    private final CitationMapper citations;
+    private final Clock clock;
 
-    MybatisAnswerRecordRepository(AnswerRecordMapper mapper) {
+    MybatisAnswerRecordRepository(AnswerRecordMapper mapper, CitationMapper citations, Clock clock) {
         this.mapper = mapper;
+        this.citations = citations;
+        this.clock = clock;
     }
 
     @Override
     public AnswerRecord add(AnswerRecord record) {
         var reply = record.reply();
-        long id = mapper.insert(record.tenantId().value(), record.asker().value(), record.question(), reply.text(),
-                reply.refused(), reply.refusalReason() == null ? null : reply.refusalReason().name(),
-                reply.topRelevance(), reply.rewrittenQuestion(), record.knowledgeBaseIds().toArray(Long[]::new));
+        var row = new AnswerRecordDO();
+        row.tenantId = record.tenantId().value();
+        row.userId = record.asker().value();
+        row.question = record.question();
+        row.answerText = reply.text();
+        row.refused = reply.refused();
+        row.refusalReason = reply.refusalReason() == null ? null : reply.refusalReason().name();
+        row.topRelevance = reply.topRelevance();
+        row.rewrittenQuestion = reply.rewrittenQuestion();
+        row.knowledgeBaseIds = record.knowledgeBaseIds().toArray(Long[]::new);
+        mapper.insert(row);
         for (var citation : reply.citations()) {
-            mapper.insertCitation(id, citation.index(), citation.chunkId(), citation.documentId(),
-                    citation.documentName(), citation.headingPath() == null ? "" : citation.headingPath());
+            var cited = new CitationDO();
+            cited.answerId = row.id;
+            cited.citationIndex = citation.index();
+            cited.chunkId = citation.chunkId();
+            cited.documentId = citation.documentId();
+            cited.documentName = citation.documentName();
+            cited.headingPath = citation.headingPath() == null ? "" : citation.headingPath();
+            citations.insert(cited);
         }
-        return record.withId(id);
+        return record.withId(row.id);
     }
 
     @Override
@@ -49,28 +73,34 @@ class MybatisAnswerRecordRepository implements AnswerRecordRepository {
         if (ids.isEmpty()) {
             return Map.of();
         }
-        var citations = new HashMap<Long, List<Citation>>();
+        var cited = new HashMap<Long, List<Citation>>();
         for (var row : mapper.citations(tenantId.value(), ids)) {
-            citations.computeIfAbsent(row.answerId, key -> new ArrayList<>()).add(new Citation(row.citationIndex,
+            cited.computeIfAbsent(row.answerId, key -> new ArrayList<>()).add(new Citation(row.citationIndex,
                     row.chunkId, row.documentId, row.documentName, row.headingPath, null));
         }
         var records = new HashMap<Long, AnswerRecord>();
-        for (var row : mapper.records(tenantId.value(), ids)) {
-            records.put(row.id, toDomain(row, citations.getOrDefault(row.id, List.of())));
+        for (var row : mapper.selectList(new LambdaQueryWrapper<AnswerRecordDO>()
+                .eq(AnswerRecordDO::getTenantId, tenantId.value())
+                .in(AnswerRecordDO::getId, ids))) {
+            records.put(row.id, toDomain(row, cited.getOrDefault(row.id, List.of())));
         }
         return records;
     }
 
     @Override
     public void saveFeedback(AnswerRecord record) {
-        mapper.updateFeedback(record.tenantId().value(), record.id(),
-                record.rating() == null ? null : record.rating().name(), record.comment());
+        var rated = record.rating() != null;
+        mapper.update(new LambdaUpdateWrapper<AnswerRecordDO>()
+                .set(AnswerRecordDO::getRating, rated ? record.rating().name() : null)
+                .set(AnswerRecordDO::getFeedbackComment, record.comment())
+                .set(AnswerRecordDO::getRatedAt, rated ? OffsetDateTime.now(clock) : null)
+                .eq(AnswerRecordDO::getTenantId, record.tenantId().value())
+                .eq(AnswerRecordDO::getId, record.id()));
     }
 
     @Override
     public void saveReview(AnswerRecord record) {
-        mapper.updateReview(record.tenantId().value(), record.id(), record.reviewStatus().name(),
-                record.resolutionNote(), record.resolvedBy() == null ? null : record.resolvedBy().value());
+        saveReviews(List.of(record));
     }
 
     @Override
@@ -79,8 +109,21 @@ class MybatisAnswerRecordRepository implements AnswerRecordRepository {
                         record.reviewStatus().name(), record.resolutionNote(),
                         record.resolvedBy() == null ? null : record.resolvedBy().value()),
                         LinkedHashMap::new, Collectors.mapping(AnswerRecord::id, Collectors.toList())))
-                .forEach((key, ids) -> mapper.updateReviews((Long) key.get(0), ids, (String) key.get(1),
+                .forEach((key, ids) -> updateReviews((Long) key.get(0), ids, (String) key.get(1),
                         (String) key.get(2), (Long) key.get(3)));
+    }
+
+    /** 一批记录改成同样的处理状态、说明和处理人；标为已处理时记下处理时间，重新打开时清掉。 */
+    private void updateReviews(long tenantId, List<Long> ids, String status, @Nullable String note,
+            @Nullable Long resolvedBy) {
+        var resolved = AnswerRecord.ReviewStatus.RESOLVED.name().equals(status);
+        mapper.update(new LambdaUpdateWrapper<AnswerRecordDO>()
+                .set(AnswerRecordDO::getReviewStatus, status)
+                .set(AnswerRecordDO::getResolutionNote, note)
+                .set(AnswerRecordDO::getResolvedBy, resolvedBy)
+                .set(AnswerRecordDO::getResolvedAt, resolved ? OffsetDateTime.now(clock) : null)
+                .eq(AnswerRecordDO::getTenantId, tenantId)
+                .in(AnswerRecordDO::getId, ids));
     }
 
     private static AnswerRecord toDomain(AnswerRecordDO row, List<Citation> citations) {

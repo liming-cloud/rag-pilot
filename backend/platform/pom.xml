@@ -18,5 +18,6 @@
     <modules>
         <module>rag-shared</module>
         <module>rag-ai</module>
+        <module>rag-persistence</module>
     </modules>
 </project>

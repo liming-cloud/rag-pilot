@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.liming.rag.settings.infrastructure.persistence.ModelPurposeMapper">
+
+    <insert id="save">
+        INSERT INTO model_purpose (purpose, provider_id, model, updated_by_name, updated_at)
+        VALUES (#{purpose}, #{providerId}, #{model}, #{updatedByName}, #{updatedAt})
+        ON CONFLICT (purpose) DO UPDATE
+        SET provider_id = EXCLUDED.provider_id, model = EXCLUDED.model,
+            updated_by_name = EXCLUDED.updated_by_name, updated_at = EXCLUDED.updated_at
+    </insert>
+</mapper>

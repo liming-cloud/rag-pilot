@@ -1,6 +1,7 @@
 package com.liming.rag.identity.infrastructure.persistence;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.liming.rag.identity.application.account.Account;
 import com.liming.rag.identity.application.account.AccountQuery;
 import com.liming.rag.identity.application.account.Accounts;
@@ -12,6 +13,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Repository;
 
 @Repository
@@ -84,7 +86,12 @@ class MybatisAccounts implements Accounts {
 
     @Override
     public void setPassword(long id, String passwordHash, boolean mustChangePassword) {
-        mapper.updatePassword(id, passwordHash, mustChangePassword);
+        mapper.update(new LambdaUpdateWrapper<AppUserDO>()
+                .set(AppUserDO::getPasswordHash, passwordHash)
+                .set(AppUserDO::getMustChangePassword, mustChangePassword)
+                .set(AppUserDO::getFailedAttempts, 0)
+                .set(AppUserDO::getLockedUntil, null)
+                .eq(AppUserDO::getId, id));
     }
 
     @Override
@@ -94,12 +101,20 @@ class MybatisAccounts implements Accounts {
 
     @Override
     public void lock(long id, OffsetDateTime until) {
-        mapper.updateFailedLogins(id, 0, until);
+        setFailedLogins(id, until);
     }
 
     @Override
     public void clearFailedLogins(long id) {
-        mapper.updateFailedLogins(id, 0, null);
+        setFailedLogins(id, null);
+    }
+
+    /** 失败次数清零，锁定到 {@code until}（为 null 时解除锁定）。 */
+    private void setFailedLogins(long id, @Nullable OffsetDateTime until) {
+        mapper.update(new LambdaUpdateWrapper<AppUserDO>()
+                .set(AppUserDO::getFailedAttempts, 0)
+                .set(AppUserDO::getLockedUntil, until)
+                .eq(AppUserDO::getId, id));
     }
 
     @Override

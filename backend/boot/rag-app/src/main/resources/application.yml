@@ -29,11 +29,7 @@ spring:
       - classpath:db/migration/evaluation
       - classpath:db/migration/settings
 
-mybatis-plus:
-  # SQL 只写在各模块的 mapper/<模块名>/*.xml 里，不用注解（AGENTS.md“约束”）。
-  mapper-locations: classpath*:/mapper/**/*.xml
-  global-config:
-    banner: false
+# MyBatis-Plus 的配置（Mapper XML 位置、分页插件）在平台组件 rag-persistence 里（D-053）。
 
 # 试点为单实例部署，会话存在内存里，应用重启后需要重新登录；多实例时改用 Redis 存储。
 sa-token:

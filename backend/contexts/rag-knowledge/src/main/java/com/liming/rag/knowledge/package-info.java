@@ -6,7 +6,7 @@
  * 只允许出现在 infrastructure 包。
  */
 // 允许依赖的模块（#136）：上下文只能依赖这些模块，以及它们 api 包公开的类型；方向见 AGENTS.md“上下文依赖”。
-@ApplicationModule(allowedDependencies = {"shared", "ai", "identity :: api", "settings :: api"})
+@ApplicationModule(allowedDependencies = {"shared", "persistence", "ai", "identity :: api", "settings :: api"})
 @NullMarked
 package com.liming.rag.knowledge;
 

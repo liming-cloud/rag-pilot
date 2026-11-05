@@ -15,13 +15,16 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
- * Mapper XML 放在所属模块的 {@code mapper/<模块名>/<Mapper 名>.xml}，namespace 指向同模块 infrastructure 包里的同名接口。
+ * Mapper XML 放在所属模块的 {@code mapper/<模块名>/<Mapper 名>.xml}，namespace 指向同模块 infrastructure 包里的同名接口；
+ * SQL 里不取数据库的当前时间，时间由 Java 侧的 {@code Clock} 传入（D-053）。
  */
 class MapperXmlLayoutTest {
 
     private static final Pattern LAYOUT = Pattern.compile(
             "rag-([a-z]+)/src/main/resources/mapper/([a-z]+)/([A-Z][A-Za-z]*Mapper)\\.xml");
     private static final Pattern NAMESPACE = Pattern.compile("<mapper\\s+namespace=\"([^\"]+)\"");
+    private static final Pattern DATABASE_NOW = Pattern.compile(
+            "(?i)\\b(now\\s*\\(\\s*\\)|current_timestamp|current_date|localtimestamp)");
 
     /** 不符合约定时返回原因；符合时返回空。 */
     static Optional<String> problem(String relativePath, String content) {
@@ -36,6 +39,10 @@ class MapperXmlLayoutTest {
         String expectedPrefix = "com.liming.rag." + m.group(1) + ".infrastructure.";
         if (!ns.find() || !ns.group(1).startsWith(expectedPrefix) || !ns.group(1).endsWith("." + m.group(3))) {
             return Optional.of("namespace 应为 " + expectedPrefix + "…." + m.group(3));
+        }
+        Matcher now = DATABASE_NOW.matcher(content);
+        if (now.find()) {
+            return Optional.of("SQL 里用了数据库的当前时间 " + now.group(1) + "，改为由 Clock 传入");
         }
         return Optional.empty();
     }
@@ -77,5 +84,8 @@ class MapperXmlLayoutTest {
                 .as("放进了别的模块的目录").isPresent();
         assertThat(problem("rag-knowledge/src/main/resources/mapper/knowledge/ChunkMapper.xml", ok))
                 .as("文件名与接口名不一致").isPresent();
+        assertThat(problem("rag-knowledge/src/main/resources/mapper/knowledge/ChunkSearchMapper.xml",
+                ok + "UPDATE chunk SET updated_at = now() WHERE id = #{id}"))
+                .as("SQL 里取数据库的当前时间").isPresent();
     }
 }

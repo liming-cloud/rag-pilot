@@ -13,6 +13,7 @@ import com.liming.rag.archfixture.answering.UsesSpringAiDocument;
 import com.liming.rag.archfixture.application.ReadsConfigWithValue;
 import com.liming.rag.archfixture.application.UsesQueryWrapper;
 import com.liming.rag.archfixture.infrastructure.AnnotatedSqlMapper;
+import com.liming.rag.archfixture.infrastructure.RawSqlUpdate;
 import com.liming.rag.archfixture.infrastructure.RawSqlWrapper;
 import com.liming.rag.archfixture.web.ChecksRoleByHand;
 import com.liming.rag.archfixture.web.UnguardedEndpoint;
@@ -45,9 +46,9 @@ import org.junit.jupiter.api.Test;
 class ArchitectureRulesTest {
 
     static final ArchRule MYBATIS_ONLY_IN_INFRASTRUCTURE = noClasses()
-            .that().resideOutsideOfPackage("..infrastructure..")
+            .that().resideOutsideOfPackages("..infrastructure..", "com.liming.rag.persistence..")
             .should().dependOnClassesThat().resideInAnyPackage("com.baomidou..", "org.apache.ibatis..")
-            .as("MyBatis-Plus 和 MyBatis 的类型只出现在 infrastructure 包");
+            .as("MyBatis-Plus 和 MyBatis 的类型只出现在 infrastructure 包和平台组件 rag-persistence（D-053）");
 
     static final ArchRule DO_ONLY_IN_INFRASTRUCTURE = classes()
             .that().haveSimpleNameEndingWith("DO")
@@ -138,8 +139,8 @@ class ArchitectureRulesTest {
             .should().callMethodWhere(describe("MyBatis-Plus 条件构造器的原始 SQL 方法",
                     (JavaMethodCall call) -> call.getTargetOwner().getPackageName()
                             .startsWith("com.baomidou.mybatisplus.core.conditions")
-                            && call.getName().matches("apply|last|inSql|notInSql|exists|notExists|having")))
-            .as("条件构造器只用类型安全的条件，不拼原始 SQL（apply、last、inSql 等）");
+                            && call.getName().matches("apply|last|inSql|notInSql|exists|notExists|having|setSql")))
+            .as("条件构造器只用类型安全的条件，不拼原始 SQL（apply、last、inSql、setSql 等）");
 
     static final ArchRule ONE_EXCEPTION_HANDLER = classes()
             .that().areAnnotatedWith("org.springframework.web.bind.annotation.RestControllerAdvice")
@@ -198,6 +199,7 @@ class ArchitectureRulesTest {
         assertViolates(LOGIN_AND_ROLE_ONLY_BY_ANNOTATION, ChecksRoleByHand.class);
         assertViolates(NO_SQL_ANNOTATIONS, AnnotatedSqlMapper.class);
         assertViolates(NO_RAW_SQL_IN_WRAPPER, RawSqlWrapper.class);
+        assertViolates(NO_RAW_SQL_IN_WRAPPER, RawSqlUpdate.class);
         assertViolates(ONE_EXCEPTION_HANDLER, ModuleExceptionAdvice.class);
         assertViolates(NO_VALUE_INJECTION, ReadsConfigWithValue.class);
         assertViolates(ENDPOINTS_NEED_PERMISSION, UnguardedEndpoint.class);

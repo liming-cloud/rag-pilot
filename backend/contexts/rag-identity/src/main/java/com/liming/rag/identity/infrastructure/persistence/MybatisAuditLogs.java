@@ -1,5 +1,6 @@
 package com.liming.rag.identity.infrastructure.persistence;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.liming.rag.identity.application.audit.AuditEntry;
 import com.liming.rag.identity.application.audit.AuditLogs;
 import com.liming.rag.identity.application.audit.AuditRecord;
@@ -19,8 +20,15 @@ class MybatisAuditLogs implements AuditLogs {
 
     @Override
     public void add(AuditEntry entry) {
-        mapper.insert(entry.tenantId(), entry.actorId(), entry.action(), entry.targetType(), entry.targetId(),
-                entry.detail(), entry.occurredAt());
+        var row = new AuditLogDO();
+        row.tenantId = entry.tenantId();
+        row.actorId = entry.actorId();
+        row.action = entry.action();
+        row.targetType = entry.targetType();
+        row.targetId = entry.targetId();
+        row.detail = entry.detail();
+        row.occurredAt = entry.occurredAt();
+        mapper.insert(row);
     }
 
     @Override
@@ -34,6 +42,6 @@ class MybatisAuditLogs implements AuditLogs {
 
     @Override
     public int deleteBefore(OffsetDateTime before) {
-        return mapper.deleteBefore(before);
+        return mapper.delete(new LambdaQueryWrapper<AuditLogDO>().lt(AuditLogDO::getOccurredAt, before));
     }
 }

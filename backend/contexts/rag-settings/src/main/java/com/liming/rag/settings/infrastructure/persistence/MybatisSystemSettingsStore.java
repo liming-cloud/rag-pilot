@@ -21,7 +21,7 @@ class MybatisSystemSettingsStore implements SystemSettingsStore {
     @Override
     public Map<SettingKey, Saved> all() {
         var saved = new EnumMap<SettingKey, Saved>(SettingKey.class);
-        for (var row : mapper.all()) {
+        for (var row : mapper.selectList(null)) {
             var key = SettingKey.valueOf(row.settingKey);
             var text = row.value;
             List<String> value = !key.list() ? List.of(text) : text.isEmpty() ? List.of() : text.lines().toList();
@@ -38,7 +38,6 @@ class MybatisSystemSettingsStore implements SystemSettingsStore {
 
     @Override
     public void delete(SettingKey key) {
-        mapper.delete(key.name());
+        mapper.deleteById(key.name());
     }
-
 }

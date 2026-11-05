@@ -36,7 +36,7 @@ import org.junit.jupiter.api.Test;
  * 目录结构与分层依赖，规范见 AGENTS.md“目录结构”。
  *
  * <p>上下文模块（identity、knowledge、answering、evaluation、settings）的类放在 api、web、application、domain、infrastructure 五个子包；
- * 技术模块（shared、ai）扁平，对外只公开接口、record、枚举和异常（shared 另可公开无实例的工具类）。
+ * 平台层模块（shared、ai、persistence）扁平，对外只公开接口、record、枚举、异常和无实例的工具类。
  */
 class PackageLayoutTest {
 
@@ -86,12 +86,11 @@ class PackageLayoutTest {
                     "..application..", "..domain..", "..infrastructure..", "..web..")
             .as("api 是对外合同，不暴露模块内部的类型");
 
-    /** shared 的通用工具（D-053）：final、构造器全是私有的、字段和方法都是静态的，没有实例可言。 */
-    static final DescribedPredicate<JavaClass> SHARED_UTILITY = new DescribedPredicate<>("shared 的无实例工具类") {
+    /** 平台层的通用工具（D-053）：final、构造器全是私有的、字段和方法都是静态的，没有实例可言。 */
+    static final DescribedPredicate<JavaClass> PLATFORM_UTILITY = new DescribedPredicate<>("平台层的无实例工具类") {
         @Override
         public boolean test(JavaClass c) {
-            return c.getPackageName().startsWith("com.liming.rag.shared")
-                    && c.getModifiers().contains(JavaModifier.FINAL)
+            return c.getModifiers().contains(JavaModifier.FINAL)
                     && c.getConstructors().stream().allMatch(k -> k.getModifiers().contains(JavaModifier.PRIVATE))
                     && c.getMethods().stream().allMatch(m -> m.getModifiers().contains(JavaModifier.STATIC))
                     && c.getFields().stream().allMatch(f -> f.getModifiers().contains(JavaModifier.STATIC));
@@ -99,14 +98,14 @@ class PackageLayoutTest {
     };
 
     static final ArchRule TECH_MODULES_EXPOSE_CONTRACTS_ONLY = classes()
-            .that().resideInAnyPackage("com.liming.rag.ai..", "com.liming.rag.shared..")
+            .that().resideInAnyPackage("com.liming.rag.ai..", "com.liming.rag.shared..", "com.liming.rag.persistence..")
             .and().arePublic()
             .and().areNotInterfaces()
             .and().areNotEnums()
             .and().areNotAssignableTo(Throwable.class)
-            .and(not(SHARED_UTILITY))
+            .and(not(PLATFORM_UTILITY))
             .should().beAssignableTo(Record.class)
-            .as("技术模块（shared、ai）对外只公开接口、record、枚举和异常，实现类包内可见；shared 另可公开无实例的工具类（D-053）");
+            .as("平台层模块（shared、ai、persistence）对外只公开接口、record、枚举、异常和无实例的工具类（D-053），实现类包内可见");
 
     static final List<ArchRule> RULES = List.of(CONTEXT_CLASSES_IN_LAYERS, DOMAIN_IS_PURE, DOMAIN_ONLY_IN_CORE,
             APPLICATION_NOT_ON_SA_TOKEN,
