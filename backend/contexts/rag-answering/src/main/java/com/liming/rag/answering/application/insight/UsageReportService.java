@@ -1,12 +1,15 @@
 package com.liming.rag.answering.application.insight;
 
 import com.liming.rag.answering.application.AnsweringException;
+import com.liming.rag.answering.application.AnsweringProperties;
 import com.liming.rag.answering.application.review.AnswerReview;
 import com.liming.rag.answering.application.review.AnswerReviews;
+import com.liming.rag.identity.api.IdentityPermissions;
 import com.liming.rag.identity.api.UserDirectory;
 import com.liming.rag.settings.api.StatsZone;
 import com.liming.rag.shared.TenantId;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -33,6 +36,8 @@ public class UsageReportService {
     static final int TOP_GAPS = 5;
     /** 一次最多导出多少条问答。 */
     static final int MAX_EXPORT_ROWS = 50_000;
+    /** 多长时间内又问相近的问题算“重复提问”。 */
+    static final Duration REPEAT_WINDOW = Duration.ofMinutes(10);
 
     private static final DateTimeFormatter TIME = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
 
@@ -41,10 +46,12 @@ public class UsageReportService {
     private final KnowledgeGapService gaps;
     private final UserDirectory users;
     private final StatsZone zones;
+    private final double similarity;
     private final Clock clock;
 
     UsageReportService(AnswerStatistics statistics, AnswerReviews reviews, KnowledgeGapService gaps,
-            UserDirectory users, StatsZone zones, Clock clock) {
+            UserDirectory users, StatsZone zones, AnsweringProperties properties, Clock clock) {
+        this.similarity = properties.gaps().similarity();
         this.statistics = statistics;
         this.reviews = reviews;
         this.gaps = gaps;
@@ -68,13 +75,24 @@ public class UsageReportService {
         var zone = zones.statsZone();
         var period = period(days, week, zone);
         var stats = statistics.usage(tenantId, period.from(), period.to(), zone);
+        int staff = users.countWithPermission(tenantId, IdentityPermissions.CHAT_USE);
+        stats = stats.withTotals(stats.totals().with(staff, repeatQuestions(tenantId, period.from(), period.to(), zone)));
         UsageStats.Totals previous = null;
         if (period.week()) {
             long length = period.to().toEpochDay() - period.from().toEpochDay();
             var start = period.from().minusWeeks(1);
-            previous = statistics.totals(tenantId, start, start.plusDays(length), zone);
+            var end = start.plusDays(length);
+            previous = statistics.totals(tenantId, start, end, zone).with(staff,
+                    repeatQuestions(tenantId, start, end, zone));
         }
         return stats.withComparison(previous, gaps.top(tenantId, period.from(), period.to(), zone, TOP_GAPS));
+    }
+
+    /** 短时间重复提问的题数：此前 10 分钟内同一员工问过、向量相似度达到缺口归类门槛的题，每题只算一次。 */
+    private int repeatQuestions(TenantId tenantId, LocalDate from, LocalDate to, ZoneId zone) {
+        return (int) statistics.repeatCandidates(tenantId, from, to, zone, REPEAT_WINDOW).stream()
+                .filter(pair -> QuestionClusters.cosine(pair.previous(), pair.current()) >= similarity)
+                .map(AnswerStatistics.RepeatCandidate::recordId).distinct().count();
     }
 
     /**

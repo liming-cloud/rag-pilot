@@ -362,7 +362,7 @@ function totalsOf(daily: ReturnType<typeof sampleDay>[]) {
     liked: Math.round((questions - refused) * 0.3) - disliked,
     disliked,
     openReviews: Math.round(refused * 0.4) + disliked,
-    // 原型（#145 A11）：接接口后由后端统计。
+    // 能用问答的在职员工数取当前人数；短时间重复提问见 README 的产品指标（#145 A11）。
     activeStaff: 36,
     repeatQuestions: Math.round(questions * 0.08),
   };

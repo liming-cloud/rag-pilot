@@ -33,6 +33,10 @@
         "count" : "number",
         "dislikedCount" : "number",
         "id" : "number",
+        "knowledgeBaseRefs" : [ {
+          "id" : "number",
+          "name" : "string"
+        } ],
         "knowledgeBases" : [ "string" ],
         "lastAskedAt" : "string",
         "openCount" : "number",
@@ -79,13 +83,15 @@
         "question" : "string"
       } ],
       "totals" : {
+        "activeStaff" : "number",
         "askers" : "number",
         "disliked" : "number",
         "liked" : "number",
         "openReviews" : "number",
         "questions" : "number",
         "rated" : "number",
-        "refused" : "number"
+        "refused" : "number",
+        "repeatQuestions" : "number"
       },
       "zone" : "string"
     },
@@ -142,6 +148,8 @@
             "chunkId" : "number",
             "documentId" : "number",
             "documentName" : "string",
+            "documentState" : "string",
+            "documentUpdatedAt" : "string",
             "excerpt" : "string",
             "headingPath" : "string",
             "index" : "number"
@@ -303,6 +311,8 @@
     "GET /api/settings/chat" : {
       "emptyHint" : "string",
       "placeholder" : "string",
+      "refusalContact" : "string",
+      "refusalTips" : [ "string" ],
       "suggestedQuestions" : [ "string" ]
     },
     "GET /api/users" : {

@@ -23,7 +23,7 @@ import org.springframework.core.io.ClassPathResource;
  * @param name 显示名称
  * @param answer 回答提示词里的角色、引用示例和拒答话术
  * @param rewrite 低分改写提示词里的角色和行业提示
- * @param chat 问答页的占位、空状态说明和推荐问题
+ * @param chat 问答页的占位、空状态说明、推荐问题，以及答不上来时的建议和联系话术（后两项不能在界面改）
  * @param markers 行业标志词：内核代码里不能出现（{@code KernelNeutralityTest}），不参与检索
  * @param vocabulary 行业词表
  */
@@ -38,7 +38,8 @@ public record IndustryPackFile(String name, @DefaultValue Answer answer, @Defaul
     public record Rewrite(String role, List<String> hints) {
     }
 
-    public record Chat(String placeholder, String emptyHint, List<String> suggestedQuestions) {
+    public record Chat(String placeholder, String emptyHint, List<String> suggestedQuestions,
+            List<String> refusalTips, String refusalContact) {
     }
 
     public IndustryPackFile {
@@ -98,6 +99,13 @@ public record IndustryPackFile(String name, @DefaultValue Answer answer, @Defaul
             value(key).ifPresent(value -> SettingRules.problem(key, value).ifPresent(problem ->
                     require(false, code, key + "：" + problem)));
         }
+        if (chat.refusalTips() != null) {
+            require(chat.refusalTips().size() <= 3, code, "chat.refusal-tips 最多 3 条");
+            chat.refusalTips().forEach(tip -> require(tip != null && !tip.isBlank() && tip.length() <= 60, code,
+                    "chat.refusal-tips 每条不能为空，最多 60 个字"));
+        }
+        require(chat.refusalContact() == null || chat.refusalContact().length() <= 100, code,
+                "chat.refusal-contact 最多 100 个字");
         markers.forEach(marker -> require(marker != null && !marker.isBlank(), code, "markers 不能有空词"));
         var seen = new HashSet<String>();
         for (var term : vocabulary) {

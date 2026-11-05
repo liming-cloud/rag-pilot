@@ -3,6 +3,7 @@ package com.liming.rag.knowledge.application;
 import com.liming.rag.knowledge.application.ingestion.DocumentCalendar;
 
 import com.liming.rag.identity.api.UserDirectory;
+import com.liming.rag.knowledge.api.DocumentFreshness;
 import com.liming.rag.knowledge.api.KnowledgeBaseRef;
 import com.liming.rag.knowledge.api.SearchHit;
 import com.liming.rag.knowledge.domain.Chunk;
@@ -252,6 +253,12 @@ public final class InMemoryKnowledge {
         }
 
         @Override
+        public Map<Long, DocumentFreshness> freshness(TenantId tenantId, Collection<Long> documentIds,
+                LocalDate today) {
+            return Map.of();
+        }
+
+        @Override
         public Map<Long, String> names(TenantId tenantId, Collection<Long> knowledgeBaseIds) {
             var result = new HashMap<Long, String>();
             knowledgeBaseIds.stream().filter(knowledgeBases.rows::containsKey)
@@ -376,6 +383,11 @@ public final class InMemoryKnowledge {
         @Override
         public boolean roleExists(TenantId tenantId, long roleId) {
             return existingRoles.contains(roleId);
+        }
+
+        @Override
+        public int countWithPermission(TenantId tenantId, String permission) {
+            return 0;
         }
 
         @Override

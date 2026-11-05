@@ -201,6 +201,11 @@ class ModelSettingsServiceTest {
         }
 
         @Override
+        public int countWithPermission(TenantId tenantId, String permission) {
+            return 0;
+        }
+
+        @Override
         public Map<Long, UserSummary> summaries(TenantId tenantId, Collection<Long> userIds) {
             return Map.of(7L, new UserSummary(7, "admin", "超级管理员"));
         }

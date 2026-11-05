@@ -1,5 +1,6 @@
 package com.liming.rag.knowledge.application;
 
+import com.liming.rag.knowledge.api.DocumentFreshness;
 import com.liming.rag.knowledge.api.KnowledgeBaseRef;
 import com.liming.rag.knowledge.domain.Document;
 import com.liming.rag.knowledge.domain.DocumentStatus;
@@ -23,6 +24,9 @@ public interface KnowledgeQueries {
 
     /** 这个库是否授权给了他本人或其角色，口径同 {@link #accessible}。 */
     boolean isAccessible(Grantee grantee, long knowledgeBaseId);
+
+    /** 本租户里这些文档的上传时间和失效日期是否早于 {@code today}，不检查授权；不存在的 id 不返回。 */
+    Map<Long, DocumentFreshness> freshness(TenantId tenantId, Collection<Long> documentIds, LocalDate today);
 
     /** 本租户里这些库的名称，不检查授权；不存在的 id 不返回。 */
     Map<Long, String> names(TenantId tenantId, Collection<Long> knowledgeBaseIds);

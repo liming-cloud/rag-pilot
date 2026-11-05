@@ -146,6 +146,8 @@ class KnowledgeGapTests {
 
         assertThat(groups).singleElement().satisfies(group -> {
             assertThat(group).containsEntry("knowledgeBases", List.of("缺口测试门店库", "缺口测试商品库"));
+            assertThat((List<Map<String, Object>>) group.get("knowledgeBaseRefs")).containsExactly(
+                    Map.of("id", (int) store, "name", "缺口测试门店库"), Map.of("id", (int) goods, "name", "缺口测试商品库"));
             assertThat((List<Map<String, Object>>) group.get("records"))
                     .extracting(record -> record.get("knowledgeBases"))
                     .containsExactly(List.of("缺口测试门店库"), List.of("缺口测试门店库", "缺口测试商品库"),

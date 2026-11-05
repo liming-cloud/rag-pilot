@@ -28,6 +28,10 @@ interface AnswerRecordMapper extends BaseMapper<AnswerRecordDO> {
     UsageTotalsDO totals(@Param("tenantId") long tenantId, @Param("from") OffsetDateTime from,
             @Param("to") OffsetDateTime to);
 
+    /** 每条记录在 {@code seconds} 秒内此前同一员工问过的问题，两边都有向量的才列。 */
+    List<RepeatPairDO> repeatPairs(@Param("tenantId") long tenantId, @Param("from") OffsetDateTime from,
+            @Param("to") OffsetDateTime to, @Param("seconds") long seconds);
+
     List<DailyUsageDO> daily(@Param("tenantId") long tenantId, @Param("from") OffsetDateTime from,
             @Param("to") OffsetDateTime to, @Param("zone") String zone);
 

@@ -130,7 +130,7 @@ function report(days: number, status: string): GapReport {
         phrasings: counts.size,
         lastAskedAt: sorted[0]!.createdAt,
         knowledgeBases: byFrequency(list.flatMap((record) => record.knowledgeBases)),
-        // 原型（#145 A10）：接接口后由后端给出。
+        // 带 id，缺口详情里能直接打开这个库补资料（#145 A10）。
         knowledgeBaseRefs: byFrequency(list.flatMap((record) => record.knowledgeBases))
           .filter((name) => name in KNOWLEDGE_BASE_IDS)
           .map((name) => ({ id: KNOWLEDGE_BASE_IDS[name]!, name })),

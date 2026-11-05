@@ -26,11 +26,12 @@ class UsageReportServiceTest {
     private static final ZoneId ZONE = ZoneId.of("Asia/Shanghai");
 
     private final InMemoryAnswering fixture = new InMemoryAnswering();
+    private final AnsweringProperties properties = new AnsweringProperties(30, 8, 0.3, false, 0.03,
+            Duration.ofSeconds(3));
     private final KnowledgeGapService gaps = new KnowledgeGapService(fixture.gaps, fixture.records, fixture.embeddings,
-            fixture.users, fixture.access, TestSettings.RETAIL,
-            new AnsweringProperties(30, 8, 0.3, false, 0.03, Duration.ofSeconds(3)), Clock.systemUTC());
+            fixture.users, fixture.access, TestSettings.RETAIL, properties, Clock.systemUTC());
     private final UsageReportService service = new UsageReportService(fixture.statistics, fixture.reviews, gaps,
-            fixture.users, TestSettings.RETAIL, Clock.systemUTC());
+            fixture.users, TestSettings.RETAIL, properties, Clock.systemUTC());
 
     @Test
     @DisplayName("最近 N 天：含今天，默认 30 天；1 到 90 天之外是 INVALID；不和上一段对比")
@@ -72,6 +73,28 @@ class UsageReportServiceTest {
         assertReason(() -> service.usage(TENANT, null, monday.minusWeeks(12).toString()),
                 AnsweringException.Reason.INVALID);
         assertReason(() -> service.usage(TENANT, null, "2026/11/02"), AnsweringException.Reason.INVALID);
+    }
+
+    @Test
+    @DisplayName("能用问答的员工数取当前人数，本期和上一周相同；短时间重复提问：10 分钟内相似度达到门槛的后一题，每题只算一次")
+    void activeStaffAndRepeatQuestions() {
+        fixture.users.staffCount = 36;
+        var same = new float[] {1, 0, 0};
+        var close = new float[] {0.9f, 0.1f, 0};
+        var other = new float[] {0, 1, 0};
+        fixture.statistics.repeats = List.of(
+                new AnswerStatistics.RepeatCandidate(11, same, same),
+                new AnswerStatistics.RepeatCandidate(12, same, close),
+                new AnswerStatistics.RepeatCandidate(12, other, close),
+                new AnswerStatistics.RepeatCandidate(13, same, other));
+        var monday = LocalDate.now(ZONE).with(DayOfWeek.MONDAY);
+
+        var stats = service.usage(TENANT, null, monday.toString());
+
+        assertThat(stats.totals().activeStaff()).isEqualTo(36);
+        assertThat(stats.totals().repeatQuestions()).as("11 和 12 算，13 的相似度不够").isEqualTo(2);
+        assertThat(stats.previous().activeStaff()).isEqualTo(36);
+        assertThat(fixture.statistics.repeatWindow).isEqualTo(Duration.ofMinutes(10));
     }
 
     @Test

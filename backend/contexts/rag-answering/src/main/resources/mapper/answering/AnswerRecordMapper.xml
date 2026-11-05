@@ -56,6 +56,24 @@
         ]]>
     </select>
 
+    <resultMap id="repeatPair" type="com.liming.rag.answering.infrastructure.persistence.RepeatPairDO" autoMapping="true">
+        <result column="previous_vector" property="previousVector"
+                typeHandler="org.apache.ibatis.type.ArrayTypeHandler"/>
+        <result column="current_vector" property="currentVector"
+                typeHandler="org.apache.ibatis.type.ArrayTypeHandler"/>
+    </resultMap>
+
+    <select id="repeatPairs" resultMap="repeatPair">
+        <![CDATA[
+        SELECT cur.id AS record_id, prev.question_embedding AS previous_vector, cur.question_embedding AS current_vector
+        FROM answer_record cur
+        JOIN answer_record prev ON prev.tenant_id = cur.tenant_id AND prev.user_id = cur.user_id
+             AND prev.created_at < cur.created_at AND prev.created_at >= cur.created_at - make_interval(secs => #{seconds})
+        WHERE cur.tenant_id = #{tenantId} AND cur.created_at >= #{from} AND cur.created_at < #{to}
+          AND cur.question_embedding IS NOT NULL AND prev.question_embedding IS NOT NULL
+        ]]>
+    </select>
+
     <select id="daily" resultType="com.liming.rag.answering.infrastructure.persistence.DailyUsageDO">
         <![CDATA[
         SELECT CAST(created_at AT TIME ZONE #{zone} AS date) AS day, count(*) AS questions,

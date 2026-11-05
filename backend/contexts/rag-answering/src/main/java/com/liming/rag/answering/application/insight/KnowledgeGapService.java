@@ -9,6 +9,7 @@ import com.liming.rag.answering.domain.AnswerRecord;
 import com.liming.rag.answering.domain.AnswerRecordRepository;
 import com.liming.rag.identity.api.UserDirectory;
 import com.liming.rag.knowledge.api.KnowledgeAccess;
+import com.liming.rag.knowledge.api.KnowledgeBaseRef;
 import com.liming.rag.settings.api.StatsZone;
 import com.liming.rag.shared.TenantId;
 import com.liming.rag.shared.UserId;
@@ -208,13 +209,14 @@ public class KnowledgeGapService {
                 .collect(Collectors.groupingBy(id -> id, LinkedHashMap::new, Collectors.counting()));
         var knowledgeBases = knowledgeBaseCounts.entrySet().stream()
                 .sorted(Map.Entry.<Long, Long>comparingByValue().reversed())
-                .map(entry -> knowledgeBaseNames.get(entry.getKey()))
+                .map(entry -> new KnowledgeBaseRef(entry.getKey(), knowledgeBaseNames.get(entry.getKey())))
                 .toList();
         return new GapGroup(latestOfRepresentative.id(), representative, members.size(),
                 (int) members.stream().filter(record -> "OPEN".equals(record.reviewStatus())).count(),
                 (int) members.stream().filter(GapRecord::refused).count(),
                 (int) members.stream().filter(record -> !record.refused()).count(),
-                texts.size(), members.getFirst().createdAt(), knowledgeBases, List.copyOf(documents),
+                texts.size(), members.getFirst().createdAt(),
+                knowledgeBases.stream().map(KnowledgeBaseRef::name).toList(), knowledgeBases, List.copyOf(documents),
                 members.stream().map(record -> {
                     var asker = names.get(record.userId());
                     return new GapEntry(record.id(), record.question(), asker == null ? null : asker.displayName(),

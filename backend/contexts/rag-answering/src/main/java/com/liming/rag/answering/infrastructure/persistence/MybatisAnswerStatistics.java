@@ -3,6 +3,7 @@ package com.liming.rag.answering.infrastructure.persistence;
 import com.liming.rag.answering.application.insight.AnswerStatistics;
 import com.liming.rag.answering.application.insight.UsageStats;
 import com.liming.rag.shared.TenantId;
+import java.time.Duration;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.HashMap;
@@ -51,9 +52,26 @@ class MybatisAnswerStatistics implements AnswerStatistics {
                 to.plusDays(1).atStartOfDay(zone).toOffsetDateTime()));
     }
 
+    @Override
+    public List<RepeatCandidate> repeatCandidates(TenantId tenantId, LocalDate from, LocalDate to, ZoneId zone,
+            Duration window) {
+        return mapper.repeatPairs(tenantId.value(), from.atStartOfDay(zone).toOffsetDateTime(),
+                to.plusDays(1).atStartOfDay(zone).toOffsetDateTime(), window.toSeconds()).stream()
+                .map(row -> new RepeatCandidate(row.recordId, toVector(row.previousVector), toVector(row.currentVector)))
+                .toList();
+    }
+
+    private static float[] toVector(Float[] stored) {
+        var vector = new float[stored.length];
+        for (int i = 0; i < vector.length; i++) {
+            vector[i] = stored[i];
+        }
+        return vector;
+    }
+
     private static UsageStats.Totals toTotals(UsageTotalsDO totals) {
         return new UsageStats.Totals(totals.questions, totals.askers, totals.refused, totals.rated, totals.liked,
-                totals.disliked, totals.openReviews);
+                totals.disliked, totals.openReviews, 0, 0);
     }
 
     private static <T> List<T> ranked(List<LabelCountDO> rows, BiFunction<String, Integer, T> factory) {

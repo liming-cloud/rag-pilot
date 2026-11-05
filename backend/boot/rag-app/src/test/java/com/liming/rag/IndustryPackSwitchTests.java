@@ -67,7 +67,9 @@ class IndustryPackSwitchTests {
     void textsUseDemoPack() {
         assertThat(http.getForEntity("/api/settings/chat", Map.class).getBody())
                 .containsEntry("placeholder", "问问物业服务规范…")
-                .containsEntry("suggestedQuestions", List.of("电梯多久保养一次？"));
+                .containsEntry("suggestedQuestions", List.of("电梯多久保养一次？"))
+                .containsEntry("refusalTips", List.of("说出具体的设备名，比如“电梯”“水泵”。"))
+                .containsEntry("refusalContact", "还是找不到的话，请联系物业经理确认。");
         assertThat(http.getForEntity("/api/auth/branding", Map.class).getBody()).containsEntry("name", "物业知识库");
         var overview = http.getForEntity("/api/settings", Map.class).getBody();
         assertThat(((Map<?, ?>) overview.get("industryPack")).get("name")).isEqualTo("物业示例");

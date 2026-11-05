@@ -57,6 +57,23 @@ class AccessServiceTest {
     }
 
     @Test
+    @DisplayName("统计有某个权限点的在职账号：停用的不算，没有这个权限点的不算，还没改初始密码的算；别的租户不算")
+    void countsActiveAccountsWithPermission() {
+        int before = access.countWithPermission(TENANT, TestCatalog.CHAT_USE);
+        var manager = fixture.role("只看回答", TestCatalog.ANSWER_VIEW);
+        fixture.account("staff01", fixture.staffRole);
+        var leaver = fixture.account("staff02", fixture.staffRole);
+        var fresh = fixture.account("staff03", fixture.staffRole);
+        fixture.account("viewer", manager);
+        fixture.store.setEnabled(leaver.value(), false);
+        fixture.store.setPassword(fresh.value(), "hash", true);
+
+        assertThat(access.countWithPermission(TENANT, TestCatalog.CHAT_USE)).isEqualTo(before + 2);
+        assertThat(access.countWithPermission(TENANT, TestCatalog.ANSWER_VIEW)).isGreaterThanOrEqualTo(2);
+        assertThat(access.countWithPermission(OTHER_TENANT, TestCatalog.CHAT_USE)).isZero();
+    }
+
+    @Test
     @DisplayName("改了角色的权限点、清除后立即生效；其他租户查不到这个账号的角色")
     void followsCurrentData() {
         var manager = fixture.role("店长", TestCatalog.ANSWER_VIEW);

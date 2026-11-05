@@ -17,6 +17,8 @@ public final class KernelDefaults {
     public static final String CHAT_EMPTY_HINT = "问问知识库里的内容，回答会标出原文出处，可以接着追问。";
     public static final String REFUSAL_MESSAGE = "知识库里没有找到能回答这个问题的可靠依据，建议换个问法，或联系管理员确认。";
 
+    public static final String REFUSAL_TIP = "换个说法，或者说出具体的名称、场景再问一次。";
+
     public static final String ANSWER_ROLE = "你是企业的运营助手，回答员工的问题。";
     public static final String CITATION_EXAMPLE = "报销单需在每月 25 日前提交[2]。";
     public static final String REWRITE_ROLE = "你负责把员工的提问改写成便于检索制度文件的规范问题。";

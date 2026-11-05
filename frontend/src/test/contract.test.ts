@@ -23,25 +23,6 @@ const MOCK_USERS: Record<string, string> = {
 
 const endpoints = shapes.endpoints as Record<string, Shape>;
 
-/**
- * 原型阶段（#145 第 8 步）先在假数据里加、后端还没有的字段。只放过“假数据有、后端没有”这一种差异；
- * 接上真实接口、重新生成 api-shapes.json 后从这里删掉，最后这张表应为空。
- */
-const PROTOTYPE_FIELDS: Record<string, string[]> = {
-  "GET /api/conversations/:id": [
-    "响应.turns[].answer.citations[].documentUpdatedAt",
-    "响应.turns[].answer.citations[].documentState",
-  ],
-  "GET /api/settings/chat": ["响应.refusalTips", "响应.refusalContact"],
-  "GET /api/answers/gaps": ["响应.groups[].knowledgeBaseRefs"],
-  "GET /api/answers/stats": [
-    "响应.totals.activeStaff",
-    "响应.totals.repeatQuestions",
-    "响应.previous.activeStaff",
-    "响应.previous.repeatQuestions",
-  ],
-};
-
 describe("与后端接口契约一致（#145 C7）", () => {
   it("权限码常量和后端的权限点清单一一对应", () => {
     expect(Object.values(PERMISSIONS).toSorted()).toEqual(shapes.permissions);
@@ -53,9 +34,7 @@ describe("与后端接口契约一致（#145 C7）", () => {
     const response = await fetch(path);
     expect(response.ok, `${path} 返回 ${response.status}`).toBe(true);
 
-    const pending = new Set((PROTOTYPE_FIELDS[endpoint] ?? []).map((field) => `${field}：假数据有、后端没有`));
-    expect(mismatches(endpoints[endpoint]!, shapeOf(await response.json())).filter((problem) => !pending.has(problem)))
-      .toEqual([]);
+    expect(mismatches(endpoints[endpoint]!, shapeOf(await response.json()))).toEqual([]);
   });
 
   it("假接口的权限点清单就是后端的清单", async () => {

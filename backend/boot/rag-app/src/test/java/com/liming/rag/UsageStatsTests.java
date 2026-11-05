@@ -66,6 +66,9 @@ class UsageStatsTests {
         log.rate(TENANT, new UserId(1), liked, "UP", null);
         log.rate(TENANT, new UserId(2), disliked, "DOWN", "不对");
         log.markReview(TENANT, new UserId(1), resolved, "RESOLVED", "已补文档");
+        // 同一员工 10 分钟内又问了意思相近的问题（问题向量相同）：算一次重复提问；其余记录没有向量，不参与。
+        long again = log.record(TENANT, new UserId(1), "临期商品打几折", AskResult.answered("七折", List.of(), 0.9)).id();
+        orthogonalVectorsExcept(liked, again);
         // 范围外的旧记录和别的租户的记录都不算。
         long old = log.record(TENANT, new UserId(1), "很久以前的问题", AskResult.refused(RefusalReason.NO_EVIDENCE, null, "拒答")).id();
         jdbc.update("UPDATE answer_record SET created_at = now() - interval '40 days' WHERE id = ?", old);
@@ -78,13 +81,15 @@ class UsageStatsTests {
         var today = LocalDate.now(ZoneId.of("Asia/Shanghai"));
         assertThat(stats).containsEntry("from", today.minusDays(29).toString()).containsEntry("to", today.toString())
                 .containsEntry("zone", "Asia/Shanghai");
-        assertThat((Map<String, Object>) stats.get("totals")).containsEntry("questions", 5).containsEntry("askers", 3)
+        assertThat((Map<String, Object>) stats.get("totals")).containsEntry("questions", 6).containsEntry("askers", 3)
                 .containsEntry("refused", 3).containsEntry("rated", 2).containsEntry("liked", 1)
-                .containsEntry("disliked", 1).containsEntry("openReviews", 3);
+                .containsEntry("disliked", 1).containsEntry("openReviews", 3).containsEntry("repeatQuestions", 1);
+        assertThat(((Number) ((Map<String, Object>) stats.get("totals")).get("activeStaff")).intValue())
+                .as("能用问答的在职员工数：至少有内置管理员").isGreaterThanOrEqualTo(1);
         var daily = (List<Map<String, Object>>) stats.get("daily");
         assertThat(daily).hasSize(30);
         assertThat(daily.getFirst()).containsEntry("questions", 0);
-        assertThat(daily.getLast()).containsEntry("date", today.toString()).containsEntry("questions", 5)
+        assertThat(daily.getLast()).containsEntry("date", today.toString()).containsEntry("questions", 6)
                 .containsEntry("refused", 3).containsEntry("disliked", 1);
         assertThat((List<Map<String, Object>>) stats.get("refusalReasons")).containsExactly(
                 Map.of("reason", "LOW_RELEVANCE", "count", 2), Map.of("reason", "NO_EVIDENCE", "count", 1));
@@ -96,6 +101,30 @@ class UsageStatsTests {
         assertThat(stats).containsEntry("previous", null);
         assertThat((List<Map<String, Object>>) stats.get("topCitedDocuments")).containsExactly(
                 Map.of("documentName", "临期与报损管理.md", "count", 2), Map.of("documentName", "陈列规范.md", "count", 1));
+    }
+
+    /**
+     * 问题向量由后台在记录后算好存进去：等这两条存好，再把所有记录的向量改成互相正交的（两条给定的相同），
+     * 这样只有这两条算相近，不受模型向量的影响，也不会被还没落库的后台写入覆盖。
+     */
+    private void orthogonalVectorsExcept(long first, long second) {
+        long deadline = System.currentTimeMillis() + 10_000;
+        while (jdbc.queryForObject("SELECT count(*) FROM answer_record WHERE id IN (?, ?) AND question_embedding IS NOT NULL",
+                Long.class, first, second) < 2) {
+            assertThat(System.currentTimeMillis()).as("等后台算好问题向量").isLessThan(deadline);
+            try {
+                Thread.sleep(50);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException(e);
+            }
+        }
+        jdbc.update("""
+                UPDATE answer_record r SET question_embedding = (
+                    SELECT array_agg((i = CASE WHEN r.id IN (?, ?) THEN 1 ELSE 2 + r.id % 5 END)::int::real ORDER BY i)
+                    FROM generate_series(1, array_length(r.question_embedding, 1)) i)
+                WHERE r.question_embedding IS NOT NULL
+                """, first, second);
     }
 
     @Test

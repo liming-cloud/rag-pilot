@@ -8,6 +8,7 @@ import com.liming.rag.shared.Enums;
 import com.liming.rag.shared.Paged;
 
 import com.liming.rag.identity.api.UserDirectory;
+import com.liming.rag.knowledge.api.DocumentFreshness;
 import com.liming.rag.knowledge.api.KnowledgeAccess;
 import com.liming.rag.knowledge.api.KnowledgeBaseRef;
 import com.liming.rag.knowledge.api.KnowledgeSearch;
@@ -97,6 +98,12 @@ public class KnowledgeBaseService implements KnowledgeAccess {
             return accessible;
         }
         return requested.stream().filter(Objects::nonNull).distinct().filter(accessible::contains).toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Map<Long, DocumentFreshness> freshness(TenantId tenantId, Collection<Long> documentIds) {
+        return queries.freshness(tenantId, documentIds, calendar.today());
     }
 
     @Override

@@ -12,9 +12,12 @@ import com.liming.rag.answering.application.review.AnswerLogService;
 import com.liming.rag.answering.domain.Citation;
 import com.liming.rag.answering.domain.Conversation;
 import com.liming.rag.answering.domain.ConversationTurn;
+import com.liming.rag.knowledge.api.DocumentFreshness;
 import com.liming.rag.shared.UserId;
 import java.time.Clock;
+import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.function.Supplier;
 import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -160,6 +163,28 @@ class ConversationServiceTest {
                 .containsExactly(true, false);
         assertThat(detail.turns().getFirst().answer().citations().getFirst().excerpt()).isNull();
         assertThat(service.prepareTurn(TENANT, OWNER, id, null).knowledgeBaseIds()).containsExactly(STORE);
+    }
+
+    @Test
+    @DisplayName("历史引用带上资料的更新时间和状态：正常、已过失效日期、文档已不在（被新版本替换或删除）")
+    void citationsShowDocumentFreshness() {
+        long id = service.create(TENANT, OWNER, null).id();
+        var uploaded = OffsetDateTime.parse("2026-10-26T09:00:00+08:00");
+        service.recordTurn(newTurn(id, 11, "青柚在哪？", List.of(STORE), null), ConversationTurn.Status.ANSWERED,
+                AskResult.answered("A 区[1]。", List.of(citation()), 0.9));
+        Supplier<Citation> shown = () -> service.detail(TENANT, OWNER, id).turns().getFirst()
+                .answer().citations().getFirst();
+
+        fixture.access.documents.put(50L, new DocumentFreshness(uploaded, false));
+        assertThat(shown.get().documentState()).isEqualTo(Citation.DocumentState.CURRENT);
+        assertThat(shown.get().documentUpdatedAt()).isEqualTo(uploaded);
+
+        fixture.access.documents.put(50L, new DocumentFreshness(uploaded, true));
+        assertThat(shown.get().documentState()).isEqualTo(Citation.DocumentState.EXPIRED);
+
+        fixture.access.documents.clear();
+        assertThat(shown.get().documentState()).isEqualTo(Citation.DocumentState.REPLACED);
+        assertThat(shown.get().documentUpdatedAt()).isNull();
     }
 
     @Test

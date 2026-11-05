@@ -18,6 +18,10 @@ public record UsageStats(LocalDate from, LocalDate to, String zone, Totals total
         List<Day> daily,
         List<ReasonCount> refusalReasons, List<QuestionCount> topGaps, List<DocumentCount> topCitedDocuments) {
 
+    UsageStats withTotals(Totals newTotals) {
+        return new UsageStats(from, to, zone, newTotals, previous, daily, refusalReasons, topGaps, topCitedDocuments);
+    }
+
     public UsageStats withComparison(Totals previousTotals, List<QuestionCount> gaps) {
         return new UsageStats(from, to, zone, totals, previousTotals, daily, refusalReasons, List.copyOf(gaps),
                 topCitedDocuments);
@@ -26,8 +30,15 @@ public record UsageStats(LocalDate from, LocalDate to, String zone, Totals total
     /**
      * @param rated 给出了回答、且被点了赞或踩的记录数
      * @param openReviews 差评和答不上来、还没标记已处理的记录数
+     * @param activeStaff 现在能使用问答的在职员工数（启用的、有“使用问答”权限的账号）；没有账号的历史，统计各段都用当前人数
+     * @param repeatQuestions 短时间重复提问：同一员工 10 分钟内又问了意思相近的问题（问题向量相似度达到缺口归类的门槛）的题数
      */
-    public record Totals(int questions, int askers, int refused, int rated, int liked, int disliked, int openReviews) {
+    public record Totals(int questions, int askers, int refused, int rated, int liked, int disliked, int openReviews,
+            int activeStaff, int repeatQuestions) {
+
+        Totals with(int staff, int repeats) {
+            return new Totals(questions, askers, refused, rated, liked, disliked, openReviews, staff, repeats);
+        }
     }
 
     public record Day(LocalDate date, int questions, int refused, int disliked) {

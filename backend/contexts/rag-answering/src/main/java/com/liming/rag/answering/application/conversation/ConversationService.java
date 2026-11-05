@@ -8,6 +8,7 @@ import com.liming.rag.answering.domain.Citation;
 import com.liming.rag.answering.domain.Conversation;
 import com.liming.rag.answering.domain.ConversationRepository;
 import com.liming.rag.answering.domain.ConversationTurn;
+import com.liming.rag.knowledge.api.DocumentFreshness;
 import com.liming.rag.knowledge.api.KnowledgeAccess;
 import com.liming.rag.knowledge.api.KnowledgeSearch;
 import com.liming.rag.shared.TenantId;
@@ -84,8 +85,10 @@ public class ConversationService {
         var chunkIds = recorded.values().stream().flatMap(answer -> answer.citations().stream())
                 .map(Citation::chunkId).collect(Collectors.toSet());
         var excerpts = search.excerpts(tenantId, userId, chunkIds);
+        var documents = access.freshness(tenantId, recorded.values().stream()
+                .flatMap(answer -> answer.citations().stream()).map(Citation::documentId).collect(Collectors.toSet()));
         var views = turns.stream().map(turn -> new ConversationViews.Turn(turn.id(), turn.question(), turn.status(),
-                turn.answerRecordId() == null ? null : withExcerpts(recorded.get(turn.answerRecordId()), excerpts),
+                turn.answerRecordId() == null ? null : withExcerpts(recorded.get(turn.answerRecordId()), excerpts, documents),
                 turn.knowledgeBaseIds(), turn.askedAt()))
                 .toList();
         return new ConversationViews.Detail(id, conversation.title(), conversation.lastAskedAt(), options, views);
@@ -253,17 +256,32 @@ public class ConversationService {
         return answers;
     }
 
-    /** 引用原文按当前授权补上；授权已收回或文档已删时为 null。 */
-    private static AskResult withExcerpts(AskResult answer, Map<Long, String> excerpts) {
+    /**
+     * 引用原文按当前授权补上，授权已收回或文档已删时为 null；资料的更新时间和状态按文档现在的情况补上，
+     * 文档已不在的算被替换（D-026：新版本处理成功后旧版本删除）。
+     */
+    private static AskResult withExcerpts(AskResult answer, Map<Long, String> excerpts,
+            Map<Long, DocumentFreshness> documents) {
         if (answer == null) {
             return null;
         }
         var citations = answer.citations().stream()
-                .map(citation -> new Citation(citation.index(), citation.chunkId(), citation.documentId(),
-                        citation.documentName(), citation.headingPath(), excerpts.get(citation.chunkId())))
+                .map(citation -> {
+                    var document = documents.get(citation.documentId());
+                    return new Citation(citation.index(), citation.chunkId(), citation.documentId(),
+                            citation.documentName(), citation.headingPath(), excerpts.get(citation.chunkId()),
+                            document == null ? null : document.uploadedAt(), state(document));
+                })
                 .toList();
         return new AskResult(answer.id(), answer.text(), answer.refused(), answer.refusalReason(), citations,
                 answer.topRelevance(), null, null);
+    }
+
+    private static Citation.DocumentState state(DocumentFreshness document) {
+        if (document == null) {
+            return Citation.DocumentState.REPLACED;
+        }
+        return document.expired() ? Citation.DocumentState.EXPIRED : Citation.DocumentState.CURRENT;
     }
 
     private static ConversationViews.Summary summary(Conversation conversation) {

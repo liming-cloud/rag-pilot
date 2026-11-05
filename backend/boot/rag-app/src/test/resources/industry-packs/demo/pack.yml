@@ -13,6 +13,9 @@ chat:
   empty-hint: 问问物业服务规范，回答会标出出处。
   suggested-questions:
     - 电梯多久保养一次？
+  refusal-tips:
+    - 说出具体的设备名，比如“电梯”“水泵”。
+  refusal-contact: 还是找不到的话，请联系物业经理确认。
 markers: [物业, 业主]
 vocabulary:
   - term: 电梯

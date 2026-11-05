@@ -134,6 +134,14 @@ public class AccessService implements UserDirectory {
     }
 
     @Override
+    public int countWithPermission(TenantId tenantId, String permission) {
+        var holders = roles.list(tenantId).stream()
+                .filter(role -> role.superAdmin() || role.permissions().contains(permission))
+                .flatMap(role -> roles.userIds(role.id()).stream()).distinct().toList();
+        return holders.isEmpty() ? 0 : (int) accounts.findAll(tenantId, holders).stream().filter(Account::enabled).count();
+    }
+
+    @Override
     public Map<Long, UserSummary> summaries(TenantId tenantId, Collection<Long> userIds) {
         if (userIds.isEmpty()) {
             return Map.of();

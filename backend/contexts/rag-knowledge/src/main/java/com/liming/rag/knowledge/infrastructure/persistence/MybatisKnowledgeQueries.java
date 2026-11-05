@@ -7,6 +7,7 @@ import com.liming.rag.knowledge.application.ExpiringDocument;
 import com.liming.rag.knowledge.application.DocumentRow;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.liming.rag.knowledge.api.DocumentFreshness;
 import com.liming.rag.knowledge.api.KnowledgeBaseRef;
 import com.liming.rag.knowledge.application.Grantee;
 import com.liming.rag.knowledge.application.KnowledgeQueries;
@@ -14,6 +15,7 @@ import com.liming.rag.shared.Paged;
 import com.liming.rag.knowledge.domain.DocumentStatus;
 import com.liming.rag.knowledge.domain.Validity;
 import com.liming.rag.shared.TenantId;
+import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.Collection;
 import java.util.List;
@@ -28,9 +30,11 @@ class MybatisKnowledgeQueries implements KnowledgeQueries {
     private final KnowledgeQueryMapper mapper;
     private final KnowledgeBaseMemberMapper members;
     private final KnowledgeBaseMapper knowledgeBases;
+    private final DocumentMapper documents;
 
     MybatisKnowledgeQueries(KnowledgeQueryMapper mapper, KnowledgeBaseMemberMapper members,
-            KnowledgeBaseMapper knowledgeBases) {
+            KnowledgeBaseMapper knowledgeBases, DocumentMapper documents) {
+        this.documents = documents;
         this.mapper = mapper;
         this.members = members;
         this.knowledgeBases = knowledgeBases;
@@ -46,6 +50,19 @@ class MybatisKnowledgeQueries implements KnowledgeQueries {
     public boolean isAccessible(Grantee grantee, long knowledgeBaseId) {
         return members.isAccessible(grantee.tenantId().value(), grantee.userId().value(), grantee.roleIds(),
                 knowledgeBaseId);
+    }
+
+    @Override
+    public Map<Long, DocumentFreshness> freshness(TenantId tenantId, Collection<Long> documentIds, LocalDate today) {
+        if (documentIds.isEmpty()) {
+            return Map.of();
+        }
+        return documents.selectList(new LambdaQueryWrapper<DocumentDO>()
+                        .select(DocumentDO::getId, DocumentDO::getCreatedAt, DocumentDO::getExpiresOn)
+                        .eq(DocumentDO::getTenantId, tenantId.value())
+                        .in(DocumentDO::getId, documentIds))
+                .stream().collect(Collectors.toMap(DocumentDO::getId, row -> new DocumentFreshness(
+                        row.getCreatedAt(), row.getExpiresOn() != null && row.getExpiresOn().isBefore(today))));
     }
 
     @Override

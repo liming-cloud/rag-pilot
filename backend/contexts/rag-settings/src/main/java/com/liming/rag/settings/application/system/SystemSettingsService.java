@@ -94,7 +94,17 @@ public class SystemSettingsService implements AnsweringSettings, StatsZone {
     public ChatTexts chatTexts() {
         var saved = saved();
         return new ChatTexts(text(saved, SettingKey.CHAT_PLACEHOLDER), text(saved, SettingKey.CHAT_EMPTY_HINT),
-                item(saved, SettingKey.SUGGESTED_QUESTIONS).value());
+                item(saved, SettingKey.SUGGESTED_QUESTIONS).value(), refusalTips(), refusalContact());
+    }
+
+    private List<String> refusalTips() {
+        var tips = file.chat().refusalTips();
+        return tips == null || tips.isEmpty() ? List.of(KernelDefaults.REFUSAL_TIP) : tips;
+    }
+
+    private String refusalContact() {
+        var contact = file.chat().refusalContact();
+        return contact == null ? "" : contact.strip();
     }
 
     /** 按接口传来的原始值保存：{@code key} 是设置项的名字，{@code value} 文字项是字符串、推荐问题是字符串数组。 */

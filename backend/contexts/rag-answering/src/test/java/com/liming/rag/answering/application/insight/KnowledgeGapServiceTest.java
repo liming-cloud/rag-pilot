@@ -11,6 +11,7 @@ import com.liming.rag.answering.application.TestSettings;
 import com.liming.rag.answering.application.ask.AskResult;
 import com.liming.rag.answering.application.insight.GapRecords.GapRecord;
 import com.liming.rag.answering.domain.AnswerRecord;
+import com.liming.rag.knowledge.api.KnowledgeBaseRef;
 import com.liming.rag.answering.domain.RefusalReason;
 import com.liming.rag.shared.UserId;
 import java.time.Clock;
@@ -64,6 +65,7 @@ class KnowledgeGapServiceTest {
         assertThat(cold.dislikedCount()).isEqualTo(1);
         assertThat(cold.phrasings()).isEqualTo(2);
         assertThat(cold.knowledgeBases()).as("已删除的库不显示").containsExactly("门店规范");
+        assertThat(cold.knowledgeBaseRefs()).as("带 id，已删除的库不列").containsExactly(new KnowledgeBaseRef(1L, "门店规范"));
         assertThat(cold.records()).extracting(GapEntry::askerName).containsOnly("店员小王");
         assertThat(report.groups()).extracting(GapGroup::question)
                 .containsExactly("冷柜温度要多少？", "青柚在哪？");

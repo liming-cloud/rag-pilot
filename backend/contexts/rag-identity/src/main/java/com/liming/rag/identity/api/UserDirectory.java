@@ -21,6 +21,9 @@ public interface UserDirectory {
     /** 角色存在且属于该租户。 */
     boolean roleExists(TenantId tenantId, long roleId);
 
+    /** 本租户里有这个权限点的在职账号数：未停用、所属角色给出该权限点（超级管理员是全部）；还没改初始密码的也算。 */
+    int countWithPermission(TenantId tenantId, String permission);
+
     /** 按 id 取账号的用户名和显示名，不存在的 id 不返回。 */
     Map<Long, UserSummary> summaries(TenantId tenantId, Collection<Long> userIds);
 

@@ -57,6 +57,8 @@ class SystemSettingsServiceTest {
         assertThat(items.get(SettingKey.CHAT_PLACEHOLDER).source()).isEqualTo(SettingSource.INDUSTRY_PACK);
         assertThat(settings.refusalMessage()).contains("联系店长确认");
         assertThat(settings.chatTexts().suggestedQuestions()).isNotEmpty();
+        assertThat(settings.chatTexts().refusalTips()).isNotEmpty();
+        assertThat(settings.chatTexts().refusalContact()).contains("店长");
     }
 
     @Test
@@ -66,7 +68,7 @@ class SystemSettingsServiceTest {
 
         assertThat(settings.refusalMessage()).isEqualTo(KernelDefaults.REFUSAL_MESSAGE);
         assertThat(settings.chatTexts()).isEqualTo(new ChatTexts(KernelDefaults.CHAT_PLACEHOLDER,
-                KernelDefaults.CHAT_EMPTY_HINT, List.of()));
+                KernelDefaults.CHAT_EMPTY_HINT, List.of(), List.of(KernelDefaults.REFUSAL_TIP), ""));
         assertThat(items(settings).get(SettingKey.REFUSAL_MESSAGE).source()).isEqualTo(SettingSource.KERNEL);
     }
 
@@ -168,6 +170,11 @@ class SystemSettingsServiceTest {
         @Override
         public boolean roleExists(TenantId tenantId, long roleId) {
             return true;
+        }
+
+        @Override
+        public int countWithPermission(TenantId tenantId, String permission) {
+            return 0;
         }
 
         @Override

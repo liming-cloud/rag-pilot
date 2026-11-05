@@ -14,6 +14,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Supplier;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -280,6 +281,30 @@ class ConversationTests {
         var done = json(events.getLast().data());
         assertThat(done.get("answer").toString()).contains("refused=true").contains("NO_EVIDENCE")
                 .doesNotContain("A 区 03 号货架");
+    }
+
+    @Test
+    @DisplayName("历史引用带上资料的更新时间和状态：正常、已过失效日期、文档删除（被新版本替换）后（#145 A7）")
+    @SuppressWarnings("unchecked")
+    void citationsShowDocumentFreshness() {
+        var setup = staffWithStore("conv16", "会话测试资料状态库");
+        long id = id(exchange(HttpMethod.POST, "/api/conversations", Map.of(), setup.token()));
+        String path = "/api/conversations/" + id;
+        SseEvents.post(http, path + "/turns/stream", Map.of("question", "青柚气泡水在哪个货架？"), setup.token());
+        Supplier<Map<String, Object>> citation = () -> {
+            var turn = ((List<Map<String, Object>>) exchange(HttpMethod.GET, path, null, setup.token()).getBody()
+                    .get("turns")).getFirst();
+            return ((List<Map<String, Object>>) ((Map<String, Object>) turn.get("answer")).get("citations")).getFirst();
+        };
+
+        assertThat(citation.get()).containsEntry("documentState", "CURRENT").doesNotContainEntry("documentUpdatedAt", null);
+
+        jdbc.update("UPDATE document SET expires_on = current_date - 1 WHERE knowledge_base_id = ?",
+                setup.knowledgeBaseId());
+        assertThat(citation.get()).containsEntry("documentState", "EXPIRED");
+
+        jdbc.update("DELETE FROM document WHERE knowledge_base_id = ?", setup.knowledgeBaseId());
+        assertThat(citation.get()).containsEntry("documentState", "REPLACED").containsEntry("documentUpdatedAt", null);
     }
 
     @Test

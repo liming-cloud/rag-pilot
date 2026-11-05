@@ -20,6 +20,12 @@ public interface KnowledgeAccess {
      */
     List<Long> scope(TenantId tenantId, UserId userId, Collection<Long> requested);
 
+    /**
+     * 文档的上传时间和是否已过失效日期，不检查成员关系，只给展示引用用。文档已被删除（被新版本替换或手工删除）的 id 不返回。
+     * “今天”按部署的统计时区算。
+     */
+    Map<Long, DocumentFreshness> freshness(TenantId tenantId, Collection<Long> documentIds);
+
     /** 知识库名称，不检查成员关系；只用于显示“会话里选过、后来被收回授权”的库叫什么。不存在的 id 不返回。 */
     Map<Long, String> names(TenantId tenantId, Collection<Long> knowledgeBaseIds);
 }

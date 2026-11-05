@@ -3,6 +3,7 @@ package com.liming.rag.answering.application;
 import com.liming.rag.ai.EmbeddingClient;
 import com.liming.rag.ai.ModelCallException;
 import com.liming.rag.answering.application.insight.AnswerStatistics;
+import com.liming.rag.answering.application.insight.AnswerStatistics.RepeatCandidate;
 import com.liming.rag.answering.application.insight.GapRecords;
 import com.liming.rag.answering.application.insight.UsageStats;
 import com.liming.rag.answering.application.review.AnswerReview;
@@ -13,6 +14,7 @@ import com.liming.rag.answering.domain.Conversation;
 import com.liming.rag.answering.domain.ConversationRepository;
 import com.liming.rag.answering.domain.ConversationTurn;
 import com.liming.rag.identity.api.UserDirectory;
+import com.liming.rag.knowledge.api.DocumentFreshness;
 import com.liming.rag.knowledge.api.KnowledgeAccess;
 import com.liming.rag.knowledge.api.KnowledgeBaseRef;
 import com.liming.rag.knowledge.api.KnowledgeSearch;
@@ -245,6 +247,15 @@ public final class InMemoryAnswering {
 
         public final List<LocalDate[]> usageCalls = new ArrayList<>();
         public final List<LocalDate[]> totalsCalls = new ArrayList<>();
+        public List<RepeatCandidate> repeats = List.of();
+        public java.time.Duration repeatWindow;
+
+        @Override
+        public List<RepeatCandidate> repeatCandidates(TenantId tenantId, LocalDate from, LocalDate to, ZoneId zone,
+                java.time.Duration window) {
+            repeatWindow = window;
+            return repeats;
+        }
 
         @Override
         public UsageStats usage(TenantId tenantId, LocalDate from, LocalDate to, ZoneId zone) {
@@ -259,7 +270,7 @@ public final class InMemoryAnswering {
         }
 
         private static UsageStats.Totals totals() {
-            return new UsageStats.Totals(0, 0, 0, 0, 0, 0, 0);
+            return new UsageStats.Totals(0, 0, 0, 0, 0, 0, 0, 0, 0);
         }
     }
 
@@ -269,6 +280,7 @@ public final class InMemoryAnswering {
         public final Map<Long, List<KnowledgeBaseRef>> accessible = new HashMap<>();
         public final Map<Long, String> names = new HashMap<>();
         public final Map<Long, String> excerpts = new HashMap<>();
+        public final Map<Long, DocumentFreshness> documents = new HashMap<>();
 
         public Access grant(long userId, long knowledgeBaseId, String name) {
             names.put(knowledgeBaseId, name);
@@ -303,6 +315,13 @@ public final class InMemoryAnswering {
         }
 
         @Override
+        public Map<Long, DocumentFreshness> freshness(TenantId tenantId, Collection<Long> documentIds) {
+            var result = new HashMap<Long, DocumentFreshness>();
+            documentIds.stream().filter(documents::containsKey).forEach(id -> result.put(id, documents.get(id)));
+            return result;
+        }
+
+        @Override
         public List<SearchHit> search(SearchQuery query) {
             return List.of();
         }
@@ -319,6 +338,7 @@ public final class InMemoryAnswering {
     public static final class Directory implements UserDirectory {
 
         public final Map<Long, String> names = new HashMap<>();
+        public int staffCount;
 
         @Override
         public boolean exists(TenantId tenantId, UserId userId) {
@@ -338,6 +358,11 @@ public final class InMemoryAnswering {
         @Override
         public boolean roleExists(TenantId tenantId, long roleId) {
             return false;
+        }
+
+        @Override
+        public int countWithPermission(TenantId tenantId, String permission) {
+            return staffCount;
         }
 
         @Override
