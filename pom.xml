@@ -35,9 +35,9 @@
         <maven-surefire-plugin.version>3.6.1</maven-surefire-plugin.version>
         <!-- 上下文层禁止依赖 Spring AI（#145，见 backend/contexts/pom.xml）。 -->
         <maven-enforcer-plugin.version>3.6.3</maven-enforcer-plugin.version>
-        <!-- 调用真实模型的评测默认不跑；评测任务用 -Dtest.groups=eval -Dtest.excludedGroups=none 运行。 -->
+        <!-- 调用真实模型的评测、耗时测量默认不跑；评测任务用 -Dtest.groups=eval -Dtest.excludedGroups=none 运行。 -->
         <test.groups></test.groups>
-        <test.excludedGroups>eval</test.excludedGroups>
+        <test.excludedGroups>eval,benchmark</test.excludedGroups>
     </properties>
 
     <dependencyManagement>
