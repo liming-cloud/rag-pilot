@@ -85,9 +85,11 @@
       "totals" : {
         "activeStaff" : "number",
         "askers" : "number",
+        "citedAnswers" : "number",
         "disliked" : "number",
         "liked" : "number",
         "openReviews" : "number",
+        "openedAnswers" : "number",
         "questions" : "number",
         "rated" : "number",
         "refused" : "number",

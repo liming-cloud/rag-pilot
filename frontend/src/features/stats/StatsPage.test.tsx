@@ -63,7 +63,19 @@ describe("运营概览页", () => {
           from: "2026-10-22",
           to: "2026-10-28",
           zone: "Asia/Singapore",
-          totals: { questions: 40, askers: 6, refused: 10, rated: 12, liked: 9, disliked: 3, openReviews: 5 },
+          totals: {
+            questions: 40,
+            askers: 6,
+            refused: 10,
+            rated: 12,
+            liked: 9,
+            disliked: 3,
+            openReviews: 5,
+            activeStaff: 12,
+            repeatQuestions: 4,
+            citedAnswers: 20,
+            openedAnswers: 5,
+          },
           daily: [],
           refusalReasons: [],
           previous: null,
@@ -76,6 +88,8 @@ describe("运营概览页", () => {
 
     const totals = await screen.findByRole("list", { name: "汇总" });
     expect(within(within(totals).getByText("拒答率").closest("li")!).getByText("25.0%")).toBeInTheDocument();
+    // 引用点开率 = 被点开过引用的回答 ÷ 带引用的回答（5 ÷ 20）。
+    expect(within(within(totals).getByText("引用点开率").closest("li")!).getByText("25.0%")).toBeInTheDocument();
     // 评价率和差评率的分母是给出了回答的 30 题。
     expect(within(within(totals).getByText("评价率").closest("li")!).getByText("40.0%")).toBeInTheDocument();
     expect(within(within(totals).getByText("差评率").closest("li")!).getByText("10.0%")).toBeInTheDocument();
@@ -97,6 +111,8 @@ describe("运营概览页", () => {
             openReviews: 0,
             activeStaff: 30,
             repeatQuestions: 0,
+            citedAnswers: 0,
+            openedAnswers: 0,
           },
           daily: [],
           refusalReasons: [],
@@ -108,8 +124,8 @@ describe("运营概览页", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: "近 7 天" }));
     expect(await screen.findByText("这段时间还没有提问。")).toBeInTheDocument();
-    // 拒答率、评价率、好评率、差评率、人均提问、短时间重复提问没有分母；提问人数占比是 0.0%。
-    expect(screen.getAllByText("-")).toHaveLength(6);
+    // 拒答率、评价率、好评率、差评率、人均提问、短时间重复提问、引用点开率没有分母；提问人数占比是 0.0%。
+    expect(screen.getAllByText("-")).toHaveLength(7);
     expect(within(screen.getByRole("list", { name: "汇总" })).getByText("0.0%")).toBeInTheDocument();
   });
 

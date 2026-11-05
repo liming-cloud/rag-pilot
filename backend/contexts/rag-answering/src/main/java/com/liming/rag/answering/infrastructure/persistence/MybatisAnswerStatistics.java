@@ -71,7 +71,7 @@ class MybatisAnswerStatistics implements AnswerStatistics {
 
     private static UsageStats.Totals toTotals(UsageTotalsDO totals) {
         return new UsageStats.Totals(totals.questions, totals.askers, totals.refused, totals.rated, totals.liked,
-                totals.disliked, totals.openReviews, 0, 0);
+                totals.disliked, totals.openReviews, 0, 0, totals.citedAnswers, totals.openedAnswers);
     }
 
     private static <T> List<T> ranked(List<LabelCountDO> rows, BiFunction<String, Integer, T> factory) {

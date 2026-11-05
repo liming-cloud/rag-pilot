@@ -13,4 +13,6 @@ final class UsageTotalsDO {
     Integer liked;
     Integer disliked;
     Integer openReviews;
+    Integer citedAnswers;
+    Integer openedAnswers;
 }

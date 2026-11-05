@@ -146,6 +146,12 @@ function StatsView({ stats }: { stats: UsageStats }) {
       change: previous ? rateChange(totals, previous, (t) => [t.repeatQuestions, t.questions]) : undefined,
     },
     {
+      label: "引用点开率",
+      value: percent(totals.openedAnswers, totals.citedAnswers),
+      note: `${totals.citedAnswers} 条带引用的回答里 ${totals.openedAnswers} 条被点开过引用`,
+      change: previous ? rateChange(totals, previous, (t) => [t.openedAnswers, t.citedAnswers]) : undefined,
+    },
+    {
       label: "拒答率",
       value: percent(totals.refused, totals.questions),
       note: `${totals.refused} 题答不上来`,

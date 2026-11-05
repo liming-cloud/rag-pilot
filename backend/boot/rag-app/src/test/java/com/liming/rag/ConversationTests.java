@@ -308,6 +308,36 @@ class ConversationTests {
     }
 
     @Test
+    @DisplayName("上报点开引用：提问人能报；别人的回答、不存在的引用位置返回 404，没登录返回 401（#145 A11）")
+    void reportsOpenedCitation() {
+        var setup = staffWithStore("conv17", "会话测试点开引用库");
+        createStaff("conv18");
+        String otherToken = TestLogin.token(http, "conv18", "staff-password");
+        long id = id(exchange(HttpMethod.POST, "/api/conversations", Map.of(), setup.token()));
+        SseEvents.post(http, "/api/conversations/" + id + "/turns/stream", Map.of("question", "青柚气泡水在哪个货架？"),
+                setup.token());
+        @SuppressWarnings("unchecked")
+        var turn = ((List<Map<String, Object>>) exchange(HttpMethod.GET, "/api/conversations/" + id, null,
+                setup.token()).getBody().get("turns")).getFirst();
+        long answerId = ((Number) ((Map<?, ?>) turn.get("answer")).get("id")).longValue();
+        String path = "/api/answers/" + answerId + "/citations/";
+
+        assertThat(exchange(HttpMethod.POST, path + "1/opened", null, setup.token()).getStatusCode())
+                .isEqualTo(HttpStatus.NO_CONTENT);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM answer_citation_open WHERE answer_id = ? AND citation_index = 1",
+                Long.class, answerId)).isEqualTo(1);
+
+        assertThat(exchange(HttpMethod.POST, path + "1/opened", null, otherToken).getStatusCode())
+                .isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(exchange(HttpMethod.POST, path + "9/opened", null, setup.token()).getStatusCode())
+                .isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(http.postForEntity(path + "1/opened", null, String.class).getStatusCode())
+                .isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM answer_citation_open WHERE answer_id = ?", Long.class,
+                answerId)).as("拒绝的上报没有写入").isEqualTo(1);
+    }
+
+    @Test
     @DisplayName("别人不能在我的会话里提问、也不能停止；停止已结束的一轮没有副作用")
     void othersCannotAskOrStop() {
         var setup = staffWithStore("conv08", "会话测试停止库");

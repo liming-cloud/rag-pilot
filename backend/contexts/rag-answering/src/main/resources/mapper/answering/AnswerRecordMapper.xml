@@ -50,7 +50,9 @@
                count(*) FILTER (WHERE NOT refused AND rating IS NOT NULL) AS rated,
                count(*) FILTER (WHERE NOT refused AND rating = 'UP') AS liked,
                count(*) FILTER (WHERE NOT refused AND rating = 'DOWN') AS disliked,
-               count(*) FILTER (WHERE review_status = 'OPEN' AND (refused OR rating = 'DOWN')) AS open_reviews
+               count(*) FILTER (WHERE review_status = 'OPEN' AND (refused OR rating = 'DOWN')) AS open_reviews,
+               count(*) FILTER (WHERE EXISTS (SELECT 1 FROM answer_citation c WHERE c.answer_id = answer_record.id)) AS cited_answers,
+               count(*) FILTER (WHERE EXISTS (SELECT 1 FROM answer_citation_open o WHERE o.answer_id = answer_record.id)) AS opened_answers
         FROM answer_record
         WHERE tenant_id = #{tenantId} AND created_at >= #{from} AND created_at < #{to}
         ]]>

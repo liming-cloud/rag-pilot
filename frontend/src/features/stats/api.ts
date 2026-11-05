@@ -15,6 +15,10 @@ export type Totals = {
   activeStaff: number;
   /** 短时间重复提问：同一员工 10 分钟内又问了意思相近的问题（问题向量相似度达到归类门槛），说明上一次没得到想要的答案（#145 A11）。 */
   repeatQuestions: number;
+  /** 带引用的回答数，算引用点开率的分母（#145 A11）。 */
+  citedAnswers: number;
+  /** 其中被点开过至少一个引用的回答数（点开记在回答被问的那一天所在的时段）。 */
+  openedAnswers: number;
 };
 
 /** 与后端 answering 模块的 UsageStats 一致。日期按部署配置的统计时区划分（D-045）。 */

@@ -270,7 +270,7 @@ public final class InMemoryAnswering {
         }
 
         private static UsageStats.Totals totals() {
-            return new UsageStats.Totals(0, 0, 0, 0, 0, 0, 0, 0, 0);
+            return new UsageStats.Totals(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
         }
     }
 

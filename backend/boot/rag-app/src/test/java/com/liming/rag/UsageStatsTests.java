@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.liming.rag.answering.application.ask.AskResult;
 import com.liming.rag.answering.application.review.AnswerLogService;
+import com.liming.rag.answering.application.review.CitationOpenService;
 import com.liming.rag.answering.domain.Citation;
 import com.liming.rag.answering.domain.RefusalReason;
 import com.liming.rag.shared.TenantId;
@@ -47,6 +48,9 @@ class UsageStatsTests {
     private AnswerLogService log;
 
     @Autowired
+    private CitationOpenService opens;
+
+    @Autowired
     private JdbcTemplate jdbc;
 
     @Test
@@ -66,6 +70,9 @@ class UsageStatsTests {
         log.rate(TENANT, new UserId(1), liked, "UP", null);
         log.rate(TENANT, new UserId(2), disliked, "DOWN", "不对");
         log.markReview(TENANT, new UserId(1), resolved, "RESOLVED", "已补文档");
+        // 引用点开率：带引用的回答有两条（liked、disliked），其中 liked 被点开过（点两次也只算一条）。
+        opens.opened(TENANT, new UserId(1), liked, 1);
+        opens.opened(TENANT, new UserId(1), liked, 1);
         // 同一员工 10 分钟内又问了意思相近的问题（问题向量相同）：算一次重复提问；其余记录没有向量，不参与。
         long again = log.record(TENANT, new UserId(1), "临期商品打几折", AskResult.answered("七折", List.of(), 0.9)).id();
         orthogonalVectorsExcept(liked, again);
@@ -83,7 +90,8 @@ class UsageStatsTests {
                 .containsEntry("zone", "Asia/Shanghai");
         assertThat((Map<String, Object>) stats.get("totals")).containsEntry("questions", 6).containsEntry("askers", 3)
                 .containsEntry("refused", 3).containsEntry("rated", 2).containsEntry("liked", 1)
-                .containsEntry("disliked", 1).containsEntry("openReviews", 3).containsEntry("repeatQuestions", 1);
+                .containsEntry("disliked", 1).containsEntry("openReviews", 3).containsEntry("repeatQuestions", 1)
+                .containsEntry("citedAnswers", 2).containsEntry("openedAnswers", 1);
         assertThat(((Number) ((Map<String, Object>) stats.get("totals")).get("activeStaff")).intValue())
                 .as("能用问答的在职员工数：至少有内置管理员").isGreaterThanOrEqualTo(1);
         var daily = (List<Map<String, Object>>) stats.get("daily");

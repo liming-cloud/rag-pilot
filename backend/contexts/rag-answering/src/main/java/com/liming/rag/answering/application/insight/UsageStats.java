@@ -32,12 +32,15 @@ public record UsageStats(LocalDate from, LocalDate to, String zone, Totals total
      * @param openReviews 差评和答不上来、还没标记已处理的记录数
      * @param activeStaff 现在能使用问答的在职员工数（启用的、有“使用问答”权限的账号）；没有账号的历史，统计各段都用当前人数
      * @param repeatQuestions 短时间重复提问：同一员工 10 分钟内又问了意思相近的问题（问题向量相似度达到缺口归类的门槛）的题数
+     * @param citedAnswers 带引用的回答数，算引用点开率的分母
+     * @param openedAnswers 其中被点开过至少一个引用的回答数（点开记在回答被问的那一天所在的时段，不按点开的时间算）
      */
     public record Totals(int questions, int askers, int refused, int rated, int liked, int disliked, int openReviews,
-            int activeStaff, int repeatQuestions) {
+            int activeStaff, int repeatQuestions, int citedAnswers, int openedAnswers) {
 
         Totals with(int staff, int repeats) {
-            return new Totals(questions, askers, refused, rated, liked, disliked, openReviews, staff, repeats);
+            return new Totals(questions, askers, refused, rated, liked, disliked, openReviews, staff, repeats,
+                    citedAnswers, openedAnswers);
         }
     }
 
