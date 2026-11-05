@@ -18,6 +18,7 @@ import com.liming.rag.knowledge.api.KnowledgeBaseRef;
 import com.liming.rag.knowledge.api.KnowledgeSearch;
 import com.liming.rag.knowledge.api.SearchHit;
 import com.liming.rag.knowledge.api.SearchQuery;
+import com.liming.rag.shared.Paged;
 import com.liming.rag.shared.TenantId;
 import com.liming.rag.shared.UserId;
 import java.time.Instant;

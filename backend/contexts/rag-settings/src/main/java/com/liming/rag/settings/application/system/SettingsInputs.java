@@ -6,10 +6,10 @@ import com.liming.rag.settings.application.SettingsException;
 
 import com.liming.rag.ai.ModelUsage;
 import com.liming.rag.identity.api.UserDirectory;
+import com.liming.rag.shared.Enums;
 import com.liming.rag.shared.TenantId;
 import com.liming.rag.shared.UserId;
 import java.util.List;
-import java.util.Locale;
 
 /** 接口传来的原始值在应用层解析，不合规时抛 {@link SettingsException}；web 只转交原始值（#136 B4）。 */
 public final class SettingsInputs {
@@ -18,19 +18,13 @@ public final class SettingsInputs {
     }
 
     public static SettingKey key(String value) {
-        try {
-            return SettingKey.valueOf(value == null ? "" : value.toUpperCase(Locale.ROOT));
-        } catch (IllegalArgumentException e) {
-            throw new SettingsException(SettingsException.Reason.NOT_FOUND, "没有这项设置");
-        }
+        return Enums.parse(SettingKey.class, value,
+                () -> new SettingsException(SettingsException.Reason.NOT_FOUND, "没有这项设置"));
     }
 
     public static ModelUsage usage(String value) {
-        try {
-            return ModelUsage.valueOf(value == null ? "" : value.toUpperCase(Locale.ROOT));
-        } catch (IllegalArgumentException e) {
-            throw new SettingsException(SettingsException.Reason.INVALID, "用途只能是 ANSWER、HEDGE、LIGHT 或 RERANK");
-        }
+        return Enums.parse(ModelUsage.class, value, () -> new SettingsException(SettingsException.Reason.INVALID,
+                "用途只能是 ANSWER、HEDGE、LIGHT 或 RERANK"));
     }
 
     /** 文字项要字符串，推荐问题要字符串数组；格式不对时按不合格处理。 */
@@ -42,10 +36,6 @@ public final class SettingsInputs {
             return items.stream().map(String.class::cast).toList();
         }
         throw new SettingsException(SettingsException.Reason.INVALID, "设置值的格式不对");
-    }
-
-    public static String blankToNull(String value) {
-        return value == null || value.isBlank() ? null : value.strip();
     }
 
     /** 变更记录里写的操作人：账号的显示名，查不到时写账号 id。 */

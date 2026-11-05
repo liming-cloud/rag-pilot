@@ -4,6 +4,7 @@ import com.liming.rag.knowledge.api.KnowledgeBaseRef;
 import com.liming.rag.knowledge.domain.Document;
 import com.liming.rag.knowledge.domain.DocumentStatus;
 import com.liming.rag.knowledge.domain.Validity;
+import com.liming.rag.shared.Paged;
 import com.liming.rag.shared.TenantId;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;

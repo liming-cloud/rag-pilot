@@ -1,6 +1,6 @@
 package com.liming.rag.identity.application.account;
 
-import com.liming.rag.identity.application.Paged;
+import com.liming.rag.shared.Paged;
 
 import java.time.OffsetDateTime;
 import org.jspecify.annotations.Nullable;

@@ -4,7 +4,8 @@ import com.liming.rag.knowledge.application.ingestion.DocumentCalendar;
 import com.liming.rag.knowledge.application.Grantee;
 import com.liming.rag.knowledge.application.KnowledgeQueries;
 import com.liming.rag.knowledge.application.KnowledgeException;
-import com.liming.rag.knowledge.application.Paged;
+import com.liming.rag.shared.Enums;
+import com.liming.rag.shared.Paged;
 
 import com.liming.rag.identity.api.UserDirectory;
 import com.liming.rag.knowledge.api.KnowledgeAccess;
@@ -20,10 +21,10 @@ import com.liming.rag.knowledge.domain.KnowledgeBase;
 import com.liming.rag.knowledge.domain.KnowledgeBaseRepository;
 import com.liming.rag.knowledge.domain.Validity;
 import com.liming.rag.shared.TenantId;
+import com.liming.rag.shared.Texts;
 import com.liming.rag.shared.UserId;
 import java.util.Collection;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import org.jspecify.annotations.Nullable;
@@ -116,7 +117,7 @@ public class KnowledgeBaseService implements KnowledgeAccess {
         if (state == Validity.State.ACTIVE || state == Validity.State.PENDING) {
             throw new KnowledgeException(KnowledgeException.Reason.INVALID, "资料有效期只能按 EXPIRING 或 EXPIRED 筛选");
         }
-        return queries.knowledgeBases(tenantId, visibleTo(tenantId, actor), blankToNull(keyword), state,
+        return queries.knowledgeBases(tenantId, visibleTo(tenantId, actor), Texts.blankToNull(keyword), state,
                 calendar.window(), new Paged.Request(page, size));
     }
 
@@ -174,7 +175,7 @@ public class KnowledgeBaseService implements KnowledgeAccess {
     @Transactional(readOnly = true)
     public Paged<DocumentRow> documents(TenantId tenantId, UserId actor, long knowledgeBaseId, DocumentFilter filter) {
         getManageable(tenantId, actor, knowledgeBaseId);
-        return queries.documents(tenantId, knowledgeBaseId, blankToNull(filter.keyword()), parseStatus(filter.status()),
+        return queries.documents(tenantId, knowledgeBaseId, Texts.blankToNull(filter.keyword()), parseStatus(filter.status()),
                 parseValidity(filter.validity()), calendar.window(), new Paged.Request(filter.page(), filter.size()));
     }
 
@@ -189,30 +190,13 @@ public class KnowledgeBaseService implements KnowledgeAccess {
     }
 
     private static Validity.State parseValidity(String validity) {
-        if (validity == null || validity.isBlank()) {
-            return null;
-        }
-        try {
-            return Validity.State.valueOf(validity.toUpperCase(Locale.ROOT));
-        } catch (IllegalArgumentException e) {
-            throw new KnowledgeException(KnowledgeException.Reason.INVALID,
-                    "有效期只能是 ACTIVE、EXPIRING、EXPIRED 或 PENDING");
-        }
+        return Enums.parseOrNull(Validity.State.class, validity, () -> new KnowledgeException(
+                KnowledgeException.Reason.INVALID, "有效期只能是 ACTIVE、EXPIRING、EXPIRED 或 PENDING"));
     }
 
     private static DocumentStatus parseStatus(String status) {
-        if (status == null || status.isBlank()) {
-            return null;
-        }
-        try {
-            return DocumentStatus.valueOf(status.toUpperCase(Locale.ROOT));
-        } catch (IllegalArgumentException e) {
-            throw new KnowledgeException(KnowledgeException.Reason.INVALID, "状态只能是 PARSING、READY 或 FAILED");
-        }
-    }
-
-    private static String blankToNull(String value) {
-        return value == null || value.isBlank() ? null : value.strip();
+        return Enums.parseOrNull(DocumentStatus.class, status, () -> new KnowledgeException(
+                KnowledgeException.Reason.INVALID, "状态只能是 PARSING、READY 或 FAILED"));
     }
 
     private static KnowledgeBaseRef ref(KnowledgeBase knowledgeBase) {

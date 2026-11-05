@@ -1,6 +1,6 @@
 package com.liming.rag.identity.web;
 
-import com.liming.rag.identity.application.Paged;
+import com.liming.rag.shared.Paged;
 import java.util.List;
 import java.util.function.Function;
 

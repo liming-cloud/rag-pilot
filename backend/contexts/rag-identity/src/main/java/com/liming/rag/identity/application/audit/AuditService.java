@@ -1,10 +1,11 @@
 package com.liming.rag.identity.application.audit;
 
 import com.liming.rag.identity.application.IdentityException;
-import com.liming.rag.identity.application.Paged;
+import com.liming.rag.shared.Paged;
 
 import com.liming.rag.identity.api.AuditTrail;
 import com.liming.rag.shared.TenantId;
+import com.liming.rag.shared.Texts;
 import com.liming.rag.shared.UserId;
 import java.time.Clock;
 import java.time.Duration;
@@ -59,7 +60,7 @@ public class AuditService implements AuditTrail {
         if (days < 1 || days > MAX_DAYS) {
             throw new IdentityException(IdentityException.Reason.INVALID, "天数只能是 1 到 " + MAX_DAYS + " 天");
         }
-        var filter = action == null || action.isBlank() ? null : action.strip();
+        var filter = Texts.blankToNull(action);
         if (filter != null && !ACTION.matcher(filter).matches()) {
             throw new IdentityException(IdentityException.Reason.INVALID, "操作类型不认识");
         }

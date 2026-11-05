@@ -26,7 +26,7 @@ JDK 25、Spring Boot 4.1、Spring AI 2.0、Spring Modulith 2.1、MyBatis-Plus、
 
 | 模块 | 层 | 职责 |
 | --- | --- | --- |
-| `rag-shared` | 平台 | 共享内核：租户和用户标识、错误分类、聚合根标记，只依赖 JDK |
+| `rag-shared` | 平台 | 共享内核与通用工具：租户和用户标识、错误分类、聚合根标记、分页和输入解析，只依赖 JDK |
 | `rag-ai` | 平台 | Spring AI 防腐层：按能力提供文字生成、问题改写、向量化、重排、连通测试，上下文不接触 Spring AI |
 | `rag-identity` | 上下文 | 账号、登录、角色与权限点（按钮级 RBAC） |
 | `rag-knowledge` | 上下文 | 核心：知识库、文档解析与分块、授权、混合检索 |

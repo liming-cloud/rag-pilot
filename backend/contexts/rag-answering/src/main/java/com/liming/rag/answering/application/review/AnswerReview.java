@@ -1,6 +1,6 @@
 package com.liming.rag.answering.application.review;
 
-import com.liming.rag.answering.application.Paged;
+import com.liming.rag.shared.Paged;
 import java.time.OffsetDateTime;
 import java.util.List;
 import org.jspecify.annotations.Nullable;

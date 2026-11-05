@@ -1,10 +1,8 @@
 package com.liming.rag.settings.application.model;
 
-import com.liming.rag.settings.application.system.SettingsInputs;
-import com.liming.rag.settings.application.SettingsException;
-
 import com.liming.rag.ai.ModelUsage;
-import com.liming.rag.settings.application.model.ProviderView;
+import com.liming.rag.settings.application.SettingsException;
+import com.liming.rag.shared.Texts;
 import java.util.List;
 import org.jspecify.annotations.Nullable;
 import org.springframework.dao.DuplicateKeyException;
@@ -30,7 +28,7 @@ public class ModelProviderService {
     public ProviderView createProvider(String name, String baseUrl, String apiKey) {
         var checkedName = checkName(name, null);
         var checkedUrl = checkBaseUrl(baseUrl);
-        var key = SettingsInputs.blankToNull(apiKey);
+        var key = Texts.blankToNull(apiKey);
         ModelProvider created;
         try {
             created = store.insertProvider(new ModelProvider(null, checkedName, checkedUrl, encrypt(key), last4(key)));
@@ -46,7 +44,7 @@ public class ModelProviderService {
     @Transactional
     public ProviderView updateProvider(long id, String name, String baseUrl, String apiKey) {
         var existing = store.provider(id).orElseThrow(() -> notFound("服务商不存在"));
-        var key = SettingsInputs.blankToNull(apiKey);
+        var key = Texts.blankToNull(apiKey);
         var updated = new ModelProvider(id, checkName(name, id), checkBaseUrl(baseUrl), encrypt(key),
                 key == null ? existing.apiKeyLast4() : last4(key));
         try {

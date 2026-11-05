@@ -10,7 +10,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.liming.rag.knowledge.api.KnowledgeBaseRef;
 import com.liming.rag.knowledge.application.Grantee;
 import com.liming.rag.knowledge.application.KnowledgeQueries;
-import com.liming.rag.knowledge.application.Paged;
+import com.liming.rag.shared.Paged;
 import com.liming.rag.knowledge.domain.DocumentStatus;
 import com.liming.rag.knowledge.domain.Validity;
 import com.liming.rag.shared.TenantId;

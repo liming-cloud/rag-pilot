@@ -2,7 +2,8 @@ package com.liming.rag.answering.application.review;
 
 import com.liming.rag.answering.application.AnswerRecorded;
 import com.liming.rag.answering.application.AnsweringException;
-import com.liming.rag.answering.application.Paged;
+import com.liming.rag.shared.Enums;
+import com.liming.rag.shared.Paged;
 import com.liming.rag.answering.application.ask.AskResult;
 import com.liming.rag.answering.domain.AnswerRecord;
 import com.liming.rag.answering.domain.AnswerRecordRepository;
@@ -10,11 +11,11 @@ import com.liming.rag.identity.api.UserDirectory;
 import com.liming.rag.knowledge.api.KnowledgeAccess;
 import com.liming.rag.settings.api.StatsZone;
 import com.liming.rag.shared.TenantId;
+import com.liming.rag.shared.Texts;
 import com.liming.rag.shared.UserId;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.util.List;
-import java.util.Locale;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -72,7 +73,7 @@ public class AnswerLogService {
         var zone = zones.statsZone();
         var since = days == null ? null
                 : LocalDate.now(clock.withZone(zone)).minusDays(days - 1L).atStartOfDay(zone).toOffsetDateTime();
-        var trimmed = keyword == null || keyword.isBlank() ? null : keyword.strip();
+        var trimmed = Texts.blankToNull(keyword);
         var found = reviews.page(tenantId, new AnswerReview.Query(parsedFilter, parsedStatus, since, trimmed,
                 new Paged.Request(page, size)));
         var names = users.summaries(tenantId, found.items().stream().map(AnswerReview::userId).distinct().toList());
@@ -82,12 +83,8 @@ public class AnswerLogService {
         });
     }
 
-    private static <E extends Enum<E>> E parse(Class<E> type, String value, String message) {
-        try {
-            return Enum.valueOf(type, value == null ? "" : value.toUpperCase(Locale.ROOT));
-        } catch (IllegalArgumentException e) {
-            throw invalid(message);
-        }
+    private static <E extends Enum<E>> E parse(Class<E> type, @Nullable String value, String message) {
+        return Enums.parse(type, value, () -> invalid(message));
     }
 
     /**

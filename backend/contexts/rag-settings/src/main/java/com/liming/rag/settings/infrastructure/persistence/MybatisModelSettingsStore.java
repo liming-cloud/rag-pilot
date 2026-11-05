@@ -4,7 +4,7 @@ import com.liming.rag.ai.ModelUsage;
 import com.liming.rag.settings.application.model.ModelChange;
 import com.liming.rag.settings.application.model.ModelProvider;
 import com.liming.rag.settings.application.model.ModelSettingsStore;
-import com.liming.rag.settings.application.Paged;
+import com.liming.rag.shared.Paged;
 import com.liming.rag.settings.application.model.PurposeSetting;
 import java.util.List;
 import java.util.Optional;

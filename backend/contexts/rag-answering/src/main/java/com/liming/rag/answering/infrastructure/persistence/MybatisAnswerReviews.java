@@ -2,7 +2,7 @@ package com.liming.rag.answering.infrastructure.persistence;
 
 import com.liming.rag.answering.application.review.AnswerReview;
 import com.liming.rag.answering.application.review.AnswerReviews;
-import com.liming.rag.answering.application.Paged;
+import com.liming.rag.shared.Paged;
 import com.liming.rag.shared.TenantId;
 import java.time.OffsetDateTime;
 import java.util.Arrays;

@@ -1,4 +1,4 @@
-package com.liming.rag.identity.application;
+package com.liming.rag.shared;
 
 import java.util.List;
 import java.util.function.Function;

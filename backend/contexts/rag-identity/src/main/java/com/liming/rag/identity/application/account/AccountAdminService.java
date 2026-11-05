@@ -9,16 +9,17 @@ import com.liming.rag.identity.application.auth.PasswordHasher;
 import com.liming.rag.identity.application.auth.PasswordRules;
 import com.liming.rag.identity.application.auth.Sessions;
 import com.liming.rag.identity.application.IdentityException;
-import com.liming.rag.identity.application.Paged;
+import com.liming.rag.shared.Enums;
+import com.liming.rag.shared.Paged;
 
 import com.liming.rag.identity.api.AuditTrail;
 import com.liming.rag.shared.TenantId;
+import com.liming.rag.shared.Texts;
 import com.liming.rag.shared.UserId;
 import java.time.Clock;
 import java.time.OffsetDateTime;
 import java.util.Collection;
 import java.util.List;
-import java.util.Locale;
 import org.jspecify.annotations.Nullable;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
@@ -54,8 +55,9 @@ public class AccountAdminService {
     @Transactional(readOnly = true)
     public Paged<ManagedAccount> page(TenantId tenantId, @Nullable String keyword, @Nullable Long roleId,
             @Nullable String status, int page, int size) {
-        var parsed = status == null || status.isBlank() ? null : parseStatus(status);
-        var found = accounts.page(tenantId, new AccountQuery(blankToNull(keyword), roleId, parsed,
+        var parsed = Enums.parseOrNull(AccountQuery.Status.class, status,
+                () -> invalid("状态只能是 enabled、disabled 或 locked"));
+        var found = accounts.page(tenantId, new AccountQuery(Texts.blankToNull(keyword), roleId, parsed,
                 OffsetDateTime.now(clock), new Paged.Request(page, size)));
         var assigned = roles.rolesOf(found.items().stream().map(Account::id).toList());
         return found.map(account -> managed(account, assigned.getOrDefault(account.id(), List.of())));
@@ -174,18 +176,6 @@ public class AccountAdminService {
         return new Account(account.id(), account.tenantId(), account.username(), account.displayName(),
                 account.passwordHash(), enabled, account.mustChangePassword(), account.failedAttempts(),
                 account.lockedUntil());
-    }
-
-    private static AccountQuery.Status parseStatus(String status) {
-        try {
-            return AccountQuery.Status.valueOf(status.toUpperCase(Locale.ROOT));
-        } catch (IllegalArgumentException e) {
-            throw invalid("状态只能是 enabled、disabled 或 locked");
-        }
-    }
-
-    private static String blankToNull(String value) {
-        return value == null || value.isBlank() ? null : value.strip();
     }
 
     private static IdentityException usernameTaken(String username) {

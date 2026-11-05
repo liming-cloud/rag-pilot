@@ -2,7 +2,7 @@ package com.liming.rag.settings.application.model;
 
 import com.liming.rag.settings.application.SettingsException;
 import com.liming.rag.settings.application.SettingsProperties;
-import com.liming.rag.settings.application.Paged;
+import com.liming.rag.shared.Paged;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;

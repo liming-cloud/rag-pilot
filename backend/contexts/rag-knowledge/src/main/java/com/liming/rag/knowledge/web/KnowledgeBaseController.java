@@ -17,7 +17,7 @@ import com.liming.rag.knowledge.application.knowledgebase.KnowledgeBaseMember;
 import com.liming.rag.knowledge.application.KnowledgeQueries;
 import com.liming.rag.knowledge.application.DocumentRow;
 import com.liming.rag.knowledge.application.KnowledgeBaseSummary;
-import com.liming.rag.knowledge.application.Paged;
+import com.liming.rag.shared.Paged;
 import com.liming.rag.shared.UserId;
 import java.io.IOException;
 import java.util.List;

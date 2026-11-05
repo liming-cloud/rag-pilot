@@ -14,6 +14,7 @@ import com.liming.rag.knowledge.domain.KnowledgeBaseRepository;
 import com.liming.rag.knowledge.domain.UploadedFile;
 import com.liming.rag.knowledge.domain.Validity;
 import com.liming.rag.settings.api.StatsZone;
+import com.liming.rag.shared.Paged;
 import com.liming.rag.shared.TenantId;
 import com.liming.rag.shared.UserId;
 import java.time.Clock;

@@ -2,7 +2,7 @@ package com.liming.rag.settings.application.model;
 
 import com.liming.rag.settings.application.system.SettingsInputs;
 import com.liming.rag.settings.application.SettingsException;
-import com.liming.rag.settings.application.Paged;
+import com.liming.rag.shared.Paged;
 
 import com.liming.rag.ai.ModelCallException;
 import com.liming.rag.ai.ModelProbe;

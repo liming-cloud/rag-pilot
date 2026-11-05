@@ -65,7 +65,7 @@
 - **上下文模块**（identity、knowledge、answering、evaluation、settings）：根包只放 `package-info.java`，类只能在五个子包里：
   - `api`：对其他模块公开的合同（接口、record、枚举、事件），不暴露模块内部类型；
   - `web`：Controller、请求响应 record；
-  - `application`：用例服务，以及它需要的端口接口（如 `ChunkIndex`、`FileStorage`）；按用例分子包，子包之间不循环依赖：answering 的 `ask`、`conversation`、`review`、`insight`，identity 的 `account`、`role`、`auth`、`audit`，knowledge 的 `ingestion`、`search`、`knowledgebase`（含授权），settings 的 `model`、`system`、`pack`；多个子包共用的异常、`Paged`、`Properties`、端口和枚举留在 `application` 根下；
+  - `application`：用例服务，以及它需要的端口接口（如 `ChunkIndex`、`FileStorage`）；按用例分子包，子包之间不循环依赖：answering 的 `ask`、`conversation`、`review`、`insight`，identity 的 `account`、`role`、`auth`、`audit`，knowledge 的 `ingestion`、`search`、`knowledgebase`（含授权），settings 的 `model`、`system`、`pack`；多个子包共用的异常、`Properties`、端口和枚举留在 `application` 根下；
   - `domain`：聚合、值对象、领域规则，只在 knowledge、answering；
   - `infrastructure`：端口的实现，按技术分子包（`persistence`、`storage`、`parsing`、`security`）。
 - **内部类型**：Service、聚合等类里的内部 record、枚举，按下面的标准决定是否提成顶层（放在使用它的 `application` 子包里，名字带业务含义，如 `ImportRow`、`GapReport`，不叫 `Row`、`Item`）：
@@ -76,8 +76,8 @@
 - **上下文依赖**：identity 不依赖其他上下文；settings 依赖 identity；knowledge 依赖 identity、settings；answering 依赖 identity、knowledge、settings；evaluation 不依赖其他上下文。平台层的 shared、ai 都可以用（evaluation 经 ai 调评判模型），ai 不依赖上下文。各上下文在根包 `package-info.java` 的 `allowedDependencies` 里声明，`ModularityTests` 检查。上游要用到下游的东西时（如权限点清单），由上游在 `api` 里定义接口、下游实现，不反向依赖。
 - **输入**：web 只转交原始值（路径、查询参数和请求体里的字符串、数字），application 解析成枚举或值对象，不合规时抛本模块的业务异常；每个模块的解析写在一处。
 - **租户**：单租户部署，`TenantId` 为以后多租户预留；哪些端口和设置不分租户见 D-051。
-- **共享内核**（rag-shared）：只放多个上下文共同依赖、用纯 Java 表达、很少变动的模型概念——租户和用户标识、错误分类 `ErrorKind` 与 `BusinessException`、聚合根标记 `AggregateRoot`。只依赖 JDK（空值注解 JSpecify 除外），没有资源文件（迁移、配置归各自模块），不放业务规则；当前用户、权限码、各上下文自己的标识不放这里。新增类型前先在 DECISIONS.md 记录理由（D-034）。
-- **平台层模块**（shared、ai）扁平：对外只公开接口、record、枚举和异常，实现类包内可见；rag-app 只放启动类和全局配置（含唯一的异常出口 `ApiExceptionHandler`）。
+- **共享内核与通用工具**（rag-shared）：只放多个上下文共同依赖、用纯 Java 表达、很少变动的东西——模型概念（租户和用户标识、错误分类 `ErrorKind` 与 `BusinessException`、聚合根标记 `AggregateRoot`）和通用工具（分页 `Paged`、空串处理 `Texts`、枚举解析 `Enums`，D-053）；只有一个上下文用的工具留在该上下文。只依赖 JDK（空值注解 JSpecify 除外），没有资源文件（迁移、配置归各自模块），不放业务规则；当前用户、权限码、各上下文自己的标识不放这里。新增类型前先在 DECISIONS.md 记录理由（D-034、D-053）。
+- **平台层模块**（shared、ai）扁平：对外只公开接口、record、枚举和异常，实现类包内可见（shared 的通用工具是 final、私有构造、只有静态成员的工具类，D-053）；rag-app 只放启动类和全局配置（含唯一的异常出口 `ApiExceptionHandler`）。
 - **聚合**：聚合根实现 `AggregateRoot`，只在 knowledge、answering 的 `domain` 包；`domain` 里的 `XxxRepository` 只为同包的聚合根 `Xxx` 而建。
 - **错误**：业务失败抛本模块继承 `BusinessException` 的异常（错误码 `<模块>_<原因>`，说明是给用户看的中文，不含内部信息）；领域对象检查不变量时抛的 `IllegalArgumentException` 由 application 转成业务异常。模块不写 `@RestControllerAdvice`，统一由 `ApiExceptionHandler` 转成带 `code` 的问题详情。
 - **资源**：Flyway 迁移在 `db/migration/<模块名>/`，Mapper XML 在 `mapper/<模块名>/`。单元测试与被测类同包；跨模块的集成测试放在 rag-app。

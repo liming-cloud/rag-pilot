@@ -1,6 +1,7 @@
 package com.liming.rag;
 
 import static com.liming.rag.ArchitectureRulesTest.assertViolates;
+import static com.tngtech.archunit.base.DescribedPredicate.not;
 import static com.tngtech.archunit.core.domain.properties.HasName.Predicates.nameMatching;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
@@ -15,7 +16,11 @@ import com.liming.rag.archfixture.domain.DomainUsesSpring;
 import com.liming.rag.archfixture.web.WebUsesDomain;
 import com.liming.rag.archfixture.web.WebUsesInfrastructure;
 import com.liming.rag.knowledge.StrayAtModuleRoot;
+import com.liming.rag.shared.SharedUtilityWithState;
+import com.tngtech.archunit.base.DescribedPredicate;
+import com.tngtech.archunit.core.domain.JavaClass;
 import com.tngtech.archunit.core.domain.JavaClasses;
+import com.tngtech.archunit.core.domain.JavaModifier;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
 import com.tngtech.archunit.core.importer.ImportOption;
 import com.tngtech.archunit.lang.ArchRule;
@@ -31,7 +36,7 @@ import org.junit.jupiter.api.Test;
  * 目录结构与分层依赖，规范见 AGENTS.md“目录结构”。
  *
  * <p>上下文模块（identity、knowledge、answering、evaluation、settings）的类放在 api、web、application、domain、infrastructure 五个子包；
- * 技术模块（shared、ai）扁平，对外只公开接口、record、枚举和异常。
+ * 技术模块（shared、ai）扁平，对外只公开接口、record、枚举和异常（shared 另可公开无实例的工具类）。
  */
 class PackageLayoutTest {
 
@@ -81,14 +86,27 @@ class PackageLayoutTest {
                     "..application..", "..domain..", "..infrastructure..", "..web..")
             .as("api 是对外合同，不暴露模块内部的类型");
 
+    /** shared 的通用工具（D-053）：final、构造器全是私有的、字段和方法都是静态的，没有实例可言。 */
+    static final DescribedPredicate<JavaClass> SHARED_UTILITY = new DescribedPredicate<>("shared 的无实例工具类") {
+        @Override
+        public boolean test(JavaClass c) {
+            return c.getPackageName().startsWith("com.liming.rag.shared")
+                    && c.getModifiers().contains(JavaModifier.FINAL)
+                    && c.getConstructors().stream().allMatch(k -> k.getModifiers().contains(JavaModifier.PRIVATE))
+                    && c.getMethods().stream().allMatch(m -> m.getModifiers().contains(JavaModifier.STATIC))
+                    && c.getFields().stream().allMatch(f -> f.getModifiers().contains(JavaModifier.STATIC));
+        }
+    };
+
     static final ArchRule TECH_MODULES_EXPOSE_CONTRACTS_ONLY = classes()
             .that().resideInAnyPackage("com.liming.rag.ai..", "com.liming.rag.shared..")
             .and().arePublic()
             .and().areNotInterfaces()
             .and().areNotEnums()
             .and().areNotAssignableTo(Throwable.class)
+            .and(not(SHARED_UTILITY))
             .should().beAssignableTo(Record.class)
-            .as("技术模块（shared、ai）对外只公开接口、record、枚举和异常，实现类包内可见");
+            .as("技术模块（shared、ai）对外只公开接口、record、枚举和异常，实现类包内可见；shared 另可公开无实例的工具类（D-053）");
 
     static final List<ArchRule> RULES = List.of(CONTEXT_CLASSES_IN_LAYERS, DOMAIN_IS_PURE, DOMAIN_ONLY_IN_CORE,
             APPLICATION_NOT_ON_SA_TOKEN,
@@ -139,5 +157,6 @@ class PackageLayoutTest {
         assertViolates(WEB_NOT_ON_DOMAIN, WebUsesDomain.class, com.liming.rag.archfixture.domain.FixtureAggregate.class);
         assertViolates(API_SELF_CONTAINED, ApiLeaksDomain.class);
         assertViolates(TECH_MODULES_EXPOSE_CONTRACTS_ONLY, PublicImplementation.class);
+        assertViolates(TECH_MODULES_EXPOSE_CONTRACTS_ONLY, SharedUtilityWithState.class);
     }
 }

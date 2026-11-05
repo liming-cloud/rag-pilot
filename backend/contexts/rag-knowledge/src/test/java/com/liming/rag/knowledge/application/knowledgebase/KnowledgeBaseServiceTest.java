@@ -7,7 +7,7 @@ import com.liming.rag.knowledge.application.InMemoryKnowledge;
 import com.liming.rag.knowledge.application.Grantee;
 import com.liming.rag.knowledge.application.KnowledgeQueries;
 import com.liming.rag.knowledge.application.KnowledgeException;
-import com.liming.rag.knowledge.application.Paged;
+import com.liming.rag.shared.Paged;
 
 import static com.liming.rag.knowledge.application.InMemoryKnowledge.OTHER_TENANT;
 import static com.liming.rag.knowledge.application.InMemoryKnowledge.TENANT;

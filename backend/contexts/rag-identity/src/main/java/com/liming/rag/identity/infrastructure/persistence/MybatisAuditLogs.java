@@ -3,7 +3,7 @@ package com.liming.rag.identity.infrastructure.persistence;
 import com.liming.rag.identity.application.audit.AuditEntry;
 import com.liming.rag.identity.application.audit.AuditLogs;
 import com.liming.rag.identity.application.audit.AuditRecord;
-import com.liming.rag.identity.application.Paged;
+import com.liming.rag.shared.Paged;
 import java.time.OffsetDateTime;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Repository;

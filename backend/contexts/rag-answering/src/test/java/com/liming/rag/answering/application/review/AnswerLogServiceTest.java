@@ -7,7 +7,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.liming.rag.answering.application.AnswerRecorded;
 import com.liming.rag.answering.application.AnsweringException;
 import com.liming.rag.answering.application.InMemoryAnswering;
-import com.liming.rag.answering.application.Paged;
+import com.liming.rag.shared.Paged;
 import com.liming.rag.answering.application.TestSettings;
 import com.liming.rag.answering.application.ask.AskResult;
 import com.liming.rag.answering.domain.AnswerRecord;
