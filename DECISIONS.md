@@ -357,3 +357,15 @@ Compose 增加 web 服务（`deploy/web.Dockerfile`）：Node 24 构建前端，
 - 回答按 Markdown 显示（react-markdown + remark-gfm，人答复引入；单独分包按需加载，加载前按原文显示），`[n]` 仍可点开原文，不渲染原始 HTML，链接和图片只显示文字。失败时显示服务端给的原因，失败的一轮可以重试、问题不丢，新建会话失败也有提示；输入框自动增高、Enter 发送、Shift+Enter 换行、输入法选字时不发送、最多 500 字；只在本来停在底部时跟随滚动；拿到轮次 id 前点停止就断开请求；登录过期后带上原页面去登录、回来时草稿还在（只接受本站路径）。引用显示资料的更新日期，过期和已有新版本的标出来；拒答时给换个问法的建议和该问谁（行业包配置）；缺口详情能直接打开检索过的库去补资料；失败文档的重新处理和自动重试时间；运营概览加提问人数占比、人均提问、短时间重复提问，点开引用会上报；新增审计记录页。
 - 原型阶段后端还没有的字段（引用的 `documentUpdatedAt`、`documentState`，问答页文案的 `refusalTips`、`refusalContact`，缺口的 `knowledgeBaseRefs`，统计的 `activeStaff`、`repeatQuestions`，以及点开引用的上报接口）只在假数据里，契约测试暂时用 `PROTOTYPE_FIELDS` 放过；接上真实接口后删掉，这张表最后应为空。
 - **application 按用例分子包、内部类型按标准提成顶层**（原型评审，人答复按建议）：identity 分 `account`、`role`、`auth`、`audit`，knowledge 分 `ingestion`、`search`、`knowledgebase`，settings 分 `model`、`system`、`pack`（answering 已有 `ask`、`conversation`、`review`、`insight`）；共用的异常、`Paged`、`Properties`、端口和 `SettingKey` 留在 `application` 根下，避免子包互相依赖（`pack` 放设置规则和内核默认值，`system` 依赖它，反过来不行）。被 web 展示或被多个包引用的内部 record 提成顶层并起有业务含义的名字（如 `ImportRow`、`GapReport`、`SettingItem`），只作参数、由调用方构造的（`Upload`、`NewTurn`、`AskRequest`）保持内部。标准写进 AGENTS.md，`ArchitectureRulesTest` 检查 web 不读取 Service 的内部类型。`rag-ai` 保持扁平（实现类要包内可见）；persistence 暂不按聚合分子包。
+
+## D-053 缓存平台组件用 Redis、会话进 Redis、通用工具进 rag-shared、单表 CRUD 用 MyBatis-Plus（2026-11-05）
+
+#145 第 9 步，人追加并答复。本条按实施逐步补充。
+
+- **缓存做成平台组件 `rag-cache`**（人答复：用 Redis，把缓存能力发布出来）：做法同 rag-ai（D-052），对外只有 `Caches`、`TypedCache`、`CacheSpec` 等接口和 record，Spring Data Redis 在里面声明为 optional，上下文层用 Enforcer 禁止依赖、`ArchitectureRulesTest` 禁止引用。机制都在平台里：值存 JSON，读不到时加载再写入，在事务里清除的等提交后再清，Redis 出错或超时记 `event=cache_failure` 后直接读库，缓存不是问答的硬依赖。
+- **缓存什么**：模型用途和服务商（只存密文，解密仍在进程内）、系统设置、账号的权限点和所属角色、问题向量（键含模型名）。不缓存可访问的知识库和检索结果（检索过滤只在 `ChunkSearchMapper` 一处，授权变更立即生效），也不缓存答案（要可追溯，权限随时会变）。
+- **权限缓存**（人答复：缓存，变更时按事件清除；修订 D-041 的“权限每次读库”）：改角色权限点、分配角色、启停、重置或修改密码、删除账号或角色后，在提交后清除对应缓存，下一个请求就按新权限判定，“立即生效”不变。
+- **会话存进 Redis**（人答复；修订 D-005 的“会话存在内存”）：用 Sa-Token 的 Redis 存储，应用重启、升级后不用重新登录。Redis 不可用时无法登录、已登录的请求被拒绝，这是会话存储决定的，不降级；运维手册写明。备份恢复不含 Redis，恢复后要重新登录。
+- **Sa-Token 不做成平台组件**（人要求评估）：按框架选用原则（D-052），Sa-Token 的核心（会话、权限来源、密码摘要）只在 identity 的 `infrastructure/security` 和 rag-app 的全局配置里，其他上下文只在 web 层用两个注解，已是原则里的例外。Spring AI 当时被三个上下文直接用到深层类型、又有不兼容升级，才需要防腐层；Sa-Token 没有这些问题。做成平台组件要由平台层定义“当前用户、权限点”的端口再由 identity 实现，认证就分在两处，还要自己写一套注解和拦截器。以后要换认证框架时，再由 identity 的 `api` 提供自己的注解（记进 ROADMAP 待办）。
+- **rag-shared 放共享内核和通用工具**（人答复；修订 D-034 的“只放模型概念”和 D-041 的“各上下文各有一个 `Paged`”）：`Paged`、空串处理、枚举解析等多个上下文共同用到的工具放进 rag-shared。边界仍是只依赖 JDK（和 JSpecify 的空值注解）、没有资源文件、不放业务规则。
+- **单表 CRUD 用 MyBatis-Plus**：单表的按主键增删改查、存在判断、条件计数和列表改用 `BaseMapper` 加 Lambda 条件；单表分页用 `PaginationInnerInterceptor`，新增它需要的 `mybatis-plus-jsqlparser`（MyBatis-Plus 3.5.9 起分页插件拆出的依赖，不加就只能在 XML 里手写分页）。XML 只留 upsert、`RETURNING`、多表、聚合、检索。XML 里的 `now()` 改为由 `Clock` 传入，`MapperXmlLayoutTest` 检查。
