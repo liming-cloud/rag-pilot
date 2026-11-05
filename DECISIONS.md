@@ -387,7 +387,7 @@ Compose 增加 web 服务（`deploy/web.Dockerfile`）：Node 24 构建前端，
 - **Spring 不隔离**（人答复）：Spring 是产品的基础框架，事务、事件、调度、配置读取、`DuplicateKeyException` 等在各层照常使用，不为它写端口。web 层的 Sa-Token 注解沿用 D-053 的例外。
 - **缓存端口是业务化的**（人答复）：上下文在 `application` 声明带业务含义的缓存端口（如 identity 的 `AccessSnapshotCache`），何时清除仍是业务规则、由用例调用；`infrastructure/cache` 用 rag-cache 实现，缓存名、值的类型、用一级还是二级、过期时间都不出现在 `application`。
 - **新增平台组件的接入步骤**：平台模块只公开契约（接口、record、枚举、异常），背后的框架声明在平台模块里，上下文层用 Enforcer 禁止依赖它；上下文的 `infrastructure` 写适配器实现自己的端口；层的限制由 ArchUnit 规则检查。
-- **落地分两步**（人答复）：#145 先把缓存按本原则重做（规则 `CACHE_ONLY_IN_INFRASTRUCTURE`），rag-ai 在 answering、knowledge、settings、evaluation 的应用层、web 层和 evaluation 的 `api` 里约 30 处直接引用，另开结果型 Issue 迁移，同时上线通用规则：上下文的 api、web、application、domain 只能依赖 JDK、Spring、JSpecify、SLF4J、rag-shared、本上下文和其他上下文的 `api`。规则和迁移一起合入，不加例外。
+- **落地分两步**（人答复）：#145 先把缓存按本原则重做（规则 `CACHE_ONLY_IN_INFRASTRUCTURE`），rag-ai 在 answering、knowledge、settings、evaluation 的应用层、web 层和 evaluation 的 `api` 里约 30 处直接引用，另开结果型 Issue #158 迁移，同时上线通用规则：上下文的 api、web、application、domain 只能依赖 JDK、Spring、JSpecify、SLF4J、rag-shared、本上下文和其他上下文的 `api`。规则和迁移一起合入，不加例外。
 - **缓存按配置分两级，没配 Redis 时只用本地**（人答复：单体、单实例，Redis 集群暂不考虑；没配缓存时用本地实现作默认）：
   - `rag.cache.redis.enabled` 默认 `false`：缓存只有一级（进程内 Caffeine，新依赖，版本由 Spring Boot 管理），会话存在进程内（重启后要重新登录），不连 Redis。Compose 部署设为 `true`：缓存一级加二级，会话进 Redis（D-053）。
   - `CacheSpec` 只有名字和值的类型；每种缓存用哪几层、过期时间和容量写在 `rag.cache.defaults` 和 `rag.cache.caches.<名字>`，非法配置启动失败。默认一级 1 万条、5 分钟，二级 1 小时；问题向量单条约 4KB，有 Redis 时只放二级（1 天），没有时退回一级、容量 2000。
