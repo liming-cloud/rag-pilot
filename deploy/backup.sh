@@ -29,6 +29,7 @@ compose exec -T db pg_dump -U rag -d rag -Fc > "$target/db.dump"
 
 info "打包上传文件"
 # 容器里以 root 打包（上传文件属于运行用户 10001），打完把文件交给执行脚本的账号，后面才能改权限、算校验和。
+ensure_redis
 compose run --rm --no-deps --user 0 -v "$target:/backup" --entrypoint sh app -c \
   "tar -czf /backup/files.tar.gz -C /data/files . && chown $(id -u):$(id -g) /backup/files.tar.gz"
 

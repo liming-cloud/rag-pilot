@@ -40,6 +40,13 @@ compose() {
   docker compose -f compose.yml "${files[@]}" "$@"
 }
 
+# compose run 即使加了 --no-deps，也要求 app 依赖的 redis 容器存在（从没有 Redis 的版本升级、或删卷之后它还没起来）；
+# 本目录的 compose.yml 没有 redis 服务时（回退到旧版本）什么都不做。
+ensure_redis() {
+  compose config --services | grep -qx redis || return 0
+  compose up -d --wait redis >/dev/null
+}
+
 APP_URL="http://127.0.0.1:$(setting APP_PORT 8080)"
 
 # 这个部署目录对应的版本：发布包的 release.env 里写着。
