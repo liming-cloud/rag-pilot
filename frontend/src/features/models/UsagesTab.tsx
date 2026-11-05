@@ -36,7 +36,7 @@ export function UsagesTab({ settings }: { settings: ModelSettings }) {
 
   return (
     <section aria-label="用途与模型" className="flex flex-col gap-3">
-      <div className="rounded-lg border bg-card">
+      <div className="overflow-x-auto rounded-xl border bg-card shadow-sm">
         <Table aria-label="各用途的模型" className="table-fixed">
           <TableHeader>
             <TableRow>
@@ -50,7 +50,7 @@ export function UsagesTab({ settings }: { settings: ModelSettings }) {
           <TableBody>
             {settings.usages.map((usage) => (
               <TableRow key={usage.usage}>
-                <TableCell className="py-3">
+                <TableCell>
                   <div className="font-medium">{USAGE_LABELS[usage.usage].name}</div>
                   <div className="text-xs text-muted-foreground">{USAGE_LABELS[usage.usage].description}</div>
                 </TableCell>
@@ -78,7 +78,7 @@ export function UsagesTab({ settings }: { settings: ModelSettings }) {
               </TableRow>
             ))}
             <TableRow className="text-muted-foreground">
-              <TableCell className="py-3">
+              <TableCell>
                 <div className="font-medium text-foreground">嵌入</div>
                 <div className="text-xs">把资料和问题变成向量；换它要重建索引，后续版本提供</div>
               </TableCell>

@@ -45,9 +45,9 @@ export function StatsPage() {
   });
 
   return (
-    <main className="mx-auto flex max-w-4xl flex-col gap-6 p-6 md:p-8 print:max-w-none print:p-0">
+    <main className="mx-auto flex w-full max-w-[1600px] flex-col gap-6 p-6 md:p-8 xl:px-10 print:max-w-none print:p-0">
       <div className="flex flex-wrap items-center gap-2">
-        <h1 className="mr-auto font-serif text-2xl font-semibold">{week ? "运营周报" : "运营概览"}</h1>
+        <h1 className="mr-auto font-display text-2xl font-semibold tracking-tight">{week ? "运营周报" : "运营概览"}</h1>
         <div className="flex flex-wrap items-center gap-2 print:hidden">
           {RANGES.map((range) => (
             <Button
@@ -192,8 +192,9 @@ function StatsView({ stats }: { stats: UsageStats }) {
         <p className="text-muted-foreground">这段时间还没有提问。</p>
       ) : (
         <>
+          <div className="grid items-start gap-6 xl:grid-cols-2">
           <DailyTable daily={stats.daily} />
-          <div className="grid gap-6 md:grid-cols-2 print:grid-cols-2">
+          <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-1 print:grid-cols-2">
             <Ranking
               title="知识缺口（待处理最多）"
               to={canReview ? "/admin/gaps" : undefined}
@@ -208,6 +209,7 @@ function StatsView({ stats }: { stats: UsageStats }) {
               rows={stats.topCitedDocuments.map((row) => ({ label: row.documentName, count: row.count }))}
             />
           </div>
+          </div>
         </>
       )}
     </>
@@ -221,23 +223,23 @@ function SummaryCard({ card }: { card: Card }) {
         {card.label}
         {card.to && <ChevronRight aria-hidden="true" className="ml-auto size-4 print:hidden" />}
       </span>
-      <span className="text-2xl font-semibold">{card.value}</span>
+      <span className="text-gradient text-3xl font-semibold tracking-tight">{card.value}</span>
       <span className="text-xs text-muted-foreground">{card.note}</span>
       {card.change && <span className="text-xs">{card.change}</span>}
     </>
   );
   return (
-    <li className="flex rounded-lg border bg-card print:break-inside-avoid">
+    <li className="flex rounded-xl border bg-card shadow-sm print:break-inside-avoid">
       {card.to ? (
         <Link
           to={card.to}
           aria-label={`${card.label} ${card.value}，去处理`}
-          className="flex flex-1 flex-col gap-1 rounded-lg p-3 hover:bg-secondary"
+          className="flex flex-1 flex-col gap-1 rounded-lg p-4 hover:bg-accent/50"
         >
           {body}
         </Link>
       ) : (
-        <div className="flex flex-1 flex-col gap-1 p-3">{body}</div>
+        <div className="flex flex-1 flex-col gap-1 p-4">{body}</div>
       )}
     </li>
   );

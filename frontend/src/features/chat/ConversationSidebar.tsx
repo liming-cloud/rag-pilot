@@ -19,7 +19,7 @@ export function ConversationSidebar({ activeId }: { activeId: number | null }) {
   const navigate = useNavigate();
 
   return (
-    <aside aria-label="会话" className="flex w-64 shrink-0 flex-col border-r bg-card">
+    <aside aria-label="会话" className="flex w-64 shrink-0 flex-col border-r bg-card/80">
       <div className="p-3">
         <Button variant="outline" className="w-full justify-start" onClick={() => void navigate("/chat")}>
           <Plus aria-hidden="true" className="size-4" />
@@ -124,7 +124,7 @@ function ConversationItem({ conversation, active }: { conversation: Conversation
     <div
       className={cn(
         "group flex items-center rounded-md hover:bg-secondary",
-        active && "bg-accent text-accent-foreground",
+        active && "bg-accent font-medium text-accent-foreground shadow-[inset_3px_0_0_var(--primary)]",
       )}
     >
       <NavLink

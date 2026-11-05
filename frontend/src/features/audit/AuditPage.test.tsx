@@ -17,13 +17,14 @@ const rows = async () => within(await screen.findByRole("table", { name: "审计
 describe("审计记录（#145 C2）", () => {
   beforeEach(() => signInAs("admin"));
 
-  it("默认看近 30 天，新的在前；操作类型显示中文，操作人账号已删除时注明", async () => {
+  it("默认看近 30 天，新的在前；操作类型和对象显示中文，操作人账号已删除时注明", async () => {
     renderPage();
 
     const list = await rows();
     expect(list).toHaveLength(6);
     expect(list[0]).toHaveTextContent("知识库授权给账号");
     expect(list[0]).toHaveTextContent("系统管理员");
+    expect(list[0]).toHaveTextContent("知识库 #1");
     expect(list.at(-1)).toHaveTextContent("已删除的账号 #9");
   });
 

@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { TableCell, TableRow } from "@/components/ui/table";
 import { Can, PERMISSIONS, useCan } from "@/lib/permissions";
+import { formatDateTime } from "@/lib/utils";
 import { rangeParts } from "./ValidityDialog";
 import { type KnowledgeDocument, VALIDITY } from "./api";
 
@@ -15,7 +16,7 @@ const STATUS = {
 } as const;
 
 /**
- * 一份文档：状态、分块数、失败原因、有效期，以及“上传新版本”和“删除”（行内二次确认）。
+ * 一份文档：状态、分块数、大小、上传时间、失败原因、有效期，以及“上传新版本”和“删除”（行内二次确认）。
  * 有修改权限时点有效期本身就能改，不再单占一个操作按钮，窄屏下操作列放得下。
  */
 export function DocumentRow({
@@ -60,10 +61,9 @@ export function DocumentRow({
 
   return (
     <TableRow>
-      <TableCell className="max-w-md min-w-40 py-2.5">
+      <TableCell className="max-w-md min-w-56">
         <div className="flex flex-col gap-0.5">
           <span className="font-medium wrap-anywhere">{document.filename}</span>
-          <span className="text-xs text-muted-foreground">{formatSize(document.sizeBytes)}</span>
           {document.replacesFilename && (
             <span className="text-xs text-muted-foreground">替换《{document.replacesFilename}》</span>
           )}
@@ -78,12 +78,12 @@ export function DocumentRow({
         </div>
       </TableCell>
       <TableCell>
-        <div className="flex flex-col items-start gap-0.5">
-          <Badge variant={status.variant}>{status.label}</Badge>
-          {document.status === "READY" && (
-            <span className="text-xs whitespace-nowrap text-muted-foreground">{document.chunkCount} 个分块</span>
-          )}
-        </div>
+        <Badge variant={status.variant}>{status.label}</Badge>
+      </TableCell>
+      <TableCell className="text-right tabular-nums">{document.status === "READY" ? document.chunkCount : "—"}</TableCell>
+      <TableCell className="text-right whitespace-nowrap tabular-nums">{formatSize(document.sizeBytes)}</TableCell>
+      <TableCell className="whitespace-nowrap text-muted-foreground tabular-nums">
+        {document.createdAt ? formatDateTime(document.createdAt) : "—"}
       </TableCell>
       <TableCell>
         <div className="flex flex-col items-start gap-0.5">

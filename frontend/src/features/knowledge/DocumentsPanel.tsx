@@ -210,13 +210,16 @@ export function DocumentsPanel({ knowledgeBaseId }: { knowledgeBaseId: number })
         }}
         onDragLeave={() => setDragging(false)}
         onDrop={drop}
-        className={cn("rounded-lg border bg-card", dragging && "border-primary bg-accent")}
+        className={cn("overflow-x-auto rounded-xl border bg-card shadow-sm", dragging && "border-primary bg-accent")}
       >
         <Table aria-label="文档列表">
           <TableHeader>
             <TableRow>
               <TableHead>文件</TableHead>
               <TableHead>状态</TableHead>
+              <TableHead className="text-right">分块</TableHead>
+              <TableHead className="text-right">大小</TableHead>
+              <TableHead>上传时间</TableHead>
               <TableHead>有效期</TableHead>
               <TableHead className="text-right">操作</TableHead>
             </TableRow>
@@ -224,7 +227,7 @@ export function DocumentsPanel({ knowledgeBaseId }: { knowledgeBaseId: number })
           <TableBody>
             {documents.data?.items.length === 0 && (
               <TableRow>
-                <TableCell colSpan={4} className="py-6 text-center text-muted-foreground">
+                <TableCell colSpan={7} className="py-10 text-center text-muted-foreground">
                   {filter.keyword || filter.status || filter.validity
                     ? "没有符合条件的文档"
                     : "还没有文档，先上传一份吧。"}

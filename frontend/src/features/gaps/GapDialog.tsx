@@ -61,7 +61,7 @@ export function GapDialog({ group, onDone }: { group: GapGroup; onDone: () => vo
           </nav>
         </Can>
       )}
-      <div className="max-h-72 overflow-y-auto rounded-lg border">
+      <div className="max-h-72 overflow-y-auto rounded-xl border">
         <Table aria-label="这一类的记录">
           <TableHeader className="sticky top-0 bg-card">
             <TableRow>

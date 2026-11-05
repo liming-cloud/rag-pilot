@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Pencil, RotateCcw, X } from "lucide-react";
+import { Pencil, RotateCcw, Sparkles, X } from "lucide-react";
 import { type UIEvent, useEffect, useRef, useState } from "react";
 import { useParams } from "react-router";
 import { Button } from "@/components/ui/button";
@@ -124,7 +124,7 @@ function ConversationView({ conversationId }: { conversationId: number | null })
 
   return (
     <div className="flex min-w-0 flex-1 flex-col">
-      <header className="shrink-0 border-b px-6 py-3">
+      <header className="glass shrink-0 border-b px-6 py-2.5">
         <div className="mx-auto flex max-w-3xl flex-col gap-1">
           <KnowledgeBasePicker
             options={options}
@@ -139,15 +139,18 @@ function ConversationView({ conversationId }: { conversationId: number | null })
         <div className="mx-auto flex max-w-3xl flex-col gap-6">
           {conversation.isError && <ErrorMessage error="会话不存在或已删除。" />}
           {empty && !conversation.isError && (
-            <div className="mt-24 flex flex-col items-center gap-4">
-              <p className="text-center text-muted-foreground">{texts.emptyHint}</p>
+            <div className="mt-20 flex flex-col items-center gap-5">
+              <span aria-hidden="true" className="flex size-14 items-center justify-center rounded-2xl bg-gradient-primary text-primary-foreground shadow-glow">
+                <Sparkles className="size-7" />
+              </span>
+              <p className="max-w-md text-center font-display text-xl font-semibold tracking-tight">{texts.emptyHint}</p>
               {texts.suggestedQuestions.length > 0 && (
                 <ul aria-label="推荐问题" className="grid w-full max-w-xl gap-2 sm:grid-cols-2">
                   {texts.suggestedQuestions.map((question) => (
                     <li key={question} className="flex">
                       <Button
                         variant="outline"
-                        className="h-auto flex-1 justify-start py-2 text-left whitespace-normal"
+                        className="h-auto flex-1 justify-start rounded-xl py-3 text-left whitespace-normal"
                         disabled={asking}
                         onClick={() => void ask(question)}
                       >
@@ -186,7 +189,7 @@ function ConversationView({ conversationId }: { conversationId: number | null })
           <div ref={endRef} />
         </div>
       </main>
-      <footer className="shrink-0 border-t px-6 py-3">
+      <footer className="shrink-0 px-6 pt-2 pb-5">
         <div className="mx-auto flex max-w-3xl flex-col gap-2">
           {editingTurnId !== null && (
             <div className="flex items-center gap-2 text-sm text-muted-foreground">

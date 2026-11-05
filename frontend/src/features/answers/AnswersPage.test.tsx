@@ -36,12 +36,14 @@ describe("回答记录页", () => {
     await row("门店几点打烊？");
   });
 
-  it("默认看最近 30 天待处理的差评，分页显示一行摘要", async () => {
+  it("默认看最近 30 天待处理的差评，分页显示一行摘要（含留言和引用资料）", async () => {
     renderPage();
 
     const first = await row("临期商品打几折？");
     expect(within(first).getByText("店员小王")).toBeInTheDocument();
     expect(within(first).getByText("没帮助")).toBeInTheDocument();
+    expect(within(first).getByText("门店规定是五折")).toBeInTheDocument();
+    expect(within(first).getByText("临期与报损管理.md")).toBeInTheDocument();
     expect(screen.queryByText("门店几点打烊？")).not.toBeInTheDocument();
     expect(screen.getByText(/共 \d+ 条/)).toBeInTheDocument();
   });

@@ -36,7 +36,7 @@ export function AnswerCard({ answer, refusalHelp }: { answer: Answer; refusalHel
 
   if (answer.refused) {
     return (
-      <article aria-label="回答" className="flex flex-col gap-2 rounded-lg border bg-card p-4">
+      <article aria-label="回答" className="flex flex-col gap-2 rounded-2xl border bg-card p-5 shadow-sm">
         <div className="flex gap-3">
           <SearchX aria-hidden="true" className="size-5 shrink-0 text-muted-foreground" />
           <div className="flex flex-col gap-1">
@@ -61,12 +61,12 @@ export function AnswerCard({ answer, refusalHelp }: { answer: Answer; refusalHel
   }
 
   return (
-    <article aria-label="回答" className="flex flex-col gap-3 rounded-lg border bg-card p-4">
+    <article aria-label="回答" className="ai-border flex flex-col gap-3 rounded-2xl p-5 shadow-md">
       <Suspense fallback={<p className="leading-relaxed whitespace-pre-line">{answer.text}</p>}>
         <AnswerMarkdown text={answer.text} citations={answer.citations} onCite={setOpened} />
       </Suspense>
       {opened && (
-        <section aria-label="引用原文" className="flex flex-col gap-1 rounded-md bg-secondary p-3 text-sm">
+        <section aria-label="引用原文" className="flex flex-col gap-1 rounded-xl border-l-4 border-l-primary bg-accent/60 p-3 text-sm">
           <div className="flex items-start justify-between gap-2">
             <div>
               <p className="font-medium">{opened.documentName}</p>
@@ -82,18 +82,18 @@ export function AnswerCard({ answer, refusalHelp }: { answer: Answer; refusalHel
           {opened.excerpt === null ? (
             <p className="text-muted-foreground">已无权查看原文：所在的知识库已不再授权给你，或原文已被删除。</p>
           ) : (
-            <p className="font-serif leading-relaxed">{opened.excerpt}</p>
+            <p className="font-display leading-relaxed">{opened.excerpt}</p>
           )}
         </section>
       )}
       {answer.citations.length > 0 && (
-        <ol aria-label="来源" className="flex flex-col gap-1 border-t pt-3 text-sm">
+        <ol aria-label="来源" className="flex flex-col gap-1.5 border-t pt-3 text-sm">
           {answer.citations.map((citation) => (
             <li key={citation.index}>
               <button
                 type="button"
                 onClick={() => setOpened(citation)}
-                className="text-left text-muted-foreground hover:text-foreground"
+                className="rounded-md text-left text-muted-foreground transition-colors hover:text-primary"
               >
                 [{citation.index}] {citation.documentName} · {citation.headingPath}
               </button>{" "}

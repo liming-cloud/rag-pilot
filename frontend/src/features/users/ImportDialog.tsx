@@ -214,7 +214,7 @@ function Review({
           </Label>
         )}
       </div>
-      <div className="max-h-72 overflow-y-auto rounded-lg border">
+      <div className="max-h-72 overflow-y-auto rounded-xl border">
         <Table aria-label="导入预检">
           <TableHeader>
             <TableRow>

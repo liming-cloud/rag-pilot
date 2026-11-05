@@ -2,7 +2,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { TableCell, TableRow } from "@/components/ui/table";
 import { Can, PERMISSIONS } from "@/lib/permissions";
-import { cn } from "@/lib/utils";
+import { cn, formatDateTime } from "@/lib/utils";
 import { type Account } from "./api";
 
 export function isLocked(account: Account) {
@@ -27,12 +27,10 @@ export function AccountRow({
   const locked = isLocked(account);
   return (
     <TableRow>
-      <TableCell>
-        <div className="flex flex-col">
-          <span className={cn(!account.enabled && "text-muted-foreground line-through")}>{account.displayName}</span>
-          <span className="text-xs text-muted-foreground">{account.username}</span>
-        </div>
+      <TableCell className={cn("font-medium", !account.enabled && "text-muted-foreground line-through")}>
+        {account.displayName}
       </TableCell>
+      <TableCell className="text-muted-foreground">{account.username}</TableCell>
       <TableCell>
         <div className="flex flex-wrap gap-1">
           {account.superAdmin ? (
@@ -54,6 +52,9 @@ export function AccountRow({
         ) : (
           <Badge variant="outline">已停用</Badge>
         )}
+      </TableCell>
+      <TableCell className="whitespace-nowrap text-muted-foreground tabular-nums">
+        {locked && account.lockedUntil ? formatDateTime(account.lockedUntil) : "—"}
       </TableCell>
       <TableCell className="text-right">
         {account.superAdmin ? (

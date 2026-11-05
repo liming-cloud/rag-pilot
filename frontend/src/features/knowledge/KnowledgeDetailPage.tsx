@@ -22,7 +22,7 @@ export function KnowledgeDetailPage() {
   const tabs = [{ key: "documents", label: "文档" }, ...(canGrant ? [{ key: "grants", label: "授权" }] : [])] as const;
 
   return (
-    <main className="mx-auto flex max-w-6xl flex-col gap-4 p-6 md:p-8">
+    <main className="mx-auto flex w-full max-w-[1600px] p-6 md:p-8 xl:px-10 flex-col gap-4">
       <Button asChild variant="ghost" size="sm" className="self-start">
         <Link to="/admin/knowledge">
           <ArrowLeft aria-hidden="true" className="size-4" />
@@ -32,7 +32,7 @@ export function KnowledgeDetailPage() {
       {knowledgeBase.isError && <ErrorMessage error="知识库不存在或你没有权限。" className="text-base" />}
       {knowledgeBase.data && (
         <>
-          <h1 className="font-serif text-2xl font-semibold">{knowledgeBase.data.name}</h1>
+          <h1 className="font-display text-2xl font-semibold tracking-tight">{knowledgeBase.data.name}</h1>
           <div role="tablist" aria-label="知识库" className="flex gap-1 border-b">
             {tabs.map((item) => (
               <button

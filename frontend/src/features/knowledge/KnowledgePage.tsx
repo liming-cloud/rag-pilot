@@ -49,9 +49,9 @@ export function KnowledgePage() {
   }
 
   return (
-    <main className="mx-auto flex max-w-6xl flex-col gap-4 p-6 md:p-8">
+    <main className="mx-auto flex w-full max-w-[1600px] p-6 md:p-8 xl:px-10 flex-col gap-4">
       <div className="flex items-center justify-between">
-        <h1 className="font-serif text-2xl font-semibold">知识库</h1>
+        <h1 className="font-display text-2xl font-semibold tracking-tight">知识库</h1>
         <Can permission={PERMISSIONS.KB_CREATE}>
           <Button size="sm" onClick={() => setCreating(true)}>
             <Plus aria-hidden="true" className="size-4" />
@@ -92,37 +92,44 @@ export function KnowledgePage() {
         </Button>
       </form>
       {knowledgeBases.isError && <ErrorMessage error="读取知识库失败，请稍后重试。" className="text-base" />}
-      <div className="rounded-lg border bg-card">
+      <div className="overflow-x-auto rounded-xl border bg-card shadow-sm">
         <Table aria-label="知识库">
           <TableHeader>
             <TableRow>
               <TableHead>名称</TableHead>
-              <TableHead>文档</TableHead>
-              <TableHead>授权</TableHead>
+              <TableHead className="text-right">文档</TableHead>
+              <TableHead>解析失败</TableHead>
+              <TableHead>有效期提醒</TableHead>
+              <TableHead className="text-right">授权角色</TableHead>
+              <TableHead className="text-right">可访问账号</TableHead>
               <TableHead className="text-right">操作</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {knowledgeBases.data?.items.length === 0 && (
               <TableRow>
-                <TableCell colSpan={4} className="py-6 text-center text-muted-foreground">
+                <TableCell colSpan={7} className="py-10 text-center text-muted-foreground">
                   没有符合条件的知识库
                 </TableCell>
               </TableRow>
             )}
             {knowledgeBases.data?.items.map((knowledgeBase) => (
               <TableRow key={knowledgeBase.id}>
-                <TableCell className="py-3 font-medium">
+                <TableCell className="font-medium">
                   <Link to={`/admin/knowledge/${knowledgeBase.id}`} className="hover:underline">
                     {knowledgeBase.name}
                   </Link>
                 </TableCell>
+                <TableCell className="text-right tabular-nums">{knowledgeBase.documentCount} 份</TableCell>
+                <TableCell>
+                  {knowledgeBase.failedCount > 0 ? (
+                    <Badge variant="destructive">{knowledgeBase.failedCount} 份失败</Badge>
+                  ) : (
+                    <span className="text-muted-foreground">—</span>
+                  )}
+                </TableCell>
                 <TableCell>
                   <span className="flex flex-wrap items-center gap-2">
-                    {knowledgeBase.documentCount} 份
-                    {knowledgeBase.failedCount > 0 && (
-                      <Badge variant="destructive">{knowledgeBase.failedCount} 份失败</Badge>
-                    )}
                     {knowledgeBase.expiringCount > 0 && (
                       <Link to={`/admin/knowledge/${knowledgeBase.id}?validity=EXPIRING`}>
                         <Badge className="hover:underline">{knowledgeBase.expiringCount} 份即将到期</Badge>
@@ -135,11 +142,13 @@ export function KnowledgePage() {
                         </Badge>
                       </Link>
                     )}
+                    {knowledgeBase.expiringCount + knowledgeBase.expiredCount === 0 && (
+                      <span className="text-muted-foreground">—</span>
+                    )}
                   </span>
                 </TableCell>
-                <TableCell className="text-muted-foreground">
-                  {knowledgeBase.roleGrantCount} 个角色 · {knowledgeBase.memberCount} 个账号
-                </TableCell>
+                <TableCell className="text-right tabular-nums">{knowledgeBase.roleGrantCount} 个角色</TableCell>
+                <TableCell className="text-right tabular-nums">{knowledgeBase.memberCount} 个账号</TableCell>
                 <TableCell className="text-right">
                   <Button asChild variant="ghost" size="sm">
                     <Link to={`/admin/knowledge/${knowledgeBase.id}`} aria-label={`管理 ${knowledgeBase.name}`}>

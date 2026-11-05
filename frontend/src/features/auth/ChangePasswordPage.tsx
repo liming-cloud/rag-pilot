@@ -56,7 +56,7 @@ export function ChangePasswordPage() {
   return (
     <main className="mx-auto flex h-full max-w-sm flex-col justify-center gap-6 p-6">
       <div className="flex flex-col gap-1">
-        <h1 className="font-serif text-2xl font-semibold">修改密码</h1>
+        <h1 className="font-display text-2xl font-semibold tracking-tight">修改密码</h1>
         {forced && <p className="text-sm text-muted-foreground">管理员重置了你的密码，请先设置新密码再继续使用。</p>}
       </div>
       <form onSubmit={(event) => void submit(event)} className="flex flex-col gap-4">

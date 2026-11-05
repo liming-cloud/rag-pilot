@@ -1,4 +1,4 @@
-import { ArrowLeft, ChevronRight, LogOut } from "lucide-react";
+import { ArrowLeft, ChevronRight, LogOut, Sparkles } from "lucide-react";
 import { useState } from "react";
 import { Link, NavLink, Outlet, useLocation } from "react-router";
 import { Button } from "@/components/ui/button";
@@ -18,8 +18,13 @@ export function AdminLayout() {
 
   return (
     <div className="flex h-dvh print:block print:h-auto">
-      <aside className="flex w-52 shrink-0 flex-col border-r bg-card print:hidden">
-        <div className="flex h-12 items-center px-4 font-medium">管理后台</div>
+      <aside className="glass flex w-56 shrink-0 flex-col border-r print:hidden">
+        <div className="flex h-14 items-center gap-2.5 px-4 font-display font-semibold tracking-tight">
+          <span aria-hidden="true" className="flex size-7 items-center justify-center rounded-lg bg-gradient-primary text-primary-foreground shadow-md">
+            <Sparkles className="size-3.5" />
+          </span>
+          管理后台
+        </div>
         <nav aria-label="管理菜单" className="flex flex-1 flex-col gap-0.5 overflow-y-auto px-2">
           {menuTree(menus).map((node) =>
             node.group === null ? (
@@ -80,9 +85,9 @@ function MenuLink({ menu, nested = false }: { menu: AdminMenu; nested?: boolean 
       to={menu.to}
       className={({ isActive }) =>
         cn(
-          "rounded-md px-3 py-2 text-sm hover:bg-secondary",
+          "rounded-lg px-3 py-2 text-sm transition-colors hover:bg-accent/60",
           nested && "pl-8",
-          isActive && "bg-accent text-accent-foreground",
+          isActive && "bg-accent font-medium text-accent-foreground shadow-[inset_3px_0_0_var(--primary)]",
         )
       }
     >

@@ -51,7 +51,7 @@ export function QuestionComposer({
 
   const left = MAX_QUESTION_LENGTH - value.length;
   return (
-    <form onSubmit={submit} className="flex items-end gap-2 rounded-xl border border-input bg-card py-1 pr-1 pl-4">
+    <form onSubmit={submit} className="glass flex items-end gap-2 rounded-2xl border border-input py-1.5 pr-1.5 pl-4 shadow-md transition-shadow focus-within:border-primary/60 focus-within:shadow-glow">
       <Label htmlFor="question" className="sr-only">
         输入问题
       </Label>
@@ -64,7 +64,7 @@ export function QuestionComposer({
         onChange={(event) => onChange(event.target.value)}
         onKeyDown={keyDown}
         aria-describedby="question-hint"
-        className="min-h-11 flex-1 resize-none rounded-none border-0 bg-transparent px-0 py-2.5 text-base focus:ring-0"
+        className="min-h-11 flex-1 resize-none rounded-none border-0 bg-transparent px-0 py-2.5 text-base shadow-none focus:ring-0"
         placeholder={placeholder}
       />
       <span id="question-hint" className="sr-only">
@@ -76,11 +76,11 @@ export function QuestionComposer({
         </span>
       )}
       {asking ? (
-        <Button type="button" size="icon" className="rounded-lg" aria-label="停止生成" onClick={onStop}>
+        <Button type="button" size="icon" className="rounded-xl" aria-label="停止生成" onClick={onStop}>
           <Square aria-hidden="true" className="size-4 fill-current" />
         </Button>
       ) : (
-        <Button type="submit" size="icon" className="rounded-lg" aria-label="发送" disabled={!value.trim()}>
+        <Button type="submit" size="icon" className="rounded-xl" aria-label="发送" disabled={!value.trim()}>
           <ArrowUp aria-hidden="true" className="size-5" />
         </Button>
       )}

@@ -27,9 +27,9 @@ export function ModelsPage() {
   const tab: Tab = TABS.some((item) => item.key === params.get("tab")) ? (params.get("tab") as Tab) : "providers";
 
   return (
-    <main className="mx-auto flex max-w-6xl flex-col gap-4 p-6 md:p-8">
+    <main className="mx-auto flex w-full max-w-[1600px] p-6 md:p-8 xl:px-10 flex-col gap-4">
       <div>
-        <h1 className="font-serif text-2xl font-semibold">模型管理</h1>
+        <h1 className="font-display text-2xl font-semibold tracking-tight">模型管理</h1>
         <p className="text-sm text-muted-foreground">
           在界面保存过的用途以这里为准，没保存过的用环境变量。保存后下一次请求就用新模型，不用重启。
         </p>

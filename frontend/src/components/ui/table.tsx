@@ -7,11 +7,11 @@ export function Table({ className, ...props }: ComponentProps<"table">) {
 }
 
 export function TableHeader({ className, ...props }: ComponentProps<"thead">) {
-  return <thead data-slot="table-header" className={cn("text-left text-muted-foreground", className)} {...props} />;
+  return <thead data-slot="table-header" className={cn("border-b bg-muted/50 text-left text-xs tracking-wide text-muted-foreground", className)} {...props} />;
 }
 
 export function TableBody({ className, ...props }: ComponentProps<"tbody">) {
-  return <tbody data-slot="table-body" className={cn("divide-y", className)} {...props} />;
+  return <tbody data-slot="table-body" className={cn("divide-y divide-border/70 [&_tr]:transition-colors [&_tr:hover]:bg-accent/40", className)} {...props} />;
 }
 
 export function TableRow(props: ComponentProps<"tr">) {
@@ -19,9 +19,9 @@ export function TableRow(props: ComponentProps<"tr">) {
 }
 
 export function TableHead({ className, ...props }: ComponentProps<"th">) {
-  return <th data-slot="table-head" className={cn("px-3 py-2 font-normal", className)} {...props} />;
+  return <th data-slot="table-head" className={cn("px-4 py-3 font-medium whitespace-nowrap", className)} {...props} />;
 }
 
 export function TableCell({ className, ...props }: ComponentProps<"td">) {
-  return <td data-slot="table-cell" className={cn("px-3 py-1.5", className)} {...props} />;
+  return <td data-slot="table-cell" className={cn("px-4 py-3 align-middle", className)} {...props} />;
 }

@@ -1,5 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { KeyRound, LayoutDashboard, LogOut } from "lucide-react";
+import { KeyRound, LayoutDashboard, LogOut, Sparkles } from "lucide-react";
 import type { ReactNode } from "react";
 import { Link, Navigate, Outlet, useLocation, useNavigate } from "react-router";
 import { Button } from "@/components/ui/button";
@@ -50,8 +50,13 @@ export function AppShell() {
 
   return (
     <div className="flex h-dvh flex-col">
-      <header className="flex h-12 shrink-0 items-center gap-3 border-b bg-card px-3">
-        <span className="flex-1 font-medium">{branding.name}</span>
+      <header className="glass sticky top-0 z-10 flex h-14 shrink-0 items-center gap-3 border-b px-4">
+        <span className="flex flex-1 items-center gap-2.5 font-display text-lg font-semibold tracking-tight">
+          <span aria-hidden="true" className="flex size-8 items-center justify-center rounded-lg bg-gradient-primary text-primary-foreground shadow-md">
+            <Sparkles className="size-4" />
+          </span>
+          {branding.name}
+        </span>
         {adminMenus.length > 0 && (
           <Button asChild variant="ghost" size="sm">
             <Link to={adminMenus[0]!.to}>

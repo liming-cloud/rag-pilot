@@ -1,4 +1,4 @@
-import { Loader2, RotateCcw } from "lucide-react";
+import { RotateCcw } from "lucide-react";
 import { type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { ErrorMessage } from "@/lib/errors";
@@ -7,7 +7,9 @@ import { type Turn } from "./api";
 import { type Live } from "./useConversationAsk";
 
 export function Question({ text }: { text: string }) {
-  return <p className="max-w-[85%] self-end rounded-lg bg-accent px-3 py-2 text-accent-foreground">{text}</p>;
+  return <p className="max-w-[85%] self-end rounded-2xl rounded-br-md bg-gradient-primary px-4 py-2.5 text-primary-foreground shadow-md">
+      {text}
+    </p>;
 }
 
 export function TurnView({ turn, actions, refusalHelp }: { turn: Turn; actions: ReactNode; refusalHelp: RefusalHelp }) {
@@ -45,12 +47,17 @@ export function LiveTurnView({ live, onRetry }: { live: Live; onRetry: () => voi
           </Button>
         </div>
       ) : live.text ? (
-        <p aria-live="polite" className="rounded-lg border bg-card p-4 leading-relaxed">
+        <p aria-live="polite" className="ai-border rounded-2xl p-5 leading-relaxed whitespace-pre-line shadow-md">
           {live.text}
+          <span aria-hidden="true" className="ml-0.5 inline-block h-4 w-0.5 translate-y-0.5 animate-pulse bg-primary" />
         </p>
       ) : (
-        <p role="status" className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Loader2 aria-hidden="true" className="size-4 animate-spin" />
+        <p role="status" className="glass flex w-fit items-center gap-3 rounded-full border px-4 py-2 text-sm text-muted-foreground shadow-sm">
+          <span aria-hidden="true" className="flex gap-1">
+            <span className="size-1.5 animate-bounce rounded-full bg-primary [animation-delay:-0.3s]" />
+            <span className="size-1.5 animate-bounce rounded-full bg-brand [animation-delay:-0.15s]" />
+            <span className="size-1.5 animate-bounce rounded-full bg-cyan" />
+          </span>
           {live.status}
         </p>
       )}

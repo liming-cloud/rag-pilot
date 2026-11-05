@@ -37,7 +37,8 @@ describe("知识库列表", () => {
     expect(within(row).getByText("2 份即将到期")).toBeInTheDocument();
     expect(within(row).getByText("1 份已失效")).toBeInTheDocument();
     expect(within(row).getByText("2 份失败")).toBeInTheDocument();
-    expect(within(row).getByText("1 个角色 · 2 个账号")).toBeInTheDocument();
+    expect(within(row).getByText("1 个角色")).toBeInTheDocument();
+    expect(within(row).getByText("2 个账号")).toBeInTheDocument();
     expect(screen.getByText("共 24 条")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "下一页" }));

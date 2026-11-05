@@ -25,7 +25,7 @@ export function ExpirySection() {
   return (
     <section
       aria-label="资料有效期"
-      className="flex flex-col gap-2 rounded-lg border bg-card p-3 text-sm print:break-inside-avoid"
+      className="flex flex-col gap-2 rounded-xl border bg-card shadow-sm p-3 text-sm print:break-inside-avoid"
     >
       <div role="status" className="flex flex-wrap items-center gap-x-3 gap-y-1">
         <span className="font-medium">资料有效期</span>

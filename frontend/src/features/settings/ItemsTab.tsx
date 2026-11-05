@@ -43,7 +43,7 @@ export function ItemsTab({ settings, group }: { settings: SystemSettings; group:
           {SETTING_META.SUGGESTED_QUESTIONS.maxItems} 个；员工看不到相关知识库时，点了也会如实说找不到依据。
         </p>
       )}
-      <ul className="divide-y rounded-lg border bg-card">
+      <ul className="divide-y rounded-xl border bg-card shadow-sm">
         {items.map((item) => {
           const meta = SETTING_META[item.key];
           return (

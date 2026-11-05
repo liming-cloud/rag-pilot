@@ -29,7 +29,7 @@ describe("知识缺口页", () => {
 
     const first = await row("门店几点打烊？");
     expect(within(await table()).getAllByRole("row")[1]).toBe(first);
-    expect(within(first).getByText("另有 3 种问法")).toBeInTheDocument();
+    expect(within(first).getByText("4 种")).toBeInTheDocument();
     expect(within(first).getByText(/^答不上来 \d+$/)).toBeInTheDocument();
     // 当时检索的知识库，出现多的在前；超过两个时折叠成“等 N 个”。
     expect(within(first).getByText("门店运营知识库、商品知识库 等 3 个")).toBeInTheDocument();

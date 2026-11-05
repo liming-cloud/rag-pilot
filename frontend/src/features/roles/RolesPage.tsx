@@ -34,9 +34,9 @@ export function RolesPage() {
     selectedId === "new" ? "new" : (roles.data?.find((role) => role.id === selectedId) ?? roles.data?.[0] ?? null);
 
   return (
-    <main className="mx-auto grid max-w-6xl gap-6 p-6 md:grid-cols-[220px_1fr] md:p-8">
+    <main className="mx-auto grid w-full max-w-[1600px] p-6 md:p-8 xl:px-10 gap-6 md:grid-cols-[220px_1fr]">
       <aside className="flex flex-col gap-3">
-        <h1 className="font-serif text-2xl font-semibold">角色与权限</h1>
+        <h1 className="font-display text-2xl font-semibold tracking-tight">角色与权限</h1>
         {roles.isError && <ErrorMessage error="读取角色失败，请稍后重试。" className="text-base" />}
         <nav aria-label="角色" className="flex flex-col gap-1">
           {roles.data?.map((role) => (
@@ -170,7 +170,7 @@ function RoleDetail({
       {isSuper && (
         <p className="text-sm text-muted-foreground">超级管理员拥有全部权限，不能修改，全系统只有一个账号。</p>
       )}
-      <div className="rounded-lg border bg-card">
+      <div className="overflow-x-auto rounded-xl border bg-card shadow-sm">
         <Table aria-label="权限">
           <TableHeader>
             <TableRow>
@@ -182,7 +182,7 @@ function RoleDetail({
           <TableBody>
             {catalog.map((group) => (
               <TableRow key={group.menu} className={cn(!has(group.view.code) && !editing && "text-muted-foreground")}>
-                <TableCell className="py-3 font-medium">{group.menu}</TableCell>
+                <TableCell className="font-medium">{group.menu}</TableCell>
                 <TableCell>
                   {editing ? (
                     <Label className="flex items-center gap-2 font-normal">

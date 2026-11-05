@@ -35,6 +35,15 @@ export const AUDIT_ACTIONS: Record<string, string> = {
   SETTING_RESTORED: "系统设置恢复默认",
 };
 
+/** 操作对象的类型；没列出的按原值显示。 */
+export const AUDIT_TARGETS: Record<string, string> = {
+  ACCOUNT: "账号",
+  ROLE: "角色",
+  KNOWLEDGE_BASE: "知识库",
+  DOCUMENT: "资料",
+  SETTING: "系统设置",
+};
+
 export const AUDIT_RANGES = [7, 30, 90, 365] as const;
 export type AuditRange = (typeof AUDIT_RANGES)[number];
 

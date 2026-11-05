@@ -34,7 +34,7 @@ export function ChangesTab() {
         每次保存和恢复都记一条。恢复会把该用途换回这条记录之后的模型，确认后先测连通，通过才生效。
       </p>
       <ErrorMessage error={changes.error} />
-      <div className="rounded-lg border bg-card">
+      <div className="overflow-x-auto rounded-xl border bg-card shadow-sm">
         <Table aria-label="变更记录" className="table-fixed">
           <TableHeader>
             <TableRow>
@@ -49,14 +49,14 @@ export function ChangesTab() {
           <TableBody>
             {changes.data?.items.length === 0 && (
               <TableRow>
-                <TableCell colSpan={6} className="py-6 text-center text-muted-foreground">
+                <TableCell colSpan={6} className="py-10 text-center text-muted-foreground">
                   还没有变更
                 </TableCell>
               </TableRow>
             )}
             {changes.data?.items.map((change) => (
               <TableRow key={change.id}>
-                <TableCell className="py-2.5 text-muted-foreground">
+                <TableCell className="text-muted-foreground">
                   {new Date(change.changedAt).toLocaleString("zh-CN", { dateStyle: "short", timeStyle: "short" })}
                 </TableCell>
                 <TableCell className="truncate">{change.changedBy}</TableCell>

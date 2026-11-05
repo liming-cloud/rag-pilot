@@ -5,7 +5,7 @@ import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 import { Pagination } from "@/components/ui/pagination";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ErrorMessage } from "@/lib/errors";
-import { AUDIT_ACTIONS, AUDIT_RANGES, type AuditFilter, auditKeys, type AuditRange, fetchAuditLogs } from "./api";
+import { AUDIT_ACTIONS, AUDIT_RANGES, AUDIT_TARGETS, type AuditFilter, auditKeys, type AuditRange, fetchAuditLogs } from "./api";
 
 const PAGE_SIZE = 20;
 
@@ -23,9 +23,9 @@ export function AuditPage() {
   const change = (next: Partial<AuditFilter>) => setFilter({ ...filter, ...next, page: next.page ?? 1 });
 
   return (
-    <main className="flex flex-col gap-4 p-6">
+    <main className="mx-auto flex w-full max-w-[1600px] flex-col gap-4 p-6 md:p-8 xl:px-10">
       <div className="flex flex-col gap-1">
-        <h1 className="text-xl font-semibold">审计记录</h1>
+        <h1 className="font-display text-2xl font-semibold tracking-tight">审计记录</h1>
         <p className="text-sm text-muted-foreground">管理操作留下的记录，保留 1 年。模型变更见“模型管理”的变更记录。</p>
       </div>
       <div className="flex flex-wrap items-end gap-3">
@@ -60,12 +60,14 @@ export function AuditPage() {
       <ErrorMessage error={logs.error} className="text-base" />
       {logs.data && (
         <>
+          <div className="overflow-x-auto rounded-xl border bg-card shadow-sm">
           <Table aria-label="审计记录">
             <TableHeader>
               <TableRow>
                 <TableHead>时间</TableHead>
                 <TableHead>操作人</TableHead>
                 <TableHead>操作</TableHead>
+                <TableHead>对象</TableHead>
                 <TableHead>内容</TableHead>
               </TableRow>
             </TableHeader>
@@ -77,18 +79,23 @@ export function AuditPage() {
                   </TableCell>
                   <TableCell>{record.actorName ?? `已删除的账号 #${record.actorId}`}</TableCell>
                   <TableCell className="whitespace-nowrap">{AUDIT_ACTIONS[record.action] ?? record.action}</TableCell>
+                  <TableCell className="whitespace-nowrap text-muted-foreground">
+                    {AUDIT_TARGETS[record.targetType] ?? record.targetType}
+                    {/^\d+$/.test(record.targetId) && ` #${record.targetId}`}
+                  </TableCell>
                   <TableCell className="whitespace-normal wrap-anywhere">{record.detail}</TableCell>
                 </TableRow>
               ))}
               {logs.data.items.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={4} className="text-center text-muted-foreground">
+                  <TableCell colSpan={5} className="py-10 text-center text-muted-foreground">
                     这段时间没有这类操作。
                   </TableCell>
                 </TableRow>
               )}
             </TableBody>
           </Table>
+          </div>
           <Pagination page={logs.data.page} size={logs.data.size} total={logs.data.total} onChange={change} />
         </>
       )}

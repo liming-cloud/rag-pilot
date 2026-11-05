@@ -9,7 +9,7 @@ export function DailyTable({ daily }: { daily: UsageStats["daily"] }) {
   return (
     <section className="flex flex-col gap-2">
       <h2 className="text-lg font-medium">每日趋势</h2>
-      <div className="max-h-96 overflow-y-auto rounded-lg border bg-card print:max-h-none print:overflow-visible">
+      <div className="max-h-96 overflow-y-auto rounded-xl border bg-card shadow-sm print:max-h-none print:overflow-visible">
         <Table aria-label="每日趋势">
           <TableHeader className="sticky top-0 bg-card">
             <TableRow>
@@ -57,9 +57,9 @@ export function Ranking({ title, rows, to }: { title: string; rows: { label: str
       {rows.length === 0 ? (
         <p className="text-sm text-muted-foreground">没有。</p>
       ) : (
-        <ol className="flex flex-col divide-y rounded-lg border bg-card text-sm">
+        <ol className="flex flex-col divide-y rounded-xl border bg-card shadow-sm text-sm">
           {rows.map((row) => (
-            <li key={row.label} className="flex items-start gap-3 px-3 py-2">
+            <li key={row.label} className="flex items-start gap-3 px-4 py-2.5">
               <span className="min-w-0 flex-1 break-words">{row.label}</span>
               <span className="shrink-0 tabular-nums text-muted-foreground">{row.count} 次</span>
             </li>

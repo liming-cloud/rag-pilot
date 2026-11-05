@@ -57,7 +57,7 @@ export function GrantsPanel({ knowledgeBaseId }: { knowledgeBaseId: number }) {
         </Button>
       </div>
       <ErrorMessage error={error} />
-      <div className="rounded-lg border bg-card">
+      <div className="overflow-x-auto rounded-xl border bg-card shadow-sm">
         <Table aria-label="授权的角色">
           <TableHeader>
             <TableRow>
@@ -76,7 +76,7 @@ export function GrantsPanel({ knowledgeBaseId }: { knowledgeBaseId: number }) {
             )}
             {grantedRoles.map((role) => (
               <TableRow key={role.id}>
-                <TableCell className="py-2.5">{role.name}</TableCell>
+                <TableCell>{role.name}</TableCell>
                 <TableCell className="text-muted-foreground">{role.userCount}</TableCell>
                 <TableCell className="text-right">
                   <Button
@@ -94,7 +94,7 @@ export function GrantsPanel({ knowledgeBaseId }: { knowledgeBaseId: number }) {
           </TableBody>
         </Table>
       </div>
-      <div className="rounded-lg border bg-card">
+      <div className="overflow-x-auto rounded-xl border bg-card shadow-sm">
         <Table aria-label="授权的账号">
           <TableHeader>
             <TableRow>
@@ -112,7 +112,7 @@ export function GrantsPanel({ knowledgeBaseId }: { knowledgeBaseId: number }) {
             )}
             {members.data?.map((member) => (
               <TableRow key={member.userId}>
-                <TableCell className="py-2.5">
+                <TableCell>
                   {member.displayName}
                   <span className="ml-2 text-xs text-muted-foreground">{member.username}</span>
                 </TableCell>

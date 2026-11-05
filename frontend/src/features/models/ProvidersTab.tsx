@@ -52,7 +52,7 @@ export function ProvidersTab({ settings }: { settings: ModelSettings }) {
           </Button>
         </Can>
       </div>
-      <div className="rounded-lg border bg-card">
+      <div className="overflow-x-auto rounded-xl border bg-card shadow-sm">
         <Table aria-label="服务商" className="table-fixed">
           <TableHeader>
             <TableRow>
@@ -65,7 +65,7 @@ export function ProvidersTab({ settings }: { settings: ModelSettings }) {
           <TableBody>
             {settings.providers.map((provider) => (
               <TableRow key={provider.id ?? ENV}>
-                <TableCell className="py-3">
+                <TableCell>
                   <div className="flex min-w-0 items-center gap-2">
                     <span className="truncate" title={provider.name}>
                       {provider.name}

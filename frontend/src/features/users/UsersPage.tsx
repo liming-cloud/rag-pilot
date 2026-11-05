@@ -51,9 +51,9 @@ export function UsersPage() {
   }
 
   return (
-    <main className="mx-auto flex max-w-6xl flex-col gap-4 p-6 md:p-8">
+    <main className="mx-auto flex w-full max-w-[1600px] p-6 md:p-8 xl:px-10 flex-col gap-4">
       <div className="flex items-center justify-between">
-        <h1 className="font-serif text-2xl font-semibold">用户</h1>
+        <h1 className="font-display text-2xl font-semibold tracking-tight">用户</h1>
         <div className="flex gap-2">
           <Can permission={PERMISSIONS.USER_IMPORT}>
             <Button size="sm" variant="outline" onClick={() => setDialog({ kind: "import" })}>
@@ -114,20 +114,22 @@ export function UsersPage() {
       {(toggle.isError || unlock.isError) && (
         <ErrorMessage error={toggle.error ?? unlock.error} />
       )}
-      <div className="rounded-lg border bg-card">
+      <div className="overflow-x-auto rounded-xl border bg-card shadow-sm">
         <Table aria-label="账号">
           <TableHeader>
             <TableRow>
-              <TableHead>账号</TableHead>
+              <TableHead>显示名</TableHead>
+              <TableHead>用户名</TableHead>
               <TableHead>角色</TableHead>
               <TableHead>状态</TableHead>
+              <TableHead>锁定到</TableHead>
               <TableHead className="text-right">操作</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {users.data?.items.length === 0 && (
               <TableRow>
-                <TableCell colSpan={4} className="py-6 text-center text-muted-foreground">
+                <TableCell colSpan={6} className="py-10 text-center text-muted-foreground">
                   没有符合条件的账号
                 </TableCell>
               </TableRow>

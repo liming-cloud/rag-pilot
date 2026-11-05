@@ -21,7 +21,7 @@ export function PackTab({ pack, statsZone }: { pack: IndustryPack; statsZone: st
           选择，换行业包需要重启。下面的内容直接影响检索和回答质量，这里只能查看；要修改请改行业包并跑评测。
         </span>
       </p>
-      <dl className="grid gap-x-4 gap-y-3 rounded-lg border bg-card px-4 py-3 text-sm md:grid-cols-[10rem_1fr]">
+      <dl className="grid gap-x-4 gap-y-3 rounded-xl border bg-card shadow-sm px-4 py-3 text-sm md:grid-cols-[10rem_1fr]">
         <ReadOnly term="回答的角色">{pack.answerRole}</ReadOnly>
         <ReadOnly term="引用示例">{pack.citationExample}</ReadOnly>
         <ReadOnly term="改写的角色">{pack.rewriteRole}</ReadOnly>
@@ -92,7 +92,7 @@ export function Vocabulary({ entries }: { entries: IndustryPack["vocabulary"] })
           />
         </div>
       </div>
-      <div className="rounded-lg border bg-card">
+      <div className="overflow-x-auto rounded-xl border bg-card shadow-sm">
         <Table aria-label="行业词表" className="table-fixed">
           <TableHeader>
             <TableRow>
@@ -121,7 +121,7 @@ export function Vocabulary({ entries }: { entries: IndustryPack["vocabulary"] })
             ))}
             {shown.length === 0 && (
               <TableRow>
-                <TableCell colSpan={2} className="py-6 text-center text-muted-foreground">
+                <TableCell colSpan={2} className="py-10 text-center text-muted-foreground">
                   没有找到包含“{word}”的词
                 </TableCell>
               </TableRow>

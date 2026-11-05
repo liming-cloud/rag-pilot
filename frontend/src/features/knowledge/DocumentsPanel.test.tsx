@@ -35,10 +35,13 @@ const row = async (filename: string) => (await within(await table()).findByText(
 describe("知识库的文档", () => {
   beforeEach(() => signInAs("admin"));
 
-  it("分页列出文档、状态和失败原因；按状态筛选", async () => {
+  it("分页列出文档、状态、分块数、大小和失败原因；按状态筛选", async () => {
     renderPanel();
 
-    expect(within(await row("临期与报损管理.md")).getByText("可用")).toBeInTheDocument();
+    const ready = await row("临期与报损管理.md");
+    expect(within(ready).getByText("可用")).toBeInTheDocument();
+    expect(within(ready).getByText("12")).toBeInTheDocument();
+    expect(within(ready).getByText("18 KB")).toBeInTheDocument();
     expect(within(await row("旧版陈列手册.txt")).getByText(/不是 UTF-8 编码/)).toBeInTheDocument();
     expect(screen.getByText("共 37 条")).toBeInTheDocument();
 
