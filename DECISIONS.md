@@ -398,3 +398,11 @@ Compose 增加 web 服务（`deploy/web.Dockerfile`）：Node 24 构建前端，
 - **缓存端口**：identity 的 `AccessSnapshotCache`（`AccessService` 用）、settings 的 `SavedSettingsCache`（`SystemSettingsService`）和 `ModelRouteCache`（`ModelSettingsService`，端口里的 `ModelUsage` 随 rag-ai 迁移一起换成 settings 自己的类型），实现在各自的 `infrastructure/cache`。rag-ai 的问题向量缓存是 rag-ai 内部机制，上下文看不到。
 - **会话存储经 rag-cache**：去掉 `redisson-spring-boot-starter` 和 `sa-token-redisson-spring-boot-starter`。`SaTokenStoreDao` 在同一个请求里对同一个键只读一次存储（读到的值记在 Sa-Token 的请求存储里，本请求的写入、删除同步更新），不在请求里时直接读写。
 - **删角色不清权限缓存**：原计划在 `RoleService.delete` 里补 `forgetAll()`，查代码后发现删除前要求角色下没有账号，任何账号的快照里都没有这个角色，清除没有作用；改为修正 `AccessService` 注释里“删角色后清除”的错误说法。
+- **测量**（本机 macOS + Docker Desktop，JDK 26，`CachePerformanceBenchmark` 两轮；基线是缓存之前的 `db1f3ed`，会话在进程内）：
+
+  | 场景（p50 / p95，毫秒） | 基线 | 有 Redis | 本地模式 |
+  | --- | --- | --- | --- |
+  | `GET /api/users` | 3.05 / 6.85，2.85 / 6.72 | 4.14 / 8.15，5.95 / 11.24 | 1.78 / 5.57，3.02 / 6.33 |
+  | 一次问答 | 17.3 / 24.2，17.0 / 24.7 | 17.7 / 28.0，20.1 / 27.9 | 11.0 / 18.8，11.0 / 18.4 |
+
+  服务层读取权限、设置、路由从 0.24–0.33 ms 降到约 0.001 ms（一级命中）。一次问答（含新建会话）缓存热了之后 16 条 SQL，不再查权限、设置、模型路由的表（`AskSqlBudgetTests`）。有 Redis 时每个登录后的请求访问 Redis 4 次（读令牌、读最后活动时间、读会话各一次，改最后活动时间一次 Lua），基线的会话在进程内、0 次；“端到端不慢于改前”在本地模式达到，有 Redis 时 `GET /api/users` 没达到（见 #145）。
