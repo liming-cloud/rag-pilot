@@ -8,10 +8,12 @@ import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noMethods;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.liming.rag.archfixture.FixtureDO;
+import com.liming.rag.archfixture.api.ApiExposesPlatformType;
 import com.liming.rag.archfixture.answering.CallsChatModelDirectly;
 import com.liming.rag.archfixture.answering.UsesCaffeineDirectly;
 import com.liming.rag.archfixture.answering.UsesRedissonDirectly;
 import com.liming.rag.archfixture.application.ApplicationUsesCaches;
+import com.liming.rag.archfixture.application.ApplicationUsesRagAi;
 import com.liming.rag.archfixture.answering.UsesSpringAiDocument;
 import com.liming.rag.archfixture.application.ReadsConfigWithValue;
 import com.liming.rag.archfixture.application.UsesQueryWrapper;
@@ -23,6 +25,7 @@ import com.liming.rag.archfixture.web.UnguardedEndpoint;
 import com.liming.rag.archfixture.application.FixtureService;
 import com.liming.rag.archfixture.web.UnknownPermission;
 import com.liming.rag.archfixture.web.WebUsesServiceNestedType;
+import com.liming.rag.archfixture.web.WebUsesRagAi;
 import com.tngtech.archunit.base.DescribedPredicate;
 import com.tngtech.archunit.core.domain.JavaClass;
 import com.tngtech.archunit.core.domain.JavaMethod;
@@ -39,6 +42,10 @@ import com.tngtech.archunit.core.importer.ClassFileImporter;
 import com.tngtech.archunit.core.importer.ImportOption;
 import com.tngtech.archunit.lang.ArchRule;
 import java.util.List;
+import java.util.Optional;
+import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -79,6 +86,53 @@ class ArchitectureRulesTest {
             .that().resideInAnyPackage("..api..", "..web..", "..application..", "..domain..")
             .should().dependOnClassesThat().resideInAPackage("com.liming.rag.cache..")
             .as("缓存组件 rag-cache 只在上下文的 infrastructure 层使用，application 经自己声明的缓存端口");
+
+    /** 上下文的业务层：{@code com.liming.rag.<上下文>.(api|web|application|domain)}，第一组是上下文名。 */
+    static final Pattern CONTEXT_LAYER = Pattern.compile("com\\.liming\\.rag\\.(\\w+)\\.(api|web|application|domain)(\\..+)?");
+    static final Set<String> PLATFORM_MODULES = Set.of("shared", "ai", "persistence", "cache");
+    /** JDK、Spring、JSpecify、SLF4J 和共享内核 rag-shared。 */
+    static final List<String> ALLOWED_LIBRARIES = List.of("java.", "javax.", "org.springframework.", "org.jspecify.",
+            "org.slf4j.", "com.liming.rag.shared.");
+    /** D-053 的例外：web 层的 Sa-Token 注解。 */
+    static final String SA_TOKEN_ANNOTATIONS = "cn.dev33.satoken.annotation.";
+
+    static Optional<Matcher> contextLayer(String packageName) {
+        var matcher = CONTEXT_LAYER.matcher(packageName);
+        return matcher.matches() && !PLATFORM_MODULES.contains(matcher.group(1)) ? Optional.of(matcher) : Optional.empty();
+    }
+
+    static boolean allowedDependency(Matcher origin, JavaClass target) {
+        var type = target.getBaseComponentType();
+        if (type.isPrimitive()) {
+            return true;
+        }
+        var name = type.getName();
+        if (ALLOWED_LIBRARIES.stream().anyMatch(name::startsWith)
+                || name.startsWith("com.liming.rag." + origin.group(1) + ".")
+                || (origin.group(2).equals("web") && name.startsWith(SA_TOKEN_ANNOTATIONS))) {
+            return true;
+        }
+        return contextLayer(type.getPackageName()).filter(other -> other.group(2).equals("api")).isPresent();
+    }
+
+    /**
+     * 松耦合（D-054）：上下文的 api、web、application、domain 只依赖 JDK、Spring、JSpecify、SLF4J、rag-shared、本上下文和其他上下文的
+     * {@code api}；平台组件（rag-shared 以外）和其他第三方框架只在 infrastructure 层经本上下文的端口使用。新增组件不用补规则。
+     */
+    static final ArchRule CONTEXT_LAYERS_ONLY_USE_ALLOWED_DEPENDENCIES = classes()
+            .that(describe("上下文的 api、web、application、domain", type -> contextLayer(type.getPackageName()).isPresent()))
+            .should(new ArchCondition<JavaClass>("只依赖 JDK、Spring、JSpecify、SLF4J、rag-shared、本上下文和其他上下文的 api") {
+                @Override
+                public void check(JavaClass type, ConditionEvents events) {
+                    var origin = contextLayer(type.getPackageName()).orElseThrow();
+                    type.getDirectDependenciesFromSelf().stream()
+                            .filter(dependency -> !allowedDependency(origin, dependency.getTargetClass()))
+                            .forEach(dependency -> events.add(SimpleConditionEvent.violated(dependency,
+                                    dependency.getDescription())));
+                }
+            })
+            .as("上下文的 api、web、application、domain 只依赖 JDK、Spring、JSpecify、SLF4J、rag-shared、本上下文和其他上下文的 api，"
+                    + "web 另可用 Sa-Token 注解（D-053、D-054）");
 
     static final String CHUNK_SEARCH_MAPPER =
             "com.liming.rag.knowledge.infrastructure.persistence.ChunkSearchMapper";
@@ -193,7 +247,8 @@ class ArchitectureRulesTest {
     }
 
     static final List<ArchRule> RULES = List.of(MYBATIS_ONLY_IN_INFRASTRUCTURE, DO_ONLY_IN_INFRASTRUCTURE,
-            SPRING_AI_ONLY_IN_RAG_AI, CACHE_CLIENTS_ONLY_IN_RAG_CACHE, CACHE_ONLY_IN_INFRASTRUCTURE, SEARCH_FILTER_IN_ONE_PLACE, LOGIN_AND_ROLE_ONLY_BY_ANNOTATION,
+            SPRING_AI_ONLY_IN_RAG_AI, CACHE_CLIENTS_ONLY_IN_RAG_CACHE, CACHE_ONLY_IN_INFRASTRUCTURE, CONTEXT_LAYERS_ONLY_USE_ALLOWED_DEPENDENCIES,
+            SEARCH_FILTER_IN_ONE_PLACE, LOGIN_AND_ROLE_ONLY_BY_ANNOTATION,
             NO_SQL_ANNOTATIONS, NO_RAW_SQL_IN_WRAPPER, ONE_EXCEPTION_HANDLER, NO_VALUE_INJECTION,
             ENDPOINTS_NEED_PERMISSION, PERMISSIONS_IN_CATALOG, WEB_NOT_USING_SERVICE_NESTED_TYPES);
 
@@ -217,6 +272,10 @@ class ArchitectureRulesTest {
         assertViolates(CACHE_CLIENTS_ONLY_IN_RAG_CACHE, UsesRedissonDirectly.class);
         assertViolates(CACHE_CLIENTS_ONLY_IN_RAG_CACHE, UsesCaffeineDirectly.class);
         assertViolates(CACHE_ONLY_IN_INFRASTRUCTURE, ApplicationUsesCaches.class);
+        assertViolates(CONTEXT_LAYERS_ONLY_USE_ALLOWED_DEPENDENCIES, ApplicationUsesRagAi.class);
+        assertViolates(CONTEXT_LAYERS_ONLY_USE_ALLOWED_DEPENDENCIES, WebUsesRagAi.class);
+        assertViolates(CONTEXT_LAYERS_ONLY_USE_ALLOWED_DEPENDENCIES, ApiExposesPlatformType.class);
+        assertViolates(CONTEXT_LAYERS_ONLY_USE_ALLOWED_DEPENDENCIES, ApplicationUsesCaches.class);
         assertViolates(SEARCH_FILTER_IN_ONE_PLACE, BypassesSearchFilter.class);
         assertViolates(LOGIN_AND_ROLE_ONLY_BY_ANNOTATION, ChecksRoleByHand.class);
         assertViolates(NO_SQL_ANNOTATIONS, AnnotatedSqlMapper.class);

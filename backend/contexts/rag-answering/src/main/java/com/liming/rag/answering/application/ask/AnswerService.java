@@ -1,8 +1,5 @@
 package com.liming.rag.answering.application.ask;
 
-import com.liming.rag.ai.QueryRewriting;
-import com.liming.rag.ai.RerankClient;
-import com.liming.rag.ai.TextGeneration;
 import com.liming.rag.answering.application.AnsweringException;
 import com.liming.rag.answering.application.AnsweringProperties;
 import com.liming.rag.answering.domain.CitationParser;
@@ -28,8 +25,8 @@ import org.springframework.stereotype.Service;
  * 带引用的问答：混合检索 → 重排 → 相关度门槛 → 生成 → 引用校验。
  *
  * <p>检索（{@link EvidenceRetriever}）、重排（{@link EvidenceReranker}）、拼证据（{@link EvidencePrompt}）各是一步，
- * 编排和拒答规则在这里（D-020）。模型能力经 rag-ai 的防腐层使用：生成用 {@link TextGeneration}，低分改写用
- * {@link QueryRewriting}；这里不接触 Spring AI 的类型（#145）。
+ * 编排和拒答规则在这里（D-020）。模型能力经本上下文的端口使用：生成用 {@link AnswerGeneration}，重排用
+ * {@link RelevanceScoring}，低分改写用 {@link QuestionRewriting}；实现在 infrastructure/ai（D-054）。
  *
  * <p>三道拒答关口：没有检索结果、重排后都低于门槛、模型回答 NO_ANSWER 或没有有效引用。
  * 重排后都低于门槛时，先把问题改写一次再检索（{@link LowRelevanceRecovery}，可用 {@code rag.answering.rewrite-on-low-relevance} 关闭）。
@@ -65,7 +62,7 @@ public class AnswerService {
     private final EvidenceRetriever retriever;
     private final EvidenceReranker reranker;
     private final LowRelevanceRecovery recovery;
-    private final TextGeneration chat;
+    private final AnswerGeneration chat;
     private final AnsweringSettings settings;
     private final String system;
     private final QueryExpansion expansion;
@@ -76,7 +73,7 @@ public class AnswerService {
     /**
      * @param executor Spring 管理的虚拟线程执行器（{@code applicationTaskExecutor}），停机时等正在跑的任务做完（#135）
      */
-    AnswerService(KnowledgeSearch search, RerankClient rerank, TextGeneration chat, QueryRewriting rewriting,
+    AnswerService(KnowledgeSearch search, RelevanceScoring rerank, AnswerGeneration chat, QuestionRewriting rewriting,
             AnsweringProperties properties, AnsweringSettings settings,
             @Qualifier("applicationTaskExecutor") AsyncTaskExecutor executor) {
         var pack = settings.pack();

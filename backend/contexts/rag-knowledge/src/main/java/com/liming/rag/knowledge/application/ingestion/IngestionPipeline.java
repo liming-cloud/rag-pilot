@@ -1,9 +1,9 @@
 package com.liming.rag.knowledge.application.ingestion;
 
 import com.liming.rag.knowledge.application.DocumentReaders;
+import com.liming.rag.knowledge.application.TextEmbedding;
 
-import com.liming.rag.ai.EmbeddingClient;
-import com.liming.rag.ai.ModelCallException;
+import com.liming.rag.knowledge.api.EmbeddingUnavailableException;
 import com.liming.rag.knowledge.domain.Document;
 import com.liming.rag.knowledge.domain.DocumentRepository;
 import java.time.Clock;
@@ -24,13 +24,13 @@ class IngestionPipeline {
 
     private final DocumentReaders readers;
     private final DocumentRepository documents;
-    private final EmbeddingClient embeddings;
+    private final TextEmbedding embeddings;
     private final TransactionOperations transactions;
     private final DocumentRemover remover;
     private final Clock clock;
     private final HeadingChunker chunker = new HeadingChunker();
 
-    IngestionPipeline(DocumentReaders readers, DocumentRepository documents, EmbeddingClient embeddings,
+    IngestionPipeline(DocumentReaders readers, DocumentRepository documents, TextEmbedding embeddings,
             TransactionOperations transactions, DocumentRemover remover, Clock clock) {
         this.readers = readers;
         this.documents = documents;
@@ -51,7 +51,7 @@ class IngestionPipeline {
             }
         } catch (DocumentParseException e) {
             failed(document, e.getMessage());
-        } catch (ModelCallException e) {
+        } catch (EmbeddingUnavailableException e) {
             // 模型暂时不可用不是文件的问题：可以重新处理，第一次失败后自动重试一次（#145 A9）。
             document.markModelUnavailable(e.getMessage(), OffsetDateTime.now(clock));
             documents.save(document);

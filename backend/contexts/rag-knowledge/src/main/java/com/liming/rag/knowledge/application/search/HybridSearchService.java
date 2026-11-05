@@ -3,8 +3,7 @@ package com.liming.rag.knowledge.application.search;
 import com.liming.rag.knowledge.application.ingestion.DocumentCalendar;
 import com.liming.rag.knowledge.application.Grantee;
 import com.liming.rag.knowledge.application.ChunkIndex;
-
-import com.liming.rag.ai.EmbeddingClient;
+import com.liming.rag.knowledge.application.TextEmbedding;
 import com.liming.rag.identity.api.UserDirectory;
 import com.liming.rag.knowledge.api.KnowledgeSearch;
 import com.liming.rag.knowledge.api.SearchHit;
@@ -28,11 +27,11 @@ class HybridSearchService implements KnowledgeSearch {
     static final int MAX_LIMIT = 50;
 
     private final ChunkIndex index;
-    private final EmbeddingClient embeddings;
+    private final TextEmbedding embeddings;
     private final UserDirectory users;
     private final DocumentCalendar calendar;
 
-    HybridSearchService(ChunkIndex index, EmbeddingClient embeddings, UserDirectory users, DocumentCalendar calendar) {
+    HybridSearchService(ChunkIndex index, TextEmbedding embeddings, UserDirectory users, DocumentCalendar calendar) {
         this.index = index;
         this.embeddings = embeddings;
         this.users = users;

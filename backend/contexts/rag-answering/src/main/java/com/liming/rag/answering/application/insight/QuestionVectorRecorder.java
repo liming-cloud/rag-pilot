@@ -1,8 +1,7 @@
 package com.liming.rag.answering.application.insight;
 
-import com.liming.rag.ai.EmbeddingClient;
-import com.liming.rag.ai.ModelCallException;
 import com.liming.rag.answering.application.AnswerRecorded;
+import com.liming.rag.answering.application.ModelUnavailableException;
 import java.util.Map;
 import java.util.concurrent.Executor;
 import org.slf4j.Logger;
@@ -20,12 +19,12 @@ class QuestionVectorRecorder {
 
     private static final Logger log = LoggerFactory.getLogger(QuestionVectorRecorder.class);
 
-    private final EmbeddingClient embeddings;
+    private final QuestionEmbeddings embeddings;
     private final GapRecords gapRecords;
     private final Executor background;
 
     /** @param background Spring 管理的虚拟线程执行器（{@code applicationTaskExecutor}），停机时等正在跑的任务做完 */
-    QuestionVectorRecorder(EmbeddingClient embeddings, GapRecords gapRecords,
+    QuestionVectorRecorder(QuestionEmbeddings embeddings, GapRecords gapRecords,
             @Qualifier("applicationTaskExecutor") Executor background) {
         this.embeddings = embeddings;
         this.gapRecords = gapRecords;
@@ -36,9 +35,9 @@ class QuestionVectorRecorder {
     void on(AnswerRecorded event) {
         background.execute(() -> {
             try {
-                var vector = embeddings.embedQuestion(event.question());
+                var vector = embeddings.embed(event.question());
                 gapRecords.saveVectors(event.tenantId(), Map.of(event.answerId(), vector));
-            } catch (ModelCallException e) {
+            } catch (ModelUnavailableException e) {
                 log.warn("回答 {} 的问题向量没算成，知识缺口归类时再补：{}", event.answerId(), e.getMessage());
             }
         });

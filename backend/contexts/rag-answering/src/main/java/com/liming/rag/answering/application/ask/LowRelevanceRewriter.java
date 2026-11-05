@@ -1,6 +1,5 @@
 package com.liming.rag.answering.application.ask;
 
-import com.liming.rag.ai.QueryRewriting;
 import com.liming.rag.answering.domain.Question;
 import com.liming.rag.settings.api.IndustryPack;
 import com.liming.rag.answering.application.ask.Rewrite.Outcome;
@@ -13,8 +12,8 @@ import java.util.concurrent.TimeoutException;
 import org.springframework.core.task.AsyncTaskExecutor;
 
 /**
- * 把员工的问题改写成规范说法，供“低分时再检索一次”使用。改写规则（策略）在这里，模型调用经 rag-ai 的
- * {@link QueryRewriting}（内部是 Spring AI 的改写组件，输出限一句话，#145）。
+ * 把员工的问题改写成规范说法，供“低分时再检索一次”使用。改写规则（策略）在这里，模型调用经端口
+ * {@link QuestionRewriting}（输出限一句话，D-054）。
  *
  * <p>规则只写通用的，不针对任何评测题。超过时限就放弃。模型没给出有效改写（空、NO_ANSWER、太长、和原问题一样）时
  * 返回原问题。
@@ -30,13 +29,13 @@ final class LowRelevanceRewriter {
     record Result(String question, Outcome outcome, int outputChars, long modelMillis) {
     }
 
-    private final QueryRewriting rewriting;
+    private final QuestionRewriting rewriting;
     private final Duration timeout;
     private final String system;
     /** 每次改写在这里另起一个虚拟线程，超时后不再等它。 */
     private final AsyncTaskExecutor calls;
 
-    LowRelevanceRewriter(QueryRewriting rewriting, Duration timeout, IndustryPack pack, AsyncTaskExecutor calls) {
+    LowRelevanceRewriter(QuestionRewriting rewriting, Duration timeout, IndustryPack pack, AsyncTaskExecutor calls) {
         this.rewriting = rewriting;
         this.timeout = timeout;
         this.system = system(pack);

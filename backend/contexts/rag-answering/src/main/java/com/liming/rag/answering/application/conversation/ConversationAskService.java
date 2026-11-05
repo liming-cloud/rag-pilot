@@ -1,8 +1,7 @@
 package com.liming.rag.answering.application.conversation;
 
-import com.liming.rag.ai.TextGeneration;
-import com.liming.rag.ai.ModelCallException;
 import com.liming.rag.answering.application.AnsweringProperties;
+import com.liming.rag.answering.application.ModelUnavailableException;
 import com.liming.rag.answering.application.ask.AnswerPrompt;
 import com.liming.rag.answering.application.ask.AnswerService;
 import com.liming.rag.answering.application.ask.AskResult;
@@ -11,7 +10,6 @@ import com.liming.rag.answering.domain.Question;
 import com.liming.rag.answering.domain.RefusalReason;
 import com.liming.rag.shared.TenantId;
 import com.liming.rag.shared.UserId;
-import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
@@ -51,33 +49,31 @@ public class ConversationAskService {
             """;
     static final int MAX_TITLE_CHARS = 16;
 
-    private static final TextGeneration.Limits SMALL_TALK_LIMITS =
-            new TextGeneration.Limits(48, List.of("\n"), TextGeneration.Tier.LIGHT);
-    private static final TextGeneration.Limits TITLE_LIMITS =
-            new TextGeneration.Limits(32, List.of("\n"), TextGeneration.Tier.LIGHT);
+    private static final int SMALL_TALK_MAX_TOKENS = 48;
+    private static final int TITLE_MAX_TOKENS = 32;
     private static final Pattern DIGITS = Pattern.compile("\\d");
 
     private final ConversationService conversations;
     private final AskRateLimiter limiter;
     private final AnswerService answers;
-    private final TextGeneration chat;
+    private final LightReplies light;
     private final SearchPlanner planner;
     private final TurnStops stops;
     private final AnsweringProperties.Conversation settings;
     /** 标题在后台生成，不占回答的时间；停机时等它写完（#135）。 */
     private final AsyncTaskExecutor background;
 
-    ConversationAskService(ConversationService conversations, AnswerService answers, TextGeneration chat, TurnStops stops,
-            AskRateLimiter limiter, AnsweringProperties properties,
+    ConversationAskService(ConversationService conversations, AnswerService answers, LightReplies light,
+            FollowUpPlanning planning, TurnStops stops, AskRateLimiter limiter, AnsweringProperties properties,
             @Qualifier("applicationTaskExecutor") AsyncTaskExecutor background) {
         this.conversations = conversations;
         this.limiter = limiter;
         this.answers = answers;
-        this.chat = chat;
+        this.light = light;
         this.stops = stops;
         this.settings = properties.conversation();
         this.background = background;
-        this.planner = new SearchPlanner(chat, settings.planningTimeout(), background);
+        this.planner = new SearchPlanner(planning, settings.planningTimeout(), background);
     }
 
     /** 生成过程中的事件，交给流式接口转成 SSE。 */
@@ -100,14 +96,14 @@ public class ConversationAskService {
     /**
      * 生成并保存这一轮，返回最终结果。模型不可用时存为 FAILED 再抛出。
      *
-     * @throws ModelCallException 模型服务不可用
+     * @throws ModelUnavailableException 模型服务不可用
      */
     public ConversationViews.Turn run(PendingTurn pending, Events events) {
         try {
             AskResult answer;
             try {
                 answer = answer(pending, events);
-            } catch (ModelCallException e) {
+            } catch (ModelUnavailableException e) {
                 record(pending, ConversationTurn.Status.FAILED, null);
                 throw e;
             }
@@ -161,7 +157,7 @@ public class ConversationAskService {
     /** 寒暄用轻量模型回一句；太长、带数字或模型出错时用固定的一句，保证不含事实内容。 */
     private String smallTalk(String question) {
         try {
-            return acceptSmallTalk(chat.complete(SMALL_TALK_SYSTEM, question, SMALL_TALK_LIMITS));
+            return acceptSmallTalk(light.reply(SMALL_TALK_SYSTEM, question, SMALL_TALK_MAX_TOKENS));
         } catch (RuntimeException e) {
             LOG.debug("寒暄回复生成失败，用固定回复", e);
             return SMALL_TALK_FALLBACK;
@@ -191,7 +187,7 @@ public class ConversationAskService {
 
     private void generateTitle(PendingTurn pending) {
         try {
-            acceptTitle(chat.complete(TITLE_SYSTEM, pending.question(), TITLE_LIMITS)).ifPresent(title ->
+            acceptTitle(light.reply(TITLE_SYSTEM, pending.question(), TITLE_MAX_TOKENS)).ifPresent(title ->
                     conversations.applyGeneratedTitle(pending.tenantId(), pending.conversationId(), title));
         } catch (RuntimeException e) {
             // 标题生成失败不影响使用，保留问题截断。

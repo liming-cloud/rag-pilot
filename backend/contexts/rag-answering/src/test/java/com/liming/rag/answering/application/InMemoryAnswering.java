@@ -1,10 +1,9 @@
 package com.liming.rag.answering.application;
 
-import com.liming.rag.ai.EmbeddingClient;
-import com.liming.rag.ai.ModelCallException;
 import com.liming.rag.answering.application.insight.AnswerStatistics;
 import com.liming.rag.answering.application.insight.AnswerStatistics.RepeatCandidate;
 import com.liming.rag.answering.application.insight.GapRecords;
+import com.liming.rag.answering.application.insight.QuestionEmbeddings;
 import com.liming.rag.answering.application.insight.UsageStats;
 import com.liming.rag.answering.application.review.AnswerReview;
 import com.liming.rag.answering.application.review.AnswerReviews;
@@ -375,7 +374,7 @@ public final class InMemoryAnswering {
     }
 
     /** 嵌入模型：按测试给的“话题”生成向量，同一话题的问题向量相同；也可以模拟模型不可用。 */
-    public static final class Embeddings implements EmbeddingClient {
+    public static final class Embeddings implements QuestionEmbeddings {
 
         public final Map<String, float[]> topics = new LinkedHashMap<>();
         public boolean unavailable;
@@ -393,7 +392,7 @@ public final class InMemoryAnswering {
             calls++;
             embedded.addAll(texts);
             if (unavailable) {
-                throw new ModelCallException("嵌入模型不可用");
+                throw new ModelUnavailableException("嵌入模型不可用", new IllegalStateException());
             }
             return texts.stream().map(text -> topics.entrySet().stream()
                     .filter(entry -> text.contains(entry.getKey())).map(Map.Entry::getValue).findFirst()
