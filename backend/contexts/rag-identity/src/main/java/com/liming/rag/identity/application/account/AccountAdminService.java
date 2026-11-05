@@ -103,6 +103,7 @@ public class AccountAdminService {
         }
         access.rulesFor(actor).checkManageable(roles.rolesOf(account.id()));
         accounts.setEnabled(account.id(), enabled);
+        access.forget(account.id());
         audit(tenantId, actor, enabled ? "ACCOUNT_ENABLED" : "ACCOUNT_DISABLED", account,
                 (enabled ? "启用账号 " : "停用账号 ") + account.username());
         if (!enabled) {
@@ -120,6 +121,7 @@ public class AccountAdminService {
         var assigned = rolesIn(tenantId, roleIds);
         rules.checkAssignable(assigned);
         roles.setUserRoles(account.id(), assigned.stream().map(Role::id).toList());
+        access.forget(account.id());
         audit(tenantId, actor, "ACCOUNT_ROLES_CHANGED", account,
                 "账号 " + account.username() + " 的角色改为：" + names(assigned));
         return managed(account, assigned);
@@ -132,6 +134,7 @@ public class AccountAdminService {
         access.rulesFor(actor).checkManageable(roles.rolesOf(account.id()));
         PasswordRules.check(account.username(), password);
         accounts.setPassword(account.id(), passwords.hash(password), true);
+        access.forget(account.id());
         sessions.logoutAll(account.id());
         audit(tenantId, actor, "ACCOUNT_PASSWORD_RESET", account, "重置了账号 " + account.username() + " 的密码");
     }

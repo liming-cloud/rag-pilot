@@ -3,6 +3,7 @@ package com.liming.rag;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doAnswer;
 
 import com.liming.rag.ai.EmbeddingClient;
@@ -89,6 +90,10 @@ class ModelCallTransactionTests {
             inTransaction.add(TransactionSynchronizationManager.isActualTransactionActive());
             return invocation.callRealMethod();
         }).when(embeddings).embed(anyList());
+        doAnswer(invocation -> {
+            inTransaction.add(TransactionSynchronizationManager.isActualTransactionActive());
+            return invocation.callRealMethod();
+        }).when(embeddings).embedQuestion(anyString());
     }
 
     @Test

@@ -26,7 +26,7 @@
                 <artifactId>maven-enforcer-plugin</artifactId>
                 <executions>
                     <execution>
-                        <id>no-spring-ai-in-contexts</id>
+                        <id>no-framework-clients-in-contexts</id>
                         <goals>
                             <goal>enforce</goal>
                         </goals>
@@ -35,9 +35,13 @@
                                 <bannedDependencies>
                                     <excludes>
                                         <exclude>org.springframework.ai:*</exclude>
+                                        <exclude>org.redisson:*</exclude>
+                                        <exclude>org.springframework.data:spring-data-redis</exclude>
+                                        <exclude>io.lettuce:*</exclude>
+                                        <exclude>redis.clients:*</exclude>
                                     </excludes>
                                     <searchTransitive>true</searchTransitive>
-                                    <message>上下文不能依赖 Spring AI：AI 能力经平台层 rag-ai 的接口使用（AGENTS.md“框架选用”）。</message>
+                                    <message>上下文不能依赖 Spring AI 和 Redis 客户端：AI 能力经平台层 rag-ai、缓存经 rag-cache 的接口使用（AGENTS.md“框架选用”，D-053）。</message>
                                 </bannedDependencies>
                             </rules>
                         </configuration>

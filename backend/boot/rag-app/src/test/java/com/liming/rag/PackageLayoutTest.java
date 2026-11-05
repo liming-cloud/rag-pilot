@@ -36,7 +36,7 @@ import org.junit.jupiter.api.Test;
  * 目录结构与分层依赖，规范见 AGENTS.md“目录结构”。
  *
  * <p>上下文模块（identity、knowledge、answering、evaluation、settings）的类放在 api、web、application、domain、infrastructure 五个子包；
- * 平台层模块（shared、ai、persistence）扁平，对外只公开接口、record、枚举、异常和无实例的工具类。
+ * 平台层模块（shared、ai、persistence、cache）扁平，对外只公开接口、record、枚举、异常和无实例的工具类。
  */
 class PackageLayoutTest {
 
@@ -98,14 +98,15 @@ class PackageLayoutTest {
     };
 
     static final ArchRule TECH_MODULES_EXPOSE_CONTRACTS_ONLY = classes()
-            .that().resideInAnyPackage("com.liming.rag.ai..", "com.liming.rag.shared..", "com.liming.rag.persistence..")
+            .that().resideInAnyPackage("com.liming.rag.ai..", "com.liming.rag.shared..", "com.liming.rag.persistence..",
+                    "com.liming.rag.cache..")
             .and().arePublic()
             .and().areNotInterfaces()
             .and().areNotEnums()
             .and().areNotAssignableTo(Throwable.class)
             .and(not(PLATFORM_UTILITY))
             .should().beAssignableTo(Record.class)
-            .as("平台层模块（shared、ai、persistence）对外只公开接口、record、枚举、异常和无实例的工具类（D-053），实现类包内可见");
+            .as("平台层模块（shared、ai、persistence、cache）对外只公开接口、record、枚举、异常和无实例的工具类（D-053），实现类包内可见");
 
     static final List<ArchRule> RULES = List.of(CONTEXT_CLASSES_IN_LAYERS, DOMAIN_IS_PURE, DOMAIN_ONLY_IN_CORE,
             APPLICATION_NOT_ON_SA_TOKEN,

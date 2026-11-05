@@ -20,6 +20,14 @@ spring:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/rag}
     username: ${DB_USERNAME:rag}
     password: ${DB_PASSWORD:}
+  # 缓存和登录会话存在 Redis（D-053），客户端是 Redisson。缓存出错时读库；会话离不开它，Redis 不可用时不能登录。
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      timeout: 500ms
+      connect-timeout: 2s
   flyway:
     # 每个模块一个迁移目录；版本号统一用时间戳，避免目录之间版本冲突。
     locations:
@@ -31,7 +39,7 @@ spring:
 
 # MyBatis-Plus 的配置（Mapper XML 位置、分页插件）在平台组件 rag-persistence 里（D-053）。
 
-# 试点为单实例部署，会话存在内存里，应用重启后需要重新登录；多实例时改用 Redis 存储。
+# 会话经 Sa-Token 的 Redisson 插件存进 Redis（D-053，修订 D-005）：应用重启、升级后不用重新登录。
 sa-token:
   token-name: Authorization
   token-prefix: Bearer
@@ -67,6 +75,10 @@ management:
       show-details: never
 
 rag:
+  cache:
+    # 缓存键的前缀，和同一个 Redis 里 Sa-Token 的会话（Authorization:login:…）分开；Redis 出错后这段时间内直接读库。
+    prefix: rag:cache
+    retry-after: 30s
   ai:
     # 嵌入、重排、对话默认共用一个 OpenAI 兼容地址和密钥（硅基流动），见 DECISIONS.md。
     base-url: ${MODEL_BASE_URL:https://api.siliconflow.cn/v1}

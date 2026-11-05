@@ -52,7 +52,7 @@ class HybridSearchService implements KnowledgeSearch {
             return List.of();
         }
         int limit = Math.clamp(query.limit(), 1, MAX_LIMIT);
-        var vector = embeddings.embed(List.of(text)).getFirst();
+        var vector = embeddings.embedQuestion(text);
         var grantee = grantee(query.tenantId(), query.userId());
         // 未生效、已失效的文档不参与检索（D-046）；问答、追问、重新回答都经过这里。
         var today = calendar.today();

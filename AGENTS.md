@@ -40,9 +40,10 @@
 ## 约束
 
 - 权限过滤只在 rag-knowledge 的检索服务里写一处，禁止绕过。
-- 框架选用：上下文只依赖能力接口，不直接用第三方框架。只有一个上下文用的库放在它的 `infrastructure`（如 PDFBox、POI、Sa-Token 的会话和密码摘要），多个上下文要用的做成平台层的能力模块（如 rag-ai、rag-persistence）；Spring 全家（Boot、Web、Tx、Modulith）和 web 层的 Sa-Token 注解例外。
+- 框架选用：上下文只依赖能力接口，不直接用第三方框架。只有一个上下文用的库放在它的 `infrastructure`（如 PDFBox、POI、Sa-Token 的会话和密码摘要），多个上下文要用的做成平台层的能力模块（如 rag-ai、rag-persistence、rag-cache）；Spring 全家（Boot、Web、Tx、Modulith）和 web 层的 Sa-Token 注解例外。
 - AI 能力只经平台层的 rag-ai（Spring AI 防腐层，D-052）：按能力提供文字生成（一次性、流式）、问题改写、向量化、重排、连通测试，参数和返回值都是自己的类型，内部用足 Spring AI 并打开它自带的观测；提示词和判断规则是上下文的策略，不放进 rag-ai。上下文层用 Enforcer 禁止依赖 Spring AI，`ArchitectureRulesTest` 检查代码。各用途用哪个服务商和模型由 rag-settings 经 `ModelRouting` 提供（D-043、D-044）。服务商密钥用 AES-GCM 加密存库，主密钥只从环境变量 `RAG_MASTER_KEY` 读；环境变量里的密钥同样只从环境变量读；接口、日志都不返回密钥明文，界面只显示后 4 位。
 - DDD：聚合只在 knowledge、answering；上下文模块之间只用对方的 `api` 包或监听事件，依赖方向见下面的“上下文依赖”。
+- 缓存只经平台层的 rag-cache（D-053）：`Caches`、`TypedCache`、`CacheSpec`，Redis 客户端是 Redisson，只在 rag-cache 里（上下文层用 Enforcer 禁止依赖，`ArchitectureRulesTest` 检查代码）。缓存什么、何时清除由上下文决定：改了被缓存的数据，在同一个事务里调 `evict`/`clear`，提交后才清；不缓存可访问的知识库、检索结果和答案。单元测试用 `Caches.inMemory()`；集成测试绕过应用直接改库里被缓存的表时，调 `TestRedis.clearCaches`。
 - MyBatis-Plus 经平台组件 rag-persistence 引入，全局配置（Mapper XML 位置、分页插件）和分页转换 `Pages` 都在那里，上下文不自己声明 MyBatis-Plus（D-053）。它的 DO、Wrapper、Page 只出现在 infrastructure 包和 rag-persistence；查询结果映射到 infrastructure 里只有字段的 `XxxDO`，不用 `Map` 加强转（`bigint[]` 列在 `resultMap` 里指定 `ArrayTypeHandler`）；不引入 MapStruct，不做多层 DTO 转换。
 - SQL 只写在 Mapper XML（`src/main/resources/mapper/<模块名>/<Mapper 名>.xml`）里；不用 `@Select` 等 SQL 注解，条件构造器不拼原始 SQL（`apply`、`last`、`inSql`、`setSql` 等）；SQL 里不取数据库的当前时间（`now()` 等），时间由 `Clock` 传入。单表的增删改查、存在判断、计数和分页用 `BaseMapper` 加 `LambdaQueryWrapper`/`LambdaUpdateWrapper`，一张表一个 Mapper；XML 只写 upsert、多行插入、多表、聚合、递归和检索（D-053）。
 - 配置只通过各模块的 `@ConfigurationProperties` record 读取（如 `AnsweringProperties`），取值在构造时校验，非法配置启动失败；不用 `@Value`。
@@ -60,7 +61,7 @@
 
 ## 目录结构
 
-后端按类型分三层聚合（D-052）：`backend/platform`（平台层：rag-shared、rag-ai、rag-persistence）、`backend/contexts`（上下文层：五个上下文）、`backend/boot`（启动层：rag-app）。每个 Maven 模块 `rag-<名>` 对应根包 `com.liming.rag.<名>`：
+后端按类型分三层聚合（D-052）：`backend/platform`（平台层：rag-shared、rag-ai、rag-persistence、rag-cache）、`backend/contexts`（上下文层：五个上下文）、`backend/boot`（启动层：rag-app）。每个 Maven 模块 `rag-<名>` 对应根包 `com.liming.rag.<名>`：
 
 - **上下文模块**（identity、knowledge、answering、evaluation、settings）：根包只放 `package-info.java`，类只能在五个子包里：
   - `api`：对其他模块公开的合同（接口、record、枚举、事件），不暴露模块内部类型；
@@ -73,11 +74,11 @@
   - 保持内部：只作外层方法参数或返回值、由调用方构造的类型（`Upload`、`NewTurn`、`AskRequest`）、聚合自己的状态枚举和异常、测试替身；
   - 自动检查：web 不读取 application 里 `Service` 的内部类型（只 new 出来当参数的除外，`ArchitectureRulesTest`）。
 - **依赖方向**：`domain` 只依赖 JDK（含 JSpecify 空值注解）、rag-shared 和本模块的 `domain`、`api`；`application` 不依赖 `infrastructure`、`web`；`web` 不依赖 `infrastructure`、`domain`（展示用 application 的查询结果 record）；`api` 不依赖本模块其他子包。
-- **上下文依赖**：identity 不依赖其他上下文；settings 依赖 identity；knowledge 依赖 identity、settings；answering 依赖 identity、knowledge、settings；evaluation 不依赖其他上下文。平台层的 shared、ai 都可以用（evaluation 经 ai 调评判模型），ai 不依赖上下文。各上下文在根包 `package-info.java` 的 `allowedDependencies` 里声明，`ModularityTests` 检查。上游要用到下游的东西时（如权限点清单），由上游在 `api` 里定义接口、下游实现，不反向依赖。
+- **上下文依赖**：identity 不依赖其他上下文；settings 依赖 identity；knowledge 依赖 identity、settings；answering 依赖 identity、knowledge、settings；evaluation 不依赖其他上下文。平台层的 shared、ai、persistence、cache 都可以用（evaluation 经 ai 调评判模型），平台层不依赖上下文。各上下文在根包 `package-info.java` 的 `allowedDependencies` 里声明，`ModularityTests` 检查。上游要用到下游的东西时（如权限点清单），由上游在 `api` 里定义接口、下游实现，不反向依赖。
 - **输入**：web 只转交原始值（路径、查询参数和请求体里的字符串、数字），application 解析成枚举或值对象，不合规时抛本模块的业务异常；每个模块的解析写在一处。
 - **租户**：单租户部署，`TenantId` 为以后多租户预留；哪些端口和设置不分租户见 D-051。
 - **共享内核与通用工具**（rag-shared）：只放多个上下文共同依赖、用纯 Java 表达、很少变动的东西——模型概念（租户和用户标识、错误分类 `ErrorKind` 与 `BusinessException`、聚合根标记 `AggregateRoot`）和通用工具（分页 `Paged`、空串处理 `Texts`、枚举解析 `Enums`，D-053）；只有一个上下文用的工具留在该上下文。只依赖 JDK（空值注解 JSpecify 除外），没有资源文件（迁移、配置归各自模块），不放业务规则；当前用户、权限码、各上下文自己的标识不放这里。新增类型前先在 DECISIONS.md 记录理由（D-034、D-053）。
-- **平台层模块**（shared、ai）扁平：对外只公开接口、record、枚举和异常，实现类包内可见（shared 的通用工具是 final、私有构造、只有静态成员的工具类，D-053）；rag-app 只放启动类和全局配置（含唯一的异常出口 `ApiExceptionHandler`）。
+- **平台层模块**（shared、ai、persistence、cache）扁平：对外只公开接口、record、枚举和异常，实现类包内可见（shared 的通用工具是 final、私有构造、只有静态成员的工具类，D-053）；rag-app 只放启动类和全局配置（含唯一的异常出口 `ApiExceptionHandler`）。
 - **聚合**：聚合根实现 `AggregateRoot`，只在 knowledge、answering 的 `domain` 包；`domain` 里的 `XxxRepository` 只为同包的聚合根 `Xxx` 而建。
 - **错误**：业务失败抛本模块继承 `BusinessException` 的异常（错误码 `<模块>_<原因>`，说明是给用户看的中文，不含内部信息）；领域对象检查不变量时抛的 `IllegalArgumentException` 由 application 转成业务异常。模块不写 `@RestControllerAdvice`，统一由 `ApiExceptionHandler` 转成带 `code` 的问题详情。
 - **资源**：Flyway 迁移在 `db/migration/<模块名>/`，Mapper XML 在 `mapper/<模块名>/`。单元测试与被测类同包；跨模块的集成测试放在 rag-app。

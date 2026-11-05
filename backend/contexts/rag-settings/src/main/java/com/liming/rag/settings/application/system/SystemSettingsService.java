@@ -11,6 +11,9 @@ import com.liming.rag.settings.application.pack.IndustryPackFile;
 import com.liming.rag.settings.application.SettingsException;
 import com.liming.rag.settings.application.SettingsProperties;
 
+import com.liming.rag.cache.CacheSpec;
+import com.liming.rag.cache.Caches;
+import com.liming.rag.cache.TypedCache;
 import com.liming.rag.identity.api.AuditTrail;
 import com.liming.rag.identity.api.UserDirectory;
 import com.liming.rag.settings.api.AnsweringSettings;
@@ -19,23 +22,34 @@ import com.liming.rag.settings.api.StatsZone;
 import com.liming.rag.shared.TenantId;
 import com.liming.rag.shared.UserId;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
  * 系统设置（D-045）：行业包启动时读一次；能在界面改的项保存后以界面为准，没保存过时品牌用部署配置、其余用行业包，
- * 都没有时用内核默认值。每次读都查一次库，保存后不用重启。同时给问答提供行业包、拒答话术和统计时区。
+ * 都没有时用内核默认值。界面保存的值整份缓存（D-053），保存、恢复后在提交后清除，不用重启。同时给问答提供行业包、
+ * 拒答话术和统计时区。
  */
 @Service
 public class SystemSettingsService implements AnsweringSettings, StatsZone {
 
     private record Fallback(List<String> value, SettingSource source) {
     }
+
+    /** 缓存里的界面保存值；过期时间只是兜底，以清除为准。 */
+    record SavedSettings(List<SystemSettingsStore.Saved> items) {
+    }
+
+    static final CacheSpec<SavedSettings> SETTINGS = new CacheSpec<>("settings", SavedSettings.class, Duration.ofHours(1));
+    private static final String ALL = "all";
 
     private final SystemSettingsStore store;
     private final AuditTrail audit;
@@ -45,9 +59,10 @@ public class SystemSettingsService implements AnsweringSettings, StatsZone {
     private final SettingsProperties.Branding branding;
     private final ZoneId statsZone;
     private final Clock clock;
+    private final TypedCache<SavedSettings> cache;
 
     SystemSettingsService(SystemSettingsStore store, UserDirectory users, SettingsProperties properties, Clock clock,
-            AuditTrail audit) {
+            AuditTrail audit, Caches caches) {
         this.audit = audit;
         this.store = store;
         this.users = users;
@@ -56,6 +71,7 @@ public class SystemSettingsService implements AnsweringSettings, StatsZone {
         this.branding = properties.branding();
         this.statsZone = ZoneId.of(properties.statsZone());
         this.clock = clock;
+        this.cache = caches.cache(SETTINGS);
     }
 
     @Override
@@ -64,9 +80,8 @@ public class SystemSettingsService implements AnsweringSettings, StatsZone {
     }
 
     @Override
-    @Transactional(readOnly = true)
     public String refusalMessage() {
-        return text(store.all(), SettingKey.REFUSAL_MESSAGE);
+        return text(saved(), SettingKey.REFUSAL_MESSAGE);
     }
 
     @Override
@@ -74,23 +89,20 @@ public class SystemSettingsService implements AnsweringSettings, StatsZone {
         return statsZone;
     }
 
-    @Transactional(readOnly = true)
     public SettingsOverview overview() {
-        var saved = store.all();
+        var saved = saved();
         return new SettingsOverview(pack, statsZone.getId(),
                 Arrays.stream(SettingKey.values()).map(key -> item(saved, key)).toList());
     }
 
-    @Transactional(readOnly = true)
     public BrandingInfo branding() {
-        var saved = store.all();
+        var saved = saved();
         return new BrandingInfo(text(saved, SettingKey.BRAND_NAME), text(saved, SettingKey.BRAND_TAGLINE),
                 text(saved, SettingKey.LOGIN_HINT));
     }
 
-    @Transactional(readOnly = true)
     public ChatTexts chatTexts() {
-        var saved = store.all();
+        var saved = saved();
         return new ChatTexts(text(saved, SettingKey.CHAT_PLACEHOLDER), text(saved, SettingKey.CHAT_EMPTY_HINT),
                 item(saved, SettingKey.SUGGESTED_QUESTIONS).value());
     }
@@ -114,6 +126,7 @@ public class SystemSettingsService implements AnsweringSettings, StatsZone {
         store.save(key, stripped, actor.value(), SettingsInputs.actorName(users, tenantId, actor), OffsetDateTime.now(clock));
         audit.record(tenantId, actor, "SETTING_CHANGED", "SETTING", key.name(),
                 "修改系统设置 " + key.name() + "：" + String.join(" / ", stripped));
+        cache.evict(ALL);
         return item(store.all(), key);
     }
 
@@ -125,8 +138,16 @@ public class SystemSettingsService implements AnsweringSettings, StatsZone {
 
     SettingItem restore(TenantId tenantId, UserId actor, SettingKey key) {
         store.delete(key);
+        cache.evict(ALL);
         audit.record(tenantId, actor, "SETTING_RESTORED", "SETTING", key.name(), "系统设置 " + key.name() + " 恢复为默认值");
         return item(store.all(), key);
+    }
+
+    /** 界面保存过的值，读缓存；一条语句读出，不用开事务。 */
+    private Map<SettingKey, SystemSettingsStore.Saved> saved() {
+        var cached = cache.get(ALL, () -> new SavedSettings(List.copyOf(store.all().values())));
+        return cached == null ? store.all() : cached.items().stream()
+                .collect(Collectors.toMap(SystemSettingsStore.Saved::key, Function.identity()));
     }
 
     private SettingItem item(Map<SettingKey, SystemSettingsStore.Saved> saved, SettingKey key) {

@@ -41,6 +41,11 @@
             <groupId>${project.groupId}</groupId>
             <artifactId>rag-persistence</artifactId>
         </dependency>
+        <!-- 系统设置、模型路由缓存经平台组件 rag-cache（D-053），看不到 Redis。 -->
+        <dependency>
+            <groupId>${project.groupId}</groupId>
+            <artifactId>rag-cache</artifactId>
+        </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>

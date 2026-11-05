@@ -61,6 +61,9 @@ class ModelSettingsTests {
     @Autowired
     private JdbcTemplate jdbc;
 
+    @Autowired
+    private org.redisson.api.RedissonClient redis;
+
     @DynamicPropertySource
     static void providers(DynamicPropertyRegistry registry) {
         registry.add("rag.ai.base-url", () -> fakeUrl("env"));
@@ -122,6 +125,17 @@ class ModelSettingsTests {
         assertThat(lastRerank()).startsWith("/db/v1/rerank").contains("db-reranker");
         assertThat(get("/api/models/changes")).containsEntry("total", 3);
 
+        // 路由缓存在 Redis 里（D-053），只存密文：扫遍 Redis 的键和值都没有密钥明文。
+        assertThat(redisDump()).contains("rag:cache:model-routes:RERANK").doesNotContain(PROVIDER_KEY)
+                .doesNotContain("sk-env-key");
+        // 改了服务商的密钥，下一次问答就带新密钥（提交后清除路由缓存）。
+        assertThat(send(HttpMethod.PATCH, "/api/model-providers/" + providerId,
+                Map.of("name", "测试服务商", "baseUrl", fakeUrl("db"), "apiKey", "sk-rotated-secret-77aa"))
+                .getStatusCode()).isEqualTo(HttpStatus.OK);
+        ask(kb);
+        assertThat(lastRerank()).startsWith("/db/v1/rerank Bearer sk-rotated-secret-77aa");
+        assertThat(redisDump()).doesNotContain("sk-rotated-secret-77aa");
+
         assertThat(send(HttpMethod.DELETE, "/api/model-providers/" + providerId, null).getStatusCode())
                 .as("还在用的服务商不能删").isEqualTo(HttpStatus.CONFLICT);
     }
@@ -145,6 +159,19 @@ class ModelSettingsTests {
                 List.class);
         assertThat(models.getBody()).containsExactly("db-reranker", "other-model");
         assertThat(lastRequestTo("/db/v1/models")).contains("Bearer " + PROVIDER_KEY);
+    }
+
+    /** Redis 里全部的键和字符串值，用来查有没有密钥明文。 */
+    private String redisDump() {
+        var dump = new StringBuilder();
+        for (var key : redis.getKeys().getKeys()) {
+            dump.append(key).append('=');
+            if (redis.getKeys().getType(key) == org.redisson.api.RType.OBJECT) {
+                dump.append(redis.<String>getBucket(key, org.redisson.client.codec.StringCodec.INSTANCE).get());
+            }
+            dump.append('\n');
+        }
+        return dump.toString();
     }
 
     private void ask(long kb) {

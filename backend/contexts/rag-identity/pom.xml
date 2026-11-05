@@ -33,6 +33,11 @@
             <groupId>${project.groupId}</groupId>
             <artifactId>rag-persistence</artifactId>
         </dependency>
+        <!-- 账号权限缓存经平台组件 rag-cache（D-053），看不到 Redis。 -->
+        <dependency>
+            <groupId>${project.groupId}</groupId>
+            <artifactId>rag-cache</artifactId>
+        </dependency>
         <!-- 登录会话、角色注解、BCrypt 都来自 Sa-Token；其他模块经由本模块传递依赖使用注解。 -->
         <dependency>
             <groupId>cn.dev33</groupId>

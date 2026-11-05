@@ -19,5 +19,6 @@
         <module>rag-shared</module>
         <module>rag-ai</module>
         <module>rag-persistence</module>
+        <module>rag-cache</module>
     </modules>
 </project>

@@ -26,6 +26,7 @@
         <spring-modulith.version>2.1.2</spring-modulith.version>
         <mybatis-plus.version>3.5.18</mybatis-plus.version>
         <sa-token.version>1.45.0</sa-token.version>
+        <redisson.version>4.8.0</redisson.version>
         <pdfbox.version>3.0.7</pdfbox.version>
         <poi.version>6.0.0</poi.version>
         <!-- 与 spring-modulith-core 2.1.0 自带的版本一致，见 DECISIONS.md D-031。 -->
@@ -83,6 +84,22 @@
                 <artifactId>sa-token-spring-boot4-starter</artifactId>
                 <version>${sa-token.version}</version>
             </dependency>
+            <!-- 会话存进 Redis（D-053），经 Redisson。 -->
+            <dependency>
+                <groupId>cn.dev33</groupId>
+                <artifactId>sa-token-redisson-spring-boot-starter</artifactId>
+                <version>${sa-token.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.redisson</groupId>
+                <artifactId>redisson</artifactId>
+                <version>${redisson.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.redisson</groupId>
+                <artifactId>redisson-spring-boot-starter</artifactId>
+                <version>${redisson.version}</version>
+            </dependency>
             <dependency>
                 <groupId>org.apache.pdfbox</groupId>
                 <artifactId>pdfbox</artifactId>
@@ -106,6 +123,11 @@
             <dependency>
                 <groupId>${project.groupId}</groupId>
                 <artifactId>rag-persistence</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>${project.groupId}</groupId>
+                <artifactId>rag-cache</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>

@@ -10,6 +10,9 @@ version="$(package_version)"
 current="$(running_version)"
 [ -n "$current" ] || die "没有检测到正在运行的版本（$APP_URL/actuator/info），全新安装请按 README.md 的“安装”"
 [ "$current" != "$version" ] || die "正在运行的已经是版本 $version"
+# 从带 Redis 的版本起（D-053）.env 要多一项：从旧版本复制来的 .env 里没有时先补上。
+[ -n "$(setting REDIS_PASSWORD)" ] && [ "$(setting REDIS_PASSWORD)" != "change-me" ] \
+  || die "请在 .env 里加上 REDIS_PASSWORD（新版本用 Redis 存缓存和登录会话，见 .env.example），再运行升级"
 info "构建版本 $version 的镜像，构建期间旧版本照常服务"
 "$DEPLOY_DIR/build.sh"
 

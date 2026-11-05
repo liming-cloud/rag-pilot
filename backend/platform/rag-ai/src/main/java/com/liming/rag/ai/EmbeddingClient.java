@@ -15,4 +15,13 @@ public interface EmbeddingClient {
      * @throws ModelCallException 当模型服务不可用或返回的向量维度不对时
      */
     List<float[]> embed(List<String> texts);
+
+    /**
+     * 一个问题的向量。同一个问题检索时、记回答时各要一次，生产实现按模型名和问题缓存（D-053），只调一次模型。
+     *
+     * @throws ModelCallException 同 {@link #embed(List)}
+     */
+    default float[] embedQuestion(String question) {
+        return embed(List.of(question)).getFirst();
+    }
 }

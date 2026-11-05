@@ -108,6 +108,7 @@ public class AuthService {
         }
         PasswordRules.check(account.username(), newPassword);
         accounts.setPassword(account.id(), passwords.hash(newPassword), false);
+        access.forget(account.id());
     }
 
     private Account current() {

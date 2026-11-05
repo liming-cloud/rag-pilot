@@ -42,10 +42,14 @@ class SystemSettingsTests {
     @Autowired
     private JdbcTemplate jdbc;
 
+    @Autowired
+    private org.redisson.api.RedissonClient redis;
+
     @BeforeEach
     void signIn() {
         TestLogin.asAdmin(http);
         jdbc.update("DELETE FROM system_setting");
+        TestRedis.clearCaches(redis);
     }
 
     @Test

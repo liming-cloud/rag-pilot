@@ -2,7 +2,8 @@
 # 部署验证的 CI 场景（D-048、#138），由 .github/workflows/deploy.yml 调用。全部用发布包和部署脚本完成，与客户现场的步骤一致：
 # 镜像由 build.sh 在本机构建；模型用本地确定性实现。
 #   ./deploy-scenarios.sh <新版本号> [上一版本的 Release 附件目录]
-# 场景：(a) 全新安装（没有上一版本时）或从上一版本升级；(b) 停服务备份 → 删卷 → 恢复；
+# 场景：(a) 全新安装（没有上一版本时）或从上一版本升级，之后重启 app，登录会话仍有效（会话在 Redis，D-053）；
+#       (b) 停服务备份 → 删卷 → 恢复；
 #       (c) 升级到一个迁移会失败的版本：升级脚本停下并提示回退，用升级前的备份回退后系统正常。
 set -euo pipefail
 
@@ -14,6 +15,7 @@ export RAG_BACKUP_DIR="$work/backups"
 env_file() {
   cat > "$1/.env" <<'EOF'
 DB_PASSWORD=ci-db-password
+REDIS_PASSWORD=ci-redis-password
 MODEL_API_KEY=ci
 RAG_EMBEDDING_PROVIDER=hashing
 RAG_RERANK_PROVIDER=lexical
@@ -51,6 +53,20 @@ else
   title "(a) 全新安装 $version（没有上一版本，跳过升级）"
   "$current/install.sh"
 fi
+
+title "(a) 重启 app 后登录会话仍有效"
+app_url="http://127.0.0.1:8080"
+token="$(curl -fsS --max-time 10 -H 'Content-Type: application/json' \
+  -d '{"username":"admin","password":"ci-admin-password"}' "$app_url/api/auth/login" | grep -o '"token":"[^"]*"' | cut -d'"' -f4)"
+[ -n "$token" ] || { echo "登录失败" >&2; exit 1; }
+(cd "$current" && docker compose -f compose.yml --env-file .env --env-file release.env restart app)
+for _ in $(seq 60); do
+  curl -fsS --max-time 5 "$app_url/actuator/health" 2>/dev/null | grep -q '"status":"UP"' && break
+  sleep 5
+done
+status="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 10 -H "Authorization: Bearer $token" "$app_url/api/auth/me")"
+[ "$status" = "200" ] || { echo "重启 app 后会话失效了（HTTP $status）" >&2; exit 1; }
+echo "重启后同一个令牌仍能访问 /api/auth/me"
 
 title "(b) 停服务备份 → 删卷 → 恢复"
 backup="$("$current/backup.sh" | tail -n 1)"

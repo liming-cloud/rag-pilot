@@ -1,5 +1,6 @@
 package com.liming.rag.identity.application.account;
 
+import com.liming.rag.identity.application.role.AccessService;
 import com.liming.rag.identity.application.role.Role;
 import com.liming.rag.identity.application.role.Roles;
 import com.liming.rag.identity.application.role.RoleService;
@@ -33,14 +34,16 @@ class AdminBootstrap implements ApplicationRunner {
     private final IdentityProperties.Admin admin;
     private final Sessions sessions;
     private final PasswordHasher passwords;
+    private final AccessService access;
 
     AdminBootstrap(Accounts accounts, Roles roles, RoleService roleService, IdentityProperties properties,
-            Sessions sessions, PasswordHasher passwords) {
+            Sessions sessions, PasswordHasher passwords, AccessService access) {
         this.accounts = accounts;
         this.roles = roles;
         this.roleService = roleService;
         this.sessions = sessions;
         this.passwords = passwords;
+        this.access = access;
         this.tenant = new TenantId(properties.admin().tenantId());
         this.admin = properties.admin();
     }
@@ -79,6 +82,7 @@ class AdminBootstrap implements ApplicationRunner {
         PasswordRules.check(account.username(), admin.resetPassword());
         accounts.setPassword(account.id(), passwords.hash(admin.resetPassword()), false);
         accounts.setEnabled(account.id(), true);
+        access.forget(account.id());
         sessions.logoutAll(account.id());
         log.warn("已按 RAG_ADMIN_RESET_PASSWORD 重置超级管理员 {} 的密码并解锁；请删掉这个环境变量后重启",
                 account.username());

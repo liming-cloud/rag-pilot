@@ -18,10 +18,13 @@ public class ModelProviderService {
 
     private final ModelSettingsStore store;
     private final KeyCipher cipher;
+    private final ModelSettingsService routing;
 
-    ModelProviderService(ModelSettingsStore store, KeyCipher cipher) {
+    /** @param routing 改或删服务商后由它清除路由缓存 */
+    ModelProviderService(ModelSettingsStore store, KeyCipher cipher, ModelSettingsService routing) {
         this.store = store;
         this.cipher = cipher;
+        this.routing = routing;
     }
 
     @Transactional
@@ -49,6 +52,7 @@ public class ModelProviderService {
                 key == null ? existing.apiKeyLast4() : last4(key));
         try {
             store.updateProvider(updated);
+            routing.forgetRoutes();
         } catch (DuplicateKeyException e) {
             throw nameTaken(updated.name());
         }
@@ -62,6 +66,7 @@ public class ModelProviderService {
             throw new SettingsException(SettingsException.Reason.CONFLICT, "还有用途在用这个服务商，先换掉才能删除");
         }
         store.deleteProvider(id);
+        routing.forgetRoutes();
     }
 
     /** 在界面配置成用这个服务商的用途；没在界面配置过的用途用环境变量，不算。 */

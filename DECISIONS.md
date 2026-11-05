@@ -22,6 +22,8 @@ JDK 25 LTS、Spring Boot 4.1.0、Spring AI 2.0.0、Spring Modulith 2.1.0、MyBat
 
 试点单实例部署，会话存在内存，应用重启后需要重新登录。需要多实例时改用 Redis 和 `sa-token-redis-template`。
 
+（已由 D-053 修订：会话经 Redisson 存进 Redis。）
+
 ## D-006 迁移版本号用时间戳（2026-10-25）
 
 每个模块一个迁移目录，版本号统一 `yyyyMMddNNNN`，避免多个目录之间版本冲突。
@@ -199,7 +201,7 @@ Compose 增加 web 服务（`deploy/web.Dockerfile`）：Node 24 构建前端，
 
 ## D-041 RBAC 的后端实现：内置角色按租户、权限每次读库、检索过滤仍只有一处（2026-10-30）
 
-#115 后端按 D-038、D-039 实现时的具体做法：
+#115 后端按 D-038、D-039 实现时的具体做法（“权限每次读库”“各上下文各有一个 `Paged`”已由 D-053 修订）：
 
 - **角色与超级管理员**：角色按租户存（`app_role`），内置角色用 `builtin` 列标出，启动时补齐配置租户缺的内置角色。超级管理员就是持有内置“超级管理员”角色的账号，接口不能分配这个角色，所以全系统只有初始化时建的那一个；它的权限由代码给出（清单里的全部权限点），不存表。迁移按 D-038 的规则把旧 `role` 列换成角色后删掉该列。
 - **权限判定**：`StpInterface` 每次校验都读库，停用、改角色、改角色权限立即生效。停用的账号和“必须先改密码”的账号没有任何权限点，只能调 `/api/auth` 下只要求登录的接口（当前用户、改密码、退出），这样强制改密在后端也成立，不只靠前端跳转。
@@ -362,10 +364,15 @@ Compose 增加 web 服务（`deploy/web.Dockerfile`）：Node 24 构建前端，
 
 #145 第 9 步，人追加并答复。本条按实施逐步补充。
 
-- **缓存做成平台组件 `rag-cache`**（人答复：用 Redis，把缓存能力发布出来）：做法同 rag-ai（D-052），对外只有 `Caches`、`TypedCache`、`CacheSpec` 等接口和 record，Spring Data Redis 在里面声明为 optional，上下文层用 Enforcer 禁止依赖、`ArchitectureRulesTest` 禁止引用。机制都在平台里：值存 JSON，读不到时加载再写入，在事务里清除的等提交后再清，Redis 出错或超时记 `event=cache_failure` 后直接读库，缓存不是问答的硬依赖。
-- **缓存什么**：模型用途和服务商（只存密文，解密仍在进程内）、系统设置、账号的权限点和所属角色、问题向量（键含模型名）。不缓存可访问的知识库和检索结果（检索过滤只在 `ChunkSearchMapper` 一处，授权变更立即生效），也不缓存答案（要可追溯，权限随时会变）。
+- **缓存做成平台组件 `rag-cache`**（人答复：用 Redis，把缓存能力发布出来；客户端用 Redisson）：做法同 rag-ai（D-052），对外只有 `Caches`、`TypedCache`、`CacheSpec` 和单元测试用的 `Caches.inMemory()`。Redisson 在里面声明为 optional，由 rag-app 带上 `redisson-spring-boot-starter`（4.8.0，按 Spring Boot 4.1 构建，按 `spring.data.redis.*` 建 `RedissonClient`）；上下文层用 Enforcer 禁止依赖 Redisson、Spring Data Redis、Lettuce、Jedis，`ArchitectureRulesTest` 禁止引用（违规样例 `UsesRedissonDirectly`）。机制都在平台里：
+  - 键是 `rag:cache:<缓存名>:<键>`，值存 JSON；读不到时加载再写入，加载结果为 null 不缓存；读回的 JSON 解析不了（升级后 record 改了字段）按没有缓存处理。
+  - 在事务里清除的等提交后再清，回滚不清。剩下一个窄窗口：别的请求在提交前读到旧值、在清除之后才写回缓存。过期时间（权限、设置、路由 1 小时，问题向量 1 天）兜底，不加分布式锁。
+  - Redis 出错或超时（命令超时 500ms）记 `event=cache_failure`，读直接走加载，之后 `rag.cache.retry-after`（30 秒）内不再访问 Redis，免得每次都等超时；出错期间的清除可能没做成，所以恢复后第一次访问前先清掉 `rag:cache:` 下的全部键。启动后第一次访问前也清一次：升级时的迁移、停机期间的改动都可能让留在 Redis 里的值过时。缓存不是问答的硬依赖（`CacheOutageTests`）。
+  - 指标 `rag.cache.gets`（标签 `cache`、`result`=hit/miss/error）。
+  - Redisson 在启动时就连 Redis，Redis 不在时应用起不来；Compose 里 app 等 redis 健康检查通过再启动。
+- **缓存什么**：模型用途和服务商（`model-routes`，按用途一份，服务商的密钥只存密文，解密仍在进程内；保存用途、改或删服务商后清全部）、系统设置（`settings`，界面保存值整份一条，保存或恢复后清）、账号的权限点和所属角色（`access`，按账号一份）、问题向量（`question-vectors`，在 rag-ai 的 `EmbeddingClient.embedQuestion` 里，键是模型名和问题的 SHA-256，Redis 里没有问题原文；检索和回答记下后补存向量共用，同一问题只调一次嵌入模型；批量向量化不缓存）。读这些不再开只读事务。不缓存可访问的知识库和检索结果（检索过滤只在 `ChunkSearchMapper` 一处，授权变更立即生效），也不缓存答案（要可追溯，权限随时会变）。
 - **权限缓存**（人答复：缓存，变更时按事件清除；修订 D-041 的“权限每次读库”）：改角色权限点、分配角色、启停、重置或修改密码、删除账号或角色后，在提交后清除对应缓存，下一个请求就按新权限判定，“立即生效”不变。
-- **会话存进 Redis**（人答复；修订 D-005 的“会话存在内存”）：用 Sa-Token 的 Redis 存储，应用重启、升级后不用重新登录。Redis 不可用时无法登录、已登录的请求被拒绝，这是会话存储决定的，不降级；运维手册写明。备份恢复不含 Redis，恢复后要重新登录。
+- **会话存进 Redis**（人答复；修订 D-005 的“会话存在内存”）：用 Sa-Token 的 Redisson 插件（`sa-token-redisson-spring-boot-starter`），和缓存共用一个 `RedissonClient`，键以 token-name 开头（`Authorization:login:…`），应用重启、升级后不用重新登录（部署验证里重启 app 后用同一个令牌访问）。Redis 不可用时无法登录、已登录的请求被拒绝，这是会话存储决定的，不降级；运维手册写明。备份恢复不含 Redis，恢复后要重新登录。Compose 的 redis 带密码、只在内部网络、开 AOF（重启 Redis 后会话还在）、内存上限 256MB 按 `volatile-lru` 淘汰，镜像按摘要锁定、在宿主机上拉（同数据库镜像，D-050）。集成测试由 `TestRedis` 给每个 Spring 上下文各起一个带密码的 Redis，各测试类的缓存和会话不串。
 - **Sa-Token 不做成平台组件**（人要求评估）：按框架选用原则（D-052），Sa-Token 的核心（会话、权限来源、密码摘要）只在 identity 的 `infrastructure/security` 和 rag-app 的全局配置里，其他上下文只在 web 层用两个注解，已是原则里的例外。Spring AI 当时被三个上下文直接用到深层类型、又有不兼容升级，才需要防腐层；Sa-Token 没有这些问题。做成平台组件要由平台层定义“当前用户、权限点”的端口再由 identity 实现，认证就分在两处，还要自己写一套注解和拦截器。以后要换认证框架时，再由 identity 的 `api` 提供自己的注解（记进 ROADMAP 待办）。
 - **rag-shared 放共享内核和通用工具**（人答复；修订 D-034 的“只放模型概念”和 D-041 的“各上下文各有一个 `Paged`”）：`Paged`、空串处理、枚举解析等多个上下文共同用到的工具放进 rag-shared。边界仍是只依赖 JDK（和 JSpecify 的空值注解）、没有资源文件、不放业务规则。
 - **单表 CRUD 用 MyBatis-Plus**：单表的按主键增删改查、存在判断、条件计数、列表和分页改用 `BaseMapper` 加 Lambda 条件，一张表一个 Mapper（角色、角色权限点、账号角色，两张授权表，会话和轮次，回答记录和引用各自拆开），主键是多列的表不标 `@TableId`。XML 只留 upsert（`ON CONFLICT`）、一条语句插入多行（`<foreach>`；MyBatis-Plus 的 `insert(Collection)` 用 BATCH 执行器，在已开的事务里和 SIMPLE 执行器冲突）、多表、聚合、递归、取序列和检索，语句数从 81 条降到 42 条。`bigint[]` 列在 DO 上用 `@TableField(typeHandler = ArrayTypeHandler.class)`，更新时在 `set` 上带同样的 `typeHandler`。会话的乐观锁照旧按版本号判断（`set version = 旧值 + 1 … where version = 旧值`），不引入 `OptimisticLockerInnerInterceptor`。XML 里的 4 处 `now()` 改为由 `Clock` 传入（服务商的更新时间、回答的处理时间和评价时间），`MapperXmlLayoutTest` 检查，补违规样例。

@@ -93,6 +93,7 @@ public class RoleService {
         var updated = new Role(role.id(), tenantId, newName, role.builtIn(), granted);
         try {
             roles.update(updated);
+            access.forgetAll();
         } catch (DuplicateKeyException e) {
             throw nameTaken(newName);
         }

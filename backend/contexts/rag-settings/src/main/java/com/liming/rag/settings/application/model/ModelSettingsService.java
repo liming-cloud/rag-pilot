@@ -9,11 +9,15 @@ import com.liming.rag.ai.ModelProbe;
 import com.liming.rag.ai.ModelRoute;
 import com.liming.rag.ai.ModelRouting;
 import com.liming.rag.ai.ModelUsage;
+import com.liming.rag.cache.CacheSpec;
+import com.liming.rag.cache.Caches;
+import com.liming.rag.cache.TypedCache;
 import com.liming.rag.identity.api.UserDirectory;
 import com.liming.rag.shared.TenantId;
 import com.liming.rag.shared.UserId;
 import java.net.URI;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -26,8 +30,9 @@ import org.springframework.transaction.support.TransactionOperations;
 
 /**
  * 模型管理（D-043）：各用途用哪个服务商和模型、服务商、变更记录。保存和恢复前都先测连通，不通不保存；
- * 同时是 rag-ai 的 {@link ModelRouting}：每次模型调用前都读一次，保存后下一次请求就生效，不用重启。
- * 没在界面配置过的用途用环境变量。
+ * 同时是 rag-ai 的 {@link ModelRouting}：每次模型调用前都问一次。各用途的配置和所用服务商缓存起来（D-053，密钥只存
+ * 密文，每次在进程里解密），保存用途、改或删服务商后在提交后清除，下一次请求就生效，不用重启。没在界面配置过的用途
+ * 用环境变量。
  *
  * <p>连通测试、读服务商的模型列表都是外部调用，可能等到超时，所以不在数据库事务里做；测通之后才开一个短事务写库（#135）。
  */
@@ -36,28 +41,55 @@ public class ModelSettingsService implements ModelRouting {
 
     static final int MAX_MODEL_LENGTH = 200;
 
+    /**
+     * 一个用途的路由在缓存里的样子：没在界面配置过时 {@code setting} 为 null；{@code provider} 是它用的服务商（密钥是密文），
+     * 用环境变量的服务商或服务商已被删除时为 null。过期时间只是兜底，以清除为准。
+     */
+    record CachedRoute(@Nullable PurposeSetting setting, @Nullable ModelProvider provider) {
+    }
+
+    static final CacheSpec<CachedRoute> ROUTES = new CacheSpec<>("model-routes", CachedRoute.class, Duration.ofHours(1));
+
     private final ModelSettingsStore store;
     private final ModelProbe probe;
     private final KeyCipher cipher;
     private final UserDirectory users;
     private final TransactionOperations transactions;
     private final Clock clock;
+    private final TypedCache<CachedRoute> routes;
 
     ModelSettingsService(ModelSettingsStore store, ModelProbe probe, KeyCipher cipher, UserDirectory users,
-            TransactionOperations transactions, Clock clock) {
+            TransactionOperations transactions, Clock clock, Caches caches) {
         this.store = store;
         this.probe = probe;
         this.cipher = cipher;
         this.users = users;
         this.transactions = transactions;
         this.clock = clock;
+        this.routes = caches.cache(ROUTES);
     }
 
+    /** 读缓存；没有时查用途和服务商两条语句，不开事务，不占着连接等模型。 */
     @Override
-    @Transactional(readOnly = true)
     public Optional<ModelRoute> override(ModelUsage usage) {
+        var cached = routes.get(usage.name(), () -> {
+            var setting = store.purpose(usage).orElse(null);
+            var providerId = setting == null ? null : setting.providerId();
+            return new CachedRoute(setting, providerId == null ? null : store.provider(providerId).orElse(null));
+        });
+        if (cached == null || cached.setting() == null) {
+            return Optional.empty();
+        }
+        var setting = cached.setting();
         try {
-            return store.purpose(usage).map(setting -> route(usage, setting.providerId(), setting.model()));
+            if (setting.providerId() == null) {
+                return Optional.of(route(usage, null, setting.model()));
+            }
+            var provider = cached.provider();
+            if (provider == null) {
+                throw notFound("服务商不存在");
+            }
+            return Optional.of(route(provider, setting.model()));
         } catch (SettingsException e) {
             // 密钥解不开（主密钥变了）时，问答按“模型服务不可用”处理，说明原因。
             throw new ModelCallException(e.getMessage(), e);
@@ -127,6 +159,7 @@ public class ModelSettingsService implements ModelRouting {
         return transactions.execute(status -> {
             var before = view(usage);
             store.savePurpose(new PurposeSetting(usage, providerId, model, actorName, OffsetDateTime.now(clock)));
+            routes.clear();
             store.insertChange(new ModelChange(null, usage, before.providerName(), before.model(), providerId,
                     providerName(providerId), model, actor.value(), actorName, OffsetDateTime.now(clock), restoredFrom));
             return view(usage);
@@ -147,9 +180,17 @@ public class ModelSettingsService implements ModelRouting {
             var environment = probe.environment(usage);
             return new ModelRoute(environment.baseUrl(), environment.apiKey(), model);
         }
-        var provider = store.provider(providerId).orElseThrow(() -> notFound("服务商不存在"));
+        return route(store.provider(providerId).orElseThrow(() -> notFound("服务商不存在")), model);
+    }
+
+    private ModelRoute route(ModelProvider provider, String model) {
         var key = provider.apiKeyCipher() == null ? null : cipher.decrypt(provider.apiKeyCipher());
         return new ModelRoute(provider.baseUrl(), key, model);
+    }
+
+    /** 改或删了服务商：用到它的用途要重新读，提交后清除全部路由（D-053）。 */
+    void forgetRoutes() {
+        routes.clear();
     }
 
     private String providerName(@Nullable Long providerId) {

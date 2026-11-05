@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.sql.DriverManager;
 import java.time.Duration;
+import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.DisplayName;
@@ -12,6 +13,7 @@ import org.springframework.boot.WebApplicationType;
 import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.core.task.AsyncTaskExecutor;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
@@ -30,15 +32,20 @@ class GracefulShutdownTests {
     @Container
     static final PostgreSQLContainer POSTGRES = TestDatabase.container();
 
+    @Container
+    static final GenericContainer<?> REDIS = TestRedis.container();
+
     @Test
     @DisplayName("关闭应用时等正在跑的后台任务做完，它还能写库")
     void waitsForBackgroundWorkOnShutdown() throws Exception {
+        var arguments = new java.util.ArrayList<>(List.of("--spring.datasource.url=" + POSTGRES.getJdbcUrl(),
+                "--spring.datasource.username=" + POSTGRES.getUsername(),
+                "--spring.datasource.password=" + POSTGRES.getPassword(),
+                "--rag.knowledge.storage.root=${java.io.tmpdir}/rag-shutdown-test-files"));
+        arguments.addAll(TestRedis.arguments(REDIS));
         var context = new SpringApplicationBuilder(RagApplication.class)
                 .web(WebApplicationType.NONE)
-                .run("--spring.datasource.url=" + POSTGRES.getJdbcUrl(),
-                        "--spring.datasource.username=" + POSTGRES.getUsername(),
-                        "--spring.datasource.password=" + POSTGRES.getPassword(),
-                        "--rag.knowledge.storage.root=${java.io.tmpdir}/rag-shutdown-test-files");
+                .run(arguments.toArray(String[]::new));
         var executor = context.getBean("applicationTaskExecutor", AsyncTaskExecutor.class);
         var jdbc = context.getBean(JdbcTemplate.class);
         jdbc.execute("CREATE TABLE shutdown_probe (note text)");

@@ -1,5 +1,6 @@
 package com.liming.rag.ai;
 
+import com.liming.rag.cache.Caches;
 import io.micrometer.observation.ObservationRegistry;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Bean;
@@ -10,13 +11,17 @@ import org.springframework.context.annotation.Lazy;
 class AiConfiguration {
 
     @Bean
-    EmbeddingClient embeddingClient(AiProperties properties, ObjectProvider<ObservationRegistry> observations) {
-        return switch (properties.embedding().provider()) {
+    EmbeddingClient embeddingClient(AiProperties properties, ObjectProvider<ObservationRegistry> observations,
+            Caches caches) {
+        var provider = properties.embedding().provider();
+        EmbeddingClient client = switch (provider) {
             case "openai" -> new SpringAiEmbeddingClient(properties,
                     observations.getIfAvailable(() -> ObservationRegistry.NOOP));
             case "hashing" -> new HashingEmbeddingClient();
-            default -> throw unknown("embedding", properties.embedding().provider(), "openai 或 hashing");
+            default -> throw unknown("embedding", provider, "openai 或 hashing");
         };
+        var model = "openai".equals(provider) ? properties.embedding().model() : provider;
+        return new CachedQuestionEmbeddings(client, model, caches);
     }
 
     @Bean

@@ -1,5 +1,6 @@
 package com.liming.rag.settings.application.model;
 
+import com.liming.rag.cache.Caches;
 import com.liming.rag.settings.application.SettingsException;
 import com.liming.rag.settings.application.SettingsProperties;
 import com.liming.rag.shared.Paged;
@@ -38,9 +39,9 @@ class ModelSettingsServiceTest {
     private final FakeProbe probe = new FakeProbe();
     private final ModelSettingsService service = new ModelSettingsService(store, probe,
             new KeyCipher(new SettingsProperties(KeyCipherTest.MASTER_KEY)), new FakeUsers(),
-            TransactionOperations.withoutTransaction(), Clock.systemUTC());
+            TransactionOperations.withoutTransaction(), Clock.systemUTC(), Caches.inMemory());
     private final ModelProviderService providers = new ModelProviderService(store,
-            new KeyCipher(new SettingsProperties(KeyCipherTest.MASTER_KEY)));
+            new KeyCipher(new SettingsProperties(KeyCipherTest.MASTER_KEY)), service);
 
     @Test
     @DisplayName("没在界面配置过时全部用环境变量，路由返回空")
@@ -131,8 +132,8 @@ class ModelSettingsServiceTest {
     void masterKeyMissing() {
         var noKey = new KeyCipher(new SettingsProperties(""));
         var withoutKey = new ModelSettingsService(store, probe, noKey, new FakeUsers(),
-                TransactionOperations.withoutTransaction(), Clock.systemUTC());
-        var providersWithoutKey = new ModelProviderService(store, noKey);
+                TransactionOperations.withoutTransaction(), Clock.systemUTC(), Caches.inMemory());
+        var providersWithoutKey = new ModelProviderService(store, noKey, withoutKey);
 
         assertThatThrownBy(() -> providersWithoutKey.createProvider("云服务", "https://x/v1", "sk-1234567890"))
                 .hasMessageContaining("RAG_MASTER_KEY");

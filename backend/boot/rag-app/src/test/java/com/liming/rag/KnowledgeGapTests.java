@@ -2,6 +2,7 @@ package com.liming.rag;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -80,6 +81,8 @@ class KnowledgeGapTests {
                 return vector;
             }).toList();
         });
+        // 问题向量走接口的默认实现，即上面的 embed（模拟对象不会自己调默认方法）。
+        when(embeddings.embedQuestion(anyString())).thenCallRealMethod();
     }
 
     @Test
