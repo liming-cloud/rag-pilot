@@ -12,14 +12,9 @@
     <name>rag-pilot</name>
 
     <modules>
-        <module>backend/rag-shared</module>
-        <module>backend/rag-ai</module>
-        <module>backend/rag-identity</module>
-        <module>backend/rag-knowledge</module>
-        <module>backend/rag-answering</module>
-        <module>backend/rag-evaluation</module>
-        <module>backend/rag-settings</module>
-        <module>backend/rag-app</module>
+        <module>backend/platform</module>
+        <module>backend/contexts</module>
+        <module>backend/boot</module>
     </modules>
 
     <properties>
@@ -31,15 +26,18 @@
         <spring-modulith.version>2.1.2</spring-modulith.version>
         <mybatis-plus.version>3.5.18</mybatis-plus.version>
         <sa-token.version>1.45.0</sa-token.version>
+        <redisson.version>4.8.0</redisson.version>
         <pdfbox.version>3.0.7</pdfbox.version>
         <poi.version>6.0.0</poi.version>
         <!-- 与 spring-modulith-core 2.1.0 自带的版本一致，见 DECISIONS.md D-031。 -->
         <archunit.version>1.4.2</archunit.version>
         <maven-compiler-plugin.version>3.16.0</maven-compiler-plugin.version>
         <maven-surefire-plugin.version>3.6.1</maven-surefire-plugin.version>
-        <!-- 调用真实模型的评测默认不跑；评测任务用 -Dtest.groups=eval -Dtest.excludedGroups=none 运行。 -->
+        <!-- 上下文层禁止依赖 Spring AI（#145，见 backend/contexts/pom.xml）。 -->
+        <maven-enforcer-plugin.version>3.6.3</maven-enforcer-plugin.version>
+        <!-- 调用真实模型的评测、耗时测量默认不跑；评测任务用 -Dtest.groups=eval -Dtest.excludedGroups=none 运行。 -->
         <test.groups></test.groups>
-        <test.excludedGroups>eval</test.excludedGroups>
+        <test.excludedGroups>eval,benchmark</test.excludedGroups>
     </properties>
 
     <dependencyManagement>
@@ -75,10 +73,22 @@
                 <artifactId>mybatis-plus-spring-boot4-starter</artifactId>
                 <version>${mybatis-plus.version}</version>
             </dependency>
+            <!-- 分页插件 PaginationInnerInterceptor（3.5.9 起单独成包），只在 rag-persistence 里用（D-053）。 -->
+            <dependency>
+                <groupId>com.baomidou</groupId>
+                <artifactId>mybatis-plus-jsqlparser</artifactId>
+                <version>${mybatis-plus.version}</version>
+            </dependency>
             <dependency>
                 <groupId>cn.dev33</groupId>
                 <artifactId>sa-token-spring-boot4-starter</artifactId>
                 <version>${sa-token.version}</version>
+            </dependency>
+            <!-- Redis 客户端（D-053），只在 rag-cache 里用，由它按 rag.cache.redis.* 创建（D-054）。 -->
+            <dependency>
+                <groupId>org.redisson</groupId>
+                <artifactId>redisson</artifactId>
+                <version>${redisson.version}</version>
             </dependency>
             <dependency>
                 <groupId>org.apache.pdfbox</groupId>
@@ -98,6 +108,16 @@
             <dependency>
                 <groupId>${project.groupId}</groupId>
                 <artifactId>rag-ai</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>${project.groupId}</groupId>
+                <artifactId>rag-persistence</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>${project.groupId}</groupId>
+                <artifactId>rag-cache</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
@@ -128,6 +148,14 @@
         </dependencies>
     </dependencyManagement>
 
+    <!-- 空值标注（#145）：各包 @NullMarked，可以为 null 的地方写 @Nullable。只是注解，版本由 Spring Boot 管理，Spring 自己也用它。 -->
+    <dependencies>
+        <dependency>
+            <groupId>org.jspecify</groupId>
+            <artifactId>jspecify</artifactId>
+        </dependency>
+    </dependencies>
+
     <build>
         <pluginManagement>
             <plugins>
@@ -139,6 +167,13 @@
                         <release>${java.version}</release>
                         <!-- 保留参数名，Spring MVC 和 MyBatis 绑定参数时需要。 -->
                         <parameters>true</parameters>
+                        <!-- 打开全部编译告警（#145）；告警不让构建失败，但要清零，确实要留的在代码里用 @SuppressWarnings 并写明原因。 -->
+                        <showWarnings>true</showWarnings>
+                        <compilerArgs>
+                            <arg>-Xlint:all</arg>
+                            <arg>-Xmaxwarns</arg>
+                            <arg>10000</arg>
+                        </compilerArgs>
                     </configuration>
                 </plugin>
                 <plugin>
@@ -154,6 +189,11 @@
                     <groupId>org.springframework.boot</groupId>
                     <artifactId>spring-boot-maven-plugin</artifactId>
                     <version>${spring-boot.version}</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-enforcer-plugin</artifactId>
+                    <version>${maven-enforcer-plugin.version}</version>
                 </plugin>
             </plugins>
         </pluginManagement>

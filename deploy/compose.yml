@@ -1,4 +1,4 @@
-# 部署：db + app + web（Nginx 提供前端并转发 /api，见 DECISIONS.md D-029）。员工访问 web 的端口。
+# 部署：db + redis + app + web（Nginx 提供前端并转发 /api，见 DECISIONS.md D-029）。员工访问 web 的端口。
 # 在发布包解压后的目录里使用（#138）：包里有编译好的 app/rag-app.jar 和 web/dist，app、web 镜像由 build.sh 在宿主机上构建，
 # 安装、升级、备份恢复见 README.md：
 #   docker compose -f compose.yml --env-file .env --env-file release.env up -d
@@ -32,6 +32,34 @@ services:
     restart: unless-stopped
     logging: *logging
 
+  redis:
+    # 缓存和登录会话（D-053）。按摘要锁定，从镜像仓库拉；用镜像源或内网仓库时在 .env 里设 RAG_REDIS_IMAGE，摘要保持不变。
+    # 只在 Compose 的内部网络里，不映射端口；带密码。数据不进备份：缓存可以重建，会话丢了重新登录即可。
+    # 开 AOF，重启 Redis 后会话还在；内存上限 256MB，满了按最近最少使用淘汰带过期时间的键（缓存、会话都有过期时间）。
+    image: ${RAG_REDIS_IMAGE:-redis@sha256:489a769e0a54dc245896132a15c72d2bc7296719954da99398f43a3877e5f8eb}
+    command:
+      - redis-server
+      - --requirepass
+      - ${REDIS_PASSWORD:?请在 .env 中设置 REDIS_PASSWORD}
+      - --appendonly
+      - "yes"
+      - --maxmemory
+      - 256mb
+      - --maxmemory-policy
+      - volatile-lru
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping | grep -q PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    environment:
+      # redis-cli 从这个变量取密码，健康检查的命令行里不出现密码。
+      REDISCLI_AUTH: ${REDIS_PASSWORD}
+    restart: unless-stopped
+    logging: *logging
+
   app:
     image: rag-pilot-app:${RAG_VERSION:-dev}
     # 在宿主机上用发布包里的 jar 构建（build.sh）。JRE 基础镜像按摘要锁定；用镜像源或内网仓库时在 .env 里设 RAG_JRE_IMAGE。
@@ -45,6 +73,10 @@ services:
       DB_URL: jdbc:postgresql://db:5432/rag
       DB_USERNAME: rag
       DB_PASSWORD: ${DB_PASSWORD}
+      RAG_CACHE_REDIS_ENABLED: "true"
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
       RAG_STORAGE_ROOT: /data/files
       MODEL_API_KEY: ${MODEL_API_KEY:?请在 .env 中设置 MODEL_API_KEY}
       MODEL_BASE_URL: ${MODEL_BASE_URL:-https://api.siliconflow.cn/v1}
@@ -62,10 +94,14 @@ services:
       RAG_INDUSTRY_PACK: ${RAG_INDUSTRY_PACK:-retail}
       RAG_STATS_ZONE: ${RAG_STATS_ZONE:-Asia/Shanghai}
       RAG_EXPIRY_WARNING_DAYS: ${RAG_EXPIRY_WARNING_DAYS:-30}
+      RAG_ASK_LIMIT_PER_MINUTE: ${RAG_ASK_LIMIT_PER_MINUTE:-10}
+      RAG_ASK_LIMIT_PER_DAY: ${RAG_ASK_LIMIT_PER_DAY:-300}
     volumes:
       - app-files:/data/files
     depends_on:
       db:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     ports:
       # 只绑定本机，用于运维检查健康状态和版本；员工经 web 访问接口。
@@ -98,3 +134,4 @@ services:
 volumes:
   db-data:
   app-files:
+  redis-data:

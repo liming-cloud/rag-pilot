@@ -38,6 +38,7 @@ compose exec -T db psql -U rag -d postgres -v ON_ERROR_STOP=1 \
 compose exec -T db pg_restore -U rag -d rag --no-owner --exit-on-error < "$source_dir/db.dump"
 
 info "恢复上传文件"
+ensure_redis
 compose run --rm --no-deps --user 0 -v "$source_dir:/backup:ro" --entrypoint sh app -c \
   'find /data/files -mindepth 1 -delete && tar -xzf /backup/files.tar.gz -C /data/files && chown -R 10001:10001 /data/files'
 

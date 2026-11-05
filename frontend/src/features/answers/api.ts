@@ -70,7 +70,7 @@ export async function recheckAnswer(id: number): Promise<Answer> {
 }
 
 /**
- * 把回答记录转成评测题草稿（格式同 backend/rag-app/src/test/resources/eval/cases.json）。
+ * 把回答记录转成评测题草稿（格式同 backend/boot/rag-app/src/test/resources/eval/cases.json）。
  * 预期文档先填当时引用的第一个文档，答案关键词留空：都要人工确认后再放进仓库外的私有评测集。
  */
 export function toEvalDrafts(reviews: AnswerReview[]) {
@@ -92,3 +92,9 @@ export function toEvalDrafts(reviews: AnswerReview[]) {
       .join(" "),
   }));
 }
+
+/** 回答记录的查询键；reviews 是前缀。 */
+export const answerKeys = {
+  reviews: ["answer-reviews"],
+  reviewPage: (filter: AnswerFilter) => ["answer-reviews", filter] as const,
+} as const;

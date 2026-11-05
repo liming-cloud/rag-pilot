@@ -1,0 +1,175 @@
+spring:
+  application:
+    name: rag-pilot
+  threads:
+    virtual:
+      enabled: true
+  task:
+    execution:
+      # 流式回答、会话轮次的保存、标题生成都在 applicationTaskExecutor 里跑：停机时最多等 30 秒让它们做完（#135）。
+      # deploy/compose.yml 的 stop_grace_period 要留出这段时间。
+      shutdown:
+        await-termination: true
+        await-termination-period: 30s
+  servlet:
+    multipart:
+      # 与 knowledge 的 UploadedFile.MAX_SIZE_BYTES 一致。
+      max-file-size: 50MB
+      max-request-size: 55MB
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/rag}
+    username: ${DB_USERNAME:rag}
+    password: ${DB_PASSWORD:}
+  flyway:
+    # 每个模块一个迁移目录；版本号统一用时间戳，避免目录之间版本冲突。
+    locations:
+      - classpath:db/migration/identity
+      - classpath:db/migration/knowledge
+      - classpath:db/migration/answering
+      - classpath:db/migration/evaluation
+      - classpath:db/migration/settings
+
+# MyBatis-Plus 的配置（Mapper XML 位置、分页插件）在平台组件 rag-persistence 里（D-053）。
+
+# 会话经 Sa-Token 的 Redisson 插件存进 Redis（D-053，修订 D-005）：应用重启、升级后不用重新登录。
+sa-token:
+  token-name: Authorization
+  token-prefix: Bearer
+  timeout: 28800
+  active-timeout: 1800
+  is-read-cookie: false
+  is-read-header: true
+  is-print: false
+
+# 运行的版本（4 位：主.次.修订.构建号，D-048），镜像构建时由 git tag 写进环境变量 RAG_VERSION；开发时为 dev。
+# 运维用 /actuator/info 查看。
+info:
+  app:
+    version: ${RAG_VERSION:dev}
+
+server:
+  port: 8080
+  shutdown: graceful
+
+management:
+  endpoints:
+    web:
+      exposure:
+        # metrics 含 Spring AI 的模型调用耗时和 token 用量（#145 C1）；Nginx 只转发 /api，这些端点只在本机 8080。
+        include: health,info,metrics
+  info:
+    env:
+      enabled: true
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: never
+
+rag:
+  cache:
+    # 缓存键的前缀，和同一个 Redis 里的会话（rag:store:sessions:…）分开；Redis 出错后这段时间内跳过二级缓存直接读库。
+    prefix: rag:cache
+    retry-after: 30s
+    # 不用 Redis 时（默认）缓存只有一级、登录会话存在进程内，重启后要重新登录；Compose 部署打开（D-054）。
+    # 打开后 Redis 不可用时不能登录，缓存跳过二级读库。
+    redis:
+      enabled: ${RAG_CACHE_REDIS_ENABLED:false}
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      timeout: 500ms
+      connect-timeout: 2s
+    # 每种缓存默认的分层：一级在进程内（单个应用实例，靠本进程的清除保持一致，过期时间只是兜底），二级在 Redis。
+    defaults:
+      local:
+        enabled: true
+        max-size: 10000
+        ttl: 5m
+      remote:
+        enabled: true
+        ttl: 1h
+    caches:
+      # 单条约 4KB、条数多：有 Redis 时只放二级；没有时退回一级，容量收小。
+      question-vectors:
+        local:
+          enabled: false
+          max-size: 2000
+        remote:
+          ttl: 1d
+  ai:
+    # 嵌入、重排、对话默认共用一个 OpenAI 兼容地址和密钥（硅基流动），见 DECISIONS.md。
+    base-url: ${MODEL_BASE_URL:https://api.siliconflow.cn/v1}
+    api-key: ${MODEL_API_KEY:}
+    timeout: 30s
+    # provider 为 openai 时调用真实模型；hashing / lexical / extractive 是本地确定性实现，
+    # 只用于测试和没有密钥时的离线开发，不能用于评测。
+    embedding:
+      provider: ${RAG_EMBEDDING_PROVIDER:openai}
+      model: ${EMBEDDING_MODEL:BAAI/bge-m3}
+      batch-size: 16
+    rerank:
+      provider: ${RAG_RERANK_PROVIDER:openai}
+      model: ${RERANK_MODEL:BAAI/bge-reranker-v2-m3}
+    chat:
+      provider: ${RAG_CHAT_PROVIDER:openai}
+      model: ${CHAT_MODEL:deepseek-ai/DeepSeek-V3}
+      temperature: 0.1
+      max-tokens: 1024
+      # 流式回答过了这么久还没出首字，就再发一个备用请求，用先出字的那个（见 DECISIONS.md D-028）。
+      # 默认不发；评测里 2s 能消除服务卡住时的 503，但正常时段首字不变快。
+      hedge-after: ${CHAT_HEDGE_AFTER:}
+      # 备用请求用的模型：同一服务商的同一个模型常常整体卡住，换一个模型才躲得开；设为空时与 model 相同。
+      hedge-model: ${CHAT_HEDGE_MODEL:deepseek-ai/DeepSeek-V4.1-Flash}
+      # 轻量任务（会话标题）用的模型，用硅基流动的免费模型，不占回答的首字时间（D-036）；设为空时与 model 相同。
+      light-model: ${CHAT_LIGHT_MODEL:Qwen/Qwen2.5-7B-Instruct}
+  answering:
+    # 检索候选数、送进提示词的证据数、重排相关度门槛（占位值，用评测集校准）。
+    candidates: 30
+    evidence-limit: 8
+    min-relevance: 0.2
+    # 重排最高分低于门槛时，先把问题改写成规范说法再检索一次，减少口语、错别字导致的误拒；只影响本来要拒答的问题。
+    rewrite-on-low-relevance: ${RAG_REWRITE_ON_LOW_RELEVANCE:true}
+    # 改写前最高分低于这个下限时，改写也救不回，直接拒答（按评测数据定的初值，待用开源数据集校准）。
+    rewrite-min-relevance: ${RAG_REWRITE_MIN_RELEVANCE:0.03}
+    # 改写超过这个时限就放弃，按原方式拒答。
+    rewrite-timeout: ${RAG_REWRITE_TIMEOUT:3s}
+    # 每个账号的提问频率上限（#145，防止一个账号短时间内占满模型额度）：超过时返回 429，不调用模型。
+    limits:
+      per-minute: ${RAG_ASK_LIMIT_PER_MINUTE:10}
+      per-day: ${RAG_ASK_LIMIT_PER_DAY:300}
+    gaps:
+      # 知识缺口归类：两个问题的向量余弦相似度达到它就归为一类（D-047，按评测报告里的校准结果调整）。
+      similarity: ${RAG_GAP_SIMILARITY:0.80}
+  # 各模块的配置由对应的 @ConfigurationProperties record 读取并校验（AnsweringProperties、IdentityProperties、
+  # KnowledgeProperties、AiProperties、SettingsProperties），取值说明见这些类。
+  settings:
+    # 加密服务商密钥的主密钥：32 字节随机值的 Base64（openssl rand -base64 32）；为空时不能在界面保存密钥（D-043）。
+    master-key: ${RAG_MASTER_KEY:}
+    # 行业包（D-045）：industry-packs/<名字>/pack.yml，放提示词角色、拒答话术、界面文案、推荐问题、行业词表；找不到时启动失败。
+    industry-pack: ${RAG_INDUSTRY_PACK:retail}
+    # 登录页、顶栏显示的产品名称和提示（D-042），作系统设置里品牌三项的默认值；留空时用内核默认值。
+    branding:
+      name: ${RAG_BRAND_NAME:}
+      tagline: ${RAG_BRAND_TAGLINE:}
+      login-hint: ${RAG_BRAND_LOGIN_HINT:}
+    # 使用统计的“一天”按哪个时区划分；部署所在地区的属性，不属于行业包。
+    stats-zone: ${RAG_STATS_ZONE:Asia/Shanghai}
+  identity:
+    # 账号表为空时用它创建超级管理员（全系统只有一个）；已有账号时不生效。
+    admin:
+      # 试点单租户：初始管理员建在这个租户下，之后的账号跟随创建它的管理员；请求的租户从登录会话取。
+      tenant-id: 1
+      username: ${RAG_ADMIN_USERNAME:}
+      password: ${RAG_ADMIN_PASSWORD:}
+      # 超级管理员密码丢失时由运维设置，启动时重置为它并解锁；重置后删掉这个变量再重启（D-038）。
+      reset-password: ${RAG_ADMIN_RESET_PASSWORD:}
+  knowledge:
+    ingestion:
+      # 后台同时处理的文档数，限制对嵌入模型的并发调用。
+      concurrency: ${RAG_INGESTION_CONCURRENCY:2}
+    storage:
+      # 原始文件存放目录；Compose 中挂载为数据卷。
+      root: ${RAG_STORAGE_ROOT:./data/files}
+    # 资料失效日期在多少天内算“即将到期”，管理端据此提醒（D-046）；1 到 365。
+    expiry-warning-days: ${RAG_EXPIRY_WARNING_DAYS:30}

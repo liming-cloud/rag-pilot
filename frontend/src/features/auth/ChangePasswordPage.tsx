@@ -4,7 +4,8 @@ import { useNavigate } from "react-router";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useMe } from "@/lib/permissions";
+import { ErrorMessage } from "@/lib/errors";
+import { meKey, useMe } from "@/lib/permissions";
 import { changePassword } from "./api";
 
 /**
@@ -38,8 +39,8 @@ export function ChangePasswordPage() {
     setError(null);
     try {
       await changePassword(form.oldPassword, form.newPassword);
-      await queryClient.invalidateQueries({ queryKey: ["me"] });
-      navigate("/chat", { replace: true });
+      await queryClient.invalidateQueries({ queryKey: meKey });
+      void navigate("/chat", { replace: true });
     } catch (e) {
       setError(e instanceof Error ? e.message : "修改密码失败");
     } finally {
@@ -55,10 +56,10 @@ export function ChangePasswordPage() {
   return (
     <main className="mx-auto flex h-full max-w-sm flex-col justify-center gap-6 p-6">
       <div className="flex flex-col gap-1">
-        <h1 className="font-serif text-2xl font-semibold">修改密码</h1>
+        <h1 className="font-display text-2xl font-semibold tracking-tight">修改密码</h1>
         {forced && <p className="text-sm text-muted-foreground">管理员重置了你的密码，请先设置新密码再继续使用。</p>}
       </div>
-      <form onSubmit={submit} className="flex flex-col gap-4">
+      <form onSubmit={(event) => void submit(event)} className="flex flex-col gap-4">
         <Label className="flex flex-col gap-1">
           {forced ? "管理员给你的临时密码" : "当前密码"}
           <Input type="password" autoComplete="current-password" required {...field("oldPassword")} />
@@ -71,11 +72,7 @@ export function ChangePasswordPage() {
           再输一次新密码
           <Input type="password" autoComplete="new-password" required {...field("confirm")} />
         </Label>
-        {error && (
-          <p role="alert" className="text-sm text-destructive">
-            {error}
-          </p>
-        )}
+        <ErrorMessage error={error} />
         <Button type="submit" disabled={submitting}>
           保存新密码
         </Button>

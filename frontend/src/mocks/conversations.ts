@@ -39,6 +39,8 @@ const answerAboutExpiry: Answer = {
       documentName: "临期与报损管理.md",
       headingPath: "临期商品 > 下架时限",
       excerpt: "保质期剩余不足三分之一的商品，贴黄色临期标签，集中陈列到临期专区，按原价七折销售。",
+      documentUpdatedAt: "2026-10-26T09:00:00+08:00",
+      documentState: "CURRENT",
     },
     {
       index: 2,
@@ -47,6 +49,8 @@ const answerAboutExpiry: Answer = {
       documentName: "临期与报损管理.md",
       headingPath: "报损 > 登记与确认",
       excerpt: "保质期仅剩 1 天的商品，当天闭店前全部下架，在报损登记表写明品名、数量和原因，店长签字确认。",
+      documentUpdatedAt: "2026-10-26T09:00:00+08:00",
+      documentState: "EXPIRED",
     },
   ],
   topRelevance: 0.97,
@@ -65,6 +69,8 @@ const answerAboutFrozen: Answer = {
       documentName: "商品陈列与补货规范.md",
       headingPath: "冷链 > 冷冻柜",
       excerpt: "冷冻柜温度保持在 -18℃ 以下，开店、闭店各记录一次温度，异常时立即报告店长。",
+      documentUpdatedAt: "2026-10-26T09:00:00+08:00",
+      documentState: "REPLACED",
     },
   ],
   topRelevance: 0.93,
@@ -97,7 +103,8 @@ function daysAgo(days: number, hour = 10): string {
 }
 
 function turn(id: number, question: string, answer: Answer | null, knowledgeBaseIds: number[], askedAt: string): Turn {
-  return { id, question, status: answer ? "ANSWERED" : "FAILED", answer, knowledgeBaseIds, askedAt };
+  const stored = answer && { rewrite: null, timings: null, ...answer };
+  return { id, question, status: answer ? "ANSWERED" : "FAILED", answer: stored, knowledgeBaseIds, askedAt };
 }
 
 /** 示例会话属于店员小王（id 2）。他只是“门店运营知识库”（1）的成员；会话 902 里选过的“商品知识库”（2）已无权访问。 */

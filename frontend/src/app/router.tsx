@@ -1,29 +1,37 @@
-import type { ReactNode } from "react";
-import { createBrowserRouter, Navigate, type RouteObject } from "react-router";
-import { AnswersPage } from "@/features/answers/AnswersPage";
-import { GapsPage } from "@/features/gaps/GapsPage";
+import type { ComponentType, ReactNode } from "react";
+import { createBrowserRouter, Navigate, type RouteObject, useLocation } from "react-router";
 import { ChangePasswordPage } from "@/features/auth/ChangePasswordPage";
 import { LoginPage } from "@/features/auth/LoginPage";
 import { ChatPage } from "@/features/chat/ChatPage";
-import { KnowledgeDetailPage } from "@/features/knowledge/KnowledgeDetailPage";
-import { KnowledgePage } from "@/features/knowledge/KnowledgePage";
-import { RolesPage } from "@/features/roles/RolesPage";
-import { ModelsPage } from "@/features/models/ModelsPage";
-import { SettingsPage } from "@/features/settings/SettingsPage";
-import { StatsPage } from "@/features/stats/StatsPage";
-import { UsersPage } from "@/features/users/UsersPage";
-import { getToken } from "@/lib/auth";
+import { getToken, loginPath } from "@/lib/auth";
+import { type Permission, PERMISSIONS } from "@/lib/permissions";
 import { AdminLayout } from "./AdminLayout";
 import { AdminHome, AppShell, RequirePasswordChanged, RequirePermission } from "./AppShell";
 
 /** 没有令牌时先去登录；令牌过期由 authFetch 收到 401 时处理。管理员重置过密码时先去改密码。 */
 function RequireAuth({ children }: { children: ReactNode }) {
-  return getToken() ? <RequirePasswordChanged>{children}</RequirePasswordChanged> : <Navigate to="/login" replace />;
+  const location = useLocation();
+  return getToken() ? (
+    <RequirePasswordChanged>{children}</RequirePasswordChanged>
+  ) : (
+    <Navigate to={loginPath(location.pathname + location.search)} replace />
+  );
 }
 
-const guarded = (permission: string, page: ReactNode) => (
+const guarded = (permission: Permission, page: ReactNode) => (
   <RequirePermission permission={permission}>{page}</RequirePermission>
 );
+
+/**
+ * 管理端页面按路由分包，打开时才下载（#145）：只用问答页的员工不用下载管理端的代码。
+ * 问答页和登录页最常用，留在主包里。
+ */
+const adminPage = (permission: Permission, load: () => Promise<ComponentType>): Pick<RouteObject, "lazy"> => ({
+  lazy: async () => {
+    const Page = await load();
+    return { element: guarded(permission, <Page />) };
+  },
+});
 
 /** 路由表单独导出，测试用内存路由复用同一份配置。 */
 export const routes: RouteObject[] = [
@@ -36,8 +44,8 @@ export const routes: RouteObject[] = [
       </RequireAuth>
     ),
     children: [
-      { path: "/chat", element: guarded("chat:use", <ChatPage />) },
-      { path: "/chat/:conversationId", element: guarded("chat:use", <ChatPage />) },
+      { path: "/chat", element: guarded(PERMISSIONS.CHAT_USE, <ChatPage />) },
+      { path: "/chat/:conversationId", element: guarded(PERMISSIONS.CHAT_USE, <ChatPage />) },
       { path: "/change-password", element: <ChangePasswordPage /> },
     ],
   },
@@ -50,15 +58,54 @@ export const routes: RouteObject[] = [
     ),
     children: [
       { index: true, element: <AdminHome /> },
-      { path: "knowledge", element: guarded("kb:view", <KnowledgePage />) },
-      { path: "knowledge/:knowledgeBaseId", element: guarded("kb:view", <KnowledgeDetailPage />) },
-      { path: "users", element: guarded("user:view", <UsersPage />) },
-      { path: "roles", element: guarded("role:view", <RolesPage />) },
-      { path: "gaps", element: guarded("answer:view", <GapsPage />) },
-      { path: "answers", element: guarded("answer:view", <AnswersPage />) },
-      { path: "stats", element: guarded("stats:view", <StatsPage />) },
-      { path: "models", element: guarded("model:view", <ModelsPage />) },
-      { path: "settings", element: guarded("setting:view", <SettingsPage />) },
+      {
+        path: "knowledge",
+        ...adminPage(PERMISSIONS.KB_VIEW, () =>
+          import("@/features/knowledge/KnowledgePage").then((m) => m.KnowledgePage),
+        ),
+      },
+      {
+        path: "knowledge/:knowledgeBaseId",
+        ...adminPage(PERMISSIONS.KB_VIEW, () =>
+          import("@/features/knowledge/KnowledgeDetailPage").then((m) => m.KnowledgeDetailPage),
+        ),
+      },
+      {
+        path: "users",
+        ...adminPage(PERMISSIONS.USER_VIEW, () => import("@/features/users/UsersPage").then((m) => m.UsersPage)),
+      },
+      {
+        path: "roles",
+        ...adminPage(PERMISSIONS.ROLE_VIEW, () => import("@/features/roles/RolesPage").then((m) => m.RolesPage)),
+      },
+      {
+        path: "audit",
+        ...adminPage(PERMISSIONS.AUDIT_VIEW, () => import("@/features/audit/AuditPage").then((m) => m.AuditPage)),
+      },
+      {
+        path: "gaps",
+        ...adminPage(PERMISSIONS.ANSWER_VIEW, () => import("@/features/gaps/GapsPage").then((m) => m.GapsPage)),
+      },
+      {
+        path: "answers",
+        ...adminPage(PERMISSIONS.ANSWER_VIEW, () =>
+          import("@/features/answers/AnswersPage").then((m) => m.AnswersPage),
+        ),
+      },
+      {
+        path: "stats",
+        ...adminPage(PERMISSIONS.STATS_VIEW, () => import("@/features/stats/StatsPage").then((m) => m.StatsPage)),
+      },
+      {
+        path: "models",
+        ...adminPage(PERMISSIONS.MODEL_VIEW, () => import("@/features/models/ModelsPage").then((m) => m.ModelsPage)),
+      },
+      {
+        path: "settings",
+        ...adminPage(PERMISSIONS.SETTING_VIEW, () =>
+          import("@/features/settings/SettingsPage").then((m) => m.SettingsPage),
+        ),
+      },
     ],
   },
 ];

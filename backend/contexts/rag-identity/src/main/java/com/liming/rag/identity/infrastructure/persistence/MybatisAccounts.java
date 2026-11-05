@@ -1,0 +1,144 @@
+package com.liming.rag.identity.infrastructure.persistence;
+
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import com.liming.rag.identity.application.account.Account;
+import com.liming.rag.identity.application.account.AccountQuery;
+import com.liming.rag.identity.application.account.Accounts;
+import com.liming.rag.shared.Paged;
+import com.liming.rag.shared.TenantId;
+import java.time.OffsetDateTime;
+import java.util.Collection;
+import java.util.List;
+import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
+import org.jspecify.annotations.Nullable;
+import org.springframework.stereotype.Repository;
+
+@Repository
+class MybatisAccounts implements Accounts {
+
+    private final AppUserMapper mapper;
+
+    MybatisAccounts(AppUserMapper mapper) {
+        this.mapper = mapper;
+    }
+
+    @Override
+    public Optional<Account> find(long id) {
+        return Optional.ofNullable(mapper.selectById(id)).map(MybatisAccounts::toAccount);
+    }
+
+    @Override
+    public Optional<Account> findByUsername(String username) {
+        return Optional.ofNullable(mapper.selectOne(byUsername(username))).map(MybatisAccounts::toAccount);
+    }
+
+    @Override
+    public boolean existsByUsername(String username) {
+        return mapper.exists(byUsername(username));
+    }
+
+    @Override
+    public Set<String> existingUsernames(Collection<String> usernames) {
+        if (usernames.isEmpty()) {
+            return Set.of();
+        }
+        return mapper.selectList(new LambdaQueryWrapper<AppUserDO>().select(AppUserDO::getUsername)
+                .in(AppUserDO::getUsername, usernames)).stream().map(AppUserDO::getUsername)
+                .collect(Collectors.toSet());
+    }
+
+    @Override
+    public Paged<Account> page(TenantId tenantId, AccountQuery query) {
+        var status = query.status() == null ? null : query.status().name();
+        var page = query.page();
+        var rows = mapper.page(tenantId.value(), query.keyword(), query.roleId(), status, query.now(), page.offset(),
+                page.size());
+        long total = mapper.countPage(tenantId.value(), query.keyword(), query.roleId(), status, query.now());
+        return new Paged<>(rows.stream().map(MybatisAccounts::toAccount).toList(), total, page.page(), page.size());
+    }
+
+    @Override
+    public List<Account> findAll(TenantId tenantId, Collection<Long> ids) {
+        if (ids.isEmpty()) {
+            return List.of();
+        }
+        return mapper.selectList(new LambdaQueryWrapper<AppUserDO>()
+                        .eq(AppUserDO::getTenantId, tenantId.value())
+                        .in(AppUserDO::getId, ids))
+                .stream().map(MybatisAccounts::toAccount).toList();
+    }
+
+    @Override
+    public long count() {
+        return mapper.selectCount(null);
+    }
+
+    @Override
+    public void setEnabled(long id, boolean enabled) {
+        var row = new AppUserDO();
+        row.setId(id);
+        row.setEnabled(enabled);
+        mapper.updateById(row);
+    }
+
+    @Override
+    public void setPassword(long id, String passwordHash, boolean mustChangePassword) {
+        mapper.update(new LambdaUpdateWrapper<AppUserDO>()
+                .set(AppUserDO::getPasswordHash, passwordHash)
+                .set(AppUserDO::getMustChangePassword, mustChangePassword)
+                .set(AppUserDO::getFailedAttempts, 0)
+                .set(AppUserDO::getLockedUntil, null)
+                .eq(AppUserDO::getId, id));
+    }
+
+    @Override
+    public int incrementFailedLogins(long id) {
+        return mapper.incrementFailedLogins(id);
+    }
+
+    @Override
+    public void lock(long id, OffsetDateTime until) {
+        setFailedLogins(id, until);
+    }
+
+    @Override
+    public void clearFailedLogins(long id) {
+        setFailedLogins(id, null);
+    }
+
+    /** 失败次数清零，锁定到 {@code until}（为 null 时解除锁定）。 */
+    private void setFailedLogins(long id, @Nullable OffsetDateTime until) {
+        mapper.update(new LambdaUpdateWrapper<AppUserDO>()
+                .set(AppUserDO::getFailedAttempts, 0)
+                .set(AppUserDO::getLockedUntil, until)
+                .eq(AppUserDO::getId, id));
+    }
+
+    @Override
+    public Account insert(Account account) {
+        var row = new AppUserDO();
+        row.setTenantId(account.tenantId().value());
+        row.setUsername(account.username());
+        row.setDisplayName(account.displayName());
+        row.setPasswordHash(account.passwordHash());
+        row.setEnabled(account.enabled());
+        row.setMustChangePassword(account.mustChangePassword());
+        row.setFailedAttempts(account.failedAttempts());
+        mapper.insert(row);
+        return toAccount(row);
+    }
+
+    private static LambdaQueryWrapper<AppUserDO> byUsername(String username) {
+        return new LambdaQueryWrapper<AppUserDO>().eq(AppUserDO::getUsername, username);
+    }
+
+    private static Account toAccount(AppUserDO row) {
+        return new Account(row.getId(), new TenantId(row.getTenantId()), row.getUsername(), row.getDisplayName(),
+                row.getPasswordHash(), Boolean.TRUE.equals(row.getEnabled()),
+                Boolean.TRUE.equals(row.getMustChangePassword()),
+                row.getFailedAttempts() == null ? 0 : row.getFailedAttempts(), row.getLockedUntil());
+    }
+}

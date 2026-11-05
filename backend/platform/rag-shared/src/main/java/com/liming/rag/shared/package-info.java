@@ -1,0 +1,13 @@
+/**
+ * 共享内核与通用工具：多个上下文共同依赖、只用纯 Java 表达、很少变动的东西——租户和用户标识、业务错误分类、聚合根标记这些模型概念，
+ * 以及分页、空串处理、枚举解析这些通用工具（D-053）。
+ *
+ * <p>只依赖 JDK，不放框架代码、配置、数据库迁移或任何业务规则；改动它等于改动所有模块的合同，新增类型前先在 DECISIONS.md 记录理由。
+ * 标记为开放模块，所有模块都可以直接使用。
+ */
+@ApplicationModule(type = ApplicationModule.Type.OPEN)
+@NullMarked
+package com.liming.rag.shared;
+
+import org.jspecify.annotations.NullMarked;
+import org.springframework.modulith.ApplicationModule;

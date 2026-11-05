@@ -1,0 +1,173 @@
+package com.liming.rag;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+import java.util.List;
+import java.util.Map;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.resttestclient.TestRestTemplate;
+import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureTestRestTemplate;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpStatusCode;
+import org.springframework.http.ResponseEntity;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.postgresql.PostgreSQLContainer;
+
+/**
+ * 登录与权限：未登录 401、没有权限点 403；超级管理员由环境变量初始化（测试值见 test 下的 config/application.yml）。
+ */
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@AutoConfigureTestRestTemplate
+@Testcontainers
+class AuthTests {
+
+    @Container
+    @ServiceConnection
+    static final PostgreSQLContainer POSTGRES = TestDatabase.container();
+
+    @Autowired
+    private TestRestTemplate http;
+
+    @Test
+    @DisplayName("运维端点：健康检查和版本号不用登录（D-048），版本号由环境变量 RAG_VERSION 给出，开发时为 dev")
+    @SuppressWarnings("unchecked")
+    void exposesHealthAndVersion() {
+        assertThat(http.getForEntity("/actuator/health", Map.class).getBody()).containsEntry("status", "UP");
+        var info = http.getForEntity("/actuator/info", Map.class).getBody();
+        assertThat((Map<String, Object>) info.get("app")).containsEntry("version", "dev");
+    }
+
+    @Test
+    @DisplayName("未登录访问业务接口返回 401")
+    void rejectsAnonymous() {
+        assertThat(status(HttpMethod.GET, "/api/knowledge-bases", null, null))
+                .isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(call(HttpMethod.POST, "/api/conversations", null, Map.of()).getStatusCode())
+                .isEqualTo(HttpStatus.UNAUTHORIZED);
+        var streamHeaders = new HttpHeaders();
+        streamHeaders.setAccept(List.of(MediaType.TEXT_EVENT_STREAM));
+        streamHeaders.setContentType(MediaType.APPLICATION_JSON);
+        assertThat(http.exchange("/api/conversations/1/turns/stream", HttpMethod.POST,
+                new HttpEntity<>(Map.of("question", "货架"), streamHeaders), String.class).getStatusCode())
+                .isEqualTo(HttpStatus.UNAUTHORIZED);
+    }
+
+    @Test
+    @DisplayName("用户名或密码错误都返回同样的 401 提示")
+    void rejectsWrongCredentials() {
+        var wrongPassword = login(TestLogin.ADMIN_USERNAME, "wrong-password");
+        var unknownUser = login("nobody", "wrong-password");
+        assertThat(wrongPassword.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(unknownUser.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(wrongPassword.getBody().get("detail")).isEqualTo(unknownUser.getBody().get("detail"));
+        assertThat(wrongPassword.getBody()).containsEntry("code", "IDENTITY_BAD_CREDENTIALS");
+    }
+
+    @Test
+    @DisplayName("管理员建店员账号；店员能读不能管；退出后令牌失效")
+    @SuppressWarnings("unchecked")
+    void adminCreatesStaffWithLimitedRights() {
+        String admin = TestLogin.token(http, TestLogin.ADMIN_USERNAME, TestLogin.ADMIN_PASSWORD);
+        var me = call(HttpMethod.GET, "/api/auth/me", admin, null);
+        assertThat(me.getBody()).containsEntry("username", TestLogin.ADMIN_USERNAME).containsEntry("superAdmin", true)
+                .containsEntry("mustChangePassword", false);
+        assertThat((List<Object>) me.getBody().get("permissions")).contains("role:update", "kb:grant", "chat:use");
+
+        var created = call(HttpMethod.POST, "/api/users", admin,
+                Map.of("username", "staff01", "displayName", "店员小王", "password", "staff-password", "roleIds", List.of(TestLogin.staffRoleId(http))));
+        assertThat(created.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        assertThat(created.getBody()).doesNotContainKey("password").doesNotContainKey("passwordHash");
+        var duplicate = call(HttpMethod.POST, "/api/users", admin,
+                Map.of("username", "staff01", "displayName", "重名", "password", "staff-password", "roleIds", List.of(TestLogin.staffRoleId(http))));
+        assertThat(duplicate.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(duplicate.getBody()).containsEntry("code", "IDENTITY_CONFLICT");
+
+        String staff = TestLogin.token(http, "staff01", "staff-password");
+        var staffMe = call(HttpMethod.GET, "/api/auth/me", staff, null).getBody();
+        assertThat(staffMe).containsEntry("superAdmin", false).containsEntry("permissions", List.of("chat:use"));
+        assertThat(status(HttpMethod.GET, "/api/knowledge-bases", staff, null)).isEqualTo(HttpStatus.OK);
+        var forbidden = call(HttpMethod.POST, "/api/knowledge-bases", staff, Map.of("name", "店员建的库"));
+        assertThat(forbidden.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(forbidden.getBody()).containsEntry("code", "FORBIDDEN");
+        assertThat(call(HttpMethod.POST, "/api/users", staff,
+                Map.of("username", "staff02", "displayName", "x", "password", "staff-password",
+                        "roleIds", List.of(TestLogin.builtInRoleId(http, "ADMIN"))))
+                .getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+
+        assertThat(call(HttpMethod.POST, "/api/auth/logout", staff, null).getStatusCode())
+                .isEqualTo(HttpStatus.NO_CONTENT);
+        assertThat(call(HttpMethod.GET, "/api/auth/me", staff, null).getStatusCode())
+                .isEqualTo(HttpStatus.UNAUTHORIZED);
+    }
+
+    @Test
+    @DisplayName("管理员能列出本租户账号，不含密码；店员不能")
+    void listsUsersForAdminOnly() {
+        String admin = TestLogin.token(http, TestLogin.ADMIN_USERNAME, TestLogin.ADMIN_PASSWORD);
+        call(HttpMethod.POST, "/api/users", admin,
+                Map.of("username", "lister01", "displayName", "店员小李", "password", "staff-password", "roleIds", List.of(TestLogin.staffRoleId(http))));
+
+        var users = http.exchange("/api/users", HttpMethod.GET, new HttpEntity<>(headers(admin)), String.class);
+        assertThat(users.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(users.getBody()).contains("\"username\":\"admin\"").contains("\"displayName\":\"店员小李\"")
+                .contains("\"total\":").doesNotContain("password");
+
+        String staff = TestLogin.token(http, "lister01", "staff-password");
+        assertThat(status(HttpMethod.GET, "/api/users", staff, null)).isEqualTo(HttpStatus.FORBIDDEN);
+    }
+
+    @Test
+    @DisplayName("停用账号后已登录的会话立即失效、不能再登录；不能停用自己；启用后恢复")
+    void disablesAndEnablesUsers() {
+        String admin = TestLogin.token(http, TestLogin.ADMIN_USERNAME, TestLogin.ADMIN_PASSWORD);
+        var created = call(HttpMethod.POST, "/api/users", admin,
+                Map.of("username", "leaver01", "displayName", "离职店员", "password", "staff-password", "roleIds", List.of(TestLogin.staffRoleId(http))));
+        long staffId = ((Number) created.getBody().get("id")).longValue();
+        assertThat(created.getBody()).containsEntry("enabled", true);
+        String staff = TestLogin.token(http, "leaver01", "staff-password");
+
+        var disabled = call(HttpMethod.PUT, "/api/users/" + staffId + "/enabled", admin, Map.of("enabled", false));
+        assertThat(disabled.getBody()).containsEntry("enabled", false);
+        assertThat(status(HttpMethod.GET, "/api/auth/me", staff, null)).isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(login("leaver01", "staff-password").getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+
+        long adminId = ((Number) call(HttpMethod.GET, "/api/auth/me", admin, null).getBody().get("id")).longValue();
+        assertThat(status(HttpMethod.PUT, "/api/users/" + adminId + "/enabled", admin, Map.of("enabled", false)))
+                .isEqualTo(HttpStatus.BAD_REQUEST);
+
+        call(HttpMethod.PUT, "/api/users/" + staffId + "/enabled", admin, Map.of("enabled", true));
+        assertThat(login("leaver01", "staff-password").getStatusCode()).isEqualTo(HttpStatus.OK);
+    }
+
+    private ResponseEntity<Map<String, Object>> login(String username, String password) {
+        return call(HttpMethod.POST, "/api/auth/login", null, Map.of("username", username, "password", password));
+    }
+
+    /** 只看状态码，响应体按字符串读，适合返回数组或空响应的接口。 */
+    private HttpStatusCode status(HttpMethod method, String path, String token, Object body) {
+        return http.exchange(path, method, new HttpEntity<>(body, headers(token)), String.class).getStatusCode();
+    }
+
+    private static HttpHeaders headers(String token) {
+        var headers = new HttpHeaders();
+        if (token != null) {
+            headers.setBearerAuth(token);
+        }
+        return headers;
+    }
+
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private ResponseEntity<Map<String, Object>> call(HttpMethod method, String path, String token, Object body) {
+        ResponseEntity response = http.exchange(path, method, new HttpEntity<>(body, headers(token)), Map.class);
+        return response;
+    }
+}

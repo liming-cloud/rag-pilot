@@ -1,5 +1,6 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
+import { PERMISSIONS } from "@/lib/permissions";
 
 // 前端目录规范见 AGENTS.md“目录结构”：feature 之间只能引用对方的 api.ts，feature 不引用 app。
 const src = path.resolve(import.meta.dirname, "..");
@@ -70,7 +71,7 @@ export function productNameProblems(file: string, source: string): string[] {
  * 通用内核 + 行业包（D-045）：行业内容只写在后端的行业包里，前端非测试、非 mocks/ 的代码（含注释）里不出现任何行业包的
  * 行业标志词和词表里的词。后端主代码由 KernelNeutralityTest 用同一份行业包检查。
  */
-const PACKS = path.resolve(src, "../../backend/rag-settings/src/main/resources/industry-packs");
+const PACKS = path.resolve(src, "../../backend/contexts/rag-settings/src/main/resources/industry-packs");
 
 /** 从 pack.yml 里取出行业标志词和词表；这些列表在行业包里用 [a, b] 的写法。 */
 export function industryWordsOf(yaml: string): string[] {
@@ -94,6 +95,20 @@ export function industryWordProblems(file: string, source: string, words: string
 const industryWords = () =>
   readdirSync(PACKS).flatMap((pack) => industryWordsOf(readFileSync(path.join(PACKS, pack, "pack.yml"), "utf8")));
 
+/** 手写的权限码（#145 C7）：界面判断权限只用 lib/permissions.tsx 的 PERMISSIONS 常量。测试和假接口里可以出现。 */
+export function permissionLiteralProblems(file: string, source: string, codes: string[]): string[] {
+  if (file === "lib/permissions.tsx" || file.startsWith("mocks/") || /\.test\.tsx?$/.test(file)) return [];
+  return codes
+    .filter((code) => source.includes(`"${code}"`) || source.includes(`'${code}'`))
+    .map((code) => `${file} 手写了权限码“${code}”：改用 PERMISSIONS 常量`);
+}
+
+/** 查询键写在各 feature 的 api.ts 里（#145），页面和组件引用常量，不现场写数组。测试可以直接写。 */
+export function queryKeyLiteralProblems(file: string, source: string): string[] {
+  if (/(^|\/)api\.ts$/.test(file) || /\.test\.tsx?$/.test(file)) return [];
+  return /queryKey:\s*\[/.test(source) ? [`${file} 现场写了查询键：改用 api.ts 里的 xxxKeys 常量`] : [];
+}
+
 describe("前端目录结构", () => {
   it("src 下只有约定的目录，components 下只放 shadcn 的 ui", () => {
     expect(readdirSync(src).filter((name) => !ALLOWED_TOP.includes(name))).toEqual([]);
@@ -116,6 +131,37 @@ describe("前端目录结构", () => {
         nativeElementProblems(path.relative(src, file).split(path.sep).join("/"), readFileSync(file, "utf8")),
       );
     expect(problems).toEqual([]);
+  });
+
+  it("界面判断权限只用 PERMISSIONS 常量，不手写权限码", () => {
+    const codes = Object.values(PERMISSIONS);
+    const problems = walk(src)
+      .filter((file) => /\.tsx?$/.test(file))
+      .flatMap((file) =>
+        permissionLiteralProblems(path.relative(src, file).split(path.sep).join("/"), readFileSync(file, "utf8"), codes),
+      );
+    expect(problems).toEqual([]);
+    expect(permissionLiteralProblems("features/x/XPage.tsx", '<Can permission="kb:view">', codes)).toHaveLength(1);
+    expect(permissionLiteralProblems("mocks/identity.ts", '"kb:view"', codes)).toEqual([]);
+  });
+
+  it("组件文件不超过 300 行，超过时把对话框、分区拆到同目录的文件里（#145）", () => {
+    const tooLong = walk(src)
+      .filter((file) => /\.tsx$/.test(file) && !/\.test\.tsx$/.test(file) && !file.includes(`${path.sep}components${path.sep}`))
+      .map((file) => [path.relative(src, file), readFileSync(file, "utf8").split("\n").length] as const)
+      .filter(([, lines]) => lines > 300);
+    expect(tooLong).toEqual([]);
+  });
+
+  it("查询键只在各 api.ts 里定义", () => {
+    const problems = walk(src)
+      .filter((file) => /\.tsx?$/.test(file))
+      .flatMap((file) =>
+        queryKeyLiteralProblems(path.relative(src, file).split(path.sep).join("/"), readFileSync(file, "utf8")),
+      );
+    expect(problems).toEqual([]);
+    expect(queryKeyLiteralProblems("features/x/XPage.tsx", 'useQuery({ queryKey: ["roles"] })')).toHaveLength(1);
+    expect(queryKeyLiteralProblems("features/x/api.ts", 'queryKey: ["roles"]')).toEqual([]);
   });
 
   it("源码里不写死产品名称，名称从部署配置读取", () => {

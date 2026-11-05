@@ -14,9 +14,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { fetchRoles } from "@/features/roles/api";
-import { fetchUsers } from "@/features/users/api";
-import { fetchMembers, fetchRoleGrants, setMember, setRoleGrant } from "./api";
+import { fetchRoles, roleKeys } from "@/features/roles/api";
+import { fetchUsers, userKeys } from "@/features/users/api";
+import { ErrorMessage } from "@/lib/errors";
+import { fetchMembers, fetchRoleGrants, knowledgeKeys, setMember, setRoleGrant } from "./api";
 
 /**
  * 知识库授权（D-038、D-039）：授权给角色或账号，分两张表。能检索这个库的人 = 授权的账号 + 属于授权角色的账号；
@@ -24,20 +25,20 @@ import { fetchMembers, fetchRoleGrants, setMember, setRoleGrant } from "./api";
  */
 export function GrantsPanel({ knowledgeBaseId }: { knowledgeBaseId: number }) {
   const queryClient = useQueryClient();
-  const membersKey = ["knowledge-bases", knowledgeBaseId, "members"];
-  const roleGrantsKey = ["knowledge-bases", knowledgeBaseId, "role-grants"];
-  const roles = useQuery({ queryKey: ["roles"], queryFn: fetchRoles });
+  const membersKey = knowledgeKeys.members(knowledgeBaseId);
+  const roleGrantsKey = knowledgeKeys.roleGrants(knowledgeBaseId);
+  const roles = useQuery({ queryKey: roleKeys.all, queryFn: fetchRoles });
   const members = useQuery({ queryKey: membersKey, queryFn: () => fetchMembers(knowledgeBaseId) });
   const roleGrants = useQuery({ queryKey: roleGrantsKey, queryFn: () => fetchRoleGrants(knowledgeBaseId) });
   const [adding, setAdding] = useState(false);
 
   const revokeMember = useMutation({
     mutationFn: (userId: number) => setMember(knowledgeBaseId, userId, false),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["knowledge-bases"] }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: knowledgeKeys.all }),
   });
   const revokeRole = useMutation({
     mutationFn: (roleId: number) => setRoleGrant(knowledgeBaseId, roleId, false),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["knowledge-bases"] }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: knowledgeKeys.all }),
   });
 
   const roleIds = new Set(roleGrants.data?.map((grant) => grant.roleId));
@@ -55,8 +56,8 @@ export function GrantsPanel({ knowledgeBaseId }: { knowledgeBaseId: number }) {
           添加授权
         </Button>
       </div>
-      {error && <p className="text-sm text-destructive">{error.message}</p>}
-      <div className="rounded-lg border bg-card">
+      <ErrorMessage error={error} />
+      <div className="overflow-x-auto rounded-xl border bg-card shadow-sm">
         <Table aria-label="授权的角色">
           <TableHeader>
             <TableRow>
@@ -75,7 +76,7 @@ export function GrantsPanel({ knowledgeBaseId }: { knowledgeBaseId: number }) {
             )}
             {grantedRoles.map((role) => (
               <TableRow key={role.id}>
-                <TableCell className="py-2.5">{role.name}</TableCell>
+                <TableCell>{role.name}</TableCell>
                 <TableCell className="text-muted-foreground">{role.userCount}</TableCell>
                 <TableCell className="text-right">
                   <Button
@@ -93,7 +94,7 @@ export function GrantsPanel({ knowledgeBaseId }: { knowledgeBaseId: number }) {
           </TableBody>
         </Table>
       </div>
-      <div className="rounded-lg border bg-card">
+      <div className="overflow-x-auto rounded-xl border bg-card shadow-sm">
         <Table aria-label="授权的账号">
           <TableHeader>
             <TableRow>
@@ -111,7 +112,7 @@ export function GrantsPanel({ knowledgeBaseId }: { knowledgeBaseId: number }) {
             )}
             {members.data?.map((member) => (
               <TableRow key={member.userId}>
-                <TableCell className="py-2.5">
+                <TableCell>
                   {member.displayName}
                   <span className="ml-2 text-xs text-muted-foreground">{member.username}</span>
                 </TableCell>
@@ -161,9 +162,9 @@ function AddGrantDialog({
   const [roleId, setRoleId] = useState("");
   const [keyword, setKeyword] = useState("");
   const [search, setSearch] = useState("");
-  const roles = useQuery({ queryKey: ["roles"], queryFn: fetchRoles });
+  const roles = useQuery({ queryKey: roleKeys.all, queryFn: fetchRoles });
   const users = useQuery({
-    queryKey: ["users", { keyword: search, size: 10 }],
+    queryKey: userKeys.list({ keyword: search, size: 10 }),
     queryFn: () => fetchUsers({ keyword: search, size: 10 }),
     enabled: kind === "user",
   });
@@ -173,8 +174,8 @@ function AddGrantDialog({
         ? setRoleGrant(knowledgeBaseId, target.id, true)
         : setMember(knowledgeBaseId, target.id, true),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["knowledge-bases"] });
-      await queryClient.invalidateQueries({ queryKey: ["roles"] });
+      await queryClient.invalidateQueries({ queryKey: knowledgeKeys.all });
+      await queryClient.invalidateQueries({ queryKey: roleKeys.all });
       onDone();
     },
   });
@@ -267,7 +268,7 @@ function AddGrantDialog({
           )}
         </div>
       )}
-      {grant.isError && <p className="text-sm text-destructive">{grant.error.message}</p>}
+      <ErrorMessage error={grant.error} />
       <DialogFooter>
         <Button type="button" variant="ghost" size="sm" onClick={onDone}>
           取消

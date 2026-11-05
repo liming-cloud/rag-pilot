@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # 全新安装（D-048、#138）：在宿主机上构建镜像（build.sh）→ 启动 → 等健康检查通过 → 跑一遍 verify.sh。
-# 先复制 .env.example 为 .env 并填写（至少 DB_PASSWORD、MODEL_API_KEY、RAG_ADMIN_PASSWORD、RAG_MASTER_KEY）。
+# 先复制 .env.example 为 .env 并填写（至少 DB_PASSWORD、REDIS_PASSWORD、MODEL_API_KEY、RAG_ADMIN_PASSWORD、RAG_MASTER_KEY）。
 # 用法：./install.sh
 source "$(dirname "$0")/lib.sh"
 
 [ -n "$(setting DB_PASSWORD)" ] && [ "$(setting DB_PASSWORD)" != "change-me" ] || die "请在 .env 里设置 DB_PASSWORD"
+[ -n "$(setting REDIS_PASSWORD)" ] && [ "$(setting REDIS_PASSWORD)" != "change-me" ] || die "请在 .env 里设置 REDIS_PASSWORD"
 [ -n "$(setting RAG_ADMIN_PASSWORD)" ] || die "请在 .env 里设置 RAG_ADMIN_PASSWORD（第一次启动时创建超级管理员）"
 [ -z "$(running_version)" ] || die "已经有版本 $(running_version) 在运行；升级请用 ./upgrade.sh"
 

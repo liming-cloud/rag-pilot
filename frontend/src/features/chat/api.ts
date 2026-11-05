@@ -1,4 +1,4 @@
-import { json } from "@/lib/api";
+import { ApiError, json } from "@/lib/api";
 import { authFetch } from "@/lib/auth";
 
 /** 与后端 answering 模块的 Citation 一致。 */
@@ -10,6 +10,10 @@ export type Citation = {
   headingPath: string;
   /** 原文片段；按当前授权读取，知识库授权已收回或原文已删除时为 null，界面显示“已无权查看原文”（D-036）。 */
   excerpt: string | null;
+  /** 资料最后一次上传或替换的时间（#145 A7）；原文已删除时为 null。 */
+  documentUpdatedAt: string | null;
+  /** 资料现在的状态：仍有效、已过失效日期、已被新版本替换（#145 A7）。 */
+  documentState: "CURRENT" | "EXPIRED" | "REPLACED";
 };
 
 /** 与后端 answering 模块的 Answer 一致；拒答时 text 是给用户看的说明，citations 为空。id 用于点赞点踩。 */
@@ -20,7 +24,18 @@ export type Answer = {
   refusalReason: "NO_EVIDENCE" | "LOW_RELEVANCE" | "MODEL_DECLINED" | "UNCITED" | null;
   citations: Citation[];
   topRelevance: number | null;
+  /** 低分改写和各阶段耗时，评测报告用，界面不显示。 */
+  rewrite?: Record<string, unknown> | null;
+  timings?: Record<string, unknown> | null;
 };
+
+/**
+ * 记下员工点开了这条回答的第几个引用（#145 A11，算引用点开率）。只记哪条回答、第几个引用和时间；
+ * 上报失败不影响员工看原文，所以不抛出。
+ */
+export async function reportCitationOpened(answerId: number, index: number): Promise<void> {
+  await authFetch(`/api/answers/${answerId}/citations/${index}/opened`, { method: "POST" }).catch(() => undefined);
+}
 
 /** 点赞、点踩（可附留言）或撤销（rating 为 null）。只有提问人本人能评价自己的回答。 */
 export async function rateAnswer(id: number, rating: "UP" | "DOWN" | null, comment?: string): Promise<void> {
@@ -131,6 +146,8 @@ export type TurnHandlers = {
   onTurn?: (turnId: number) => void;
   onStatus?: (text: string) => void;
   onDelta?: (text: string) => void;
+  /** 拿到轮次 id 之前点停止时用它断开请求（#145 A5）。 */
+  signal?: AbortSignal;
 };
 
 /**
@@ -146,9 +163,14 @@ export async function askInConversation(
     method: "POST",
     headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
     body: JSON.stringify(request),
+    signal: handlers.signal,
   });
-  if (!response.ok || !response.body) {
-    throw new Error(`问答失败（${response.status}）`);
+  if (!response.ok) {
+    // 问题太长、会话刚被改过、提问太频繁等，显示服务端给的原因（#145 A2）。
+    await json(response, "问答失败，请稍后重试");
+  }
+  if (!response.body) {
+    throw new Error("问答失败，请稍后重试");
   }
   return readEvents<Turn>(response.body, {
     turn: (data) => handlers.onTurn?.((data as { id: number }).id),
@@ -180,23 +202,43 @@ async function readEvents<T>(
         return event.data as T;
       }
       if (event.name === "error") {
-        throw new Error((event.data as { detail: string }).detail);
+        const problem = event.data as { code?: string; detail: string };
+        throw new ApiError(200, problem.detail, problem.code);
       }
       on[event.name]?.(event.data);
     }
   }
 }
 
-/** 问答页的文案和推荐问题（D-045）：默认来自行业包，管理员可在系统设置里改。 */
-export type ChatTexts = { placeholder: string; emptyHint: string; suggestedQuestions: string[] };
+/**
+ * 问答页的文案和推荐问题（D-045），默认来自行业包，管理员可在系统设置里改。refusalTips、refusalContact 是答不上来时给的下一步（#145 A8，行业包配置）：
+ * 换个问法的建议，以及还找不到时该问谁。
+ */
+export type ChatTexts = {
+  placeholder: string;
+  emptyHint: string;
+  suggestedQuestions: string[];
+  refusalTips: string[];
+  refusalContact: string;
+};
 
 /** 读取失败或还没读到时用的内核默认值，不带行业内容。 */
 export const DEFAULT_CHAT_TEXTS: ChatTexts = {
   placeholder: "输入问题…",
   emptyHint: "问问知识库里的内容，回答会标出原文出处，可以接着追问。",
   suggestedQuestions: [],
+  refusalTips: ["换个说法，或者说出具体的名称、场景再问一次。"],
+  refusalContact: "",
 };
 
 export async function fetchChatTexts(): Promise<ChatTexts> {
   return json(await authFetch("/api/settings/chat"), "读取问答页文案失败");
 }
+
+/** 问答页用到的查询键（#145：查询键收在各自的 api.ts）。 */
+export const chatKeys = {
+  conversations: ["conversations"],
+  /** id 为 null 时查询不启用（还没有会话）。 */
+  conversation: (id: number | null) => ["conversation", id] as const,
+  texts: ["chat-texts"],
+} as const;

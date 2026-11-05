@@ -28,10 +28,13 @@ export async function fetchBranding(): Promise<Branding> {
 
 /** 读不到时用默认值，不让名称影响登录。顺便把浏览器标题设成产品名称。 */
 export function useBranding(): Branding {
-  const branding = useQuery({ queryKey: ["branding"], queryFn: fetchBranding, staleTime: Infinity, retry: false });
+  const branding = useQuery({ queryKey: brandingKey, queryFn: fetchBranding, staleTime: Infinity, retry: false });
   const value = branding.data ?? DEFAULT_BRANDING;
   useEffect(() => {
     document.title = value.name;
   }, [value.name]);
   return value;
 }
+
+/** 品牌信息的查询键。 */
+export const brandingKey = ["branding"] as const;

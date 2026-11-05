@@ -1,13 +1,16 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
+import { Link } from "react-router";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Can } from "@/lib/permissions";
-import { type GapGroup, recheckGap, resolveGap } from "./api";
+import { answerKeys } from "@/features/answers/api";
+import { ErrorMessage } from "@/lib/errors";
+import { Can, PERMISSIONS } from "@/lib/permissions";
+import { type GapGroup, gapKeys, recheckGap, resolveGap } from "./api";
 
 /**
  * 一类缺口的详情：类里的原始记录（时间、提问人、原文、类型、留言、状态）；用代表问题重新回答，确认补的资料生效后
@@ -26,8 +29,8 @@ export function GapDialog({ group, onDone }: { group: GapGroup; onDone: () => vo
         note.trim() || undefined,
       ),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["answer-gaps"] });
-      await queryClient.invalidateQueries({ queryKey: ["answer-reviews"] });
+      await queryClient.invalidateQueries({ queryKey: gapKeys.all });
+      await queryClient.invalidateQueries({ queryKey: answerKeys.reviews });
       onDone();
     },
   });
@@ -42,7 +45,23 @@ export function GapDialog({ group, onDone }: { group: GapGroup; onDone: () => vo
           {group.citedDocuments.length > 0 && ` · 差评时引用了 ${group.citedDocuments.join("、")}`}
         </DialogDescription>
       </DialogHeader>
-      <div className="max-h-72 overflow-y-auto rounded-lg border">
+      {group.knowledgeBaseRefs.length > 0 && (
+        <Can permission={PERMISSIONS.DOC_UPLOAD}>
+          <nav aria-label="去补资料" className="flex flex-wrap items-center gap-2 text-sm">
+            <span className="text-muted-foreground">去补资料：</span>
+            {group.knowledgeBaseRefs.map((knowledgeBase) => (
+              <Link
+                key={knowledgeBase.id}
+                to={`/admin/knowledge/${knowledgeBase.id}`}
+                className="text-primary underline-offset-4 hover:underline"
+              >
+                {knowledgeBase.name}
+              </Link>
+            ))}
+          </nav>
+        </Can>
+      )}
+      <div className="max-h-72 overflow-y-auto rounded-xl border">
         <Table aria-label="这一类的记录">
           <TableHeader className="sticky top-0 bg-card">
             <TableRow>
@@ -103,7 +122,7 @@ export function GapDialog({ group, onDone }: { group: GapGroup; onDone: () => vo
         </div>
       )}
       {(recheck.isError || resolve.isError) && (
-        <p className="text-sm text-destructive">{(recheck.error ?? resolve.error)?.message}</p>
+        <ErrorMessage error={recheck.error ?? resolve.error} />
       )}
       {resolving && (
         <Label className="flex flex-col gap-1 text-sm">
@@ -117,13 +136,13 @@ export function GapDialog({ group, onDone }: { group: GapGroup; onDone: () => vo
         </Label>
       )}
       <DialogFooter>
-        <Can permission="answer:recheck">
+        <Can permission={PERMISSIONS.ANSWER_RECHECK}>
           <Button size="sm" variant="ghost" disabled={recheck.isPending} onClick={() => recheck.mutate()}>
             {recheck.isPending ? "正在回答…" : "用代表问题重新回答"}
           </Button>
         </Can>
         {open.length > 0 && (
-          <Can permission="answer:review">
+          <Can permission={PERMISSIONS.ANSWER_REVIEW}>
             {resolving ? (
               <Button size="sm" disabled={resolve.isPending} onClick={() => resolve.mutate()}>
                 确认 {open.length} 条已处理

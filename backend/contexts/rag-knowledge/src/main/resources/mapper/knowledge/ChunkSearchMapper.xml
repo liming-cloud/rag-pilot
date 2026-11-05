@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.liming.rag.knowledge.infrastructure.persistence.ChunkSearchMapper">
+
+    <!--
+      用户能访问的知识库 = 直接授权给本人的 ∪ 授权给其角色的（D-038）。这是检索链路里唯一的权限过滤定义（AGENTS.md）：
+      nearest、keyword 两条召回 SQL 和 accessibleContents 都只在这个范围里查；KnowledgeBaseMemberMapper 列出可访问的库时
+      也引用它。roleIds 由检索服务向 identity 查得，不由调用方传入。
+    -->
+    <sql id="accessibleKnowledgeBases">
+        SELECT knowledge_base_id FROM knowledge_base_member
+        WHERE tenant_id = #{tenantId} AND user_id = #{userId}
+        <if test="roleIds != null and !roleIds.isEmpty()">
+            UNION
+            SELECT knowledge_base_id FROM knowledge_base_role_grant
+            WHERE tenant_id = #{tenantId}
+              AND role_id IN <foreach collection="roleIds" item="roleId" open="(" separator="," close=")">#{roleId}</foreach>
+        </if>
+    </sql>
+
+    <!--
+      当天有效的文档（#124、D-046）：未到生效日期、过了失效日期的不参与检索；失效日期当天仍有效。today 按部署的统计时区
+      由检索服务算出。有效期不是权限，但和权限过滤写在同一个检索 SQL 里，保证检索入口只有一处。
+      accessibleContents 不加这个条件：员工过去的回答里引用的原文，资料过期后仍能查看（审计）。
+    -->
+    <sql id="currentDocuments">
+        SELECT id FROM document
+        WHERE tenant_id = #{tenantId}
+          AND (effective_from IS NULL OR effective_from &lt;= #{today})
+          AND (expires_on IS NULL OR expires_on &gt;= #{today})
+    </sql>
+
+    <!--
+      #145：HNSW 先扫索引再按 WHERE 过滤，可访问的资料只占一小部分时剩下的远少于 limit（pgvector 文档“Filtering”）。
+      迭代扫描在不够时继续往下扫（上限 hnsw.max_scan_tuples）；relaxed_order 的结果可能略微乱序，所以用物化 CTE 再按距离排一次
+      （pgvector 文档“Iterative Index Scans”的写法，distance + 0 防止 PostgreSQL 17 起把排序推回索引）。SET LOCAL 只在当前事务有效。
+    -->
+    <update id="enableIterativeScan">
+        SET LOCAL hnsw.iterative_scan = relaxed_order
+    </update>
+
+    <select id="nearest" resultType="long">
+        WITH relaxed AS MATERIALIZED (
+            SELECT id, embedding &lt;=&gt; CAST(#{vector} AS vector) AS distance FROM chunk
+            WHERE tenant_id = #{tenantId}
+              AND knowledge_base_id IN (<include refid="accessibleKnowledgeBases"/>)
+              <if test="knowledgeBaseIds != null and !knowledgeBaseIds.isEmpty()">
+                AND knowledge_base_id IN <foreach collection="knowledgeBaseIds" item="kb" open="(" separator="," close=")">#{kb}</foreach>
+              </if>
+              AND document_id IN (<include refid="currentDocuments"/>)
+              AND embedding IS NOT NULL
+            ORDER BY distance
+            LIMIT #{limit}
+        )
+        SELECT id FROM relaxed ORDER BY distance + 0
+    </select>
+
+    <select id="keyword" resultType="long">
+        SELECT id FROM chunk
+        WHERE tenant_id = #{tenantId}
+          AND knowledge_base_id IN (<include refid="accessibleKnowledgeBases"/>)
+          <if test="knowledgeBaseIds != null and !knowledgeBaseIds.isEmpty()">
+            AND knowledge_base_id IN <foreach collection="knowledgeBaseIds" item="kb" open="(" separator="," close=")">#{kb}</foreach>
+          </if>
+          AND document_id IN (<include refid="currentDocuments"/>)
+          <!-- 正文和章节路径（含文件名）都查（#145 B4）。 -->
+          AND (content ||| #{text} OR heading_path ||| #{text})
+        ORDER BY pdb.score(id) DESC
+        LIMIT #{limit}
+    </select>
+
+    <select id="load" resultType="com.liming.rag.knowledge.infrastructure.persistence.ChunkHitDO">
+        SELECT c.id AS chunk_id, c.document_id, d.filename AS document_name, c.heading_path, c.content
+        FROM chunk c JOIN document d ON d.id = c.document_id
+        WHERE c.tenant_id = #{tenantId}
+          AND c.id IN <foreach collection="chunkIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </select>
+
+    <select id="accessibleContents" resultType="com.liming.rag.knowledge.infrastructure.persistence.ChunkHitDO">
+        SELECT id AS chunk_id, content FROM chunk
+        WHERE tenant_id = #{tenantId}
+          AND knowledge_base_id IN (<include refid="accessibleKnowledgeBases"/>)
+          AND id IN <foreach collection="chunkIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </select>
+</mapper>

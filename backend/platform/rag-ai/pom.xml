@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.liming.rag</groupId>
+        <artifactId>rag-platform</artifactId>
+        <version>0.1.0-SNAPSHOT</version>
+        <relativePath>../pom.xml</relativePath>
+    </parent>
+
+    <artifactId>rag-ai</artifactId>
+    <!-- Spring AI 防腐层（#145）：按能力提供文字生成、改写、向量化、重排、连通测试，上下文不接触 Spring AI 的类型。 -->
+
+    <dependencies>
+        <dependency>
+            <groupId>${project.groupId}</groupId>
+            <artifactId>rag-shared</artifactId>
+        </dependency>
+        <!-- 问题向量缓存（D-053）。 -->
+        <dependency>
+            <groupId>${project.groupId}</groupId>
+            <artifactId>rag-cache</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.modulith</groupId>
+            <artifactId>spring-modulith-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-autoconfigure</artifactId>
+        </dependency>
+        <!--
+          Spring AI 只在这里用（#145）：声明为 optional，不传给依赖 rag-ai 的上下文，它们只看得到 rag-ai 的能力接口；
+          运行时由启动模块 rag-app 带上。只用模型实现，不用 starter 的自动配置：模型对象由 AiConfiguration 按 rag.ai 配置显式构造。
+        -->
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-openai</artifactId>
+            <optional>true</optional>
+        </dependency>
+        <!-- ChatClient、结构化输出（#145：Spring AI 只在防腐层 rag-ai 里用）。 -->
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-client-chat</artifactId>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.assertj</groupId>
+            <artifactId>assertj-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+</project>

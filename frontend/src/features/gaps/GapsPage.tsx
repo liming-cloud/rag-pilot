@@ -9,8 +9,9 @@ import { Label } from "@/components/ui/label";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Pagination } from "@/components/ui/pagination";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { fetchGaps, GAP_RANGES, type GapGroup, type GapRange, type GapReport } from "./api";
+import { ErrorMessage } from "@/lib/errors";
 import { GapDialog } from "./GapDialog";
+import { fetchGaps, GAP_RANGES, type GapGroup, gapKeys, type GapRange, type GapReport } from "./api";
 
 const PAGE_SIZE = 20;
 
@@ -27,7 +28,7 @@ export function GapsPage() {
   const [page, setPage] = useState(1);
   const [opened, setOpened] = useState<GapGroup | null>(null);
   const report = useQuery({
-    queryKey: ["answer-gaps", days, status],
+    queryKey: gapKeys.report(days, status),
     queryFn: () => fetchGaps({ days, status }),
     placeholderData: keepPreviousData,
   });
@@ -45,9 +46,9 @@ export function GapsPage() {
   }
 
   return (
-    <main className="mx-auto flex max-w-6xl flex-col gap-4 p-6 md:p-8">
+    <main className="mx-auto flex w-full max-w-[1600px] p-6 md:p-8 xl:px-10 flex-col gap-4">
       <div className="flex flex-wrap items-center gap-2">
-        <h1 className="mr-auto font-serif text-2xl font-semibold">知识缺口</h1>
+        <h1 className="mr-auto font-display text-2xl font-semibold tracking-tight">知识缺口</h1>
         {GAP_RANGES.map((range) => (
           <Button
             key={range}
@@ -87,22 +88,24 @@ export function GapsPage() {
         </Button>
       </form>
       {report.data && <Summary report={report.data} />}
-      {report.isError && <p className="text-destructive">{report.error.message}</p>}
-      <div className="rounded-lg border bg-card">
+      <ErrorMessage error={report.error} className="text-base" />
+      <div className="overflow-x-auto rounded-xl border bg-card shadow-sm">
         <Table aria-label="知识缺口">
           <TableHeader>
             <TableRow>
               <TableHead>代表问题</TableHead>
+              <TableHead className="text-right">问法</TableHead>
               <TableHead className="w-24 text-right">待处理 / 共</TableHead>
               <TableHead className="w-32">类型</TableHead>
-              <TableHead className="hidden w-40 lg:table-cell">知识库</TableHead>
+              <TableHead className="w-40">知识库</TableHead>
+              <TableHead className="w-48">涉及资料</TableHead>
               <TableHead className="w-28">最近一次</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {report.data && shown.length === 0 && (
               <TableRow>
-                <TableCell colSpan={5} className="py-6 text-center text-muted-foreground">
+                <TableCell colSpan={7} className="py-10 text-center text-muted-foreground">
                   {applied || status === "all" ? "没有符合条件的缺口" : "这段时间没有待处理的缺口"}
                 </TableCell>
               </TableRow>
@@ -150,16 +153,12 @@ function GapRow({ group, onOpen }: { group: GapGroup; onOpen: () => void }) {
       onClick={onOpen}
       onKeyDown={(event) => event.key === "Enter" && onOpen()}
     >
-      <TableCell className="max-w-md py-2.5">
-        <div className="flex flex-col gap-0.5">
-          <span className="line-clamp-3 font-medium wrap-anywhere" title={group.question}>
-            {group.question}
-          </span>
-          {group.phrasings > 1 && (
-            <span className="text-xs text-muted-foreground">另有 {group.phrasings - 1} 种问法</span>
-          )}
-        </div>
+      <TableCell className="max-w-md min-w-56">
+        <span className="line-clamp-3 font-medium wrap-anywhere" title={group.question}>
+          {group.question}
+        </span>
       </TableCell>
+      <TableCell className="text-right whitespace-nowrap text-muted-foreground tabular-nums">{group.phrasings} 种</TableCell>
       <TableCell className="text-right tabular-nums">
         {group.openCount === 0 ? (
           <Badge variant="success">已处理</Badge>
@@ -176,14 +175,23 @@ function GapRow({ group, onOpen }: { group: GapGroup; onOpen: () => void }) {
           {group.dislikedCount > 0 && <Badge variant="outline">没帮助 {group.dislikedCount}</Badge>}
         </div>
       </TableCell>
-      <TableCell className="hidden text-muted-foreground lg:table-cell">
+      <TableCell className="text-muted-foreground">
         <span title={group.knowledgeBases.join("、")}>{knowledgeBaseLabel(group.knowledgeBases)}</span>
+      </TableCell>
+      <TableCell className="max-w-64 truncate text-muted-foreground" title={group.citedDocuments.join("、")}>
+        {documentLabel(group.citedDocuments)}
       </TableCell>
       <TableCell className="whitespace-nowrap text-muted-foreground">
         {new Date(group.lastAskedAt).toLocaleDateString("zh-CN", { month: "numeric", day: "numeric" })}
       </TableCell>
     </TableRow>
   );
+}
+
+/** 差评时引用的资料，最多列两份；只有答不上来的类没有引用。 */
+function documentLabel(names: string[]) {
+  if (names.length === 0) return "—";
+  return names.length <= 2 ? names.join("、") : `${names.slice(0, 2).join("、")} 等 ${names.length} 份`;
 }
 
 /** 最多列两个库，其余用“等 N 个”；员工没点名知识库时检索的是全部可访问的库，列表可能很长。 */

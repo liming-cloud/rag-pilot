@@ -8,11 +8,15 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { RouterProvider } from "react-router";
 import { router } from "@/app/router";
-import { setUnauthorizedHandler } from "@/lib/auth";
+import { loginPath, setUnauthorizedHandler } from "@/lib/auth";
 import "./index.css";
 
 const queryClient = new QueryClient();
-setUnauthorizedHandler(() => router.navigate("/login", { replace: true }));
+// 登录过期时带上所在的页面去登录，登录后回来；问答页的草稿存在 sessionStorage，也还在（#145 A6）。
+setUnauthorizedHandler(() => {
+  const { pathname, search } = router.state.location;
+  void router.navigate(loginPath(pathname + search), { replace: true });
+});
 
 async function enableMocks() {
   // 只有 dev:mock 模式才加载假接口，生产构建里这段代码会被摇树去掉。
@@ -22,7 +26,7 @@ async function enableMocks() {
   }
 }
 
-enableMocks().then(() => {
+void enableMocks().then(() => {
   createRoot(document.getElementById("root")!).render(
     <StrictMode>
       <QueryClientProvider client={queryClient}>

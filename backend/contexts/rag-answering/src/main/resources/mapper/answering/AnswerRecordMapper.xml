@@ -1,0 +1,158 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.liming.rag.answering.infrastructure.persistence.AnswerRecordMapper">
+
+    <resultMap id="gapRecord" type="com.liming.rag.answering.infrastructure.persistence.GapRecordDO" autoMapping="true">
+        <result column="knowledge_base_ids" property="knowledgeBaseIds"
+                typeHandler="org.apache.ibatis.type.ArrayTypeHandler"/>
+        <result column="question_embedding" property="questionEmbedding"
+                typeHandler="org.apache.ibatis.type.ArrayTypeHandler"/>
+    </resultMap>
+
+    <select id="citations" resultType="com.liming.rag.answering.infrastructure.persistence.CitationDO">
+        SELECT c.answer_id, c.citation_index, c.chunk_id, c.document_id, c.document_name, c.heading_path
+        FROM answer_citation c JOIN answer_record r ON r.id = c.answer_id
+        WHERE r.tenant_id = #{tenantId}
+          AND c.answer_id IN <foreach collection="ids" item="id" open="(" separator="," close=")">#{id}</foreach>
+        ORDER BY c.answer_id, c.citation_index
+    </select>
+
+    <sql id="reviewFilter">
+        WHERE r.tenant_id = #{tenantId}
+        <if test="filter == 'DISLIKED'">AND r.rating = 'DOWN'</if>
+        <if test="filter == 'REFUSED'">AND r.refused</if>
+        <if test="status != null">AND r.review_status = #{status}</if>
+        <if test="since != null">AND r.created_at &gt;= #{since}</if>
+        <if test="keyword != null">AND r.question ILIKE '%' || #{keyword} || '%'</if>
+    </sql>
+
+    <select id="list" resultType="com.liming.rag.answering.infrastructure.persistence.AnswerReviewDO">
+        SELECT r.id, r.user_id, r.question, r.answer_text, r.refused, r.refusal_reason, r.top_relevance,
+               r.rating, r.feedback_comment, r.created_at, r.rewritten_question, r.review_status,
+               r.resolution_note, r.resolved_at,
+               (SELECT string_agg(DISTINCT c.document_name, chr(31)) FROM answer_citation c
+                 WHERE c.answer_id = r.id) AS cited_documents
+        FROM answer_record r
+        <include refid="reviewFilter"/>
+        ORDER BY r.created_at DESC, r.id DESC
+        LIMIT #{size} OFFSET #{offset}
+    </select>
+
+    <select id="count" resultType="long">
+        SELECT count(*) FROM answer_record r
+        <include refid="reviewFilter"/>
+    </select>
+
+    <select id="totals" resultType="com.liming.rag.answering.infrastructure.persistence.UsageTotalsDO">
+        <![CDATA[
+        SELECT count(*) AS questions, count(DISTINCT user_id) AS askers,
+               count(*) FILTER (WHERE refused) AS refused,
+               count(*) FILTER (WHERE NOT refused AND rating IS NOT NULL) AS rated,
+               count(*) FILTER (WHERE NOT refused AND rating = 'UP') AS liked,
+               count(*) FILTER (WHERE NOT refused AND rating = 'DOWN') AS disliked,
+               count(*) FILTER (WHERE review_status = 'OPEN' AND (refused OR rating = 'DOWN')) AS open_reviews,
+               count(*) FILTER (WHERE EXISTS (SELECT 1 FROM answer_citation c WHERE c.answer_id = answer_record.id)) AS cited_answers,
+               count(*) FILTER (WHERE EXISTS (SELECT 1 FROM answer_citation_open o WHERE o.answer_id = answer_record.id)) AS opened_answers
+        FROM answer_record
+        WHERE tenant_id = #{tenantId} AND created_at >= #{from} AND created_at < #{to}
+        ]]>
+    </select>
+
+    <resultMap id="repeatPair" type="com.liming.rag.answering.infrastructure.persistence.RepeatPairDO" autoMapping="true">
+        <result column="previous_vector" property="previousVector"
+                typeHandler="org.apache.ibatis.type.ArrayTypeHandler"/>
+        <result column="current_vector" property="currentVector"
+                typeHandler="org.apache.ibatis.type.ArrayTypeHandler"/>
+    </resultMap>
+
+    <select id="repeatPairs" resultMap="repeatPair">
+        <![CDATA[
+        SELECT cur.id AS record_id, prev.question_embedding AS previous_vector, cur.question_embedding AS current_vector
+        FROM answer_record cur
+        JOIN answer_record prev ON prev.tenant_id = cur.tenant_id AND prev.user_id = cur.user_id
+             AND prev.created_at < cur.created_at AND prev.created_at >= cur.created_at - make_interval(secs => #{seconds})
+        WHERE cur.tenant_id = #{tenantId} AND cur.created_at >= #{from} AND cur.created_at < #{to}
+          AND cur.question_embedding IS NOT NULL AND prev.question_embedding IS NOT NULL
+        ]]>
+    </select>
+
+    <select id="daily" resultType="com.liming.rag.answering.infrastructure.persistence.DailyUsageDO">
+        <![CDATA[
+        SELECT CAST(created_at AT TIME ZONE #{zone} AS date) AS day, count(*) AS questions,
+               count(*) FILTER (WHERE refused) AS refused,
+               count(*) FILTER (WHERE NOT refused AND rating = 'DOWN') AS disliked
+        FROM answer_record
+        WHERE tenant_id = #{tenantId} AND created_at >= #{from} AND created_at < #{to}
+        GROUP BY day
+        ]]>
+    </select>
+
+    <select id="refusalReasons" resultType="com.liming.rag.answering.infrastructure.persistence.LabelCountDO">
+        <![CDATA[
+        SELECT refusal_reason AS label, count(*) AS count
+        FROM answer_record
+        WHERE tenant_id = #{tenantId} AND created_at >= #{from} AND created_at < #{to} AND refused
+        GROUP BY refusal_reason
+        ORDER BY count DESC, refusal_reason
+        ]]>
+    </select>
+
+    <select id="topCitedDocuments" resultType="com.liming.rag.answering.infrastructure.persistence.LabelCountDO">
+        <![CDATA[
+        SELECT c.document_name AS label, count(DISTINCT c.answer_id) AS count
+        FROM answer_citation c
+        JOIN answer_record r ON r.id = c.answer_id
+        WHERE r.tenant_id = #{tenantId} AND r.created_at >= #{from} AND r.created_at < #{to}
+        GROUP BY c.document_name
+        ORDER BY count DESC, c.document_name
+        LIMIT #{limit}
+        ]]>
+    </select>
+
+    <!-- 知识缺口要归类的记录（D-047）：答不上来的和被点踩的，最新的在前。 -->
+    <sql id="gapFilter">
+        WHERE r.tenant_id = #{tenantId} AND r.created_at &gt;= #{from} AND r.created_at &lt; #{to}
+          AND (r.refused OR r.rating = 'DOWN')
+    </sql>
+
+    <select id="gapRecords" resultMap="gapRecord">
+        SELECT r.id, r.user_id, r.question, r.created_at, r.refused, r.feedback_comment, r.review_status,
+               r.knowledge_base_ids, r.question_embedding,
+               (SELECT string_agg(DISTINCT c.document_name, chr(31)) FROM answer_citation c
+                 WHERE c.answer_id = r.id) AS cited_documents
+        FROM answer_record r
+        <include refid="gapFilter"/>
+        ORDER BY r.created_at DESC, r.id DESC
+        LIMIT #{limit}
+    </select>
+
+    <select id="countGapRecords" resultType="long">
+        SELECT count(*) FROM answer_record r
+        <include refid="gapFilter"/>
+    </select>
+
+    <!-- 写回问题向量（#145 C6）：一次写一批，不逐条往返。 -->
+    <update id="updateQuestionVectors">
+        UPDATE answer_record r SET question_embedding = v.vector
+        FROM (VALUES
+        <foreach collection="rows" item="row" separator=",">
+            (#{row.id}::bigint, #{row.vector, typeHandler=org.apache.ibatis.type.ArrayTypeHandler}::real[])
+        </foreach>
+        ) AS v(id, vector)
+        WHERE r.tenant_id = #{tenantId} AND r.id = v.id
+    </update>
+
+    <!-- 运营明细导出（#125）：一段时间内的全部问答，按时间先后。 -->
+    <select id="between" resultType="com.liming.rag.answering.infrastructure.persistence.AnswerReviewDO">
+        SELECT r.id, r.user_id, r.question, r.answer_text, r.refused, r.refusal_reason, r.top_relevance,
+               r.rating, r.feedback_comment, r.created_at, r.rewritten_question, r.review_status,
+               r.resolution_note, r.resolved_at,
+               (SELECT string_agg(DISTINCT c.document_name, chr(31)) FROM answer_citation c
+                 WHERE c.answer_id = r.id) AS cited_documents
+        FROM answer_record r
+        WHERE r.tenant_id = #{tenantId} AND r.created_at &gt;= #{from} AND r.created_at &lt; #{to}
+        ORDER BY r.created_at, r.id
+        LIMIT #{limit}
+    </select>
+
+</mapper>

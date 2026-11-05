@@ -54,3 +54,9 @@ export async function deleteRole(id: number): Promise<void> {
     await json(response, "删除角色失败");
   }
 }
+
+/** 角色相关的查询键。 */
+export const roleKeys = {
+  all: ["roles"],
+  catalog: ["permission-catalog"],
+} as const;

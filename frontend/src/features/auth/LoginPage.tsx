@@ -1,13 +1,15 @@
 import { BadgeCheck, FileSearch, ShieldCheck } from "lucide-react";
 import { type FormEvent, useState } from "react";
-import { useNavigate } from "react-router";
+import { useNavigate, useSearchParams } from "react-router";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ApiError } from "@/lib/api";
+import { returnPath } from "@/lib/auth";
 import { useBranding } from "@/lib/branding";
-import { BadCredentialsError, login } from "./api";
+import { ErrorMessage } from "@/lib/errors";
 import { TrustIllustration } from "./TrustIllustration";
+import { BadCredentialsError, login } from "./api";
 
 /** 内核的产品主张，不随行业变（D-042）。 */
 const VALUES = [
@@ -22,6 +24,7 @@ const VALUES = [
  */
 export function LoginPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const branding = useBranding();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -34,10 +37,12 @@ export function LoginPage() {
     setError(null);
     try {
       const me = await login(username.trim(), password);
-      navigate(me.mustChangePassword ? "/change-password" : "/chat", { replace: true });
+      // 必须先改密码时先去改密码；否则回到登录过期前所在的页面（#145 A6）。
+      void navigate(me.mustChangePassword ? "/change-password" : returnPath(searchParams.get("from")), { replace: true });
     } catch (e) {
       setError(
-        e instanceof BadCredentialsError || (e instanceof ApiError && e.code === "IDENTITY_LOCKED")
+        e instanceof BadCredentialsError ||
+          (e instanceof ApiError && (e.code === "IDENTITY_LOCKED" || e.code === "TOO_MANY_REQUESTS"))
           ? e.message
           : "暂时无法登录，请稍后重试。",
       );
@@ -50,32 +55,42 @@ export function LoginPage() {
     <div className="grid min-h-dvh lg:grid-cols-[1.15fr_1fr]">
       <section
         aria-label="产品介绍"
-        className="hidden flex-col justify-between gap-10 bg-secondary px-14 py-12 lg:flex"
+        className="relative hidden flex-col justify-between gap-10 overflow-hidden bg-[#161447] px-14 py-12 text-white lg:flex"
       >
-        <div className="flex flex-col gap-3">
-          <p className="font-serif text-3xl font-semibold">{branding.name}</p>
-          {branding.tagline && <p className="text-lg text-muted-foreground">{branding.tagline}</p>}
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute -top-32 -left-24 size-[28rem] rounded-full bg-primary/50 blur-3xl"
+        />
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute -right-24 bottom-0 size-[26rem] rounded-full bg-cyan/30 blur-3xl"
+        />
+        <div className="relative flex flex-col gap-3">
+          <p className="font-display text-3xl font-semibold tracking-tight">{branding.name}</p>
+          {branding.tagline && <p className="text-lg text-white/75">{branding.tagline}</p>}
         </div>
-        <TrustIllustration className="w-full max-w-lg self-center" />
-        <ul className="grid grid-cols-3 gap-6">
+        <div className="relative w-full max-w-md self-center rounded-3xl border border-white/25 bg-white/90 p-8 shadow-lg backdrop-blur">
+          <TrustIllustration className="w-full max-w-lg" />
+        </div>
+        <ul className="relative grid grid-cols-3 gap-6">
           {VALUES.map(({ icon: Icon, title, text }) => (
             <li key={title} className="flex flex-col gap-1.5">
               <span className="flex items-center gap-2 font-medium">
-                <Icon aria-hidden="true" className="size-4 text-brand" />
+                <Icon aria-hidden="true" className="size-4 text-cyan-300" />
                 {title}
               </span>
-              <span className="text-sm text-muted-foreground">{text}</span>
+              <span className="text-sm text-white/70">{text}</span>
             </li>
           ))}
         </ul>
       </section>
-      <main className="flex items-center justify-center p-6">
-        <div className="flex w-full max-w-sm flex-col gap-6 rounded-lg border bg-card p-8 shadow-sm">
+      <main className="flex items-center justify-center bg-background p-6">
+        <div className="flex w-full max-w-sm flex-col gap-6 ai-border rounded-2xl p-8 shadow-lg">
           <div className="flex flex-col gap-1">
-            <h1 className="font-serif text-2xl font-semibold">登录{branding.name}</h1>
+            <h1 className="font-display text-2xl font-semibold tracking-tight">登录{branding.name}</h1>
             {branding.tagline && <p className="text-sm text-muted-foreground lg:hidden">{branding.tagline}</p>}
           </div>
-          <form onSubmit={submit} className="flex flex-col gap-4">
+          <form onSubmit={(event) => void submit(event)} className="flex flex-col gap-4">
             <Label className="flex flex-col gap-1">
               用户名
               <Input
@@ -97,12 +112,8 @@ export function LoginPage() {
                 required
               />
             </Label>
-            {error && (
-              <p role="alert" className="text-sm text-destructive">
-                {error}
-              </p>
-            )}
-            <Button type="submit" className="h-11" disabled={submitting}>
+            <ErrorMessage error={error} />
+            <Button type="submit" className="h-11 text-base" disabled={submitting}>
               登录
             </Button>
           </form>

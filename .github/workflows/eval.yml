@@ -34,13 +34,13 @@ on:
         default: ""
   pull_request:
     paths:
-      - backend/rag-ai/**
-      - backend/rag-knowledge/**
-      - backend/rag-answering/**
-      - backend/rag-evaluation/**
-      - backend/rag-settings/**
-      - backend/rag-app/src/test/resources/eval/**
-      - backend/rag-app/src/main/resources/application.yml
+      - backend/platform/rag-ai/**
+      - backend/contexts/rag-knowledge/**
+      - backend/contexts/rag-answering/**
+      - backend/contexts/rag-evaluation/**
+      - backend/contexts/rag-settings/**
+      - backend/boot/rag-app/src/test/resources/eval/**
+      - backend/boot/rag-app/src/main/resources/application.yml
       - .github/workflows/eval.yml
   push:
     branches: [main]
@@ -94,7 +94,7 @@ jobs:
           if [ -n "$EVIDENCE_LIMIT" ]; then export RAG_ANSWERING_EVIDENCE_LIMIT="$EVIDENCE_LIMIT"; fi
           if [ "$HEDGE_AFTER" = off ]; then export CHAT_HEDGE_AFTER=; elif [ -n "$HEDGE_AFTER" ]; then export CHAT_HEDGE_AFTER="$HEDGE_AFTER"; fi
           if [ "$HEDGE_MODEL" = same ]; then export CHAT_HEDGE_MODEL=; elif [ -n "$HEDGE_MODEL" ]; then export CHAT_HEDGE_MODEL="$HEDGE_MODEL"; fi
-          ./mvnw -B -ntp verify -pl backend/rag-app -am \
+          ./mvnw -B -ntp verify -pl backend/boot/rag-app -am \
             -Dtest.groups=eval -Dtest.excludedGroups=none \
             -Dtest=EvaluationRun -Dsurefire.failIfNoSpecifiedTests=false
       - name: 保存报告
@@ -102,5 +102,5 @@ jobs:
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: eval-report
-          path: backend/rag-app/target/eval-report.md
+          path: backend/boot/rag-app/target/eval-report.md
           if-no-files-found: ignore

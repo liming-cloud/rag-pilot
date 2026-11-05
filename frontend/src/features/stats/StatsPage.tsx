@@ -2,17 +2,18 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { ChevronRight, Download, Printer } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { fetchExpirySummary } from "@/features/knowledge/api";
-import { Can, useCan } from "@/lib/permissions";
+import { ErrorMessage } from "@/lib/errors";
+import { Can, PERMISSIONS, useCan } from "@/lib/permissions";
+import { ExpirySection } from "./ExpirySection";
+import { DailyTable, Ranking, percent } from "./StatsTables";
 import {
   exportUsageCsv,
   fetchUsageStats,
   RANGES,
   recentWeeks,
+  statsKeys,
   type StatsPeriod,
   type Totals,
   type UsageStats,
@@ -26,9 +27,6 @@ const REASONS: Record<string, string> = {
   UNCITED: "回答没有可核对的引用",
 };
 
-/** 运营概览上列出的到期资料份数，其余到知识库里看。 */
-const EXPIRY_ROWS = 5;
-
 /**
  * 运营概览（管理端首页）：员工用得怎么样、哪些资料该补、哪些资料该更新，供试点汇报和补文档参考。
  * 可以看最近 N 天，也可以看某个自然周并与上一周对比（#125、D-047）；“打印”用浏览器存成 PDF 作为周报，
@@ -38,7 +36,7 @@ const EXPIRY_ROWS = 5;
  */
 export function StatsPage() {
   const [period, setPeriod] = useState<StatsPeriod>({ days: 30 });
-  const stats = useQuery({ queryKey: ["usage-stats", period], queryFn: () => fetchUsageStats(period) });
+  const stats = useQuery({ queryKey: statsKeys.usage(period), queryFn: () => fetchUsageStats(period) });
   const weeks = recentWeeks(stats.data?.zone ?? "Asia/Shanghai");
   const week = "week" in period ? period.week : "";
   const exporting = useMutation({
@@ -47,9 +45,9 @@ export function StatsPage() {
   });
 
   return (
-    <main className="mx-auto flex max-w-4xl flex-col gap-6 p-6 md:p-8 print:max-w-none print:p-0">
+    <main className="mx-auto flex w-full max-w-[1600px] flex-col gap-6 p-6 md:p-8 xl:px-10 print:max-w-none print:p-0">
       <div className="flex flex-wrap items-center gap-2">
-        <h1 className="mr-auto font-serif text-2xl font-semibold">{week ? "运营周报" : "运营概览"}</h1>
+        <h1 className="mr-auto font-display text-2xl font-semibold tracking-tight">{week ? "运营周报" : "运营概览"}</h1>
         <div className="flex flex-wrap items-center gap-2 print:hidden">
           {RANGES.map((range) => (
             <Button
@@ -82,7 +80,7 @@ export function StatsPage() {
           <Printer aria-hidden="true" className="size-4" />
           打印 / 存为 PDF
         </Button>
-        <Can permission="stats:export">
+        <Can permission={PERMISSIONS.STATS_EXPORT}>
           <Button
             size="sm"
             variant="outline"
@@ -96,7 +94,7 @@ export function StatsPage() {
         {exporting.isError && <span className="text-sm text-destructive">{exporting.error.message}</span>}
       </div>
       {stats.isPending && <p className="text-muted-foreground">正在统计…</p>}
-      {stats.isError && <p className="text-destructive">{stats.error.message}</p>}
+      <ErrorMessage error={stats.error} className="text-base" />
       {stats.data && <StatsView stats={stats.data} />}
     </main>
   );
@@ -120,7 +118,7 @@ type Card = { label: string; value: string; note: string; change?: string; to?: 
 
 function StatsView({ stats }: { stats: UsageStats }) {
   const { totals, previous } = stats;
-  const canReview = useCan("answer:view");
+  const canReview = useCan(PERMISSIONS.ANSWER_VIEW);
   const answered = totals.questions - totals.refused;
   const cards: Card[] = [
     {
@@ -128,6 +126,30 @@ function StatsView({ stats }: { stats: UsageStats }) {
       value: String(totals.questions),
       note: `${totals.askers} 位员工`,
       change: previous ? countChange(totals.questions, previous.questions) : undefined,
+    },
+    // 产品指标（#145 A11，口径见 README）：用的人多不多、用得深不深、有没有问了又问。
+    {
+      label: "提问人数占比",
+      value: percent(totals.askers, totals.activeStaff),
+      note: `${totals.activeStaff} 位能用问答的员工里 ${totals.askers} 位问过`,
+      change: previous ? rateChange(totals, previous, (t) => [t.askers, t.activeStaff]) : undefined,
+    },
+    {
+      label: "人均提问",
+      value: totals.askers === 0 ? "-" : (totals.questions / totals.askers).toFixed(1),
+      note: "问过的员工平均每人提问数",
+    },
+    {
+      label: "短时间重复提问",
+      value: percent(totals.repeatQuestions, totals.questions),
+      note: `${totals.repeatQuestions} 题是 10 分钟内又问了相近的问题`,
+      change: previous ? rateChange(totals, previous, (t) => [t.repeatQuestions, t.questions]) : undefined,
+    },
+    {
+      label: "引用点开率",
+      value: percent(totals.openedAnswers, totals.citedAnswers),
+      note: `${totals.citedAnswers} 条带引用的回答里 ${totals.openedAnswers} 条被点开过引用`,
+      change: previous ? rateChange(totals, previous, (t) => [t.openedAnswers, t.citedAnswers]) : undefined,
     },
     {
       label: "拒答率",
@@ -176,8 +198,9 @@ function StatsView({ stats }: { stats: UsageStats }) {
         <p className="text-muted-foreground">这段时间还没有提问。</p>
       ) : (
         <>
+          <div className="grid items-start gap-6 xl:grid-cols-2">
           <DailyTable daily={stats.daily} />
-          <div className="grid gap-6 md:grid-cols-2 print:grid-cols-2">
+          <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-1 print:grid-cols-2">
             <Ranking
               title="知识缺口（待处理最多）"
               to={canReview ? "/admin/gaps" : undefined}
@@ -192,6 +215,7 @@ function StatsView({ stats }: { stats: UsageStats }) {
               rows={stats.topCitedDocuments.map((row) => ({ label: row.documentName, count: row.count }))}
             />
           </div>
+          </div>
         </>
       )}
     </>
@@ -205,23 +229,23 @@ function SummaryCard({ card }: { card: Card }) {
         {card.label}
         {card.to && <ChevronRight aria-hidden="true" className="ml-auto size-4 print:hidden" />}
       </span>
-      <span className="text-2xl font-semibold">{card.value}</span>
+      <span className="text-gradient text-3xl font-semibold tracking-tight">{card.value}</span>
       <span className="text-xs text-muted-foreground">{card.note}</span>
       {card.change && <span className="text-xs">{card.change}</span>}
     </>
   );
   return (
-    <li className="flex rounded-lg border bg-card print:break-inside-avoid">
+    <li className="flex rounded-xl border bg-card shadow-sm print:break-inside-avoid">
       {card.to ? (
         <Link
           to={card.to}
           aria-label={`${card.label} ${card.value}，去处理`}
-          className="flex flex-1 flex-col gap-1 rounded-lg p-3 hover:bg-secondary"
+          className="flex flex-1 flex-col gap-1 rounded-lg p-4 hover:bg-accent/50"
         >
           {body}
         </Link>
       ) : (
-        <div className="flex flex-1 flex-col gap-1 p-3">{body}</div>
+        <div className="flex flex-1 flex-col gap-1 p-4">{body}</div>
       )}
     </li>
   );
@@ -239,132 +263,4 @@ function rateChange(current: Totals, previous: Totals, parts: (totals: Totals) =
   if (whole === 0 || previousWhole === 0) return "上周无可比数据";
   const delta = ((part / whole - previousPart / previousWhole) * 100).toFixed(1);
   return `比上周 ${Number(delta) > 0 ? "+" : ""}${delta} 个百分点`;
-}
-
-/**
- * 资料有效期（#124、#125）：有知识库权限时显示即将到期和已失效的文档数，列出最早到期的几份，周报里一起打印。
- * 都没有时不占位置。
- */
-function ExpirySection() {
-  const canView = useCan("kb:view");
-  const summary = useQuery({
-    queryKey: ["knowledge-bases", "expiry-summary"],
-    queryFn: fetchExpirySummary,
-    enabled: canView,
-  });
-  if (!summary.data || summary.data.expiring + summary.data.expired === 0) return null;
-  const { expiring, expired, warningDays, documents } = summary.data;
-  const total = expiring + expired;
-  return (
-    <section
-      aria-label="资料有效期"
-      className="flex flex-col gap-2 rounded-lg border bg-card p-3 text-sm print:break-inside-avoid"
-    >
-      <div role="status" className="flex flex-wrap items-center gap-x-3 gap-y-1">
-        <span className="font-medium">资料有效期</span>
-        {expiring > 0 && (
-          <span>
-            {expiring} 份将在 {warningDays} 天内到期
-          </span>
-        )}
-        {expired > 0 && <span className="text-destructive">{expired} 份已失效，不再参与回答</span>}
-        <Link to="/admin/knowledge" className="ml-auto inline-flex items-center hover:underline print:hidden">
-          去知识库处理
-          <ChevronRight aria-hidden="true" className="size-4" />
-        </Link>
-      </div>
-      <ul className="flex flex-col gap-1">
-        {documents.slice(0, EXPIRY_ROWS).map((document) => (
-          <li key={document.documentId} className="flex flex-wrap items-center gap-x-2">
-            <Badge variant={document.validity === "EXPIRED" ? "destructive" : "default"}>
-              {document.validity === "EXPIRED" ? "已失效" : "即将到期"}
-            </Badge>
-            <Link
-              to={`/admin/knowledge/${document.knowledgeBaseId}?validity=${document.validity}`}
-              className="wrap-anywhere hover:underline"
-            >
-              {document.filename}
-            </Link>
-            <span className="text-muted-foreground">
-              {document.knowledgeBaseName} · {document.validity === "EXPIRED" ? "失效于" : "到期"} {document.expiresOn}
-            </span>
-          </li>
-        ))}
-      </ul>
-      {total > EXPIRY_ROWS && (
-        <p className="text-xs text-muted-foreground">还有 {total - EXPIRY_ROWS} 份，到知识库里查看。</p>
-      )}
-    </section>
-  );
-}
-
-/** 每日提问、拒答、差评。条形长度按这段时间里单日最多的提问数换算。 */
-function DailyTable({ daily }: { daily: UsageStats["daily"] }) {
-  const max = Math.max(1, ...daily.map((day) => day.questions));
-  return (
-    <section className="flex flex-col gap-2">
-      <h2 className="text-lg font-medium">每日趋势</h2>
-      <div className="max-h-96 overflow-y-auto rounded-lg border bg-card print:max-h-none print:overflow-visible">
-        <Table aria-label="每日趋势">
-          <TableHeader className="sticky top-0 bg-card">
-            <TableRow>
-              <TableHead>日期</TableHead>
-              <TableHead className="w-1/2">提问</TableHead>
-              <TableHead className="text-right">拒答</TableHead>
-              <TableHead className="text-right">差评</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {daily.map((day) => (
-              <TableRow key={day.date}>
-                <TableCell className="tabular-nums">{day.date.slice(5)}</TableCell>
-                <TableCell>
-                  <div className="flex items-center gap-2">
-                    <div className="h-2 flex-1 overflow-hidden rounded-sm bg-secondary">
-                      <div className="h-full bg-primary" style={{ width: `${(day.questions / max) * 100}%` }} />
-                    </div>
-                    <span className="w-8 text-right tabular-nums">{day.questions}</span>
-                  </div>
-                </TableCell>
-                <TableCell className="text-right tabular-nums">{day.refused}</TableCell>
-                <TableCell className="text-right tabular-nums">{day.disliked}</TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </div>
-    </section>
-  );
-}
-
-function Ranking({ title, rows, to }: { title: string; rows: { label: string; count: number }[]; to?: string }) {
-  return (
-    <section className="flex flex-col gap-2 print:break-inside-avoid">
-      <h2 className="flex items-center text-lg font-medium">
-        {title}
-        {to && (
-          <Link to={to} className="ml-auto inline-flex items-center text-sm font-normal hover:underline print:hidden">
-            查看全部
-            <ChevronRight aria-hidden="true" className="size-4" />
-          </Link>
-        )}
-      </h2>
-      {rows.length === 0 ? (
-        <p className="text-sm text-muted-foreground">没有。</p>
-      ) : (
-        <ol className="flex flex-col divide-y rounded-lg border bg-card text-sm">
-          {rows.map((row) => (
-            <li key={row.label} className="flex items-start gap-3 px-3 py-2">
-              <span className="min-w-0 flex-1 break-words">{row.label}</span>
-              <span className="shrink-0 tabular-nums text-muted-foreground">{row.count} 次</span>
-            </li>
-          ))}
-        </ol>
-      )}
-    </section>
-  );
-}
-
-function percent(part: number, whole: number) {
-  return whole > 0 ? `${((part / whole) * 100).toFixed(1)}%` : "-";
 }

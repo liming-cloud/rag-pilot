@@ -5,8 +5,9 @@ import { NavLink, useNavigate } from "react-router";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { ErrorMessage } from "@/lib/errors";
 import { cn } from "@/lib/utils";
-import { type ConversationSummary, deleteConversation, fetchConversations, updateConversation } from "./api";
+import { chatKeys, type ConversationSummary, deleteConversation, fetchConversations, updateConversation } from "./api";
 import { groupByDate } from "./conversationGroups";
 
 /**
@@ -14,19 +15,19 @@ import { groupByDate } from "./conversationGroups";
  * 删除只影响员工端，管理端的回答记录照常保留；会话从最后一次提问起保留 30 天（D-036）。
  */
 export function ConversationSidebar({ activeId }: { activeId: number | null }) {
-  const conversations = useQuery({ queryKey: ["conversations"], queryFn: fetchConversations });
+  const conversations = useQuery({ queryKey: chatKeys.conversations, queryFn: fetchConversations });
   const navigate = useNavigate();
 
   return (
-    <aside aria-label="会话" className="flex w-64 shrink-0 flex-col border-r bg-card">
+    <aside aria-label="会话" className="flex w-64 shrink-0 flex-col border-r bg-card/80">
       <div className="p-3">
-        <Button variant="outline" className="w-full justify-start" onClick={() => navigate("/chat")}>
+        <Button variant="outline" className="w-full justify-start" onClick={() => void navigate("/chat")}>
           <Plus aria-hidden="true" className="size-4" />
           新对话
         </Button>
       </div>
       <nav aria-label="会话列表" className="flex flex-1 flex-col gap-4 overflow-y-auto px-2 pb-3">
-        {conversations.isError && <p className="px-2 text-sm text-destructive">读取会话失败</p>}
+        {conversations.isError && <ErrorMessage error="读取会话失败" className="px-2" />}
         {conversations.data?.length === 0 && <p className="px-2 text-sm text-muted-foreground">还没有会话</p>}
         {groupByDate(conversations.data ?? []).map((group) => (
           <section key={group.label} aria-label={group.label} className="flex flex-col gap-0.5">
@@ -56,16 +57,16 @@ function ConversationItem({ conversation, active }: { conversation: Conversation
     mutationFn: (next: string) => updateConversation(conversation.id, { title: next }),
     onSuccess: () => {
       setMode("view");
-      void queryClient.invalidateQueries({ queryKey: ["conversations"] });
-      void queryClient.invalidateQueries({ queryKey: ["conversation", conversation.id] });
+      void queryClient.invalidateQueries({ queryKey: chatKeys.conversations });
+      void queryClient.invalidateQueries({ queryKey: chatKeys.conversation(conversation.id) });
     },
   });
   const remove = useMutation({
     mutationFn: () => deleteConversation(conversation.id),
     onSuccess: () => {
-      queryClient.removeQueries({ queryKey: ["conversation", conversation.id] });
-      void queryClient.invalidateQueries({ queryKey: ["conversations"] });
-      if (active) navigate("/chat");
+      queryClient.removeQueries({ queryKey: chatKeys.conversation(conversation.id) });
+      void queryClient.invalidateQueries({ queryKey: chatKeys.conversations });
+      if (active) void navigate("/chat");
     },
   });
 
@@ -123,7 +124,7 @@ function ConversationItem({ conversation, active }: { conversation: Conversation
     <div
       className={cn(
         "group flex items-center rounded-md hover:bg-secondary",
-        active && "bg-accent text-accent-foreground",
+        active && "bg-accent font-medium text-accent-foreground shadow-[inset_3px_0_0_var(--primary)]",
       )}
     >
       <NavLink

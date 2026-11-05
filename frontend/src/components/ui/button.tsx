@@ -5,13 +5,13 @@ import { cn } from "@/lib/utils";
 
 // shadcn/ui 的 Button，尺寸按触控目标调整：默认 44px 高，图标按钮 44x44。
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors disabled:pointer-events-none disabled:opacity-50",
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all duration-150 disabled:pointer-events-none disabled:opacity-50",
   {
     variants: {
       variant: {
-        default: "bg-primary text-primary-foreground hover:bg-primary/90",
-        outline: "border border-input bg-card text-foreground hover:bg-secondary",
-        ghost: "text-muted-foreground hover:bg-secondary hover:text-foreground",
+        default: "bg-gradient-primary text-primary-foreground shadow-md hover:brightness-110 hover:shadow-glow",
+        outline: "border border-input bg-card text-foreground shadow-sm hover:border-primary/40 hover:bg-accent",
+        ghost: "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
         destructive: "bg-destructive text-destructive-foreground hover:bg-destructive/90",
       },
       size: {

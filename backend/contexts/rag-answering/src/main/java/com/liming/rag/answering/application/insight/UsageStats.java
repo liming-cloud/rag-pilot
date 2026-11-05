@@ -1,0 +1,59 @@
+package com.liming.rag.answering.application.insight;
+
+import java.time.LocalDate;
+import java.util.List;
+import org.jspecify.annotations.Nullable;
+
+/**
+ * 一段时间内的使用统计，日期按部署配置的统计时区划分（D-045）。评价相关的数只算给出了回答的记录。
+ *
+ * @param from 第一天（含）
+ * @param to 最后一天（含）
+ * @param zone 统计时区，如 Asia/Shanghai
+ * @param previous 按周查看时上一周同样天数的汇总，用来对比；按最近 N 天查看时为 null（#125）
+ * @param daily 每天一条，没有提问的日子也有，数都是 0
+ * @param topGaps 待处理次数最多的知识缺口（按意思归类，D-047）：代表问题和待处理次数
+ */
+public record UsageStats(LocalDate from, LocalDate to, String zone, Totals totals, @Nullable Totals previous,
+        List<Day> daily,
+        List<ReasonCount> refusalReasons, List<QuestionCount> topGaps, List<DocumentCount> topCitedDocuments) {
+
+    UsageStats withTotals(Totals newTotals) {
+        return new UsageStats(from, to, zone, newTotals, previous, daily, refusalReasons, topGaps, topCitedDocuments);
+    }
+
+    public UsageStats withComparison(Totals previousTotals, List<QuestionCount> gaps) {
+        return new UsageStats(from, to, zone, totals, previousTotals, daily, refusalReasons, List.copyOf(gaps),
+                topCitedDocuments);
+    }
+
+    /**
+     * @param rated 给出了回答、且被点了赞或踩的记录数
+     * @param openReviews 差评和答不上来、还没标记已处理的记录数
+     * @param activeStaff 现在能使用问答的在职员工数（启用的、有“使用问答”权限的账号）；没有账号的历史，统计各段都用当前人数
+     * @param repeatQuestions 短时间重复提问：同一员工 10 分钟内又问了意思相近的问题（问题向量相似度达到缺口归类的门槛）的题数
+     * @param citedAnswers 带引用的回答数，算引用点开率的分母
+     * @param openedAnswers 其中被点开过至少一个引用的回答数（点开记在回答被问的那一天所在的时段，不按点开的时间算）
+     */
+    public record Totals(int questions, int askers, int refused, int rated, int liked, int disliked, int openReviews,
+            int activeStaff, int repeatQuestions, int citedAnswers, int openedAnswers) {
+
+        Totals with(int staff, int repeats) {
+            return new Totals(questions, askers, refused, rated, liked, disliked, openReviews, staff, repeats,
+                    citedAnswers, openedAnswers);
+        }
+    }
+
+    public record Day(LocalDate date, int questions, int refused, int disliked) {
+    }
+
+    public record ReasonCount(String reason, int count) {
+    }
+
+    public record QuestionCount(String question, int count) {
+    }
+
+    /** @param count 引用过这份文档的回答数 */
+    public record DocumentCount(String documentName, int count) {
+    }
+}

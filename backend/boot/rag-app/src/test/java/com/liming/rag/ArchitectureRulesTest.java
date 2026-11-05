@@ -1,0 +1,241 @@
+package com.liming.rag;
+
+import static com.tngtech.archunit.base.DescribedPredicate.describe;
+import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
+import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.methods;
+import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
+import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noMethods;
+import static org.assertj.core.api.Assertions.assertThat;
+
+import com.liming.rag.archfixture.FixtureDO;
+import com.liming.rag.archfixture.answering.CallsChatModelDirectly;
+import com.liming.rag.archfixture.answering.UsesCaffeineDirectly;
+import com.liming.rag.archfixture.answering.UsesRedissonDirectly;
+import com.liming.rag.archfixture.application.ApplicationUsesCaches;
+import com.liming.rag.archfixture.answering.UsesSpringAiDocument;
+import com.liming.rag.archfixture.application.ReadsConfigWithValue;
+import com.liming.rag.archfixture.application.UsesQueryWrapper;
+import com.liming.rag.archfixture.infrastructure.AnnotatedSqlMapper;
+import com.liming.rag.archfixture.infrastructure.RawSqlUpdate;
+import com.liming.rag.archfixture.infrastructure.RawSqlWrapper;
+import com.liming.rag.archfixture.web.ChecksRoleByHand;
+import com.liming.rag.archfixture.web.UnguardedEndpoint;
+import com.liming.rag.archfixture.application.FixtureService;
+import com.liming.rag.archfixture.web.UnknownPermission;
+import com.liming.rag.archfixture.web.WebUsesServiceNestedType;
+import com.tngtech.archunit.base.DescribedPredicate;
+import com.tngtech.archunit.core.domain.JavaClass;
+import com.tngtech.archunit.core.domain.JavaMethod;
+import com.tngtech.archunit.lang.ArchCondition;
+import com.tngtech.archunit.lang.ConditionEvents;
+import com.tngtech.archunit.lang.SimpleConditionEvent;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+import com.liming.rag.archfixture.web.ModuleExceptionAdvice;
+import com.liming.rag.knowledge.infrastructure.persistence.BypassesSearchFilter;
+import com.tngtech.archunit.core.domain.JavaClasses;
+import com.tngtech.archunit.core.domain.JavaMethodCall;
+import com.tngtech.archunit.core.importer.ClassFileImporter;
+import com.tngtech.archunit.core.importer.ImportOption;
+import com.tngtech.archunit.lang.ArchRule;
+import java.util.List;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+
+/**
+ * 把 AGENTS.md 里能明确判定的约束写成规则。每条规则先检查生产代码，再用 archfixture 里故意违规的样例确认规则能拦下。
+ * 模块之间的依赖由 {@link ModularityTests} 检查，这里不重复。
+ */
+class ArchitectureRulesTest {
+
+    static final ArchRule MYBATIS_ONLY_IN_INFRASTRUCTURE = noClasses()
+            .that().resideOutsideOfPackages("..infrastructure..", "com.liming.rag.persistence..")
+            .should().dependOnClassesThat().resideInAnyPackage("com.baomidou..", "org.apache.ibatis..")
+            .as("MyBatis-Plus 和 MyBatis 的类型只出现在 infrastructure 包和平台组件 rag-persistence（D-053）");
+
+    static final ArchRule DO_ONLY_IN_INFRASTRUCTURE = classes()
+            .that().haveSimpleNameEndingWith("DO")
+            .should().resideInAPackage("..infrastructure..")
+            .as("DO 只放在 infrastructure 包");
+
+    /** 框架选用（#145）：Spring AI 只在防腐层 rag-ai 里用，其他模块经它的能力接口使用 AI 能力。 */
+    static final ArchRule SPRING_AI_ONLY_IN_RAG_AI = noClasses()
+            .that().resideOutsideOfPackage("com.liming.rag.ai..")
+            .should().dependOnClassesThat().resideInAPackage("org.springframework.ai..")
+            .as("Spring AI 只在 rag-ai 模块（防腐层）里使用");
+
+    /** 缓存平台组件（D-053、D-054）：Redis 客户端和一级缓存 Caffeine 只在 rag-cache 里用，其他模块经它的能力接口。 */
+    static final ArchRule CACHE_CLIENTS_ONLY_IN_RAG_CACHE = noClasses()
+            .that().resideOutsideOfPackage("com.liming.rag.cache..")
+            .should().dependOnClassesThat().resideInAnyPackage("org.redisson..", "org.springframework.data.redis..",
+                    "io.lettuce..", "redis.clients..", "com.github.benmanes.caffeine..")
+            .as("Redis 客户端和 Caffeine 只在 rag-cache 模块里使用");
+
+    /**
+     * 松耦合（D-054）：上下文只在 infrastructure 层用缓存组件，实现 application 声明的业务化缓存端口；
+     * api、web、application、domain 不知道缓存怎么实现。
+     */
+    static final ArchRule CACHE_ONLY_IN_INFRASTRUCTURE = noClasses()
+            .that().resideInAnyPackage("..api..", "..web..", "..application..", "..domain..")
+            .should().dependOnClassesThat().resideInAPackage("com.liming.rag.cache..")
+            .as("缓存组件 rag-cache 只在上下文的 infrastructure 层使用，application 经自己声明的缓存端口");
+
+    static final String CHUNK_SEARCH_MAPPER =
+            "com.liming.rag.knowledge.infrastructure.persistence.ChunkSearchMapper";
+
+    static final ArchRule SEARCH_FILTER_IN_ONE_PLACE = noClasses()
+            .that().doNotHaveFullyQualifiedName("com.liming.rag.knowledge.infrastructure.persistence.MybatisChunkIndex")
+            .and().doNotHaveFullyQualifiedName(CHUNK_SEARCH_MAPPER)
+            .should().dependOnClassesThat().haveFullyQualifiedName(CHUNK_SEARCH_MAPPER)
+            .as("带成员授权过滤的检索 SQL（ChunkSearchMapper）只经 MybatisChunkIndex 调用");
+
+    static final ArchRule LOGIN_AND_ROLE_ONLY_BY_ANNOTATION = noClasses()
+            .should().callMethodWhere(describe("StpUtil 的登录、角色、权限校验方法",
+                    (JavaMethodCall call) -> call.getTargetOwner().getFullName().equals("cn.dev33.satoken.stp.StpUtil")
+                            && call.getName().matches("check.*|has.*|isLogin")))
+            .as("登录和角色校验只用 Sa-Token 注解，不在代码里调用 StpUtil.check*/has*/isLogin");
+
+    static final String SA_CHECK_PERMISSION = "cn.dev33.satoken.annotation.SaCheckPermission";
+
+    /** 接口方法：Controller 里标了 Spring 请求映射注解的方法。 */
+    static final DescribedPredicate<JavaMethod> ENDPOINT = describe("接口方法", method ->
+            method.getOwner().isAnnotatedWith(RestController.class)
+                    && method.getAnnotations().stream().anyMatch(annotation ->
+                            annotation.getRawType().isAnnotatedWith(RequestMapping.class)
+                                    || annotation.getRawType().isEquivalentTo(RequestMapping.class)));
+
+    /** 登录、退出、当前用户、改自己的密码只要求登录（必须先改密码的账号也要能用），其他接口都要标权限点。 */
+    static final DescribedPredicate<JavaMethod> AUTH_ENDPOINT = describe("/api/auth 下的接口", method ->
+            method.getOwner().tryGetAnnotationOfType(RequestMapping.class)
+                    .map(mapping -> List.of(mapping.value()).contains("/api/auth"))
+                    .orElse(false));
+
+    static final ArchRule ENDPOINTS_NEED_PERMISSION = methods()
+            .that(ENDPOINT).and(DescribedPredicate.not(AUTH_ENDPOINT))
+            .should(new ArchCondition<>("在方法或类上标 @SaCheckPermission") {
+                @Override
+                public void check(JavaMethod method, ConditionEvents events) {
+                    if (!method.isAnnotatedWith(SA_CHECK_PERMISSION)
+                            && !method.getOwner().isAnnotatedWith(SA_CHECK_PERMISSION)) {
+                        events.add(SimpleConditionEvent.violated(method, method.getFullName() + " 没有标权限点"));
+                    }
+                }
+            })
+            .as("每个接口都标了权限点（@SaCheckPermission），/api/auth 除外（ROADMAP 第四节）");
+
+    static final ArchRule PERMISSIONS_IN_CATALOG = classes()
+            .should(new ArchCondition<>("只用各上下文清单里的权限点") {
+                @Override
+                public void check(JavaClass javaClass, ConditionEvents events) {
+                    var annotated = new java.util.ArrayList<com.tngtech.archunit.core.domain.JavaAnnotation<?>>();
+                    javaClass.tryGetAnnotationOfType(SA_CHECK_PERMISSION).ifPresent(annotated::add);
+                    javaClass.getMethods().forEach(method ->
+                            method.tryGetAnnotationOfType(SA_CHECK_PERMISSION).ifPresent(annotated::add));
+                    for (var annotation : annotated) {
+                        for (Object code : (Object[]) annotation.get("value").orElse(new Object[0])) {
+                            if (!AllPermissions.ALL.contains(code)) {
+                                events.add(SimpleConditionEvent.violated(javaClass,
+                                        javaClass.getName() + " 用了清单外的权限点 " + code));
+                            }
+                        }
+                    }
+                }
+            })
+            .as("@SaCheckPermission 的权限点都在各上下文声明的权限点清单里");
+
+    static final ArchRule NO_SQL_ANNOTATIONS = noMethods()
+            .should().beAnnotatedWith("org.apache.ibatis.annotations.Select")
+            .orShould().beAnnotatedWith("org.apache.ibatis.annotations.Update")
+            .orShould().beAnnotatedWith("org.apache.ibatis.annotations.Insert")
+            .orShould().beAnnotatedWith("org.apache.ibatis.annotations.Delete")
+            .orShould().beAnnotatedWith("org.apache.ibatis.annotations.SelectProvider")
+            .orShould().beAnnotatedWith("org.apache.ibatis.annotations.UpdateProvider")
+            .orShould().beAnnotatedWith("org.apache.ibatis.annotations.InsertProvider")
+            .orShould().beAnnotatedWith("org.apache.ibatis.annotations.DeleteProvider")
+            .as("SQL 只写在 Mapper XML（mapper/<模块名>/）里，不用 @Select 等注解");
+
+    static final ArchRule NO_RAW_SQL_IN_WRAPPER = noClasses()
+            .should().callMethodWhere(describe("MyBatis-Plus 条件构造器的原始 SQL 方法",
+                    (JavaMethodCall call) -> call.getTargetOwner().getPackageName()
+                            .startsWith("com.baomidou.mybatisplus.core.conditions")
+                            && call.getName().matches("apply|last|inSql|notInSql|exists|notExists|having|setSql")))
+            .as("条件构造器只用类型安全的条件，不拼原始 SQL（apply、last、inSql、setSql 等）");
+
+    static final ArchRule ONE_EXCEPTION_HANDLER = classes()
+            .that().areAnnotatedWith("org.springframework.web.bind.annotation.RestControllerAdvice")
+            .or().areAnnotatedWith("org.springframework.web.bind.annotation.ControllerAdvice")
+            .should().haveFullyQualifiedName("com.liming.rag.ApiExceptionHandler")
+            .as("只有 rag-app 的 ApiExceptionHandler 一个异常出口；模块抛继承 BusinessException 的业务异常，不自己写处理器");
+
+    static final ArchRule NO_VALUE_INJECTION = noClasses()
+            .should().dependOnClassesThat().haveFullyQualifiedName("org.springframework.beans.factory.annotation.Value")
+            .as("配置只通过各模块的 @ConfigurationProperties record 读取（带取值校验），不用 @Value");
+
+    static final ArchRule WEB_NOT_USING_SERVICE_NESTED_TYPES = classes()
+            .that().resideInAPackage("..web..")
+            .should(new ArchCondition<JavaClass>("不读取 application 里 Service 的内部类型（只 new 出来当参数的除外）") {
+                @Override
+                public void check(JavaClass web, ConditionEvents events) {
+                    web.getDirectDependenciesFromSelf().stream()
+                            .filter(dependency -> isServiceNested(dependency.getTargetClass()))
+                            .filter(dependency -> !dependency.getDescription().contains("calls constructor"))
+                            .forEach(dependency -> events.add(
+                                    SimpleConditionEvent.violated(dependency, dependency.getDescription())));
+                }
+            })
+            .as("web 展示用的类型（返回值、参数、读取结果）不放在 Service 里面，提成 application 的顶层类型；"
+                    + "只由 web 构造后交给 Service 的参数（如 Upload）可以留在里面（#145）");
+
+    static boolean isServiceNested(JavaClass type) {
+        return type.getEnclosingClass()
+                .map(outer -> outer.getPackageName().contains(".application") && outer.getSimpleName().endsWith("Service"))
+                .orElse(false);
+    }
+
+    static final List<ArchRule> RULES = List.of(MYBATIS_ONLY_IN_INFRASTRUCTURE, DO_ONLY_IN_INFRASTRUCTURE,
+            SPRING_AI_ONLY_IN_RAG_AI, CACHE_CLIENTS_ONLY_IN_RAG_CACHE, CACHE_ONLY_IN_INFRASTRUCTURE, SEARCH_FILTER_IN_ONE_PLACE, LOGIN_AND_ROLE_ONLY_BY_ANNOTATION,
+            NO_SQL_ANNOTATIONS, NO_RAW_SQL_IN_WRAPPER, ONE_EXCEPTION_HANDLER, NO_VALUE_INJECTION,
+            ENDPOINTS_NEED_PERMISSION, PERMISSIONS_IN_CATALOG, WEB_NOT_USING_SERVICE_NESTED_TYPES);
+
+    @Test
+    @DisplayName("生产代码遵守全部架构规则")
+    void productionCodeFollowsRules() {
+        JavaClasses production = new ClassFileImporter()
+                .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS)
+                .importPackages("com.liming.rag");
+        assertThat(production).as("应导入各模块的生产代码").hasSizeGreaterThan(50);
+        RULES.forEach(rule -> rule.check(production));
+    }
+
+    @Test
+    @DisplayName("每条规则都能拦下对应的违规样例")
+    void rulesCatchViolations() {
+        assertViolates(MYBATIS_ONLY_IN_INFRASTRUCTURE, UsesQueryWrapper.class);
+        assertViolates(DO_ONLY_IN_INFRASTRUCTURE, FixtureDO.class);
+        assertViolates(SPRING_AI_ONLY_IN_RAG_AI, CallsChatModelDirectly.class);
+        assertViolates(SPRING_AI_ONLY_IN_RAG_AI, UsesSpringAiDocument.class);
+        assertViolates(CACHE_CLIENTS_ONLY_IN_RAG_CACHE, UsesRedissonDirectly.class);
+        assertViolates(CACHE_CLIENTS_ONLY_IN_RAG_CACHE, UsesCaffeineDirectly.class);
+        assertViolates(CACHE_ONLY_IN_INFRASTRUCTURE, ApplicationUsesCaches.class);
+        assertViolates(SEARCH_FILTER_IN_ONE_PLACE, BypassesSearchFilter.class);
+        assertViolates(LOGIN_AND_ROLE_ONLY_BY_ANNOTATION, ChecksRoleByHand.class);
+        assertViolates(NO_SQL_ANNOTATIONS, AnnotatedSqlMapper.class);
+        assertViolates(NO_RAW_SQL_IN_WRAPPER, RawSqlWrapper.class);
+        assertViolates(NO_RAW_SQL_IN_WRAPPER, RawSqlUpdate.class);
+        assertViolates(ONE_EXCEPTION_HANDLER, ModuleExceptionAdvice.class);
+        assertViolates(NO_VALUE_INJECTION, ReadsConfigWithValue.class);
+        assertViolates(ENDPOINTS_NEED_PERMISSION, UnguardedEndpoint.class);
+        assertViolates(PERMISSIONS_IN_CATALOG, UnknownPermission.class);
+        assertViolates(WEB_NOT_USING_SERVICE_NESTED_TYPES, WebUsesServiceNestedType.class, FixtureService.class);
+    }
+
+    /** 只导入违规样例（以及它需要的类），规则应报出违规。 */
+    static void assertViolates(ArchRule rule, Class<?> sample, Class<?>... context) {
+        var all = new java.util.ArrayList<Class<?>>(List.of(context));
+        all.add(sample);
+        JavaClasses classes = new ClassFileImporter().importClasses(all);
+        assertThat(rule.evaluate(classes).hasViolation())
+                .as("%s 应被规则“%s”拦下", sample.getSimpleName(), rule.getDescription())
+                .isTrue();
+    }
+}

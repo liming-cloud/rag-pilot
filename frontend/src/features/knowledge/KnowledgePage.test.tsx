@@ -33,11 +33,12 @@ describe("知识库列表", () => {
 
     const table = await screen.findByRole("table", { name: "知识库" });
     const row = (await within(table).findByRole("link", { name: "门店运营知识库" })).closest("tr")!;
-    expect(within(row).getByText("36 份")).toBeInTheDocument();
+    expect(within(row).getByText("37 份")).toBeInTheDocument();
     expect(within(row).getByText("2 份即将到期")).toBeInTheDocument();
     expect(within(row).getByText("1 份已失效")).toBeInTheDocument();
-    expect(within(row).getByText("1 份失败")).toBeInTheDocument();
-    expect(within(row).getByText("1 个角色 · 2 个账号")).toBeInTheDocument();
+    expect(within(row).getByText("2 份失败")).toBeInTheDocument();
+    expect(within(row).getByText("1 个角色")).toBeInTheDocument();
+    expect(within(row).getByText("2 个账号")).toBeInTheDocument();
     expect(screen.getByText("共 24 条")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "下一页" }));

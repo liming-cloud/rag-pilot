@@ -3,12 +3,13 @@ import type { AnswerReview } from "@/features/answers/api";
 import type { Answer } from "@/features/chat/api";
 import type { KnowledgeBase, KnowledgeDocument, Validity } from "@/features/knowledge/api";
 import type { UsageStats } from "@/features/stats/api";
+import { auditHandlers } from "./audit";
 import { conversationHandlers, resetConversations } from "./conversations";
 import { gapHandlers, resetGaps, topGaps } from "./gaps";
 import { accountName, currentIdentity, forbidden, identityHandlers, resetIdentity } from "./identity";
 import { modelHandlers, resetModels } from "./models";
-import { resetSettings, settingHandlers } from "./settings";
 import { matches, paginate } from "./page";
+import { resetSettings, settingHandlers } from "./settings";
 
 /** 假接口与后端契约保持一致；示例数据只用于原型和测试。 */
 export const sampleKnowledgeBases: KnowledgeBase[] = [
@@ -60,6 +61,8 @@ const sampleDocuments: Record<number, StoredDocument[]> = {
       createdAt: "2026-10-26T09:00:00+08:00",
       replacesDocumentId: null,
       replacesFilename: null,
+      reprocessable: false,
+      retryAt: null,
       ...longTerm,
     },
     // 有效期的几种情况（日期相对今天，原型里随时都能看到）：旧版制度已失效、今天到期（当天仍有效）、
@@ -74,6 +77,8 @@ const sampleDocuments: Record<number, StoredDocument[]> = {
       createdAt: "2026-03-01T09:00:00+08:00",
       replacesDocumentId: null,
       replacesFilename: null,
+      reprocessable: false,
+      retryAt: null,
       effectiveFrom: "2026-03-01",
       expiresOn: addDays(today(), -10),
     },
@@ -87,6 +92,8 @@ const sampleDocuments: Record<number, StoredDocument[]> = {
       createdAt: "2026-10-20T09:00:00+08:00",
       replacesDocumentId: null,
       replacesFilename: null,
+      reprocessable: false,
+      retryAt: null,
       effectiveFrom: null,
       expiresOn: today(),
     },
@@ -100,6 +107,8 @@ const sampleDocuments: Record<number, StoredDocument[]> = {
       createdAt: "2026-10-01T09:00:00+08:00",
       replacesDocumentId: null,
       replacesFilename: null,
+      reprocessable: false,
+      retryAt: null,
       effectiveFrom: null,
       expiresOn: addDays(today(), 18),
     },
@@ -113,6 +122,8 @@ const sampleDocuments: Record<number, StoredDocument[]> = {
       createdAt: "2026-10-30T09:00:00+08:00",
       replacesDocumentId: null,
       replacesFilename: null,
+      reprocessable: false,
+      retryAt: null,
       effectiveFrom: addDays(today(), 5),
       expiresOn: null,
     },
@@ -126,6 +137,23 @@ const sampleDocuments: Record<number, StoredDocument[]> = {
       createdAt: "2026-10-26T09:05:00+08:00",
       replacesDocumentId: null,
       replacesFilename: null,
+      reprocessable: false,
+      retryAt: null,
+      ...longTerm,
+    },
+    // 原型（#145 A9）：模型暂时不可用而失败的文档，可以重新处理，10 分钟后自动重试一次。
+    {
+      id: 17,
+      filename: "夜班交接手册.docx",
+      status: "FAILED",
+      error: "向量化失败：嵌入模型服务暂时不可用，请稍后重试",
+      chunkCount: 0,
+      sizeBytes: 52_224,
+      createdAt: "2026-11-04T09:30:00+08:00",
+      replacesDocumentId: null,
+      replacesFilename: null,
+      reprocessable: true,
+      retryAt: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
       ...longTerm,
     },
     // 多生成一些文档，原型里能看到分页。
@@ -139,6 +167,8 @@ const sampleDocuments: Record<number, StoredDocument[]> = {
       createdAt: "2026-10-27T10:00:00+08:00",
       replacesDocumentId: null,
       replacesFilename: null,
+      reprocessable: false,
+      retryAt: null,
       ...longTerm,
     })),
   ],
@@ -271,6 +301,8 @@ export const sampleAnswer: Answer = {
       documentName: "临期与报损管理.md",
       headingPath: "临期商品 > 下架时限",
       excerpt: "保质期剩余不足三分之一的商品，贴黄色临期标签，集中陈列到临期专区，按原价七折销售。",
+      documentUpdatedAt: "2026-10-26T09:00:00+08:00",
+      documentState: "CURRENT",
     },
     {
       index: 2,
@@ -279,6 +311,8 @@ export const sampleAnswer: Answer = {
       documentName: "临期与报损管理.md",
       headingPath: "报损 > 登记与确认",
       excerpt: "保质期仅剩 1 天的商品，当天闭店前全部下架，在报损登记表写明品名、数量和原因，店长签字确认。",
+      documentUpdatedAt: "2026-10-26T09:00:00+08:00",
+      documentState: "CURRENT",
     },
   ],
   topRelevance: 0.97,
@@ -328,6 +362,11 @@ function totalsOf(daily: ReturnType<typeof sampleDay>[]) {
     liked: Math.round((questions - refused) * 0.3) - disliked,
     disliked,
     openReviews: Math.round(refused * 0.4) + disliked,
+    // 能用问答的在职员工数取当前人数；短时间重复提问见 README 的产品指标（#145 A11）。
+    activeStaff: 36,
+    repeatQuestions: Math.round(questions * 0.08),
+    citedAnswers: questions - refused,
+    openedAnswers: Math.round((questions - refused) * 0.35),
   };
 }
 
@@ -423,6 +462,8 @@ async function upload(knowledgeBaseId: number, request: Request, replacesDocumen
     createdAt: new Date().toISOString(),
     replacesDocumentId,
     replacesFilename: null,
+    reprocessable: false,
+    retryAt: null,
     ...range,
   };
   list.unshift(created);
@@ -438,6 +479,7 @@ function invalidRange(range: { effectiveFrom: string | null; expiresOn: string |
 
 export const handlers = [
   ...identityHandlers,
+  ...auditHandlers,
   ...gapHandlers,
   ...modelHandlers,
   ...settingHandlers,
@@ -497,6 +539,8 @@ export const handlers = [
   http.post("/api/answers/:id/recheck", () =>
     HttpResponse.json({ ...sampleAnswer, id: null, text: "保质期剩余不足三分之一的商品按原价五折销售 [1]。" }),
   ),
+  // 原型（#145 A11）：员工点开了第几个引用，接接口后由后端记下。
+  http.post("/api/answers/:id/citations/:index/opened", () => new HttpResponse(null, { status: 204 })),
   http.put("/api/answers/:id/feedback", () => new HttpResponse(null, { status: 204 })),
   http.delete("/api/answers/:id/feedback", () => new HttpResponse(null, { status: 204 })),
   // 与后端一致：只返回当前账号是成员的知识库，管理员也一样（D-017）。
@@ -628,6 +672,23 @@ export const handlers = [
       }
     }
     return HttpResponse.json(snapshot);
+  }),
+  http.post("/api/knowledge-bases/:id/documents/:documentId/reprocess", ({ params }) => {
+    const document = (documents[Number(params.id)] ?? []).find((item) => item.id === Number(params.documentId));
+    if (!document) return HttpResponse.json({ status: 404, code: "KNOWLEDGE_NOT_FOUND", detail: "文档不存在" }, { status: 404 });
+    if (document.status !== "FAILED" || !document.reprocessable) {
+      return HttpResponse.json(
+        {
+          status: 409,
+          code: "KNOWLEDGE_CONFLICT",
+          detail: "只有因模型暂时不可用而失败的文档才能重新处理；文件本身有问题时请改好后重新上传",
+        },
+        { status: 409 },
+      );
+    }
+    Object.assign(document, { status: "PARSING", error: null, reprocessable: false, retryAt: null });
+    pendingChunks.set(document.id, 6);
+    return HttpResponse.json(withValidity(document));
   }),
   http.delete("/api/knowledge-bases/:id/documents/:documentId", ({ params }) => {
     const id = Number(params.id);

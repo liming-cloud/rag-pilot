@@ -31,7 +31,7 @@ describe("页面外壳与管理端菜单", () => {
       within(menu)
         .getAllByRole("link")
         .map((link) => link.textContent),
-    ).toEqual(["运营概览", "知识库", "知识缺口", "回答记录", "用户", "角色与权限", "模型管理", "系统设置"]);
+    ).toEqual(["运营概览", "知识库", "知识缺口", "回答记录", "用户", "角色与权限", "审计记录", "模型管理", "系统设置"]);
     const groups = within(menu).getAllByRole("group");
     expect(groups.map((group) => group.getAttribute("aria-label"))).toEqual(["知识运营", "账号与权限", "系统配置"]);
     expect(

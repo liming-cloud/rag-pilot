@@ -1,0 +1,51 @@
+package com.liming.rag.identity.application.account;
+
+import com.liming.rag.shared.Paged;
+
+import com.liming.rag.shared.TenantId;
+import java.time.OffsetDateTime;
+import java.util.Collection;
+import java.util.List;
+import java.util.Optional;
+import java.util.Set;
+
+/** 账号存储端口。 */
+public interface Accounts {
+
+    Optional<Account> find(long id);
+
+    Optional<Account> findByUsername(String username);
+
+    boolean existsByUsername(String username);
+
+    /** 这些用户名里已被使用的（区分大小写，与唯一约束一致）。 */
+    Set<String> existingUsernames(Collection<String> usernames);
+
+    /** 按筛选条件分页，按创建顺序。 */
+    Paged<Account> page(TenantId tenantId, AccountQuery query);
+
+    /** 本租户里这些 id 的账号，不存在的不返回。 */
+    List<Account> findAll(TenantId tenantId, Collection<Long> ids);
+
+    long count();
+
+    void setEnabled(long id, boolean enabled);
+
+    /** 换密码，同时清掉登录失败计数和锁定。 */
+    void setPassword(long id, String passwordHash, boolean mustChangePassword);
+
+    /**
+     * 记一次密码错误：在数据库里原子地加一，返回加一后的次数。同时发来的多次错误都会累计（#145 C4，原来读出后整值写回，
+     * 并发时计数不涨，锁定能被绕过）。
+     */
+    int incrementFailedLogins(long id);
+
+    /** 锁定到 {@code until}，并把失败计数清零。 */
+    void lock(long id, OffsetDateTime until);
+
+    /** 登录成功或管理员解锁：清掉失败计数和锁定。 */
+    void clearFailedLogins(long id);
+
+    /** 插入新账号，返回带主键的账号。 */
+    Account insert(Account account);
+}

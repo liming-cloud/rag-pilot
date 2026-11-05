@@ -7,7 +7,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Can, useCan } from "@/lib/permissions";
+import { ErrorMessage } from "@/lib/errors";
+import { Can, PERMISSIONS, useCan } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
 import {
   createRole,
@@ -16,6 +17,7 @@ import {
   fetchRoles,
   type PermissionGroup,
   type Role,
+  roleKeys,
   updateRole,
 } from "./api";
 
@@ -25,17 +27,17 @@ import {
  * 超级管理员只读；还有账号的角色和内置角色不能删。
  */
 export function RolesPage() {
-  const roles = useQuery({ queryKey: ["roles"], queryFn: fetchRoles });
-  const catalog = useQuery({ queryKey: ["permission-catalog"], queryFn: fetchPermissionCatalog });
+  const roles = useQuery({ queryKey: roleKeys.all, queryFn: fetchRoles });
+  const catalog = useQuery({ queryKey: roleKeys.catalog, queryFn: fetchPermissionCatalog });
   const [selectedId, setSelectedId] = useState<number | "new" | null>(null);
   const selected =
     selectedId === "new" ? "new" : (roles.data?.find((role) => role.id === selectedId) ?? roles.data?.[0] ?? null);
 
   return (
-    <main className="mx-auto grid max-w-6xl gap-6 p-6 md:grid-cols-[220px_1fr] md:p-8">
+    <main className="mx-auto grid w-full max-w-[1600px] p-6 md:p-8 xl:px-10 gap-6 md:grid-cols-[220px_1fr]">
       <aside className="flex flex-col gap-3">
-        <h1 className="font-serif text-2xl font-semibold">角色与权限</h1>
-        {roles.isError && <p className="text-destructive">读取角色失败，请稍后重试。</p>}
+        <h1 className="font-display text-2xl font-semibold tracking-tight">角色与权限</h1>
+        {roles.isError && <ErrorMessage error="读取角色失败，请稍后重试。" className="text-base" />}
         <nav aria-label="角色" className="flex flex-col gap-1">
           {roles.data?.map((role) => (
             <button
@@ -53,7 +55,7 @@ export function RolesPage() {
             </button>
           ))}
         </nav>
-        <Can permission="role:create">
+        <Can permission={PERMISSIONS.ROLE_CREATE}>
           <Button variant="outline" size="sm" onClick={() => setSelectedId("new")}>
             <Plus aria-hidden="true" className="size-4" />
             新建角色
@@ -88,12 +90,12 @@ function RoleDetail({
   onDeleted: () => void;
 }) {
   const queryClient = useQueryClient();
-  const canUpdate = useCan("role:update");
+  const canUpdate = useCan(PERMISSIONS.ROLE_UPDATE);
   const isSuper = role?.builtIn === "SUPER_ADMIN";
   const [editing, setEditing] = useState(role === null);
   const [name, setName] = useState(role?.name ?? "");
-  const [granted, setGranted] = useState<Set<string>>(new Set(role?.permissions ?? ["chat:use"]));
-  const refresh = () => queryClient.invalidateQueries({ queryKey: ["roles"] });
+  const [granted, setGranted] = useState<Set<string>>(new Set(role?.permissions ?? [PERMISSIONS.CHAT_USE]));
+  const refresh = () => queryClient.invalidateQueries({ queryKey: roleKeys.all });
 
   const save = useMutation({
     mutationFn: () =>
@@ -168,7 +170,7 @@ function RoleDetail({
       {isSuper && (
         <p className="text-sm text-muted-foreground">超级管理员拥有全部权限，不能修改，全系统只有一个账号。</p>
       )}
-      <div className="rounded-lg border bg-card">
+      <div className="overflow-x-auto rounded-xl border bg-card shadow-sm">
         <Table aria-label="权限">
           <TableHeader>
             <TableRow>
@@ -180,7 +182,7 @@ function RoleDetail({
           <TableBody>
             {catalog.map((group) => (
               <TableRow key={group.menu} className={cn(!has(group.view.code) && !editing && "text-muted-foreground")}>
-                <TableCell className="py-3 font-medium">{group.menu}</TableCell>
+                <TableCell className="font-medium">{group.menu}</TableCell>
                 <TableCell>
                   {editing ? (
                     <Label className="flex items-center gap-2 font-normal">
@@ -235,11 +237,7 @@ function RoleDetail({
           </TableBody>
         </Table>
       </div>
-      {(save.isError || remove.isError) && (
-        <p role="alert" className="text-sm text-destructive">
-          {(save.error ?? remove.error)?.message}
-        </p>
-      )}
+      <ErrorMessage error={save.error ?? remove.error} />
       {editing ? (
         <div className="sticky bottom-0 flex items-center gap-2 border-t bg-background py-3">
           <Button size="sm" disabled={save.isPending || !name.trim()} onClick={() => save.mutate()}>
@@ -251,7 +249,7 @@ function RoleDetail({
         </div>
       ) : (
         role?.builtIn === null && (
-          <Can permission="role:delete">
+          <Can permission={PERMISSIONS.ROLE_DELETE}>
             <div className="flex items-center gap-2">
               <Button
                 size="sm"

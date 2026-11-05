@@ -37,6 +37,8 @@ export type GapGroup = {
   lastAskedAt: string;
   /** 类里的记录当时检索过的知识库，出现多的在前，提示资料该补到哪个库（D-047）。 */
   knowledgeBases: string[];
+  /** 同上，带上 id，缺口详情里能直接打开这个库去补资料（#145 A10）；已删除的库不列。 */
+  knowledgeBaseRefs: { id: number; name: string }[];
   /** 类里差评记录当时引用的文档（拒答没有引用），提示该改哪份资料。 */
   citedDocuments: string[];
   records: GapRecord[];
@@ -77,3 +79,9 @@ export async function resolveGap(recordIds: number[], note?: string): Promise<vo
 export async function recheckGap(recordId: number): Promise<Answer> {
   return json(await authFetch(`/api/answers/${recordId}/recheck`, { method: "POST" }), "重新回答失败");
 }
+
+/** 知识缺口的查询键；all 是前缀。 */
+export const gapKeys = {
+  all: ["answer-gaps"],
+  report: (days: GapRange, status: "open" | "all") => ["answer-gaps", days, status] as const,
+} as const;

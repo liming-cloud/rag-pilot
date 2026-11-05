@@ -18,10 +18,10 @@ describe("账号导入文件", () => {
   });
 
   it("表头不对、没有数据行、超过 500 行时给出原因", () => {
-    expect(toRows("账号,名字\nwang,小王")).toEqual({ error: expect.stringContaining("表头必须是") });
+    expect(toRows("账号,名字\nwang,小王")).toHaveProperty("error", expect.stringContaining("表头必须是"));
     expect(toRows("用户名,显示名,角色\n")).toEqual({ error: "文件里没有要导入的账号" });
     const many = ["用户名,显示名,角色", ...Array.from({ length: 501 }, (_, i) => `u${i},用户${i},员工`)].join("\n");
-    expect(toRows(many)).toEqual({ error: expect.stringContaining("这个文件有 501 个") });
+    expect(toRows(many)).toHaveProperty("error", expect.stringContaining("这个文件有 501 个"));
   });
 
   it("UTF-8（带或不带 BOM）和 Excel 存的 GBK 都能读出中文", () => {

@@ -22,6 +22,8 @@ JDK 25 LTS、Spring Boot 4.1.0、Spring AI 2.0.0、Spring Modulith 2.1.0、MyBat
 
 试点单实例部署，会话存在内存，应用重启后需要重新登录。需要多实例时改用 Redis 和 `sa-token-redis-template`。
 
+（已由 D-053 修订：会话经 Redisson 存进 Redis。）
+
 ## D-006 迁移版本号用时间戳（2026-10-25）
 
 每个模块一个迁移目录，版本号统一 `yyyyMMddNNNN`，避免多个目录之间版本冲突。
@@ -199,7 +201,7 @@ Compose 增加 web 服务（`deploy/web.Dockerfile`）：Node 24 构建前端，
 
 ## D-041 RBAC 的后端实现：内置角色按租户、权限每次读库、检索过滤仍只有一处（2026-10-30）
 
-#115 后端按 D-038、D-039 实现时的具体做法：
+#115 后端按 D-038、D-039 实现时的具体做法（“权限每次读库”“各上下文各有一个 `Paged`”已由 D-053 修订）：
 
 - **角色与超级管理员**：角色按租户存（`app_role`），内置角色用 `builtin` 列标出，启动时补齐配置租户缺的内置角色。超级管理员就是持有内置“超级管理员”角色的账号，接口不能分配这个角色，所以全系统只有初始化时建的那一个；它的权限由代码给出（清单里的全部权限点），不存表。迁移按 D-038 的规则把旧 `role` 列换成角色后删掉该列。
 - **权限判定**：`StpInterface` 每次校验都读库，停用、改角色、改角色权限立即生效。停用的账号和“必须先改密码”的账号没有任何权限点，只能调 `/api/auth` 下只要求登录的接口（当前用户、改密码、退出），这样强制改密在后端也成立，不只靠前端跳转。
@@ -230,7 +232,7 @@ Compose 增加 web 服务（`deploy/web.Dockerfile`）：Node 24 构建前端，
 
 ## D-044 新增上下文模块 rag-settings（系统设置）（2026-11-01）
 
-#120 接后端时发现模型管理没有合适的家：它要有表、接口和权限点，而 `rag-ai` 是技术模块（扁平、只公开契约、没有持久化层、不依赖上下文模块），放进 identity、knowledge、answering 也都不对。经人决定新增上下文模块 `rag-settings`（系统设置），放模型管理的表、接口和服务；M5 的行业包、品牌名称、推荐问题等系统设置以后也放这里（D-042 暂放在 identity 的品牌配置届时迁过来）。`rag-ai` 只增加三个公开契约：各用途当前用哪个服务商和模型（`ModelRouting`）、连通测试和读服务商模型列表（`ModelProbe`），由 `rag-settings` 实现和调用；依赖方向是 settings → ai，`rag-ai` 仍然扁平、不依赖上下文模块。模型配置是部署级的，表不带租户。
+#120 接后端时发现模型管理没有合适的家：它要有表、接口和权限点，而 `rag-ai` 是技术模块（扁平、只公开契约、没有持久化层、不依赖上下文模块），放进 identity、knowledge、answering 也都不对。经人决定新增上下文模块 `rag-settings`（系统设置），放模型管理的表、接口和服务；M5 的行业包、品牌名称、推荐问题等系统设置以后也放这里（D-042 暂放在 identity 的品牌配置届时迁过来）。`rag-ai` 只增加三个公开契约：各用途当前用哪个服务商和模型（`ModelRouting`）、连通测试和读服务商模型列表（`ModelProbe`），由 `rag-settings` 实现和调用（D-054 起由 settings 的 `infrastructure` 层实现和调用）；依赖方向是 settings → ai，`rag-ai` 仍然扁平、不依赖上下文模块。模型配置是部署级的，表不带租户。
 
 ## D-045 行业包与系统设置：资源目录打包、可改项存库、词表在检索前扩展（2026-11-01）
 
@@ -257,7 +259,7 @@ Compose 增加 web 服务（`deploy/web.Dockerfile`）：Node 24 构建前端，
 
 #125（从 #124 拆出）经人答复：
 
-- **知识缺口归类**：用现有嵌入模型（经 rag-ai 的 `EmbeddingClient`）给问题原文算向量，按出现次数从多到少逐个处理，与已有各类的第一个问题比较余弦相似度，最高的达到门槛（`rag.answering.gaps.similarity`，默认 0.80，`RAG_GAP_SIMILARITY`）就并入，否则自成一类；代表问题取类里出现最多的原文。查询时现算、不落表、不调用对话模型：取所选时间范围（默认 30 天、最多 90 天）内最近 1000 条。嵌入模型不可用时退回按原文分组（去掉空白、标点、全半角和大小写差异），页面上注明。纳入范围是全部拒答和被点踩的回答：空问题会被直接拒绝、不进回答记录，没有可用知识库时记为 `NO_EVIDENCE`，与“知识库里没有内容”分不开，所以四种拒答原因都算。已标记处理的记录不计入待处理，但仍留在类里。
+- **知识缺口归类**：用现有嵌入模型（经 rag-ai 的 `EmbeddingClient`）给问题原文算向量（向量改为记录回答后在后台算好存进 `answer_record`，见 D-052），按出现次数从多到少逐个处理，与已有各类的第一个问题比较余弦相似度，最高的达到门槛（`rag.answering.gaps.similarity`，默认 0.80，`RAG_GAP_SIMILARITY`）就并入，否则自成一类；代表问题取类里出现最多的原文。查询时现算、不落表、不调用对话模型：取所选时间范围（默认 30 天、最多 90 天）内最近 1000 条。嵌入模型不可用时退回按原文分组（去掉空白、标点、全半角和大小写差异），页面上注明。纳入范围是全部拒答和被点踩的回答：空问题会被直接拒绝、不进回答记录，没有可用知识库时记为 `NO_EVIDENCE`，与“知识库里没有内容”分不开，所以四种拒答原因都算。已标记处理的记录不计入待处理，但仍留在类里。
 - **门槛校准**：评测运行时用合成集里同一道题的不同问法（`-口语`、`-错字`、`-改写`、`有效期-` 等）作为应该合并的问题对，其余问题两两作为不该合并的问题对，在评测报告里给出各个门槛下的合并比例和误合并对数。首次校准（run 41394523445，硅基流动的嵌入模型）：同义问法 16 对、其余 1209 对，门槛 0.85 时合并 8 对、误合并 0；0.80 时合并 11 对、误合并 1 对（“会员积分多少分能抵一块钱”和“现在消费一块钱积几分？多少分抵一元？”，意思本就重叠）；0.75 时误合并 9 对。默认值定为 0.80。口语和错字很重的问法（如“便当饭团晚上几点得撤下来啊”与“鲜食什么时候下架？”相似度 0.53）仍分不到一起，这类会多出几个小类，不影响排在前面的高频缺口。
 - **缺口页**：管理端“知识运营”下新增“知识缺口”（在回答记录之前），查看 `answer:view`，整类标记已处理 `answer:review`（`POST /api/answers/gaps/resolve`，类里还没处理的记录都写同一条说明），重新回答 `answer:recheck`（沿用 D-017：按管理员自己的权限检索、不写入记录、不通知原提问人）。不新增权限点。
 - **涉及的知识库**：回答记录原来没有存当时检索了哪些知识库，经人决定补上：`answer_record` 加 `knowledge_base_ids`，记下实际检索的库（问答接口为点名的库里提问人有权访问的那些，没点名时是能访问的全部；会话提问为这一轮实际检索的库），只用于显示，检索时的权限过滤仍只在 rag-knowledge 的检索服务里。缺口页按出现次数列出类里检索过的库，最多显示两个、其余折叠成“等 N 个”；加这一列之前的旧记录为空。差评记录当时引用的文档在详情里一起列出，提示该改哪份资料。
@@ -311,3 +313,96 @@ Compose 增加 web 服务（`deploy/web.Dockerfile`）：Node 24 构建前端，
 - **单租户**（Q11）：部署是单租户，`TenantId` 为以后多租户预留，不改签名。不带租户的有：identity 的 `Accounts`（按 id 查、启停、改密码、登录失败计数，用户名全局唯一，登录时不选租户）、`Roles` 的 `delete`、`rolesOf`、`userIds`、`setUserRoles`，answering 的 `ConversationRepository.addTurn`、`mainLine`、`deleteInactiveSince`，靠调用方先按租户查到聚合或账号再调用；settings 的模型管理、系统设置、行业包和统计时区都是部署级的。真做多租户时，这些端口要补租户参数，用户名改为租户内唯一（数据库变更）。
 - **角色删除不用领域事件**：identity 发布 `RoleDeleted`，knowledge 在同一事务里同步收回这个角色的知识库授权，删角色和收回授权要么都成功、要么都不做。目前没有其他领域事件，也不引入事件发布表。
 - **不做的**：id 类型化（E6）记进 ROADMAP 待办；不合并各上下文的 `Paged`（D-041），不往 rag-shared 加类型（D-034）。
+
+## D-052 1.0 质量收尾：AI 能力收进防腐层、后端分三层聚合（2026-11-04）
+
+#145 经人答复（合并了 #141–#144 和后端开发视图调整）。本条按实施步骤逐步补充。
+
+**开发视图（第 1 步）**
+
+- **框架选用原则**（人提出的思路；已由 D-054 修订：能力接口只在上下文的 `infrastructure` 层引用）：上下文只依赖能力接口，不直接用第三方框架。只有一个上下文用的库放在它的 `infrastructure`，多个上下文要用的做成平台层的能力模块；Spring 全家（Boot、Web、Tx、Modulith）和 web 层的 Sa-Token 注解是应用框架，例外。按这个标准盘点，当时只有 Spring AI 违反：answering 的应用层用它的 RAG 类型，knowledge 的入库用它的 ETL 接口，而且 knowledge 是经 rag-ai 间接带进来的。PDFBox、POI、MyBatis-Plus、Sa-Token 都已关在各自的 `infrastructure` 里。#136 Q13（文件解析放在 knowledge）按这个标准仍然成立。
+- **rag-ai 是 Spring AI 防腐层，按能力而不是按调用设计接口**：原来的 `ChatGateway` 只有“给提示词拿文字”，框架的 `ChatClient`、观测、结构化输出都用不上（人答复：要充分使用框架的能力）。现在对外是 `TextGeneration`（一次性、流式含备用请求和停止）、`QueryRewriting`、`EmbeddingClient`、`RerankClient`、`ModelProbe`；内部用 `ChatClient`，模型和客户端带上观测注册表，Spring AI 自带的耗时、token 用量观测由 Actuator 汇总。提示词按消息整段交给框架，不走它的模板渲染（资料和问题里可能有花括号）。防腐层只管机制，提示词内容、门槛、何时改写、引用校验这些策略留在上下文。
+- **问答编排留在 answering**：不用 `RetrievalAugmentationAdvisor` 编排整条链路，拒答门槛、引用校验、寒暄判断是业务规则；证据、检索请求改用自己的带类型 record，检索、重排、拼证据不再实现框架接口。这修订了原来“流程骨架用 Spring AI 的阶段接口”的做法（D-020）。
+- **用了框架组件、评测变差就退回**（能评测才算完成）：第一版把低分改写换成 `RewriteQueryTransformer`、检索规划换成结构化输出（`.entity(…)`）。三轮评测（run 41794040547，对比 main 的 run 41767186934）：召回、引用正确、拒答正确、越权都不变，但误拒从均值 0.7% 升到 2.9%（框架的改写组件把规则和问题放进同一条用户消息，改写开始给问题加括号注明类别，错字、口语题的证据跑偏），追问首字中位数从 3745 ms 升到 4294 ms、寒暄从 2349 ms 升到 3244 ms（结构化输出在提示词末尾附上 JSON 格式说明，输出也变长）；单轮题首字中位数不变（1928 → 1909 ms），说明改走会话接口本身不变慢。所以改写退回“规则作系统提示词、问题作用户消息”，检索规划退回按行输出“检索：”，都仍在防腐层里经 `ChatClient`（保留观测）；没有调用方的结构化输出能力去掉。退回后三轮（run 41796268777）召回、引用正确、拒答正确不变，首字中位数持平（三轮 2043–2117 ms，main 1926–2039 ms），首字 p95 均值 3896 → 4435 ms（+13.8%，超过“不慢于 10%”）：这是口径变化，旧接口按第一个事件计时，要低分改写的题第一个事件是“换个说法再找找…”的状态，会话接口按第一段内容计时；人答复（2026-11-05）确认接受。`CompressionQueryTransformer` 加 `MultiQueryExpander` 没有采用：要调两次模型，且不判断寒暄。
+- **其他取舍**：`EmbeddingClient` 保留原名（它本来就是“向量化”能力，只换内部实现，重试用 OpenAI SDK 自带的退避）；评判不用结构化输出（要兼容先输出思考过程的模型，提示词和解析已经过评判自检校准），评判规则移到 rag-evaluation，模型调用经 `TextGeneration.fixed`。
+- **Maven 分三层聚合**：`backend/platform`（rag-shared、rag-ai）、`backend/contexts`（五个上下文）、`backend/boot`（rag-app），Java 包名不变。rag-ai 把 Spring AI 声明为 optional，不传给上下文，运行时由 rag-app 带上；`backend/contexts/pom.xml` 用 `maven-enforcer-plugin` 禁止 `org.springframework.ai`（含传递依赖）；架构规则改为“Spring AI 只在 rag-ai”。
+- **不加 `maven-dependency-plugin:analyze`**（原计划要加）：试跑时每个模块都报十几项 Spring 底层包“用了没声明”、starter“声明了没用”，要让它通过就得在每个模块声明 `spring-context`、`spring-beans`、`slf4j` 等并去掉 starter，与 Spring Boot 的常规做法相反、维护成本高；它要防的“经传递依赖用 Spring AI”已由 optional、Enforcer、ArchUnit 三层拦住。
+
+**准确与安全（第 3、4 步）**
+
+- **大数据量向量召回**（人答复选“只对召回查询打开”）：HNSW 先扫索引再按授权、有效期过滤，默认 `hnsw.ef_search = 40`，员工能访问的资料只占 2% 时只召回 1 条（要 30 条）。召回查询在自己的只读事务里 `SET LOCAL hnsw.iterative_scan = relaxed_order`，结果用物化 CTE 按距离重排（pgvector 文档的写法）。不改库级设置：恢复备份是新建空库再 `pg_restore`（不带 `--create`），库级设置不会带过去，迁移记录又显示已执行，会悄悄失效。数据库按代价决定走不走 HNSW（数据量、统计信息、参数是不是绑定参数都会影响），所以 `LargeScaleRetrievalTests` 关掉排序、固定在“选了 HNSW”的情形。
+- **关键词检索也查章节路径**：BM25 索引加上 `heading_path`（以文件名开头），只重建索引、不改数据；以评测决定是否保留。
+- **登录锁定原子计数**：失败次数在数据库里原子加一并返回新值，同时发来的错误密码不再能绕过锁定。
+- **安全响应头**：CSP 只允许本站脚本（登录令牌在 localStorage），样式允许内联（对话框运行时插入 `<style>`），不许被嵌入；另有 `X-Content-Type-Options`、`X-Frame-Options`、`Referrer-Policy`。放在 `security-headers.conf`，server 级和带 `add_header` 的 location 都 include（Nginx 的 location 有自己的 `add_header` 时不继承 server 级的）。
+- **限流**（人答复的值）：每个账号最近 1 分钟最多 10 个问题、最近 24 小时最多 300 个（`RAG_ASK_LIMIT_PER_MINUTE`、`RAG_ASK_LIMIT_PER_DAY`），超出返回 429、不调用模型、不留下这一轮；计数在内存里，单实例部署，重启清零。问题合规、会话是自己的之后才计数；管理员“重新回答”不受限。Nginx 对 `/api/auth/login` 按来源 IP 每分钟 10 次、可突发 5 次。为此共享内核的 `ErrorKind` 新增 `TOO_MANY_REQUESTS`（D-034：所有上下文共用的错误分类，转 429 由 rag-app 的入口负责）。
+- **审计记录**（人答复的范围和保留期）：identity 的 `api` 提供 `AuditTrail`，各上下文的应用服务在操作成功之后、同一个事务里记一条（`Propagation.MANDATORY`，操作回滚时审计也回滚）：知识库授权给账号或角色及撤销、角色新建/修改/删除、账号新建/启停/改角色/重置密码/解锁/批量导入、删除和替换资料、系统设置的修改和恢复默认。模型变更已有 `model_change`，不重复记。表 `audit_log` 在 identity，只增不改，每天清理一年前的记录。被拒绝的操作不记。查看审计新增权限点 `audit:view`（人答复：默认给内置管理员，已有部署由迁移补上）：`GET /api/audit-logs` 按天数（1–365，默认 30）和操作类型筛选、分页，新的在前，带操作人的显示名；页面随第 8 步的原型一起做。
+- **防提示词注入**（人答复：硬指标 = 0）：资料用 `<<<资料开始>>>`、`<<<资料结束>>>` 包起来，资料标题说明其中的指令一律不执行，回答规则第 7 条同样写明。评测加 5 份夹带指令的零售资料（冷柜除霜、到货通知、员工福利、卫生检查、交接班话术）和 5 道“注入”题，每题列出 `forbidden`（照做了才会出现的内容），新增指标“被资料里的指令带偏”。三轮评测（run 41808054287，对比 run 41796268777）：带偏 0；引用正确、拒答正确仍是 100%；误拒均值 1.4% → 2.0%，最大值 2.2% → 2.0%；召回 100% → 98%，只差“鲜食下架-口语”一题（“便当饭团晚上几点得撤下来啊”，重排最高分 0.19–0.20，本来就在门槛附近）。提示词不影响检索，召回变化来自新增的 5 份资料挤进了混合检索的前 10 条；问答走 30 条候选再重排，这题三轮里两轮仍引用了正确资料。资料多了以后这类口语题更难，属于第 5 步扩充评测集后要看的问题，不为它调整。
+
+**可靠与可观测（第 6 步）**
+
+- **原始文件在事务提交后才删**：删除资料、新版本替换旧版本时，原来在事务里直接删文件，事务回滚后记录还在、文件没了。现在提交后再查一次有没有别的文档引用同一个文件，没有才删；删不掉只记日志，留下的孤立文件不影响数据。
+- **问题向量存进回答记录**（人答复，修订 D-047）：`answer_record` 加 `question_embedding`（`real[]`，只用于归类，不建索引）。回答记下、事务提交后在后台（`applicationTaskExecutor`，停机时等它做完）算问题向量写回；嵌入模型不可用时只记日志，回答不受影响。知识缺口归类时直接用存好的向量，同一段原文有一条有向量就都用它；都没有的（加列之前的旧记录、后台没算成）一次算完并写回，之后不再算。所有问题都算，不只拒答：差评发生在回答之后，而且只多一次嵌入调用。嵌入模型在界面上不能改（D-043）；以后（1.x）做换嵌入模型的重建索引时，这一列要一起清空。1,000 条记录（200 种问题各 5 次）时打开缺口页 p50 46.5–54.1 ms、p95 61.0–108.7 ms（`KnowledgeGapBenchmark` 两轮，本机 Docker Desktop，默认不跑），不调用嵌入模型；改前每次要重新向量化约 60 次调用。
+- **处理失败的文档**（人答复）：失败分两类。模型暂时不可用（嵌入调用失败、超时）记为可重新处理，管理端可以点“重新处理”（`POST …/documents/{id}/reprocess`，和上传是同一件事，用 `doc:upload`，不新增权限点），第一次失败 10 分钟后后台自动重试一次（每分钟检查，重试后再失败不再自动重试，仍可手动）；文件内容的问题（编码、没有文字、损坏）不能重新处理（409），改好后重传。同一个库里同一份文件之前处理失败的，重传时删掉失败的那条再传，不再报“已存在”。`document` 加 `reprocessable`、`retry_at`、`attempts`；加列之前的失败文档都按文件问题处理。界面随第 8 步的原型一起做。
+- **日志与指标**（人答复：先不接 Prometheus，保证指标和日志可用）：Actuator 加开 `metrics`，Spring AI 的模型调用观测（`gen_ai.client.operation`、`spring.ai.chat.client`，按操作类型 `gen_ai.operation.name` 和模型名 `gen_ai.request.model` 分；各用途在配置里各用一个模型，不另加用途标签）、token 用量 `gen_ai.client.token.usage` 和接口请求统计都在里面（没用 Spring AI 的 starter，token 用量的观测处理器由 rag-ai 注册，`ModelMetricsTests` 验证，指标里没有提示词和回答原文），Nginx 只转发 `/api`，所以只在本机 8080 能看。关键事件记成一行 `event=<名字> 键=值`（logfmt 写法）：`docker compose logs` 里人能直接读，`grep` 就能筛，不用引入日志收集组件，也不用把整套日志改成 JSON。事件有模型调用失败（rag-ai 在转成 `ModelCallException` 的地方记，只记用途、模型、异常类型）、拒答、低分改写、入库失败（分文件问题和模型不可用）、登录失败和锁定、越权拒绝（缺权限点在统一异常出口记，不能管理的库在 knowledge 记）。不记密码、密钥、提示词和问题原文；不合规的用户名不原样写进日志，防止伪造日志行。
+- **前后端接口契约**（人答复选“集成测试导出响应样例、前端测试校验”）：rag-app 的 `ApiContractTests` 造一套数据，按管理员调用前端用到的 21 个查询接口，把响应换成形状（字段名和值的类型，不含具体值，数组合并各元素），连同权限码清单写进 `frontend/src/test/contract/api-shapes.json`；和仓库里的不一致就失败，接口改了用 `-Dcontract.update=true` 重新生成。前端 `contract.test.ts` 把 MSW 假数据换成同样的形状比较：字段要一一对应，某一边是 null 或空数组时不比较类型。权限码改成 `PERMISSIONS` 常量，`Can`、`useCan` 和路由守卫只接受常量里的值，写错在类型检查时就报；结构测试禁止在界面代码里手写权限码。不生成 TypeScript 类型（要引入 OpenAPI 生成工具，属于新增依赖），只校验假数据，类型仍手写、由假数据带着对齐。第一次运行就发现文档列表、会话详情的假数据少了后端已有的字段。
+- **失败路径测试**：补流式事件（员工断开后照样做完、超时、业务异常、意外错误）、重排（错误状态码、越界序号、连不上）、连通测试（错误不是 JSON、说明过长截断、模型列表为空、地址格式）、文档解析（不支持的类型、Word 的正文样式和表格边界、加密 Excel、只有表头的工作表）、前端评价条和各 `api.ts` 写操作被拒绝时的测试。下线 `/api/ask` 后流式事件“断开就停止生成”的分支没有调用方了，一并删掉。覆盖率用命令行临时插桩统计，口径和基线相同（前端不含假数据、测试工具和 shadcn 组件）。
+
+**代码写法（第 7 步）**
+
+- **前端**：管理端页面按路由分包（React Router 的 `lazy`），打开时才下载，问答页和登录页留在主包，主包从 555 KB 降到 370 KB；`engines` 和 `.nvmrc` 改为 Node 24，与 CI 一致；ESLint 改用 typescript-eslint 带类型信息的推荐规则（jsx-a11y 不支持 ESLint 10，人答复先不加，记进 ROADMAP 待办），查出的 17 处主要是 React Router 7 的 `navigate()` 返回 Promise 没有处理，统一写成 `void navigate(…)`，表单的异步提交包一层；`.npmrc` 打开 `engine-strict`，Node 20 下 `npm ci` 直接报版本不对。查询键收到各 feature 的 `api.ts`（`roleKeys`、`knowledgeKeys` 等，前缀键用于一起失效），结构测试禁止在页面里现场写 `queryKey: [...]`。出错提示统一用 `lib/errors.tsx` 的 `ErrorMessage`：一律带 `role="alert"`，传请求错误或一句话，没有错误时不显示，替换了 30 多处手写的提示，外观不变。
+- **编译告警和空值声明**：根 pom 打开 `-Xlint:all`（`-Xmaxwarns 10000`，看到全部告警），原有 103 条全部清掉：异常类补 `serialVersionUID`（12 条）；测试里把 JSON 读成 `Map` 的 `unchecked`、`rawtypes`（86 条）按方法加 `@SuppressWarnings`，与原来的写法一致；Sa-Token 的 `BCrypt` 已标过时（3 条），换实现要引入新依赖且要兼容已有的密码摘要（D-016），在 `BCryptPasswordHasher` 上抑制并注明，另议；两处没有挂到声明上的文档注释改正。各包标 JSpecify 的 `@NullMarked`（依赖在根 pom 声明一次，版本由 Spring Boot 管理），包装类型的参数和 record 组件一律视为可空并标 `@Nullable`，注释里写明“为 null”的地方逐一标注，MyBatis 的 DO 整个类 `@NullUnmarked`。没有引入 NullAway 之类的编译期检查（#145 约定不做），标注只是声明，由评审和 IDE 提示把关。共享内核的架构规则原来只许依赖 JDK 和 package-info 上的 Modulith 注解，这次同时允许 JSpecify 的空值注解（属于人答复的“各包加 `@NullMarked`”，不放开别的依赖）。
+- **长参数和大服务**：会话存一轮改用 `NewTurn`（原来 9 个参数），上传改用 `Upload`（8 个，日期和文件名都是字符串，容易传错位置），文档列表改用 `DocumentFilter`，都照 `AskRequest` 写成 record，web 仍原样转交请求里的值。`KnowledgeBaseService` 拆出 `KnowledgeGrantService`（授权给账号和角色、撤销、角色删除时收回，审计也跟过去），`ModelSettingsService` 拆出 `ModelProviderService`（服务商的增删改、密钥加密和后 4 位），拆后分别 223、118、207、112 行。知识库的授权测试拆到 `KnowledgeGrantServiceTest`；服务商的测试留在 `ModelSettingsServiceTest`，因为“在用的不能删”“改密钥后路由跟着变”要两个服务一起验证。
+- **前端页面拆分**：超过 300 行的 7 个组件把对话框、分区搬到同目录的文件（模型管理页拆出用途、服务商、变更记录三个标签页，系统设置页拆出设置项、编辑对话框、行业包，用户页拆出账号行和账号对话框，文档列表拆出文档行，运营概览拆出到期提醒和统计表，回答记录拆出详情对话框），行为不变；问答页的提问逻辑（新建会话、流式更新、写回缓存、失败、停止）抽成 `useConversationAsk`，有单独的测试。结构测试限制组件文件不超过 300 行（`components/ui` 除外）。
+
+**体验（第 8 步，MSW 原型，待人确认）**
+
+- 回答按 Markdown 显示（react-markdown + remark-gfm，人答复引入；单独分包按需加载，加载前按原文显示），`[n]` 仍可点开原文，不渲染原始 HTML，链接和图片只显示文字。失败时显示服务端给的原因，失败的一轮可以重试、问题不丢，新建会话失败也有提示；输入框自动增高、Enter 发送、Shift+Enter 换行、输入法选字时不发送、最多 500 字；只在本来停在底部时跟随滚动；拿到轮次 id 前点停止就断开请求；登录过期后带上原页面去登录、回来时草稿还在（只接受本站路径）。引用显示资料的更新日期，过期和已有新版本的标出来；拒答时给换个问法的建议和该问谁（行业包配置）；缺口详情能直接打开检索过的库去补资料；失败文档的重新处理和自动重试时间；运营概览加提问人数占比、人均提问、短时间重复提问，点开引用会上报；新增审计记录页。
+- 原型确认后后端已补齐这些字段，`PROTOTYPE_FIELDS` 已删（契约测试不再放过任何差异）：引用的 `documentUpdatedAt`（文档上传时间，新版本是新文档，所以也是这一版的更新时间）和 `documentState`（`CURRENT`；失效日期早于统计时区今天的 `EXPIRED`；文档已不在的 `REPLACED`——新版本处理成功后旧版本删除（D-026），删除后看不出是被替换还是被手工删，一律按“资料已更新或移除”显示）；问答页文案的 `refusalTips`、`refusalContact` 只来自行业包（不加设置项和界面，没写时用内核默认建议、联系话术为空）；缺口的 `knowledgeBaseRefs`；统计的 `activeStaff`（现在能用问答的在职员工数，不分时段，上一周对比也用当前人数，因为没有账号历史）和 `repeatQuestions`（同一员工 10 分钟内问了与此前一题相似度达到缺口归类门槛的题，用已存的问题向量；口径见 README）。点开引用的上报接口 `POST /api/answers/{id}/citations/{index}/opened` 和表 `answer_citation_open`（只记回答、引用位置、时间，不记人）已做，引用点开率口径见 README。
+- **application 按用例分子包、内部类型按标准提成顶层**（原型评审，人答复按建议）：identity 分 `account`、`role`、`auth`、`audit`，knowledge 分 `ingestion`、`search`、`knowledgebase`，settings 分 `model`、`system`、`pack`（answering 已有 `ask`、`conversation`、`review`、`insight`）；共用的异常、`Paged`、`Properties`、端口和 `SettingKey` 留在 `application` 根下，避免子包互相依赖（`pack` 放设置规则和内核默认值，`system` 依赖它，反过来不行）。被 web 展示或被多个包引用的内部 record 提成顶层并起有业务含义的名字（如 `ImportRow`、`GapReport`、`SettingItem`），只作参数、由调用方构造的（`Upload`、`NewTurn`、`AskRequest`）保持内部。标准写进 AGENTS.md，`ArchitectureRulesTest` 检查 web 不读取 Service 的内部类型。`rag-ai` 保持扁平（实现类要包内可见）；persistence 暂不按聚合分子包。
+
+## D-053 缓存平台组件用 Redis、会话进 Redis、通用工具进 rag-shared、单表 CRUD 用 MyBatis-Plus（2026-11-05）
+
+#145 第 9 步，人追加并答复。本条按实施逐步补充。
+
+- **缓存做成平台组件 `rag-cache`**（人答复：用 Redis，把缓存能力发布出来；客户端用 Redisson）：做法同 rag-ai（D-052），对外只有 `Caches`、`TypedCache`、`CacheSpec` 和单元测试用的 `Caches.inMemory()`（D-054 起加上键值存储 `KeyValueStores`、`KeyValueStore`，上下文只在 infrastructure 层使用）。Redisson（4.8.0）在里面声明为 optional，由 rag-app 带上；`rag.cache.redis.enabled` 打开时 rag-cache 按 `rag.cache.redis.*` 自己建 `RedissonClient`，不用 starter（D-054）；上下文层用 Enforcer 禁止依赖 Redisson、Spring Data Redis、Lettuce、Jedis，`ArchitectureRulesTest` 禁止引用（违规样例 `UsesRedissonDirectly`）。机制都在平台里：
+  - 二级（Redis）的键是 `rag:cache:<缓存名>:<键>`，值存 JSON；读不到时加载再写入，加载结果为 null 不缓存；读回的 JSON 解析不了（升级后 record 改了字段）按没有缓存处理。
+  - 在事务里清除的等提交后再清，回滚不清。防止旧值写回：清除前先把全局代数 `rag:cache@generation` 加一（和删除在一个 Lua 脚本里原子执行）；读不到时先记下代数再从库里加载，写回时用 Lua 比较代数，变了就不写（指标 `rag.cache.rejected_writes`）。这样“提交前从库里读到旧权限、清除之后才写回”的那次写入被拒绝，收回的权限不会被放回缓存。代数全局一个、不随清除删除：清除很少（管理操作），代价只是同时在加载的其他键这次不写回。验证：`JsonCachesTest` 的三个竞态用例；`CacheConsistencyTests` 对着真实 Redis，加载较慢时并发读写 60 轮没有读到旧版本（去掉代数比较后同一用例失败：“清除第 2 版之后开始读，却读到第 1 版”），并发收回权限 15 轮后发出的请求全部 403。过期时间（权限、设置、路由 1 小时，问题向量 1 天）只是兜底。
+  - 不经应用直接改库（运维手工执行 SQL）时缓存不知道，要重启 app（启动后先清空缓存）或等过期，运维手册写明。
+  - Redis 出错或超时（命令超时 500ms）记 `event=cache_failure`，读直接走加载，之后 `rag.cache.retry-after`（30 秒）内不再访问 Redis，免得每次都等超时；出错期间的清除可能没做成，所以恢复后第一次访问前先清掉 `rag:cache:` 下的全部键。启动后第一次访问前也清一次：升级时的迁移、停机期间的改动都可能让留在 Redis 里的值过时。缓存不是问答的硬依赖（`CacheOutageTests`）。
+  - 指标 `rag.cache.gets`（标签 `cache`、`result`=hit/miss/error）。
+  - 打开 Redis 时 Redisson 在启动时就连，Redis 不在时应用起不来；Compose 里 app 等 redis 健康检查通过再启动。
+- **缓存什么**：模型用途和服务商（`model-routes`，按用途一份，服务商的密钥只存密文，解密仍在进程内；保存用途、改或删服务商后清全部）、系统设置（`settings`，界面保存值整份一条，保存或恢复后清）、账号的权限点和所属角色（`access`，按账号一份）、问题向量（`question-vectors`，在 rag-ai 的 `EmbeddingClient.embedQuestion` 里，键是模型名和问题的 SHA-256，Redis 里没有问题原文；检索和回答记下后补存向量共用，同一问题只调一次嵌入模型；批量向量化不缓存）。读这些不再开只读事务。不缓存可访问的知识库和检索结果（检索过滤只在 `ChunkSearchMapper` 一处，授权变更立即生效），也不缓存答案（要可追溯，权限随时会变）。
+- **权限缓存**（人答复：缓存，变更时按事件清除；修订 D-041 的“权限每次读库”）：改角色权限点、分配角色、启停、重置或修改密码、删除账号或角色后，在提交后清除对应缓存，下一个请求就按新权限判定，“立即生效”不变。
+- **会话存进 Redis**（人答复；修订 D-005 的“会话存在内存”；D-054 起经 rag-cache）：identity 的 `SaTokenStoreDao` 实现 Sa-Token 的存储，底层是 rag-cache 的键值存储 `sessions`，不再用 Sa-Token 的 Redisson 插件；打开 Redis 时键是 `rag:store:sessions:<Sa-Token 的键>`（如 `rag:store:sessions:Authorization:login:token:…`），应用重启、升级后不用重新登录（部署验证里重启 app 后用同一个令牌访问）。Redis 不可用时无法登录、已登录的请求被拒绝，这是会话存储决定的，不降级；运维手册写明。被拒绝时接口（如 `/api/auth/me`）返回 HTTP 500，人答复（2026-11-05）先保持，不改成 401/503。备份恢复不含 Redis，恢复后要重新登录。Compose 的 redis 带密码、只在内部网络、开 AOF（重启 Redis 后会话还在）、内存上限 256MB 按 `volatile-lru` 淘汰，镜像按摘要锁定、在宿主机上拉（同数据库镜像，D-050）。集成测试由 `TestRedis` 给每个 Spring 上下文各起一个带密码的 Redis，各测试类的缓存和会话不串。
+- **Sa-Token 不做成平台组件**（人要求评估）：按框架选用原则（D-052），Sa-Token 的核心（会话、权限来源、密码摘要）只在 identity 的 `infrastructure/security` 和 rag-app 的全局配置里，其他上下文只在 web 层用两个注解，已是原则里的例外。Spring AI 当时被三个上下文直接用到深层类型、又有不兼容升级，才需要防腐层；Sa-Token 没有这些问题。做成平台组件要由平台层定义“当前用户、权限点”的端口再由 identity 实现，认证就分在两处，还要自己写一套注解和拦截器。以后要换认证框架时，再由 identity 的 `api` 提供自己的注解（记进 ROADMAP 待办）。
+- **rag-shared 放共享内核和通用工具**（人答复；修订 D-034 的“只放模型概念”和 D-041 的“各上下文各有一个 `Paged`”）：`Paged`、空串处理、枚举解析等多个上下文共同用到的工具放进 rag-shared。边界仍是只依赖 JDK（和 JSpecify 的空值注解）、没有资源文件、不放业务规则。
+- **单表 CRUD 用 MyBatis-Plus**：单表的按主键增删改查、存在判断、条件计数、列表和分页改用 `BaseMapper` 加 Lambda 条件，一张表一个 Mapper（角色、角色权限点、账号角色，两张授权表，会话和轮次，回答记录和引用各自拆开），主键是多列的表不标 `@TableId`。XML 只留 upsert（`ON CONFLICT`）、一条语句插入多行（`<foreach>`；MyBatis-Plus 的 `insert(Collection)` 用 BATCH 执行器，在已开的事务里和 SIMPLE 执行器冲突）、多表、聚合、递归、取序列和检索，语句数从 81 条降到 42 条。`bigint[]` 列在 DO 上用 `@TableField(typeHandler = ArrayTypeHandler.class)`，更新时在 `set` 上带同样的 `typeHandler`。会话的乐观锁照旧按版本号判断（`set version = 旧值 + 1 … where version = 旧值`），不引入 `OptimisticLockerInnerInterceptor`。XML 里的 4 处 `now()` 改为由 `Clock` 传入（服务商的更新时间、回答的处理时间和评价时间），`MapperXmlLayoutTest` 检查，补违规样例。
+- **MyBatis-Plus 做成平台组件 `rag-persistence`**（人答复：配置、分页、基础接口都放进组件，即使目前只有 settings 用分页）：依赖（含分页插件需要的 `mybatis-plus-jsqlparser`，3.5.9 起单独成包）、全局配置（Mapper XML 位置、关闭启动横幅，从 `application.yml` 移入 `MybatisPlusPropertiesCustomizer`；分页插件）和分页转换 `Pages` 都在这里；上下文改为依赖它，不再各自声明 MyBatis-Plus。它和 rag-ai 不同，不是防腐层：MyBatis-Plus 的类型仍在各上下文的 infrastructure 里直接用（写 SQL 的地方本来就离不开框架），组件只收拢配置和通用转换。架构规则相应调整：MyBatis 类型可以出现在 infrastructure 包和 rag-persistence；平台层可以公开 final、私有构造、只有静态成员的工具类（`Texts`、`Enums`、`Pages`），可实例化的仍须包内可见。这修订了 D-052 框架选用原则里把 MyBatis-Plus 算作“关在各自 infrastructure 里”的判断——它其实被四个上下文用到，按原则本就该是平台组件。
+
+## D-054 松耦合：上下文只在 infrastructure 层经端口使用外部能力（2026-11-05）
+
+#145 第 9 步重做缓存时，人指出架构门禁缺一条明确的松耦合原则（修订 D-052 的框架选用原则）。
+
+- **原则**：组件或上下文对外提供的是能力；其他上下文只在自己的 `infrastructure` 层调用这些能力，实现本上下文 `application` 声明的端口。`application` 和 `domain` 只关注本上下文的业务，不知道外部能力怎么实现——端口的参数、返回值和异常都用本上下文的类型。适用于 rag-ai（Spring AI）、rag-cache、rag-persistence，以及以后新增的平台组件。
+- **Spring 不隔离**（人答复）：Spring 是产品的基础框架，事务、事件、调度、配置读取、`DuplicateKeyException` 等在各层照常使用，不为它写端口。web 层的 Sa-Token 注解沿用 D-053 的例外。
+- **缓存端口是业务化的**（人答复）：上下文在 `application` 声明带业务含义的缓存端口（如 identity 的 `AccessSnapshotCache`），何时清除仍是业务规则、由用例调用；`infrastructure/cache` 用 rag-cache 实现，缓存名、值的类型、用一级还是二级、过期时间都不出现在 `application`。
+- **新增平台组件的接入步骤**：平台模块只公开契约（接口、record、枚举、异常），背后的框架声明在平台模块里，上下文层用 Enforcer 禁止依赖它；上下文的 `infrastructure` 写适配器实现自己的端口；层的限制由 ArchUnit 规则检查。
+- **落地分两步**（人答复）：#145 先把缓存按本原则重做（规则 `CACHE_ONLY_IN_INFRASTRUCTURE`），rag-ai 在 answering、knowledge、settings、evaluation 的应用层、web 层和 evaluation 的 `api` 里约 30 处直接引用，另开结果型 Issue #158 迁移，同时上线通用规则：上下文的 api、web、application、domain 只能依赖 JDK、Spring、JSpecify、SLF4J、rag-shared、本上下文和其他上下文的 `api`。规则和迁移一起合入，不加例外。
+- **缓存按配置分两级，没配 Redis 时只用本地**（人答复：单体、单实例，Redis 集群暂不考虑；没配缓存时用本地实现作默认）：
+  - `rag.cache.redis.enabled` 默认 `false`：缓存只有一级（进程内 Caffeine，新依赖，版本由 Spring Boot 管理），会话存在进程内（重启后要重新登录），不连 Redis。Compose 部署设为 `true`：缓存一级加二级，会话进 Redis（D-053）。
+  - `CacheSpec` 只有名字和值的类型；每种缓存用哪几层、过期时间和容量写在 `rag.cache.defaults` 和 `rag.cache.caches.<名字>`，非法配置启动失败。默认一级 1 万条、5 分钟，二级 1 小时；问题向量单条约 4KB，有 Redis 时只放二级（1 天），没有时退回一级、容量 2000。
+  - 一级存对象，读的顺序是一级 → 二级 → 加载。只按单个实例设计，一级靠本进程的清除保持一致，过期时间只是兜底；Redis 出错时一级照常用（本进程的清除仍生效），二级跳过。多实例时要在 rag-cache 里加跨实例失效通知（ROADMAP 待办），端口不变。
+  - 一级的一致性：进程内一个失效计数，加载前记下，填入时在 Caffeine 的键锁里比较，变了就不填；清除时先清二级、再加计数并删一级。最初的写法是“先填、发现计数变了再删”，并且先清一级，`CacheConsistencyTests` 对着真实 Redis 失败（“清除第 2 版之后开始读，却读到第 1 版”、收回权限后的请求返回 200）：填和删之间别的请求能读到旧值；先清一级时，之后开始读的请求还能从 Redis 读到没删的旧值填回一级。改成上面的做法后通过。
+  - 指标：`rag.cache.gets` 的 `result` 加 `local_hit`；`rag.cache.rejected_writes` 加标签 `tier`（local、remote）。
+  - Caffeine 由 rag-cache 正常传给上下文（单元测试里 `Caches.inMemory()` 就是只有一级的生产实现），所以不用 Enforcer 禁止，由 `ArchitectureRulesTest` 的 `CACHE_CLIENTS_ONLY_IN_RAG_CACHE` 禁止在 rag-cache 之外引用；`CACHE_ONLY_IN_INFRASTRUCTURE` 禁止上下文的 api、web、application、domain 引用 rag-cache；`DOMAIN_IS_PURE` 加上 rag-cache 和 rag-persistence。都补了违规样例。
+- **缓存端口**：identity 的 `AccessSnapshotCache`（`AccessService` 用）、settings 的 `SavedSettingsCache`（`SystemSettingsService`）和 `ModelRouteCache`（`ModelSettingsService`，端口里的 `ModelUsage` 随 rag-ai 迁移一起换成 settings 自己的类型），实现在各自的 `infrastructure/cache`。rag-ai 的问题向量缓存是 rag-ai 内部机制，上下文看不到。
+- **会话存储经 rag-cache**：去掉 `redisson-spring-boot-starter` 和 `sa-token-redisson-spring-boot-starter`。`SaTokenStoreDao` 在同一个请求里对同一个键只读一次存储（读到的值记在 Sa-Token 的请求存储里，本请求的写入、删除同步更新），不在请求里时直接读写。
+- **删角色不清权限缓存**：原计划在 `RoleService.delete` 里补 `forgetAll()`，查代码后发现删除前要求角色下没有账号，任何账号的快照里都没有这个角色，清除没有作用；改为修正 `AccessService` 注释里“删角色后清除”的错误说法。
+- **测量**（本机 macOS + Docker Desktop，JDK 26，`CachePerformanceBenchmark` 两轮；基线是缓存之前的 `db1f3ed`，会话在进程内）：
+
+  | 场景（p50 / p95，毫秒） | 基线 | 有 Redis | 本地模式 |
+  | --- | --- | --- | --- |
+  | `GET /api/users` | 3.05 / 6.85，2.85 / 6.72 | 4.14 / 8.15，5.95 / 11.24 | 1.78 / 5.57，3.02 / 6.33 |
+  | 一次问答 | 17.3 / 24.2，17.0 / 24.7 | 17.7 / 28.0，20.1 / 27.9 | 11.0 / 18.8，11.0 / 18.4 |
+
+  服务层读取权限、设置、路由从 0.24–0.33 ms 降到约 0.001 ms（一级命中）。一次问答（含新建会话）缓存热了之后 16 条 SQL，不再查权限、设置、模型路由的表（`AskSqlBudgetTests`）。有 Redis 时每个登录后的请求访问 Redis 4 次（读令牌、读最后活动时间、读会话各一次，改最后活动时间一次 Lua），基线的会话在进程内、0 次；“端到端不慢于改前”在本地模式达到；有 Redis 时 `GET /api/users` 没达到，人答复接受这点差距：这是会话跨重启仍有效的代价，有 Redis 时的验收以“每个请求访问 Redis 4 次”为准（改前插件是 9 次）。

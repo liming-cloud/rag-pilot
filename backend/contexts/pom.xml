@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.liming.rag</groupId>
+        <artifactId>rag-pilot</artifactId>
+        <version>0.1.0-SNAPSHOT</version>
+        <relativePath>../../pom.xml</relativePath>
+    </parent>
+
+    <!-- 上下文层：各业务上下文，只依赖平台层的能力接口和彼此的 api 包；不直接依赖 Spring AI（AGENTS.md“框架选用”）。 -->
+    <artifactId>rag-contexts</artifactId>
+    <packaging>pom</packaging>
+
+    <!--
+      框架选用（AGENTS.md）：上下文只经平台层的能力接口使用 AI 能力，不直接或间接依赖 Spring AI。rag-ai 把 Spring AI 声明为
+      optional，不会传给依赖它的上下文；这里再用 Enforcer 兜底，有人加了直接依赖或换了传递依赖时构建失败。
+    -->
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-enforcer-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>no-framework-clients-in-contexts</id>
+                        <goals>
+                            <goal>enforce</goal>
+                        </goals>
+                        <configuration>
+                            <rules>
+                                <bannedDependencies>
+                                    <excludes>
+                                        <exclude>org.springframework.ai:*</exclude>
+                                        <exclude>org.redisson:*</exclude>
+                                        <exclude>org.springframework.data:spring-data-redis</exclude>
+                                        <exclude>io.lettuce:*</exclude>
+                                        <exclude>redis.clients:*</exclude>
+                                    </excludes>
+                                    <searchTransitive>true</searchTransitive>
+                                    <message>上下文不能依赖 Spring AI 和 Redis 客户端：AI 能力经平台层 rag-ai、缓存经 rag-cache 的接口使用（AGENTS.md“框架选用”，D-053）。</message>
+                                </bannedDependencies>
+                            </rules>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+
+    <modules>
+        <module>rag-identity</module>
+        <module>rag-settings</module>
+        <module>rag-knowledge</module>
+        <module>rag-answering</module>
+        <module>rag-evaluation</module>
+    </modules>
+</project>

@@ -24,7 +24,7 @@ export function UploadBatch({
   const running = counts.done < counts.total;
   const problems = items.filter((item) => ["duplicate", "unsupported", "failed"].includes(item.outcome));
   return (
-    <section aria-label="本批上传" className="flex flex-col gap-2 rounded-lg border bg-card p-3 text-sm">
+    <section aria-label="本批上传" className="flex flex-col gap-2 rounded-xl border bg-card shadow-sm p-3 text-sm">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
         <span className="font-medium">
           {running ? `正在上传 ${counts.done} / ${counts.total}` : `本批 ${counts.total} 个文件已处理完`}

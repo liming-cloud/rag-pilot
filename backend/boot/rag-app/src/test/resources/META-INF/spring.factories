@@ -1,0 +1,2 @@
+# 每个 @SpringBootTest 的上下文各起一个 Redis（D-053），见 TestRedis。
+org.springframework.test.context.ContextCustomizerFactory=com.liming.rag.TestRedis$Factory

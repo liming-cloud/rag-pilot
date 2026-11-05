@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>com.liming.rag</groupId>
+        <artifactId>rag-contexts</artifactId>
+        <version>0.1.0-SNAPSHOT</version>
+        <relativePath>../pom.xml</relativePath>
+    </parent>
+    <artifactId>rag-identity</artifactId>
+    <!-- 限界上下文：账号、登录、角色。 -->
+    <dependencies>
+        <dependency>
+            <groupId>${project.groupId}</groupId>
+            <artifactId>rag-shared</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.modulith</groupId>
+            <artifactId>spring-modulith-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-webmvc</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-tx</artifactId>
+        </dependency>
+        <!-- MyBatis-Plus 经平台组件 rag-persistence 引入（D-053）。 -->
+        <dependency>
+            <groupId>${project.groupId}</groupId>
+            <artifactId>rag-persistence</artifactId>
+        </dependency>
+        <!-- 账号权限缓存和登录会话经平台组件 rag-cache（D-053、D-054），只在 infrastructure 里用，看不到 Redis。 -->
+        <dependency>
+            <groupId>${project.groupId}</groupId>
+            <artifactId>rag-cache</artifactId>
+        </dependency>
+        <!-- 登录会话、角色注解、BCrypt 都来自 Sa-Token；其他模块经由本模块传递依赖使用注解。 -->
+        <dependency>
+            <groupId>cn.dev33</groupId>
+            <artifactId>sa-token-spring-boot4-starter</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.assertj</groupId>
+            <artifactId>assertj-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+</project>

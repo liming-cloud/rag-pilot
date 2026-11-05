@@ -25,6 +25,11 @@ describe("运营概览页", () => {
     expect(within(totals).getByText("提问")).toBeInTheDocument();
     expect(within(totals).getByText("拒答率")).toBeInTheDocument();
     expect(within(totals).getByText("差评率")).toBeInTheDocument();
+    // 产品指标（#145 A11）。
+    expect(within(totals).getByText("提问人数占比")).toBeInTheDocument();
+    expect(within(totals).getByText("人均提问")).toBeInTheDocument();
+    expect(within(totals).getByText("短时间重复提问")).toBeInTheDocument();
+    expect(within(totals).getByText(/36 位能用问答的员工里 \d+ 位问过/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "近 30 天" })).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByRole("table", { name: "每日趋势" })).toBeInTheDocument();
     expect(screen.getByText("相关度低于门槛")).toBeInTheDocument();
@@ -58,7 +63,19 @@ describe("运营概览页", () => {
           from: "2026-10-22",
           to: "2026-10-28",
           zone: "Asia/Singapore",
-          totals: { questions: 40, askers: 6, refused: 10, rated: 12, liked: 9, disliked: 3, openReviews: 5 },
+          totals: {
+            questions: 40,
+            askers: 6,
+            refused: 10,
+            rated: 12,
+            liked: 9,
+            disliked: 3,
+            openReviews: 5,
+            activeStaff: 12,
+            repeatQuestions: 4,
+            citedAnswers: 20,
+            openedAnswers: 5,
+          },
           daily: [],
           refusalReasons: [],
           previous: null,
@@ -71,6 +88,8 @@ describe("运营概览页", () => {
 
     const totals = await screen.findByRole("list", { name: "汇总" });
     expect(within(within(totals).getByText("拒答率").closest("li")!).getByText("25.0%")).toBeInTheDocument();
+    // 引用点开率 = 被点开过引用的回答 ÷ 带引用的回答（5 ÷ 20）。
+    expect(within(within(totals).getByText("引用点开率").closest("li")!).getByText("25.0%")).toBeInTheDocument();
     // 评价率和差评率的分母是给出了回答的 30 题。
     expect(within(within(totals).getByText("评价率").closest("li")!).getByText("40.0%")).toBeInTheDocument();
     expect(within(within(totals).getByText("差评率").closest("li")!).getByText("10.0%")).toBeInTheDocument();
@@ -82,7 +101,19 @@ describe("运营概览页", () => {
           from: "2026-10-22",
           to: "2026-10-28",
           zone: "Asia/Singapore",
-          totals: { questions: 0, askers: 0, refused: 0, rated: 0, liked: 0, disliked: 0, openReviews: 0 },
+          totals: {
+            questions: 0,
+            askers: 0,
+            refused: 0,
+            rated: 0,
+            liked: 0,
+            disliked: 0,
+            openReviews: 0,
+            activeStaff: 30,
+            repeatQuestions: 0,
+            citedAnswers: 0,
+            openedAnswers: 0,
+          },
           daily: [],
           refusalReasons: [],
           previous: null,
@@ -93,7 +124,9 @@ describe("运营概览页", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: "近 7 天" }));
     expect(await screen.findByText("这段时间还没有提问。")).toBeInTheDocument();
-    expect(screen.getAllByText("-")).toHaveLength(4);
+    // 拒答率、评价率、好评率、差评率、人均提问、短时间重复提问、引用点开率没有分母；提问人数占比是 0.0%。
+    expect(screen.getAllByText("-")).toHaveLength(7);
+    expect(within(screen.getByRole("list", { name: "汇总" })).getByText("0.0%")).toBeInTheDocument();
   });
 
   it("有知识库权限时提醒即将到期和已失效的资料，链到知识库", async () => {
@@ -128,7 +161,7 @@ describe("运营概览页", () => {
 
     const weeks = screen.getByLabelText("按周查看");
     expect(within(weeks).getAllByRole("option")).toHaveLength(13);
-    const lastWeek = within(weeks).getByRole("option", { name: /（上周）$/ }) as HTMLOptionElement;
+    const lastWeek = within(weeks).getByRole<HTMLOptionElement>("option", { name: /（上周）$/ });
     fireEvent.change(weeks, { target: { value: lastWeek.value } });
 
     expect(await screen.findByRole("heading", { name: "运营周报" })).toBeInTheDocument();
