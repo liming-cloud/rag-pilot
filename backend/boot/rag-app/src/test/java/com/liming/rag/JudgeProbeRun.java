@@ -2,8 +2,9 @@ package com.liming.rag;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.liming.rag.ai.ModelCallException;
 import com.liming.rag.evaluation.api.AnswerJudge;
+import com.liming.rag.evaluation.api.JudgeUnavailableException;
+import com.liming.rag.evaluation.infrastructure.ai.ModelAnswerJudge;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -55,7 +56,7 @@ class JudgeProbeRun {
                 Files.readString(Path.of(System.getenv("EVAL_JUDGE_PROBE"))), new TypeReference<>() {
                 });
         var model = env("EVAL_JUDGE_MODEL", "THUDM/GLM-4-9B-0414");
-        var judge = AnswerJudge.openAiCompatible(env("EVAL_JUDGE_BASE_URL",
+        var judge = ModelAnswerJudge.openAiCompatible(env("EVAL_JUDGE_BASE_URL",
                         env("MODEL_BASE_URL", "https://api.siliconflow.cn/v1")),
                 env("EVAL_JUDGE_API_KEY", System.getenv("MODEL_API_KEY")), model, Duration.ofSeconds(120));
 
@@ -68,7 +69,7 @@ class JudgeProbeRun {
                     permits.acquire();
                     try {
                         return new Result(probe, judge.judge(probe.question(), probe.referenceAnswer(), probe.answer()));
-                    } catch (ModelCallException e) {
+                    } catch (JudgeUnavailableException e) {
                         var cause = e.getCause() == null ? "" : e.getCause().getMessage();
                         return new Result(probe, new AnswerJudge.Judgement(null, "评判调用失败：" + cause));
                     } finally {

@@ -1,6 +1,5 @@
 package com.liming.rag.settings.application.model;
 
-import com.liming.rag.ai.ModelUsage;
 import java.util.function.Supplier;
 
 /**
@@ -10,7 +9,7 @@ import java.util.function.Supplier;
 public interface ModelRouteCache {
 
     /** 有缓存时直接返回，没有时调用 {@code loader} 并缓存结果。 */
-    SavedRoute get(ModelUsage usage, Supplier<SavedRoute> loader);
+    SavedRoute get(ModelPurpose usage, Supplier<SavedRoute> loader);
 
     void forgetAll();
 }

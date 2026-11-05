@@ -4,7 +4,7 @@ import com.liming.rag.settings.application.SettingKey;
 
 import com.liming.rag.settings.application.SettingsException;
 
-import com.liming.rag.ai.ModelUsage;
+import com.liming.rag.settings.application.model.ModelPurpose;
 import com.liming.rag.identity.api.UserDirectory;
 import com.liming.rag.shared.Enums;
 import com.liming.rag.shared.TenantId;
@@ -22,8 +22,8 @@ public final class SettingsInputs {
                 () -> new SettingsException(SettingsException.Reason.NOT_FOUND, "没有这项设置"));
     }
 
-    public static ModelUsage usage(String value) {
-        return Enums.parse(ModelUsage.class, value, () -> new SettingsException(SettingsException.Reason.INVALID,
+    public static ModelPurpose usage(String value) {
+        return Enums.parse(ModelPurpose.class, value, () -> new SettingsException(SettingsException.Reason.INVALID,
                 "用途只能是 ANSWER、HEDGE、LIGHT 或 RERANK"));
     }
 

@@ -2,7 +2,7 @@ package com.liming.rag;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.liming.rag.ai.ModelUsage;
+import com.liming.rag.settings.application.model.ModelPurpose;
 import com.liming.rag.identity.application.role.AccessService;
 import com.liming.rag.settings.application.model.ModelSettingsService;
 import com.liming.rag.settings.application.system.SystemSettingsService;
@@ -66,7 +66,7 @@ abstract class CachePerformanceBenchmark {
 
         report("服务层：权限点", 2000, () -> access.permissionsOf(admin));
         report("服务层：系统设置", 2000, () -> settings.chatTexts());
-        report("服务层：模型路由", 2000, () -> models.override(ModelUsage.ANSWER));
+        report("服务层：模型路由", 2000, () -> models.savedEndpoint(ModelPurpose.ANSWER));
         report("GET /api/users", 300, () -> http.getForEntity("/api/users", Map.class));
         report("一次问答", 50, () -> TestAsk.ask(http, null, List.of(store), "青柚气泡水在哪个货架"));
     }

@@ -1,6 +1,5 @@
 package com.liming.rag.settings.application.model;
 
-import com.liming.rag.ai.ModelUsage;
 import java.time.OffsetDateTime;
 import org.jspecify.annotations.Nullable;
 
@@ -11,7 +10,7 @@ import org.jspecify.annotations.Nullable;
  * @param afterProviderId 用来恢复；null 表示环境变量里的服务商
  * @param restoredFrom 这条是恢复操作时，恢复的是哪条记录
  */
-public record ModelChange(@Nullable Long id, ModelUsage purpose, String beforeProviderName, String beforeModel,
+public record ModelChange(@Nullable Long id, ModelPurpose purpose, String beforeProviderName, String beforeModel,
         @Nullable Long afterProviderId, String afterProviderName, String afterModel, long changedBy, String changedByName,
         OffsetDateTime changedAt, @Nullable Long restoredFrom) {
 }

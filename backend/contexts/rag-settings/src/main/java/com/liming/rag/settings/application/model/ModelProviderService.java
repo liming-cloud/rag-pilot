@@ -1,6 +1,5 @@
 package com.liming.rag.settings.application.model;
 
-import com.liming.rag.ai.ModelUsage;
 import com.liming.rag.settings.application.SettingsException;
 import com.liming.rag.shared.Texts;
 import java.util.List;
@@ -70,7 +69,7 @@ public class ModelProviderService {
     }
 
     /** 在界面配置成用这个服务商的用途；没在界面配置过的用途用环境变量，不算。 */
-    private List<ModelUsage> usedBy(long providerId) {
+    private List<ModelPurpose> usedBy(long providerId) {
         return store.purposes().stream()
                 .filter(setting -> Long.valueOf(providerId).equals(setting.providerId()))
                 .map(PurposeSetting::purpose)

@@ -384,6 +384,7 @@ Compose 增加 web 服务（`deploy/web.Dockerfile`）：Node 24 构建前端，
 #145 第 9 步重做缓存时，人指出架构门禁缺一条明确的松耦合原则（修订 D-052 的框架选用原则）。
 
 - **原则**：组件或上下文对外提供的是能力；其他上下文只在自己的 `infrastructure` 层调用这些能力，实现本上下文 `application` 声明的端口。`application` 和 `domain` 只关注本上下文的业务，不知道外部能力怎么实现——端口的参数、返回值和异常都用本上下文的类型。适用于 rag-ai（Spring AI）、rag-cache、rag-persistence，以及以后新增的平台组件。
+- **rag-ai 的迁移（#158，人答复）**：端口按用途拆（回答生成、追问改写、重排、向量化……），一个端口一种能力，和 `ChunkIndex`、`FileStorage` 一样，不做每个上下文一个 `ModelGateway`；`ModelCallException` 的错误码不分上下文、接口返回的 `code` 不变，只在适配器里转成本上下文的异常类型。
 - **Spring 不隔离**（人答复）：Spring 是产品的基础框架，事务、事件、调度、配置读取、`DuplicateKeyException` 等在各层照常使用，不为它写端口。web 层的 Sa-Token 注解沿用 D-053 的例外。
 - **缓存端口是业务化的**（人答复）：上下文在 `application` 声明带业务含义的缓存端口（如 identity 的 `AccessSnapshotCache`），何时清除仍是业务规则、由用例调用；`infrastructure/cache` 用 rag-cache 实现，缓存名、值的类型、用一级还是二级、过期时间都不出现在 `application`。
 - **新增平台组件的接入步骤**：平台模块只公开契约（接口、record、枚举、异常），背后的框架声明在平台模块里，上下文层用 Enforcer 禁止依赖它；上下文的 `infrastructure` 写适配器实现自己的端口；层的限制由 ArchUnit 规则检查。

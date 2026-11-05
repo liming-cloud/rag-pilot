@@ -2,7 +2,7 @@ package com.liming.rag.settings.infrastructure.cache;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.liming.rag.ai.ModelUsage;
+import com.liming.rag.settings.application.model.ModelPurpose;
 import com.liming.rag.cache.Caches;
 import com.liming.rag.settings.application.SettingKey;
 import com.liming.rag.settings.application.model.PurposeSetting;
@@ -37,20 +37,20 @@ class RagSettingsCachesTest {
     @Test
     void routesAreCachedPerUsageUntilForgotten() {
         var cache = new RagModelRouteCache(caches);
-        var answer = route(ModelUsage.ANSWER, "model-a");
+        var answer = route(ModelPurpose.ANSWER, "model-a");
 
-        assertThat(cache.get(ModelUsage.ANSWER, () -> count(answer))).isEqualTo(answer);
-        assertThat(cache.get(ModelUsage.ANSWER, () -> count(route(ModelUsage.ANSWER, "changed")))).isEqualTo(answer);
-        assertThat(cache.get(ModelUsage.RERANK, () -> count(new SavedRoute(null, null))))
+        assertThat(cache.get(ModelPurpose.ANSWER, () -> count(answer))).isEqualTo(answer);
+        assertThat(cache.get(ModelPurpose.ANSWER, () -> count(route(ModelPurpose.ANSWER, "changed")))).isEqualTo(answer);
+        assertThat(cache.get(ModelPurpose.RERANK, () -> count(new SavedRoute(null, null))))
                 .isEqualTo(new SavedRoute(null, null));
 
         cache.forgetAll();
-        assertThat(cache.get(ModelUsage.ANSWER, () -> count(route(ModelUsage.ANSWER, "model-b"))))
-                .isEqualTo(route(ModelUsage.ANSWER, "model-b"));
+        assertThat(cache.get(ModelPurpose.ANSWER, () -> count(route(ModelPurpose.ANSWER, "model-b"))))
+                .isEqualTo(route(ModelPurpose.ANSWER, "model-b"));
         assertThat(loads).hasValue(3);
     }
 
-    private static SavedRoute route(ModelUsage usage, String model) {
+    private static SavedRoute route(ModelPurpose usage, String model) {
         return new SavedRoute(new PurposeSetting(usage, null, model, "管理员", AT), null);
     }
 

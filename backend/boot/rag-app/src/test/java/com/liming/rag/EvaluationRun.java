@@ -4,8 +4,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.fail;
 
 import com.liming.rag.evaluation.api.AnswerJudge;
+import com.liming.rag.evaluation.infrastructure.ai.ModelAnswerJudge;
 import com.liming.rag.ai.EmbeddingClient;
-import com.liming.rag.ai.ModelCallException;
+import com.liming.rag.evaluation.api.JudgeUnavailableException;
 import com.liming.rag.evaluation.api.EvalCase;
 import com.liming.rag.evaluation.api.EvalOutcome;
 import com.liming.rag.evaluation.api.EvalReport;
@@ -266,7 +267,7 @@ class EvaluationRun {
         if ("none".equals(env("EVAL_JUDGE_PROVIDER", "openai"))) {
             return null;
         }
-        return AnswerJudge.openAiCompatible(env("EVAL_JUDGE_BASE_URL", env("MODEL_BASE_URL", "https://api.siliconflow.cn/v1")),
+        return ModelAnswerJudge.openAiCompatible(env("EVAL_JUDGE_BASE_URL", env("MODEL_BASE_URL", "https://api.siliconflow.cn/v1")),
                 env("EVAL_JUDGE_API_KEY", System.getenv("MODEL_API_KEY")), env("EVAL_JUDGE_MODEL", DEFAULT_JUDGE_MODEL),
                 Duration.ofSeconds(120));
     }
@@ -283,7 +284,7 @@ class EvaluationRun {
         try {
             var judgement = judge.judge(evalCase.question(), evalCase.referenceAnswer(), outcome.answer());
             return outcome.withJudgement(new EvalOutcome.Judgement(judgement.verdict().name(), judgement.reason()));
-        } catch (ModelCallException e) {
+        } catch (JudgeUnavailableException e) {
             var cause = e.getCause() == null ? "" : "：" + e.getCause().getMessage();
             if (first) {
                 throw new IllegalStateException(e.getMessage() + cause, e);

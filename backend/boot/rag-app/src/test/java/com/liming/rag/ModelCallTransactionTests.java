@@ -8,7 +8,7 @@ import static org.mockito.Mockito.doAnswer;
 
 import com.liming.rag.ai.EmbeddingClient;
 import com.liming.rag.ai.ModelProbe;
-import com.liming.rag.ai.ModelUsage;
+import com.liming.rag.settings.application.model.ModelPurpose;
 import com.liming.rag.answering.application.ask.AskResult;
 import com.liming.rag.answering.application.review.AnswerLogService;
 import com.liming.rag.answering.application.insight.KnowledgeGapService;
@@ -101,8 +101,8 @@ class ModelCallTransactionTests {
     void probesOutsideTransactions() {
         var admin = admin();
 
-        ignoreFailure(() -> models.save(TENANT, admin, ModelUsage.RERANK.name(), null, "any-reranker"));
-        ignoreFailure(() -> models.test(ModelUsage.ANSWER.name(), null, "any-model"));
+        ignoreFailure(() -> models.save(TENANT, admin, ModelPurpose.RERANK.name(), null, "any-reranker"));
+        ignoreFailure(() -> models.test(ModelPurpose.ANSWER.name(), null, "any-model"));
         ignoreFailure(() -> models.availableModels(null));
 
         assertThat(inTransaction).hasSize(3).containsOnly(false);

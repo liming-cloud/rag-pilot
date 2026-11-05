@@ -7,7 +7,7 @@ import com.liming.rag.settings.application.SettingsException;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.liming.rag.ai.ModelUsage;
+import com.liming.rag.settings.application.model.ModelPurpose;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -18,7 +18,7 @@ class SettingsInputsTest {
     @DisplayName("设置项和用途的名字不分大小写；没有这项设置是 NOT_FOUND，用途不对是 INVALID")
     void parsesNames() {
         assertThat(SettingsInputs.key("brand_name")).isEqualTo(SettingKey.BRAND_NAME);
-        assertThat(SettingsInputs.usage("rerank")).isEqualTo(ModelUsage.RERANK);
+        assertThat(SettingsInputs.usage("rerank")).isEqualTo(ModelPurpose.RERANK);
 
         assertThatThrownBy(() -> SettingsInputs.key("nope")).isInstanceOfSatisfying(SettingsException.class,
                 e -> assertThat(e.code()).isEqualTo("SETTINGS_NOT_FOUND"));

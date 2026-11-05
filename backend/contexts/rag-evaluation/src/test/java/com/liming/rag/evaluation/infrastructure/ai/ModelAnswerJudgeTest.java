@@ -1,11 +1,15 @@
-package com.liming.rag.evaluation.api;
+package com.liming.rag.evaluation.infrastructure.ai;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.liming.rag.ai.ModelCallException;
+import com.liming.rag.evaluation.api.AnswerJudge;
+import com.liming.rag.evaluation.api.JudgeUnavailableException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-class AnswerJudgeTest {
+class ModelAnswerJudgeTest {
 
     @Test
     @DisplayName("解析评判结果：结论和理由；中文冒号或英文冒号都认；看不懂时判为错误并保留原文")
@@ -30,5 +34,31 @@ class AnswerJudgeTest {
                 .isEqualTo(new AnswerJudge.Judgement(AnswerJudge.Verdict.CORRECT, "要点齐全"));
         assertThat(ModelAnswerJudge.parse("分析：结论：部分正确吗？再想想。\n结论：错误\n理由：数字不对").verdict())
                 .isEqualTo(AnswerJudge.Verdict.WRONG);
+    }
+
+    @Test
+    @DisplayName("评判模型调用失败：转成评测自己的异常，错误码仍是 MODEL_UNAVAILABLE，不泄露 rag-ai 的类型")
+    void modelFailureBecomesJudgeException() {
+        var judge = new ModelAnswerJudge((system, user) -> {
+            throw new ModelCallException("底层失败");
+        });
+
+        assertThatThrownBy(() -> judge.judge("问题", "参考", "回答"))
+                .isInstanceOf(JudgeUnavailableException.class)
+                .isNotInstanceOf(ModelCallException.class)
+                .hasMessageContaining("答案评判失败")
+                .extracting(e -> ((JudgeUnavailableException) e).code())
+                .isEqualTo("MODEL_UNAVAILABLE");
+    }
+
+    @Test
+    @DisplayName("把问题、参考答案和系统回答交给模型，按返回的结论评判")
+    void judgesWithModelOutput() {
+        var judge = new ModelAnswerJudge((system, user) -> {
+            assertThat(user).contains("问题：Q").contains("参考答案：R").contains("系统回答：A");
+            return "结论：正确\n理由：一致";
+        });
+
+        assertThat(judge.judge("Q", "R", "A").verdict()).isEqualTo(AnswerJudge.Verdict.CORRECT);
     }
 }

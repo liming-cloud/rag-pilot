@@ -1,7 +1,7 @@
 package com.liming.rag.settings.infrastructure.persistence;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.liming.rag.ai.ModelUsage;
+import com.liming.rag.settings.application.model.ModelPurpose;
 import com.liming.rag.settings.application.model.ModelChange;
 import com.liming.rag.settings.application.model.ModelProvider;
 import com.liming.rag.settings.application.model.ModelSettingsStore;
@@ -77,7 +77,7 @@ class MybatisModelSettingsStore implements ModelSettingsStore {
     }
 
     @Override
-    public Optional<PurposeSetting> purpose(ModelUsage purpose) {
+    public Optional<PurposeSetting> purpose(ModelPurpose purpose) {
         return Optional.ofNullable(purposes.selectById(purpose.name())).map(MybatisModelSettingsStore::toPurpose);
     }
 
@@ -130,12 +130,12 @@ class MybatisModelSettingsStore implements ModelSettingsStore {
     }
 
     private static PurposeSetting toPurpose(ModelPurposeDO row) {
-        return new PurposeSetting(ModelUsage.valueOf(row.purpose), row.providerId, row.model, row.updatedByName,
+        return new PurposeSetting(ModelPurpose.valueOf(row.purpose), row.providerId, row.model, row.updatedByName,
                 row.updatedAt);
     }
 
     private static ModelChange toChange(ModelChangeDO row) {
-        return new ModelChange(row.id, ModelUsage.valueOf(row.purpose), row.beforeProviderName, row.beforeModel,
+        return new ModelChange(row.id, ModelPurpose.valueOf(row.purpose), row.beforeProviderName, row.beforeModel,
                 row.afterProviderId, row.afterProviderName, row.afterModel, row.changedBy, row.changedByName,
                 row.changedAt, row.restoredFrom);
     }
