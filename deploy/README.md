@@ -84,6 +84,7 @@ docker compose --env-file .env --env-file release.env logs --tail 200 app   # �
 ```bash
 docker compose --env-file .env --env-file release.env logs --since 24h app | grep 'event=model_call_failed'
 curl -s http://127.0.0.1:8080/actuator/metrics/gen_ai.client.operation         # 模型调用次数和耗时
+curl -s 'http://127.0.0.1:8080/actuator/metrics/gen_ai.client.token.usage?tag=gen_ai.token.type:total'  # 模型调用用掉的 token（可再按 gen_ai.request.model 筛）
 curl -s 'http://127.0.0.1:8080/actuator/metrics/http.server.requests?tag=status:500'   # 出错的接口请求
 curl -s 'http://127.0.0.1:8080/actuator/metrics/rag.cache.gets?tag=result:local_hit'  # 进程内一级缓存命中次数（result 还有 hit=Redis 命中、miss、error）
 ```
