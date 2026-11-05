@@ -232,7 +232,7 @@ Compose 增加 web 服务（`deploy/web.Dockerfile`）：Node 24 构建前端，
 
 ## D-044 新增上下文模块 rag-settings（系统设置）（2026-11-01）
 
-#120 接后端时发现模型管理没有合适的家：它要有表、接口和权限点，而 `rag-ai` 是技术模块（扁平、只公开契约、没有持久化层、不依赖上下文模块），放进 identity、knowledge、answering 也都不对。经人决定新增上下文模块 `rag-settings`（系统设置），放模型管理的表、接口和服务；M5 的行业包、品牌名称、推荐问题等系统设置以后也放这里（D-042 暂放在 identity 的品牌配置届时迁过来）。`rag-ai` 只增加三个公开契约：各用途当前用哪个服务商和模型（`ModelRouting`）、连通测试和读服务商模型列表（`ModelProbe`），由 `rag-settings` 实现和调用；依赖方向是 settings → ai，`rag-ai` 仍然扁平、不依赖上下文模块。模型配置是部署级的，表不带租户。
+#120 接后端时发现模型管理没有合适的家：它要有表、接口和权限点，而 `rag-ai` 是技术模块（扁平、只公开契约、没有持久化层、不依赖上下文模块），放进 identity、knowledge、answering 也都不对。经人决定新增上下文模块 `rag-settings`（系统设置），放模型管理的表、接口和服务；M5 的行业包、品牌名称、推荐问题等系统设置以后也放这里（D-042 暂放在 identity 的品牌配置届时迁过来）。`rag-ai` 只增加三个公开契约：各用途当前用哪个服务商和模型（`ModelRouting`）、连通测试和读服务商模型列表（`ModelProbe`），由 `rag-settings` 实现和调用（D-054 起由 settings 的 `infrastructure` 层实现和调用）；依赖方向是 settings → ai，`rag-ai` 仍然扁平、不依赖上下文模块。模型配置是部署级的，表不带租户。
 
 ## D-045 行业包与系统设置：资源目录打包、可改项存库、词表在检索前扩展（2026-11-01）
 
@@ -320,7 +320,7 @@ Compose 增加 web 服务（`deploy/web.Dockerfile`）：Node 24 构建前端，
 
 **开发视图（第 1 步）**
 
-- **框架选用原则**（人提出的思路）：上下文只依赖能力接口，不直接用第三方框架。只有一个上下文用的库放在它的 `infrastructure`，多个上下文要用的做成平台层的能力模块；Spring 全家（Boot、Web、Tx、Modulith）和 web 层的 Sa-Token 注解是应用框架，例外。按这个标准盘点，当时只有 Spring AI 违反：answering 的应用层用它的 RAG 类型，knowledge 的入库用它的 ETL 接口，而且 knowledge 是经 rag-ai 间接带进来的。PDFBox、POI、MyBatis-Plus、Sa-Token 都已关在各自的 `infrastructure` 里。#136 Q13（文件解析放在 knowledge）按这个标准仍然成立。
+- **框架选用原则**（人提出的思路；已由 D-054 修订：能力接口只在上下文的 `infrastructure` 层引用）：上下文只依赖能力接口，不直接用第三方框架。只有一个上下文用的库放在它的 `infrastructure`，多个上下文要用的做成平台层的能力模块；Spring 全家（Boot、Web、Tx、Modulith）和 web 层的 Sa-Token 注解是应用框架，例外。按这个标准盘点，当时只有 Spring AI 违反：answering 的应用层用它的 RAG 类型，knowledge 的入库用它的 ETL 接口，而且 knowledge 是经 rag-ai 间接带进来的。PDFBox、POI、MyBatis-Plus、Sa-Token 都已关在各自的 `infrastructure` 里。#136 Q13（文件解析放在 knowledge）按这个标准仍然成立。
 - **rag-ai 是 Spring AI 防腐层，按能力而不是按调用设计接口**：原来的 `ChatGateway` 只有“给提示词拿文字”，框架的 `ChatClient`、观测、结构化输出都用不上（人答复：要充分使用框架的能力）。现在对外是 `TextGeneration`（一次性、流式含备用请求和停止）、`QueryRewriting`、`EmbeddingClient`、`RerankClient`、`ModelProbe`；内部用 `ChatClient`，模型和客户端带上观测注册表，Spring AI 自带的耗时、token 用量观测由 Actuator 汇总。提示词按消息整段交给框架，不走它的模板渲染（资料和问题里可能有花括号）。防腐层只管机制，提示词内容、门槛、何时改写、引用校验这些策略留在上下文。
 - **问答编排留在 answering**：不用 `RetrievalAugmentationAdvisor` 编排整条链路，拒答门槛、引用校验、寒暄判断是业务规则；证据、检索请求改用自己的带类型 record，检索、重排、拼证据不再实现框架接口。这修订了原来“流程骨架用 Spring AI 的阶段接口”的做法（D-020）。
 - **用了框架组件、评测变差就退回**（能评测才算完成）：第一版把低分改写换成 `RewriteQueryTransformer`、检索规划换成结构化输出（`.entity(…)`）。三轮评测（run 41794040547，对比 main 的 run 41767186934）：召回、引用正确、拒答正确、越权都不变，但误拒从均值 0.7% 升到 2.9%（框架的改写组件把规则和问题放进同一条用户消息，改写开始给问题加括号注明类别，错字、口语题的证据跑偏），追问首字中位数从 3745 ms 升到 4294 ms、寒暄从 2349 ms 升到 3244 ms（结构化输出在提示词末尾附上 JSON 格式说明，输出也变长）；单轮题首字中位数不变（1928 → 1909 ms），说明改走会话接口本身不变慢。所以改写退回“规则作系统提示词、问题作用户消息”，检索规划退回按行输出“检索：”，都仍在防腐层里经 `ChatClient`（保留观测）；没有调用方的结构化输出能力去掉。`CompressionQueryTransformer` 加 `MultiQueryExpander` 没有采用：要调两次模型，且不判断寒暄。
@@ -378,3 +378,13 @@ Compose 增加 web 服务（`deploy/web.Dockerfile`）：Node 24 构建前端，
 - **rag-shared 放共享内核和通用工具**（人答复；修订 D-034 的“只放模型概念”和 D-041 的“各上下文各有一个 `Paged`”）：`Paged`、空串处理、枚举解析等多个上下文共同用到的工具放进 rag-shared。边界仍是只依赖 JDK（和 JSpecify 的空值注解）、没有资源文件、不放业务规则。
 - **单表 CRUD 用 MyBatis-Plus**：单表的按主键增删改查、存在判断、条件计数、列表和分页改用 `BaseMapper` 加 Lambda 条件，一张表一个 Mapper（角色、角色权限点、账号角色，两张授权表，会话和轮次，回答记录和引用各自拆开），主键是多列的表不标 `@TableId`。XML 只留 upsert（`ON CONFLICT`）、一条语句插入多行（`<foreach>`；MyBatis-Plus 的 `insert(Collection)` 用 BATCH 执行器，在已开的事务里和 SIMPLE 执行器冲突）、多表、聚合、递归、取序列和检索，语句数从 81 条降到 42 条。`bigint[]` 列在 DO 上用 `@TableField(typeHandler = ArrayTypeHandler.class)`，更新时在 `set` 上带同样的 `typeHandler`。会话的乐观锁照旧按版本号判断（`set version = 旧值 + 1 … where version = 旧值`），不引入 `OptimisticLockerInnerInterceptor`。XML 里的 4 处 `now()` 改为由 `Clock` 传入（服务商的更新时间、回答的处理时间和评价时间），`MapperXmlLayoutTest` 检查，补违规样例。
 - **MyBatis-Plus 做成平台组件 `rag-persistence`**（人答复：配置、分页、基础接口都放进组件，即使目前只有 settings 用分页）：依赖（含分页插件需要的 `mybatis-plus-jsqlparser`，3.5.9 起单独成包）、全局配置（Mapper XML 位置、关闭启动横幅，从 `application.yml` 移入 `MybatisPlusPropertiesCustomizer`；分页插件）和分页转换 `Pages` 都在这里；上下文改为依赖它，不再各自声明 MyBatis-Plus。它和 rag-ai 不同，不是防腐层：MyBatis-Plus 的类型仍在各上下文的 infrastructure 里直接用（写 SQL 的地方本来就离不开框架），组件只收拢配置和通用转换。架构规则相应调整：MyBatis 类型可以出现在 infrastructure 包和 rag-persistence；平台层可以公开 final、私有构造、只有静态成员的工具类（`Texts`、`Enums`、`Pages`），可实例化的仍须包内可见。这修订了 D-052 框架选用原则里把 MyBatis-Plus 算作“关在各自 infrastructure 里”的判断——它其实被四个上下文用到，按原则本就该是平台组件。
+
+## D-054 松耦合：上下文只在 infrastructure 层经端口使用外部能力（2026-11-05）
+
+#145 第 9 步重做缓存时，人指出架构门禁缺一条明确的松耦合原则（修订 D-052 的框架选用原则）。
+
+- **原则**：组件或上下文对外提供的是能力；其他上下文只在自己的 `infrastructure` 层调用这些能力，实现本上下文 `application` 声明的端口。`application` 和 `domain` 只关注本上下文的业务，不知道外部能力怎么实现——端口的参数、返回值和异常都用本上下文的类型。适用于 rag-ai（Spring AI）、rag-cache、rag-persistence，以及以后新增的平台组件。
+- **Spring 不隔离**（人答复）：Spring 是产品的基础框架，事务、事件、调度、配置读取、`DuplicateKeyException` 等在各层照常使用，不为它写端口。web 层的 Sa-Token 注解沿用 D-053 的例外。
+- **缓存端口是业务化的**（人答复）：上下文在 `application` 声明带业务含义的缓存端口（如 identity 的 `AccessSnapshotCache`），何时清除仍是业务规则、由用例调用；`infrastructure/cache` 用 rag-cache 实现，缓存名、值的类型、用一级还是二级、过期时间都不出现在 `application`。
+- **新增平台组件的接入步骤**：平台模块只公开契约（接口、record、枚举、异常），背后的框架声明在平台模块里，上下文层用 Enforcer 禁止依赖它；上下文的 `infrastructure` 写适配器实现自己的端口；层的限制由 ArchUnit 规则检查。
+- **落地分两步**（人答复）：#145 先把缓存按本原则重做（规则 `CACHE_ONLY_IN_INFRASTRUCTURE`），rag-ai 在 answering、knowledge、settings、evaluation 的应用层、web 层和 evaluation 的 `api` 里约 30 处直接引用，另开结果型 Issue 迁移，同时上线通用规则：上下文的 api、web、application、domain 只能依赖 JDK、Spring、JSpecify、SLF4J、rag-shared、本上下文和其他上下文的 `api`。规则和迁移一起合入，不加例外。

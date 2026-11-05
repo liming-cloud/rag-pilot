@@ -40,10 +40,10 @@
 ## 约束
 
 - 权限过滤只在 rag-knowledge 的检索服务里写一处，禁止绕过。
-- 框架选用：上下文只依赖能力接口，不直接用第三方框架。只有一个上下文用的库放在它的 `infrastructure`（如 PDFBox、POI、Sa-Token 的会话和密码摘要），多个上下文要用的做成平台层的能力模块（如 rag-ai、rag-persistence、rag-cache）；Spring 全家（Boot、Web、Tx、Modulith）和 web 层的 Sa-Token 注解例外。
-- AI 能力只经平台层的 rag-ai（Spring AI 防腐层，D-052）：按能力提供文字生成（一次性、流式）、问题改写、向量化、重排、连通测试，参数和返回值都是自己的类型，内部用足 Spring AI 并打开它自带的观测；提示词和判断规则是上下文的策略，不放进 rag-ai。上下文层用 Enforcer 禁止依赖 Spring AI，`ArchitectureRulesTest` 检查代码。各用途用哪个服务商和模型由 rag-settings 经 `ModelRouting` 提供（D-043、D-044）。服务商密钥用 AES-GCM 加密存库，主密钥只从环境变量 `RAG_MASTER_KEY` 读；环境变量里的密钥同样只从环境变量读；接口、日志都不返回密钥明文，界面只显示后 4 位。
+- 松耦合（D-054）：组件或上下文对外提供能力，上下文只在自己的 `infrastructure` 层调用外部能力，实现 `application` 声明的端口（参数、返回值、异常都用本上下文的类型）；`application`、`domain` 只关注业务，不知道外部能力怎么实现。只有一个上下文用的库放在它的 `infrastructure`（如 PDFBox、POI、Sa-Token 的会话和密码摘要），多个上下文要用的做成平台层的能力模块（如 rag-ai、rag-persistence、rag-cache），同样只在 `infrastructure` 里引用。Spring 是基础框架，不隔离；web 层的 Sa-Token 注解例外。
+- AI 能力只经平台层的 rag-ai（Spring AI 防腐层，D-052）：按能力提供文字生成（一次性、流式）、问题改写、向量化、重排、连通测试，参数和返回值都是自己的类型，内部用足 Spring AI 并打开它自带的观测；提示词和判断规则是上下文的策略，不放进 rag-ai；上下文经自己的端口调用它（迁移中，见 D-054）。上下文层用 Enforcer 禁止依赖 Spring AI，`ArchitectureRulesTest` 检查代码。各用途用哪个服务商和模型由 rag-settings 经 `ModelRouting` 提供（D-043、D-044）。服务商密钥用 AES-GCM 加密存库，主密钥只从环境变量 `RAG_MASTER_KEY` 读；环境变量里的密钥同样只从环境变量读；接口、日志都不返回密钥明文，界面只显示后 4 位。
 - DDD：聚合只在 knowledge、answering；上下文模块之间只用对方的 `api` 包或监听事件，依赖方向见下面的“上下文依赖”。
-- 缓存只经平台层的 rag-cache（D-053）：`Caches`、`TypedCache`、`CacheSpec`，Redis 客户端是 Redisson，只在 rag-cache 里（上下文层用 Enforcer 禁止依赖，`ArchitectureRulesTest` 检查代码）。缓存什么、何时清除由上下文决定：改了被缓存的数据，在同一个事务里调 `evict`/`clear`，提交后才清；不缓存可访问的知识库、检索结果和答案。单元测试用 `Caches.inMemory()`；集成测试绕过应用直接改库里被缓存的表时，调 `TestRedis.clearCaches`。
+- 缓存只经平台层的 rag-cache（D-053、D-054）：上下文在 `application` 声明业务化的缓存端口（如 `AccessSnapshotCache`），`infrastructure/cache` 用 `Caches`、`TypedCache`、`CacheSpec` 实现；用不用 Redis、一级还是二级、过期时间都在 rag-cache 的配置里，上下文不知道。Redis 客户端 Redisson 和一级缓存 Caffeine 只在 rag-cache 里（上下文层用 Enforcer 禁止依赖，`ArchitectureRulesTest` 检查代码）。缓存什么、何时清除由上下文决定：改了被缓存的数据，在同一个事务里调端口的清除方法，提交后才清；不缓存可访问的知识库、检索结果和答案。单元测试用 `Caches.inMemory()`；集成测试绕过应用直接改库里被缓存的表时，调 `TestRedis.clearCaches`。
 - MyBatis-Plus 经平台组件 rag-persistence 引入，全局配置（Mapper XML 位置、分页插件）和分页转换 `Pages` 都在那里，上下文不自己声明 MyBatis-Plus（D-053）。它的 DO、Wrapper、Page 只出现在 infrastructure 包和 rag-persistence；查询结果映射到 infrastructure 里只有字段的 `XxxDO`，不用 `Map` 加强转（`bigint[]` 列在 `resultMap` 里指定 `ArrayTypeHandler`）；不引入 MapStruct，不做多层 DTO 转换。
 - SQL 只写在 Mapper XML（`src/main/resources/mapper/<模块名>/<Mapper 名>.xml`）里；不用 `@Select` 等 SQL 注解，条件构造器不拼原始 SQL（`apply`、`last`、`inSql`、`setSql` 等）；SQL 里不取数据库的当前时间（`now()` 等），时间由 `Clock` 传入。单表的增删改查、存在判断、计数和分页用 `BaseMapper` 加 `LambdaQueryWrapper`/`LambdaUpdateWrapper`，一张表一个 Mapper；XML 只写 upsert、多行插入、多表、聚合、递归和检索（D-053）。
 - 配置只通过各模块的 `@ConfigurationProperties` record 读取（如 `AnsweringProperties`），取值在构造时校验，非法配置启动失败；不用 `@Value`。
@@ -68,7 +68,7 @@
   - `web`：Controller、请求响应 record；
   - `application`：用例服务，以及它需要的端口接口（如 `ChunkIndex`、`FileStorage`）；按用例分子包，子包之间不循环依赖：answering 的 `ask`、`conversation`、`review`、`insight`，identity 的 `account`、`role`、`auth`、`audit`，knowledge 的 `ingestion`、`search`、`knowledgebase`（含授权），settings 的 `model`、`system`、`pack`；多个子包共用的异常、`Properties`、端口和枚举留在 `application` 根下；
   - `domain`：聚合、值对象、领域规则，只在 knowledge、answering；
-  - `infrastructure`：端口的实现，按技术分子包（`persistence`、`storage`、`parsing`、`security`）。
+  - `infrastructure`：端口的实现，按技术分子包（`persistence`、`storage`、`parsing`、`security`、`cache`）。
 - **内部类型**：Service、聚合等类里的内部 record、枚举，按下面的标准决定是否提成顶层（放在使用它的 `application` 子包里，名字带业务含义，如 `ImportRow`、`GapReport`，不叫 `Row`、`Item`）：
   - 提成顶层：被 web 展示、被别的包或多个文件引用的类型（返回值、读取结果、列表项），如 `DocumentRow`、`Rewrite`、`ProviderView`；
   - 保持内部：只作外层方法参数或返回值、由调用方构造的类型（`Upload`、`NewTurn`、`AskRequest`）、聚合自己的状态枚举和异常、测试替身；
