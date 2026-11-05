@@ -10,7 +10,7 @@ body:
     id: goal
     attributes:
       label: 目标
-      description: 交付什么结果、解决什么问题；对应 ROADMAP.md 的哪个里程碑
+      description: 交付什么结果、解决什么问题；对应哪个 GitHub Milestone（方向见 ROADMAP.md）
     validations:
       required: true
   - type: textarea
@@ -41,6 +41,11 @@ body:
     attributes:
       label: 不做的
       description: 明确不在本 Issue 范围内的事
+  - type: textarea
+    id: start
+    attributes:
+      label: 开工
+      description: 前置 Issue（要先合并的）、分支名、第一步做什么；新会话从这里接着做
   - type: textarea
     id: history
     attributes:

@@ -1,10 +1,10 @@
 # AGENTS.md
 
-目标：做通用的可信运营助手（最终是 RAG + AI 大脑），1.0 面向新零售。路线和里程碑见 ROADMAP.md，指标见 README。
+目标：做通用的可信运营助手（最终是 RAG + AI 大脑），1.0 面向新零售。产品方向见 ROADMAP.md，进度看 GitHub Milestone，指标见 README。
 
 ## 开始任务
 
-从 ROADMAP.md 当前里程碑取带 `status/ready` 的结果型 Issue（GitHub Milestone 下）→ 建分支 `feat|fix/<Issue 号>-<短名>` → 先写失败的测试，再写实现。
+从 GitHub 当前 Milestone 取带 `status/ready`、前置已合并的结果型 Issue（前置写在 Issue 的“开工”一节）→ 建分支 `feat|fix/<Issue 号>-<短名>` → 先写失败的测试，再写实现。
 
 - Issue 用模板“结果”新建，默认带 `status/needs-decision`：先把需要人决定的事写进“未决问题”，人在 Issue 里答复、答复写进 DECISIONS.md 后，改为 `status/ready` 再开工。卡在未决问题上时，转去做其他已就绪的 Issue，不自己拍板。
 - 进度、决定、实施记录更新在 Issue 描述里，不靠评论；ROADMAP.md 不写进度。
