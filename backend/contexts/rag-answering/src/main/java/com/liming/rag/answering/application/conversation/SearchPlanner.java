@@ -1,6 +1,5 @@
 package com.liming.rag.answering.application.conversation;
 
-import com.liming.rag.ai.TextGeneration;
 import com.liming.rag.answering.domain.Question;
 import java.time.Duration;
 import java.util.LinkedHashSet;
@@ -34,7 +33,6 @@ final class SearchPlanner {
 
     static final int MAX_QUERIES = 2;
 
-    private static final TextGeneration.Limits LIMITS = new TextGeneration.Limits(MAX_TOKENS, List.of());
     private static final String NO_SEARCH = "不检索";
 
     enum Outcome {
@@ -51,13 +49,13 @@ final class SearchPlanner {
     record Plan(List<String> queries, boolean smallTalk, Outcome outcome, long modelMillis) {
     }
 
-    private final TextGeneration chat;
+    private final FollowUpPlanning planning;
     private final Duration timeout;
     /** 每次规划在这里另起一个虚拟线程，超时后不再等它。 */
     private final AsyncTaskExecutor calls;
 
-    SearchPlanner(TextGeneration chat, Duration timeout, AsyncTaskExecutor calls) {
-        this.chat = chat;
+    SearchPlanner(FollowUpPlanning planning, Duration timeout, AsyncTaskExecutor calls) {
+        this.planning = planning;
         this.timeout = timeout;
         this.calls = calls;
     }
@@ -70,7 +68,7 @@ final class SearchPlanner {
     Plan plan(String history, String question) {
         long start = System.nanoTime();
         var message = "前面的对话：\n" + history + "\n\n当前问题：" + question;
-        var call = calls.submit(() -> chat.complete(SYSTEM, message, LIMITS));
+        var call = calls.submit(() -> planning.plan(SYSTEM, message, MAX_TOKENS));
         String reply;
         try {
             reply = call.get(timeout.toMillis(), TimeUnit.MILLISECONDS);

@@ -1,7 +1,7 @@
 package com.liming.rag.knowledge.application.ingestion;
 
 import com.liming.rag.knowledge.domain.Chunk;
-import com.liming.rag.ai.EmbeddingClient;
+import com.liming.rag.knowledge.application.TextEmbedding;
 import com.liming.rag.knowledge.domain.Document;
 import com.liming.rag.knowledge.domain.DocumentRepository;
 import java.util.List;
@@ -16,12 +16,12 @@ import org.springframework.transaction.support.TransactionOperations;
 final class ChunkWriter {
 
     private final DocumentRepository documents;
-    private final EmbeddingClient embeddings;
+    private final TextEmbedding embeddings;
     private final TransactionOperations transactions;
     private final DocumentRemover remover;
     private final Document target;
 
-    ChunkWriter(DocumentRepository documents, EmbeddingClient embeddings, TransactionOperations transactions,
+    ChunkWriter(DocumentRepository documents, TextEmbedding embeddings, TransactionOperations transactions,
             DocumentRemover remover, Document target) {
         this.documents = documents;
         this.embeddings = embeddings;

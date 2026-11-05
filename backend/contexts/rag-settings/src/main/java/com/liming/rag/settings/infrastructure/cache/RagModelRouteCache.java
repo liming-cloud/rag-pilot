@@ -1,6 +1,6 @@
 package com.liming.rag.settings.infrastructure.cache;
 
-import com.liming.rag.ai.ModelUsage;
+import com.liming.rag.settings.application.model.ModelPurpose;
 import com.liming.rag.cache.CacheSpec;
 import com.liming.rag.cache.Caches;
 import com.liming.rag.cache.TypedCache;
@@ -22,7 +22,7 @@ class RagModelRouteCache implements ModelRouteCache {
     }
 
     @Override
-    public SavedRoute get(ModelUsage usage, Supplier<SavedRoute> loader) {
+    public SavedRoute get(ModelPurpose usage, Supplier<SavedRoute> loader) {
         var cached = cache.get(usage.name(), loader);
         return cached == null ? loader.get() : cached;
     }

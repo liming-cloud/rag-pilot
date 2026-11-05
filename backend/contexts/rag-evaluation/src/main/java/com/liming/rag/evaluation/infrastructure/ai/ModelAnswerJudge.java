@@ -1,7 +1,10 @@
-package com.liming.rag.evaluation.api;
+package com.liming.rag.evaluation.infrastructure.ai;
 
 import com.liming.rag.ai.ModelCallException;
 import com.liming.rag.ai.TextGeneration;
+import com.liming.rag.evaluation.api.AnswerJudge;
+import com.liming.rag.evaluation.api.JudgeUnavailableException;
+import java.time.Duration;
 import java.util.regex.Pattern;
 import org.jspecify.annotations.Nullable;
 
@@ -10,7 +13,7 @@ import org.jspecify.annotations.Nullable;
  * 不用结构化输出：要兼容先输出思考过程的模型，提示词和解析已经过评判自检（JudgeProbeRun）校准。
  * 兼容先输出思考过程的模型：去掉 &lt;think&gt; 段，取最后一个“结论”。
  */
-final class ModelAnswerJudge implements AnswerJudge {
+public final class ModelAnswerJudge implements AnswerJudge {
 
     static final String SYSTEM = """
             你是问答系统的评测员。对照参考答案，判断系统回答有没有答对问题。
@@ -39,13 +42,25 @@ final class ModelAnswerJudge implements AnswerJudge {
         this.generation = generation;
     }
 
+    /**
+     * 调用 OpenAI 兼容接口上的评判模型。
+     *
+     * @param apiKey 只从环境变量读取，不进日志
+     */
+    public static AnswerJudge openAiCompatible(String baseUrl, String apiKey, String model, Duration timeout) {
+        if (apiKey == null || apiKey.isBlank()) {
+            throw new IllegalStateException("未配置评判模型密钥：请设置环境变量 EVAL_JUDGE_API_KEY 或 MODEL_API_KEY");
+        }
+        return new ModelAnswerJudge(TextGeneration.fixed(baseUrl, apiKey, model, timeout, MAX_TOKENS));
+    }
+
     @Override
     public Judgement judge(String question, String referenceAnswer, String answer) {
         var user = "问题：" + question + "\n\n参考答案：" + referenceAnswer + "\n\n系统回答：" + answer;
         try {
             return parse(generation.complete(SYSTEM, user));
         } catch (ModelCallException e) {
-            throw new ModelCallException("答案评判失败：评判模型服务暂时不可用，请检查 EVAL_JUDGE_BASE_URL 和 EVAL_JUDGE_MODEL", e);
+            throw new JudgeUnavailableException("答案评判失败：评判模型服务暂时不可用，请检查 EVAL_JUDGE_BASE_URL 和 EVAL_JUDGE_MODEL", e);
         }
     }
 

@@ -1,9 +1,8 @@
 package com.liming.rag.answering.application.insight;
 
-import com.liming.rag.ai.EmbeddingClient;
-import com.liming.rag.ai.ModelCallException;
 import com.liming.rag.answering.application.AnsweringException;
 import com.liming.rag.answering.application.AnsweringProperties;
+import com.liming.rag.answering.application.ModelUnavailableException;
 import com.liming.rag.answering.application.insight.GapRecords.GapRecord;
 import com.liming.rag.answering.domain.AnswerRecord;
 import com.liming.rag.answering.domain.AnswerRecordRepository;
@@ -53,14 +52,14 @@ public class KnowledgeGapService {
 
     private final GapRecords gapRecords;
     private final AnswerRecordRepository records;
-    private final EmbeddingClient embeddings;
+    private final QuestionEmbeddings embeddings;
     private final UserDirectory users;
     private final KnowledgeAccess access;
     private final StatsZone zones;
     private final AnsweringProperties properties;
     private final Clock clock;
 
-    KnowledgeGapService(GapRecords gapRecords, AnswerRecordRepository records, EmbeddingClient embeddings,
+    KnowledgeGapService(GapRecords gapRecords, AnswerRecordRepository records, QuestionEmbeddings embeddings,
             UserDirectory users, KnowledgeAccess access, StatsZone zones, AnsweringProperties properties, Clock clock) {
         this.gapRecords = gapRecords;
         this.records = records;
@@ -114,7 +113,7 @@ public class KnowledgeGapService {
         List<List<Integer>> clusters;
         try {
             clusters = QuestionClusters.bySimilarity(vectors(tenantId, texts, byText), properties.gaps().similarity());
-        } catch (ModelCallException e) {
+        } catch (ModelUnavailableException e) {
             log.warn("知识缺口归类时嵌入模型不可用，退回按原文分组：{}", e.getMessage());
             grouping = GapGrouping.TEXT;
             clusters = QuestionClusters.byText(texts);

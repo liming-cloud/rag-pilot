@@ -7,9 +7,6 @@ import com.liming.rag.shared.Paged;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.liming.rag.ai.ModelProbe;
-import com.liming.rag.ai.ModelRoute;
-import com.liming.rag.ai.ModelUsage;
 import com.liming.rag.identity.api.UserDirectory;
 import com.liming.rag.shared.TenantId;
 import com.liming.rag.shared.UserId;
@@ -51,9 +48,9 @@ class ModelSettingsServiceTest {
         assertThat(overview.providers()).singleElement().satisfies(provider -> {
             assertThat(provider.name()).isEqualTo("环境变量（env.example）");
             assertThat(provider.apiKeyLast4()).isEqualTo("1234");
-            assertThat(provider.usedBy()).containsExactly(ModelUsage.values());
+            assertThat(provider.usedBy()).containsExactly(ModelPurpose.values());
         });
-        assertThat(service.override(ModelUsage.ANSWER)).isEmpty();
+        assertThat(service.savedEndpoint(ModelPurpose.ANSWER)).isEmpty();
     }
 
     @Test
@@ -61,12 +58,12 @@ class ModelSettingsServiceTest {
     void savesAfterProbe() {
         var provider = providers.createProvider("DeepSeek 官方", "https://api.deepseek.com/v1/", "sk-deepseek-abcd");
 
-        var saved = service.save(TENANT, ADMIN, ModelUsage.ANSWER, provider.id(), " deepseek-chat ");
+        var saved = service.save(TENANT, ADMIN, ModelPurpose.ANSWER, provider.id(), " deepseek-chat ");
 
         assertThat(saved.fromDatabase()).isTrue();
         assertThat(saved.updatedBy()).isEqualTo("超级管理员");
-        assertThat(service.override(ModelUsage.ANSWER)).contains(
-                new ModelRoute("https://api.deepseek.com/v1", "sk-deepseek-abcd", "deepseek-chat"));
+        assertThat(service.savedEndpoint(ModelPurpose.ANSWER)).contains(
+                new ModelEndpoint("https://api.deepseek.com/v1", "sk-deepseek-abcd", "deepseek-chat"));
         assertThat(probe.probed).containsExactly("ANSWER https://api.deepseek.com/v1 deepseek-chat");
         var change = store.changes.getFirst();
         assertThat(change.beforeProviderName()).isEqualTo("环境变量（env.example）");
@@ -80,7 +77,7 @@ class ModelSettingsServiceTest {
     void refusesWhenProbeFails() {
         probe.failWith = "服务商返回 404：Model does not exist.";
 
-        assertThatThrownBy(() -> service.save(TENANT, ADMIN, ModelUsage.RERANK, null, "nope"))
+        assertThatThrownBy(() -> service.save(TENANT, ADMIN, ModelPurpose.RERANK, null, "nope"))
                 .isInstanceOf(SettingsException.class)
                 .hasMessage("连通测试没通过，没有保存：服务商返回 404：Model does not exist.");
         assertThat(store.purposes).isEmpty();
@@ -91,8 +88,8 @@ class ModelSettingsServiceTest {
     @DisplayName("恢复到某条记录之后的配置，记一条“恢复”；服务商删了的记录不能恢复")
     void restores() {
         var provider = providers.createProvider("自建", "http://10.0.0.8:8000/v1", null);
-        service.save(TENANT, ADMIN, ModelUsage.LIGHT, provider.id(), "qwen-small");
-        service.save(TENANT, ADMIN, ModelUsage.LIGHT, null, "env-other");
+        service.save(TENANT, ADMIN, ModelPurpose.LIGHT, provider.id(), "qwen-small");
+        service.save(TENANT, ADMIN, ModelPurpose.LIGHT, null, "env-other");
         long first = store.changes.getFirst().id();
 
         var restored = service.restore(TENANT, ADMIN, first);
@@ -100,9 +97,9 @@ class ModelSettingsServiceTest {
         assertThat(restored.providerId()).isEqualTo(provider.id());
         assertThat(restored.model()).isEqualTo("qwen-small");
         assertThat(store.changes.getLast().restoredFrom()).isEqualTo(first);
-        assertThat(service.override(ModelUsage.LIGHT).orElseThrow().apiKey()).isNull();
+        assertThat(service.savedEndpoint(ModelPurpose.LIGHT).orElseThrow().apiKey()).isNull();
 
-        service.save(TENANT, ADMIN, ModelUsage.LIGHT, null, "env-other");
+        service.save(TENANT, ADMIN, ModelPurpose.LIGHT, null, "env-other");
         providers.deleteProvider(provider.id());
         assertThatThrownBy(() -> service.restore(TENANT, ADMIN, first)).hasMessageContaining("已被删除");
     }
@@ -118,12 +115,12 @@ class ModelSettingsServiceTest {
         assertThatThrownBy(() -> providers.createProvider("硅基流动", "https://x/v1", null)).hasMessageContaining("同名");
         assertThatThrownBy(() -> providers.createProvider("坏地址", "ftp://x", null)).hasMessageContaining("http://");
 
-        service.save(TENANT, ADMIN, ModelUsage.RERANK, provider.id(), "bge-reranker");
+        service.save(TENANT, ADMIN, ModelPurpose.RERANK, provider.id(), "bge-reranker");
         assertThatThrownBy(() -> providers.deleteProvider(provider.id())).hasMessageContaining("先换掉才能删除");
 
         var renamed = providers.updateProvider(provider.id(), "硅基流动 2", "https://api.siliconflow.cn/v1", "");
         assertThat(renamed.apiKeyLast4()).as("留空不改密钥").isEqualTo("wxyz");
-        assertThat(service.override(ModelUsage.RERANK).orElseThrow().apiKey()).isEqualTo("sk-silicon-wxyz");
+        assertThat(service.savedEndpoint(ModelPurpose.RERANK).orElseThrow().apiKey()).isEqualTo("sk-silicon-wxyz");
     }
 
     @Test
@@ -140,25 +137,25 @@ class ModelSettingsServiceTest {
         assertThat(withoutKey.overview().masterKeyConfigured()).isFalse();
     }
 
-    private static final class FakeProbe implements ModelProbe {
+    private static final class FakeProbe implements ModelConnector {
 
         final List<String> probed = new ArrayList<>();
         String failWith;
 
         @Override
-        public ModelRoute environment(ModelUsage usage) {
+        public ModelEndpoint environment(ModelPurpose usage) {
             var model = switch (usage) {
                 case ANSWER -> "env-answer";
                 case HEDGE -> "env-hedge";
                 case LIGHT -> "env-light";
                 case RERANK -> "env-rerank";
             };
-            return new ModelRoute("https://env.example/v1", "sk-env-1234", model);
+            return new ModelEndpoint("https://env.example/v1", "sk-env-1234", model);
         }
 
         @Override
-        public ModelRoute embedding() {
-            return new ModelRoute("https://env.example/v1", null, "bge-m3");
+        public ModelEndpoint embedding() {
+            return new ModelEndpoint("https://env.example/v1", null, "bge-m3");
         }
 
         @Override
@@ -167,7 +164,7 @@ class ModelSettingsServiceTest {
         }
 
         @Override
-        public ProbeResult probe(ModelUsage usage, ModelRoute route) {
+        public ProbeResult probe(ModelPurpose usage, ModelEndpoint route) {
             probed.add(usage + " " + route.baseUrl() + " " + route.model());
             return failWith == null ? new ProbeResult(true, 300L, "连通正常") : new ProbeResult(false, 200L, failWith);
         }
@@ -214,7 +211,7 @@ class ModelSettingsServiceTest {
     private static final class InMemoryStore implements ModelSettingsStore {
 
         final Map<Long, ModelProvider> providers = new LinkedHashMap<>();
-        final Map<ModelUsage, PurposeSetting> purposes = new LinkedHashMap<>();
+        final Map<ModelPurpose, PurposeSetting> purposes = new LinkedHashMap<>();
         final List<ModelChange> changes = new ArrayList<>();
         private long nextId = 1;
 
@@ -260,7 +257,7 @@ class ModelSettingsServiceTest {
         }
 
         @Override
-        public Optional<PurposeSetting> purpose(ModelUsage purpose) {
+        public Optional<PurposeSetting> purpose(ModelPurpose purpose) {
             return Optional.ofNullable(purposes.get(purpose));
         }
 

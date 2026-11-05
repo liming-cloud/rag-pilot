@@ -1,6 +1,5 @@
 package com.liming.rag.answering.application.ask;
 
-import com.liming.rag.ai.RerankClient;
 import java.util.Comparator;
 import java.util.List;
 import java.util.stream.IntStream;
@@ -11,9 +10,9 @@ import java.util.stream.IntStream;
  */
 final class EvidenceReranker {
 
-    private final RerankClient rerank;
+    private final RelevanceScoring rerank;
 
-    EvidenceReranker(RerankClient rerank) {
+    EvidenceReranker(RelevanceScoring rerank) {
         this.rerank = rerank;
     }
 

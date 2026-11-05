@@ -14,6 +14,7 @@ import java.util.Map;
  */
 public interface KnowledgeSearch {
 
+    /** @throws EmbeddingUnavailableException 嵌入模型不可用，算不出问题的向量 */
     List<SearchHit> search(SearchQuery query);
 
     /**

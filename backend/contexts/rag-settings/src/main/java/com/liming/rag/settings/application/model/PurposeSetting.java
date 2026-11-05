@@ -1,6 +1,5 @@
 package com.liming.rag.settings.application.model;
 
-import com.liming.rag.ai.ModelUsage;
 import java.time.OffsetDateTime;
 import org.jspecify.annotations.Nullable;
 
@@ -9,6 +8,6 @@ import org.jspecify.annotations.Nullable;
  *
  * @param providerId null 表示用环境变量里的服务商，只换模型名
  */
-public record PurposeSetting(ModelUsage purpose, @Nullable Long providerId, String model, String updatedByName,
+public record PurposeSetting(ModelPurpose purpose, @Nullable Long providerId, String model, String updatedByName,
         OffsetDateTime updatedAt) {
 }

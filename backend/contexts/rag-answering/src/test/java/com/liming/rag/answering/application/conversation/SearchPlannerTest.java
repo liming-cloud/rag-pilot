@@ -2,7 +2,6 @@ package com.liming.rag.answering.application.conversation;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.liming.rag.ai.TextGeneration;
 import com.liming.rag.answering.application.TestExecutor;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -13,31 +12,23 @@ import org.junit.jupiter.api.Test;
 class SearchPlannerTest {
 
     private final List<String> messages = new ArrayList<>();
-    private final List<TextGeneration.Limits> limits = new ArrayList<>();
+    private final List<Integer> maxTokens = new ArrayList<>();
 
     private SearchPlanner planner(String reply, long delayMillis) {
-        TextGeneration chat = new TextGeneration() {
-            @Override
-            public String complete(String systemPrompt, String userMessage) {
-                throw new AssertionError("检索规划应当带输出上限调用");
+        FollowUpPlanning planning = (system, message, tokens) -> {
+            messages.add(message);
+            maxTokens.add(tokens);
+            try {
+                Thread.sleep(delayMillis);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
             }
-
-            @Override
-            public String complete(String systemPrompt, String userMessage, Limits callLimits) {
-                messages.add(userMessage);
-                limits.add(callLimits);
-                try {
-                    Thread.sleep(delayMillis);
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                }
-                if (reply == null) {
-                    throw new IllegalStateException("模型不可用");
-                }
-                return reply;
+            if (reply == null) {
+                throw new IllegalStateException("模型不可用");
             }
+            return reply;
         };
-        return new SearchPlanner(chat, Duration.ofMillis(300), TestExecutor.VIRTUAL);
+        return new SearchPlanner(planning, Duration.ofMillis(300), TestExecutor.VIRTUAL);
     }
 
     @Test
@@ -49,7 +40,7 @@ class SearchPlannerTest {
         assertThat(plan.queries()).containsExactly("冷冻柜温度要求是多少");
         assertThat(plan.smallTalk()).isFalse();
         assertThat(messages.getFirst()).contains("饮料冷柜温度要多少").contains("当前问题：那冷冻柜呢？");
-        assertThat(limits.getFirst().maxTokens()).isEqualTo(SearchPlanner.MAX_TOKENS);
+        assertThat(maxTokens.getFirst()).isEqualTo(SearchPlanner.MAX_TOKENS);
     }
 
     @Test

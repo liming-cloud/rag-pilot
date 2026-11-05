@@ -2,10 +2,10 @@ package com.liming.rag.settings.web;
 
 import cn.dev33.satoken.annotation.SaCheckLogin;
 import cn.dev33.satoken.annotation.SaCheckPermission;
-import com.liming.rag.ai.ModelProbe;
 import com.liming.rag.identity.api.CurrentUser;
 import com.liming.rag.settings.api.SettingsPermissions;
 import com.liming.rag.settings.application.model.ModelChange;
+import com.liming.rag.settings.application.model.ModelConnector;
 import com.liming.rag.settings.application.model.ModelProviderService;
 import com.liming.rag.settings.application.model.ModelSettingsService;
 import com.liming.rag.settings.application.model.ProviderView;
@@ -106,7 +106,7 @@ class ModelSettingsController {
 
     @SaCheckPermission(SettingsPermissions.MODEL_TEST)
     @PostMapping("/api/models/test")
-    ModelProbe.ProbeResult test(@RequestBody TestRequest request) {
+    ModelConnector.ProbeResult test(@RequestBody TestRequest request) {
         return settings.test(request.usage(), request.providerId(), request.model());
     }
 

@@ -2,7 +2,6 @@ package com.liming.rag.settings.application.model;
 
 import com.liming.rag.shared.Paged;
 
-import com.liming.rag.ai.ModelUsage;
 import java.util.List;
 import java.util.Optional;
 import org.jspecify.annotations.Nullable;
@@ -26,7 +25,7 @@ public interface ModelSettingsStore {
 
     List<PurposeSetting> purposes();
 
-    Optional<PurposeSetting> purpose(ModelUsage purpose);
+    Optional<PurposeSetting> purpose(ModelPurpose purpose);
 
     void savePurpose(PurposeSetting setting);
 

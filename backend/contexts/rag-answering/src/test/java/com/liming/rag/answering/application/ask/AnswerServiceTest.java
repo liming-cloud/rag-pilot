@@ -3,14 +3,14 @@ package com.liming.rag.answering.application.ask;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.liming.rag.ai.QueryRewriting;
-import com.liming.rag.ai.TextGeneration;
 import com.liming.rag.answering.application.AnsweringException;
 import com.liming.rag.answering.application.AnsweringProperties;
+import com.liming.rag.answering.application.ModelUnavailableException;
 import com.liming.rag.answering.application.TestExecutor;
 import com.liming.rag.answering.application.TestSettings;
 import com.liming.rag.answering.domain.RefusalReason;
 import com.liming.rag.answering.domain.RefusalReason;
+import com.liming.rag.knowledge.api.EmbeddingUnavailableException;
 import com.liming.rag.knowledge.api.SearchHit;
 import com.liming.rag.shared.ErrorKind;
 import com.liming.rag.shared.TenantId;
@@ -18,7 +18,7 @@ import com.liming.rag.shared.UserId;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.function.Consumer;
+import java.util.function.BiFunction;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -32,10 +32,10 @@ class AnswerServiceTest {
     private final List<String> prompts = new ArrayList<>();
 
     private AnswerService service(List<SearchHit> hits, List<Double> scores, String reply) {
-        return new AnswerService(query -> hits, (query, documents) -> scores, (system, user) -> {
+        return new AnswerService(query -> hits, (query, documents) -> scores, replying((system, user) -> {
             prompts.add(user);
             return reply;
-        }, (instructions, question) -> "", new AnsweringProperties(30, 8, 0.3, false, 0.03, Duration.ofSeconds(3)), TestSettings.RETAIL,
+        }), (instructions, question) -> "", new AnsweringProperties(30, 8, 0.3, false, 0.03, Duration.ofSeconds(3)), TestSettings.RETAIL,
                 TestExecutor.VIRTUAL);
     }
 
@@ -60,11 +60,11 @@ class AnswerServiceTest {
         var answer = new AnswerService(query -> {
             searched.add(query.text());
             return List.of(SHELF);
-        }, (query, documents) -> List.of(0.9), (system, user) -> {
+        }, (query, documents) -> List.of(0.9), replying((system, user) -> {
             systems.add(system);
             prompts.add(user);
             return "在 03 号货架[1]。";
-        }, (instructions, question) -> "", new AnsweringProperties(30, 8, 0.3, false, 0.03, Duration.ofSeconds(3)), TestSettings.RETAIL,
+        }), (instructions, question) -> "", new AnsweringProperties(30, 8, 0.3, false, 0.03, Duration.ofSeconds(3)), TestSettings.RETAIL,
                 TestExecutor.VIRTUAL)
                 .ask(TENANT, USER, List.of(1L), "便当饭团晚上几点得撤下来啊");
 
@@ -78,7 +78,7 @@ class AnswerServiceTest {
     @DisplayName("拒答话术用系统设置里当前的")
     void refusesWithConfiguredMessage() {
         var settings = new TestSettings(TestSettings.RETAIL_PACK, "资料里没有依据，请联系总部。");
-        var answer = new AnswerService(query -> List.of(), (query, documents) -> List.of(), (system, user) -> "x",
+        var answer = new AnswerService(query -> List.of(), (query, documents) -> List.of(), replying((system, user) -> "x"),
                 (instructions, question) -> "", new AnsweringProperties(30, 8, 0.3, false, 0.03, Duration.ofSeconds(3)), settings, TestExecutor.VIRTUAL)
                 .ask(TENANT, USER, List.of(1L), "问");
 
@@ -180,17 +180,9 @@ class AnswerServiceTest {
     }
 
     private AnswerService streaming(List<String> pieces, double score) {
-        TextGeneration chat = new TextGeneration() {
-            @Override
-            public String complete(String systemPrompt, String userMessage) {
-                return String.join("", pieces);
-            }
-
-            @Override
-            public String stream(String systemPrompt, String userMessage, Consumer<String> onDelta) {
-                pieces.forEach(onDelta);
-                return String.join("", pieces);
-            }
+        AnswerGeneration chat = (system, user, onDelta, stop) -> {
+            pieces.forEach(onDelta);
+            return String.join("", pieces);
         };
         return new AnswerService(query -> List.of(SHELF), (query, documents) -> List.of(score), chat,
                 (instructions, question) -> "", new AnsweringProperties(30, 8, 0.3, false, 0.03, Duration.ofSeconds(3)), TestSettings.RETAIL,
@@ -213,7 +205,7 @@ class AnswerServiceTest {
      * 耗时 {@code delayMillis}。回答时用员工原来的问题，证据来自改写后的检索。
      */
     private AnswerService rewriting(String rewritten, boolean enabled, double originalScore, long delayMillis) {
-        QueryRewriting rewriting = (instructions, question) -> {
+        QuestionRewriting rewriting = (instructions, question) -> {
             prompts.add(question);
             rewriteCalls.add(List.of(instructions, question));
             try {
@@ -223,18 +215,10 @@ class AnswerServiceTest {
             }
             return rewritten;
         };
-        TextGeneration chat = new TextGeneration() {
-            @Override
-            public String complete(String systemPrompt, String userMessage) {
-                throw new AssertionError("改写应当经改写能力，不经文字生成");
-            }
-
-            @Override
-            public String stream(String systemPrompt, String userMessage, Consumer<String> onDelta) {
-                prompts.add(userMessage);
-                onDelta.accept("在 03 号货架[1]。");
-                return "在 03 号货架[1]。";
-            }
+        AnswerGeneration chat = (system, user, onDelta, stop) -> {
+            prompts.add(user);
+            onDelta.accept("在 03 号货架[1]。");
+            return "在 03 号货架[1]。";
         };
         return new AnswerService(query -> List.of(SHELF),
                 (query, documents) -> List.of(query.contains("货架") ? 0.9 : originalScore), chat, rewriting,
@@ -324,18 +308,10 @@ class AnswerServiceTest {
 
     /** 追问场景：检索词含“冷冻”时检索到冷冻柜的资料，含“冷柜”时检索到货架资料；重排只给和检索词对得上的资料高分。 */
     private AnswerService followUp(List<String> retrieved) {
-        TextGeneration chat = new TextGeneration() {
-            @Override
-            public String complete(String systemPrompt, String userMessage) {
-                throw new AssertionError("生成应当走流式");
-            }
-
-            @Override
-            public String stream(String systemPrompt, String userMessage, Consumer<String> onDelta) {
-                prompts.add(userMessage);
-                onDelta.accept("零下十八度[1]，货架[2]。");
-                return "零下十八度[1]，货架[2]。";
-            }
+        AnswerGeneration chat = (system, user, onDelta, stop) -> {
+            prompts.add(user);
+            onDelta.accept("零下十八度[1]，货架[2]。");
+            return "零下十八度[1]，货架[2]。";
         };
         return new AnswerService(query -> {
             retrieved.add(query.text());
@@ -391,13 +367,40 @@ class AnswerServiceTest {
     }
 
     @Test
+    @DisplayName("检索时嵌入模型不可用：转成 answering 的模型不可用异常（会话据此把这一轮记为失败），错误码仍是 MODEL_UNAVAILABLE")
+    void translatesSearchModelFailure() {
+        var answer = new AnswerService(query -> {
+            throw new EmbeddingUnavailableException("向量化失败", new IllegalStateException());
+        }, (query, documents) -> List.of(0.9), replying((system, user) -> "x"), (instructions, question) -> "",
+                new AnsweringProperties(30, 8, 0.3, false, 0.03, Duration.ofSeconds(3)), TestSettings.RETAIL,
+                TestExecutor.VIRTUAL);
+
+        assertThatThrownBy(() -> answer.ask(TENANT, USER, List.of(1L), "青柚在哪"))
+                .isInstanceOfSatisfying(ModelUnavailableException.class, e -> {
+                    assertThat(e.code()).isEqualTo("MODEL_UNAVAILABLE");
+                    assertThat(e.getMessage()).isEqualTo("向量化失败");
+                });
+    }
+
+    /** 一次性给出整段回复的生成：整段交给 {@code onDelta}。 */
+    private static AnswerGeneration replying(BiFunction<String, String, String> reply) {
+        return (system, user, onDelta, stop) -> {
+            var text = reply.apply(system, user);
+            if (!text.isEmpty()) {
+                onDelta.accept(text);
+            }
+            return text;
+        };
+    }
+
+    @Test
     @DisplayName("送给模型的资料去掉行首的列表序号，免得模型把“2.”写成引用 [2]（#71、#107）；员工看到的引用原文不变")
     void stripsListNumbersFromEvidence() {
         var listed = new SearchHit(14, 4, "收银与交接班.md", "交接班", "1. 交班时双方清点钱箱。\n2. 差额超过 20 元须填写《差异说明单》。", 0.02);
-        var answer = new AnswerService(query -> List.of(listed), (query, documents) -> List.of(0.9), (system, user) -> {
+        var answer = new AnswerService(query -> List.of(listed), (query, documents) -> List.of(0.9), replying((system, user) -> {
             prompts.add(user);
             return "差额超过 20 元须填写说明单[1]。";
-        }, (instructions, question) -> "", new AnsweringProperties(30, 8, 0.3, false, 0.03, Duration.ofSeconds(3)), TestSettings.RETAIL,
+        }), (instructions, question) -> "", new AnsweringProperties(30, 8, 0.3, false, 0.03, Duration.ofSeconds(3)), TestSettings.RETAIL,
                 TestExecutor.VIRTUAL).ask(TENANT, USER, List.of(), "差额多少要写说明");
 
         assertThat(prompts.getFirst()).contains("交班时双方清点钱箱。\n差额超过 20 元").doesNotContain("2. 差额");

@@ -1,5 +1,7 @@
 package com.liming.rag.answering.application.ask;
 
+import com.liming.rag.answering.application.ModelUnavailableException;
+import com.liming.rag.knowledge.api.EmbeddingUnavailableException;
 import com.liming.rag.knowledge.api.KnowledgeSearch;
 import com.liming.rag.knowledge.api.SearchQuery;
 import java.util.List;
@@ -17,10 +19,15 @@ final class EvidenceRetriever {
         this.candidates = candidates;
     }
 
+    /** @throws ModelUnavailableException 嵌入模型不可用 */
     List<Evidence> retrieve(SearchRequest request) {
-        return search.search(new SearchQuery(request.tenantId(), request.userId(), request.knowledgeBaseIds(),
-                request.text(), candidates)).stream()
-                .map(Evidence::of)
-                .toList();
+        try {
+            return search.search(new SearchQuery(request.tenantId(), request.userId(), request.knowledgeBaseIds(),
+                    request.text(), candidates)).stream()
+                    .map(Evidence::of)
+                    .toList();
+        } catch (EmbeddingUnavailableException e) {
+            throw new ModelUnavailableException(e.getMessage(), e);
+        }
     }
 }
