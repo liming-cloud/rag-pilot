@@ -110,9 +110,13 @@ class ModelCallTransactionTests {
 
     @Test
     @DisplayName("知识缺口、运营概览归类时的向量化不在事务里")
-    void embedsGapQuestionsOutsideTransactions() {
+    void embedsGapQuestionsOutsideTransactions() throws InterruptedException {
         var admin = admin();
-        answers.record(TENANT, admin, "冷柜温度要多少？", AskResult.refused(RefusalReason.NO_EVIDENCE, null, "答不上来"));
+        long id = answers.record(TENANT, admin, "冷柜温度要多少？",
+                AskResult.refused(RefusalReason.NO_EVIDENCE, null, "答不上来")).id();
+        // 后台补存问题向量与下面的归类赛跑（#164）：等它存好再置空，归类一定补算一次。
+        waitForVector(id);
+        jdbc.update("UPDATE answer_record SET question_embedding = NULL WHERE id = ?", id);
 
         gaps.report(TENANT, 7, "all");
         usage.usage(TENANT, 7, null);
@@ -131,6 +135,17 @@ class ModelCallTransactionTests {
     private UserId admin() {
         return new UserId(jdbc.queryForObject("SELECT id FROM app_user WHERE username = ?", Long.class,
                 TestLogin.ADMIN_USERNAME));
+    }
+
+    private void waitForVector(long id) throws InterruptedException {
+        for (int i = 0; i < 100; i++) {
+            if (Boolean.TRUE.equals(jdbc.queryForObject(
+                    "SELECT question_embedding IS NOT NULL FROM answer_record WHERE id = ?", Boolean.class, id))) {
+                return;
+            }
+            Thread.sleep(50);
+        }
+        throw new AssertionError("回答 " + id + " 的问题向量 5 秒内没有存好");
     }
 
     /** 测试环境连不上真实模型，连通测试失败也要先调用到模型，这里只关心调用时的事务状态。 */

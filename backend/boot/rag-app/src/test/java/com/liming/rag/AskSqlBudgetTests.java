@@ -27,6 +27,7 @@ import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DelegatingDataSource;
 import org.springframework.util.LinkedMultiValueMap;
 import org.testcontainers.junit.jupiter.Container;
@@ -59,6 +60,9 @@ class AskSqlBudgetTests {
     @Autowired
     private StatementLog statements;
 
+    @Autowired
+    private JdbcTemplate jdbc;
+
     @BeforeEach
     void signIn() {
         TestLogin.asAdmin(http);
@@ -66,12 +70,14 @@ class AskSqlBudgetTests {
 
     @Test
     @DisplayName("缓存热了之后，一次问答不再查权限、设置和模型路由，SQL 不超过上限")
-    void askStaysWithinSqlBudget() {
+    void askStaysWithinSqlBudget() throws InterruptedException {
         var created = http.postForEntity("/api/knowledge-bases", Map.of("name", "语句数知识库"), Map.class);
         long store = ((Number) created.getBody().get("id")).longValue();
         upload(store, "商品陈列.txt", "青柚气泡水陈列在一层 A 区 03 号货架第二层。补货时先移出临期批次。");
         var question = "青柚气泡水在哪个货架";
         assertThat(TestAsk.ask(http, null, List.of(store), question)).containsEntry("refused", false);
+        // 预热那一问的问题向量在后台补存（#160）：等它存好再开始数，不算进这一问。
+        waitForQuestionVectors();
 
         statements.reset();
         assertThat(TestAsk.ask(http, null, List.of(store), question)).containsEntry("refused", false);
@@ -83,6 +89,17 @@ class AskSqlBudgetTests {
             assertThat(issued).as("缓存热了之后不该查 %s：%n%s", table, listed)
                     .noneMatch(sql -> sql.matches("(?is).*\\b" + table + "\\b.*"));
         }
+    }
+
+    private void waitForQuestionVectors() throws InterruptedException {
+        for (int i = 0; i < 100; i++) {
+            if (jdbc.queryForObject("SELECT count(*) FROM answer_record WHERE question_embedding IS NULL",
+                    Long.class) == 0) {
+                return;
+            }
+            Thread.sleep(50);
+        }
+        throw new AssertionError("预热那一问的问题向量 5 秒内没有存好");
     }
 
     private void upload(long knowledgeBaseId, String filename, String text) {

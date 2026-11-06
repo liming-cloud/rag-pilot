@@ -1,5 +1,19 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { KeyRound, LayoutDashboard, LogOut, Sparkles } from "lucide-react";
+import {
+  ChartColumn,
+  Cpu,
+  KeyRound,
+  LayoutDashboard,
+  LibraryBig,
+  LogOut,
+  MessagesSquare,
+  ScrollText,
+  SearchX,
+  Settings,
+  ShieldCheck,
+  Sparkles,
+  Users,
+} from "lucide-react";
 import type { ReactNode } from "react";
 import { Link, Navigate, Outlet, useLocation, useNavigate } from "react-router";
 import { Button } from "@/components/ui/button";
@@ -12,15 +26,15 @@ import { type Me, type Permission, PERMISSIONS, useMe } from "@/lib/permissions"
  * 打开没有权限的页面或管理端首页时，跳到第一个有权限的菜单。
  */
 export const ADMIN_MENUS = [
-  { to: "/admin/stats", label: "运营概览", permission: PERMISSIONS.STATS_VIEW, group: null },
-  { to: "/admin/knowledge", label: "知识库", permission: PERMISSIONS.KB_VIEW, group: "知识运营" },
-  { to: "/admin/gaps", label: "知识缺口", permission: PERMISSIONS.ANSWER_VIEW, group: "知识运营" },
-  { to: "/admin/answers", label: "回答记录", permission: PERMISSIONS.ANSWER_VIEW, group: "知识运营" },
-  { to: "/admin/users", label: "用户", permission: PERMISSIONS.USER_VIEW, group: "账号与权限" },
-  { to: "/admin/roles", label: "角色与权限", permission: PERMISSIONS.ROLE_VIEW, group: "账号与权限" },
-  { to: "/admin/audit", label: "审计记录", permission: PERMISSIONS.AUDIT_VIEW, group: "账号与权限" },
-  { to: "/admin/models", label: "模型管理", permission: PERMISSIONS.MODEL_VIEW, group: "系统配置" },
-  { to: "/admin/settings", label: "系统设置", permission: PERMISSIONS.SETTING_VIEW, group: "系统配置" },
+  { to: "/admin/stats", label: "运营概览", permission: PERMISSIONS.STATS_VIEW, group: null, icon: ChartColumn },
+  { to: "/admin/knowledge", label: "知识库", permission: PERMISSIONS.KB_VIEW, group: "知识运营", icon: LibraryBig },
+  { to: "/admin/gaps", label: "知识缺口", permission: PERMISSIONS.ANSWER_VIEW, group: "知识运营", icon: SearchX },
+  { to: "/admin/answers", label: "回答记录", permission: PERMISSIONS.ANSWER_VIEW, group: "知识运营", icon: MessagesSquare },
+  { to: "/admin/users", label: "用户", permission: PERMISSIONS.USER_VIEW, group: "账号与权限", icon: Users },
+  { to: "/admin/roles", label: "角色与权限", permission: PERMISSIONS.ROLE_VIEW, group: "账号与权限", icon: ShieldCheck },
+  { to: "/admin/audit", label: "审计记录", permission: PERMISSIONS.AUDIT_VIEW, group: "账号与权限", icon: ScrollText },
+  { to: "/admin/models", label: "模型管理", permission: PERMISSIONS.MODEL_VIEW, group: "系统配置", icon: Cpu },
+  { to: "/admin/settings", label: "系统设置", permission: PERMISSIONS.SETTING_VIEW, group: "系统配置", icon: Settings },
 ] as const;
 
 export type AdminMenu = (typeof ADMIN_MENUS)[number];

@@ -69,6 +69,69 @@ describe("页面外壳与管理端菜单", () => {
     expect(JSON.parse(localStorage.getItem("admin.menu.collapsed")!)).toEqual([]);
   });
 
+  it("菜单可以收起成图标窄栏：不显示分组标题，链接仍在、悬停有菜单名，状态记在本机（#130）", async () => {
+    signInAs("admin");
+    renderAt("/admin/models");
+    const menu = await screen.findByRole("navigation", { name: "管理菜单" });
+    expect(menu.closest("aside")).toHaveAttribute("data-rail", "false");
+
+    fireEvent.click(screen.getByRole("button", { name: "收起菜单" }));
+
+    expect(menu.closest("aside")).toHaveAttribute("data-rail", "true");
+    expect(localStorage.getItem("admin.menu.rail")).toBe("collapsed");
+    expect(within(menu).queryByRole("button", { name: "系统配置" })).not.toBeInTheDocument();
+    expect(within(menu).getAllByRole("link")).toHaveLength(9);
+    expect(within(menu).getByRole("link", { name: "用户" })).toHaveAttribute("title", "用户");
+
+    fireEvent.click(screen.getByRole("button", { name: "展开菜单" }));
+
+    expect(menu.closest("aside")).toHaveAttribute("data-rail", "false");
+    expect(localStorage.getItem("admin.menu.rail")).toBe("expanded");
+    expect(within(menu).getByRole("button", { name: "系统配置" })).toBeInTheDocument();
+  });
+
+  it("上次收起的状态下次进入仍然生效", async () => {
+    localStorage.setItem("admin.menu.rail", "collapsed");
+    signInAs("admin");
+    renderAt("/admin/stats");
+
+    const menu = await screen.findByRole("navigation", { name: "管理菜单" });
+    expect(menu.closest("aside")).toHaveAttribute("data-rail", "true");
+  });
+
+  describe("窗口窄于 1024px", () => {
+    beforeEach(() => {
+      vi.stubGlobal("matchMedia", (query: string) => ({
+        matches: true,
+        media: query,
+        addEventListener: () => undefined,
+        removeEventListener: () => undefined,
+      }));
+    });
+    afterEach(() => vi.unstubAllGlobals());
+
+    it("没有手动选过时默认收起，手动展开后记住", async () => {
+      signInAs("admin");
+      renderAt("/admin/stats");
+      const menu = await screen.findByRole("navigation", { name: "管理菜单" });
+      expect(menu.closest("aside")).toHaveAttribute("data-rail", "true");
+
+      fireEvent.click(screen.getByRole("button", { name: "展开菜单" }));
+
+      expect(menu.closest("aside")).toHaveAttribute("data-rail", "false");
+      expect(localStorage.getItem("admin.menu.rail")).toBe("expanded");
+    });
+
+    it("手动展开过的，窄屏下也保持展开", async () => {
+      localStorage.setItem("admin.menu.rail", "expanded");
+      signInAs("admin");
+      renderAt("/admin/stats");
+
+      const menu = await screen.findByRole("navigation", { name: "管理菜单" });
+      expect(menu.closest("aside")).toHaveAttribute("data-rail", "false");
+    });
+  });
+
   it("顶栏显示部署配置的产品名称（D-042）", async () => {
     renderAt("/chat");
     const [shellHeader] = await screen.findAllByRole("banner");

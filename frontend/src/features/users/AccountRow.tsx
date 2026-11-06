@@ -27,7 +27,7 @@ export function AccountRow({
   const locked = isLocked(account);
   return (
     <TableRow>
-      <TableCell className={cn("font-medium", !account.enabled && "text-muted-foreground line-through")}>
+      <TableCell className={cn("font-medium whitespace-nowrap", !account.enabled && "text-muted-foreground line-through")}>
         {account.displayName}
       </TableCell>
       <TableCell className="text-muted-foreground">{account.username}</TableCell>
