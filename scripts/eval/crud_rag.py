@@ -12,6 +12,8 @@ CRUD-RAG（https://github.com/IAAR-Shanghai/CRUD_RAG，README 标注 Apache 2.0�
 - 可回答题：从 questanswer_1doc / 2docs / 3docs 各抽若干题，每个新闻事件最多一题；题目给出的原文新闻进语料，
   作为预期文档，参考答案交给评判模型。
 - 应拒答题：另取若干事件，把这些事件的全部新闻都排除在语料之外，再用它们的单文档问题提问。
+  同一件事常被不同事件条目重复报道，所以还要求语料里没有与它相似的文档（四字片段重合度，见 `answerable_elsewhere`），
+  否则这道题其实可答，会把拒答正确率压低（D-032、#159）。
 - 干扰文档：event_summary 里其余事件的新闻全文，最多若干篇。
 """
 
@@ -26,6 +28,23 @@ QA_SETS = (("questanswer_1doc", "单文档"), ("questanswer_2docs", "双文档")
 
 def news_fields(item):
     return [item[key] for key in sorted(item) if key.startswith("news") and item[key]]
+
+
+def grams(text, n=4):
+    text = "".join(ch for ch in text if ch.isalnum())
+    return {text[i:i + n] for i in range(len(text) - n + 1)}
+
+
+def answerable_elsewhere(item, other_grams, same_news=0.15, same_answer=0.3):
+    """别的事件的文档里，是否有与该题的原文或参考答案高度重合的：有就说明这道题在语料里其实可答。"""
+    source = grams(" ".join(news_fields(item)))
+    answer = grams(item["answers"])
+    for doc in other_grams:
+        if len(source & doc) / max(1, min(len(source), len(doc))) >= same_news:
+            return True
+        if len(answer & doc) / max(1, len(answer)) >= same_answer:
+            return True
+    return False
 
 
 def document_name(text):
@@ -50,12 +69,17 @@ def main():
     # 同一事件的新闻可能出现在多个问答集和 event_summary 里：按事件整体划分，避免拒答题的答案从别处漏进语料。
     unanswerable_pool = list(data["questanswer_1doc"])
     rng.shuffle(unanswerable_pool)
+    all_docs = [(item["event"], text) for key, _ in QA_SETS for item in data[key] for text in news_fields(item)]
+    all_docs += [(item["event"], item["text"]) for item in data["event_summary"] if item["text"]]
+    doc_grams = [(event, grams(text)) for event, text in all_docs]
     excluded_events = set()
     unanswerable = []
     for item in unanswerable_pool:
         if len(unanswerable) == args.unanswerable:
             break
         if item["event"] not in excluded_events:
+            if answerable_elsewhere(item, [g for event, g in doc_grams if event != item["event"]]):
+                continue
             excluded_events.add(item["event"])
             unanswerable.append(item)
 
