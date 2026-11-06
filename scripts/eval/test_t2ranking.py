@@ -35,6 +35,23 @@ class T2RankingTest(unittest.TestCase):
             self.assertEqual(10, len(names))
             self.assertEqual(passage(2), (out / "corpus" / "store" / "段落-2.txt").read_text(encoding="utf-8"))
 
+    def test_内容相同的段落只留一份_预期文档指向留下的那份(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            lines = ["pid\ttext"] + [f"{i}\t{passage(i)}" for i in range(40)]
+            lines[11] = "10\t" + passage(2)  # pid 10 与 pid 2 内容相同
+            (root / "collection.tsv").write_text("\n".join(lines) + "\n", encoding="utf-8")
+            (root / "queries.tsv").write_text("qid\ttext\n0\t冷柜怎么检查\n", encoding="utf-8")
+            (root / "qrels.tsv").write_text("qid\tpid\n0\t10\n", encoding="utf-8")
+            out = root / "out"
+            subprocess.run([sys.executable, "-I", str(HERE / "t2ranking.py"), str(root / "collection.tsv"),
+                            str(root / "queries.tsv"), str(root / "qrels.tsv"), str(out), "--questions", "1",
+                            "--passages", "39", "--max-pid", "39"], check=True, capture_output=True)
+            case = json.loads((out / "cases.json").read_text(encoding="utf-8"))[0]
+            texts = [p.read_text(encoding="utf-8") for p in (out / "corpus" / "store").glob("*.txt")]
+        self.assertEqual(["段落-2.txt"], case["expectedDocuments"])
+        self.assertEqual(len(texts), len(set(texts)), "语料里不能有内容相同的文件")
+
 
 if __name__ == "__main__":
     unittest.main()

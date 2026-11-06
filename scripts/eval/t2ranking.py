@@ -69,6 +69,7 @@ def main():
     wanted = needed | {str(pid) for pid in extra}
 
     passages = {}
+    first_pid_of = {}  # T2Ranking 里有内容完全相同的段落，入库会按内容判重，所以相同文本只留第一个 pid
     with args.collection.open(encoding="utf-8") as source:
         next(source)
         for line in source:
@@ -76,6 +77,7 @@ def main():
             if pid in wanted:
                 text = clean(text)
                 if len(text) >= MIN_LENGTH:
+                    first_pid_of.setdefault(text, pid)
                     passages[pid] = text
 
     cases = []
@@ -84,6 +86,7 @@ def main():
         pids = [pid for pid in qrels[qid] if pid in passages]
         if len(pids) != len(qrels[qid]) or len(cases) == args.questions:
             continue
+        pids = list(dict.fromkeys(first_pid_of[passages[pid]] for pid in pids))
         relevant.update(pids)
         cases.append({"id": f"T2-{qid}", "question": queries[qid], "kind": "answerable", "style": "段落检索",
                       "expectedDocuments": [f"段落-{pid}.txt" for pid in pids],
@@ -95,7 +98,8 @@ def main():
     for pid, text in passages.items():
         if len(corpus) >= args.passages:
             break
-        corpus.setdefault(pid, text)
+        if first_pid_of[text] == pid:
+            corpus.setdefault(pid, text)
 
     store = args.output / "corpus" / "store"
     store.mkdir(parents=True, exist_ok=True)
