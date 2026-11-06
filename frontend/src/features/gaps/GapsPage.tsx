@@ -175,7 +175,7 @@ function GapRow({ group, onOpen }: { group: GapGroup; onOpen: () => void }) {
           {group.dislikedCount > 0 && <Badge variant="outline">没帮助 {group.dislikedCount}</Badge>}
         </div>
       </TableCell>
-      <TableCell className="text-muted-foreground">
+      <TableCell className="min-w-36 text-muted-foreground">
         <span title={group.knowledgeBases.join("、")}>{knowledgeBaseLabel(group.knowledgeBases)}</span>
       </TableCell>
       <TableCell className="max-w-64 truncate text-muted-foreground" title={group.citedDocuments.join("、")}>
