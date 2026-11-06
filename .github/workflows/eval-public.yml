@@ -1,13 +1,22 @@
 name: eval-public
 
-# 用开源数据集 CRUD-RAG 跑一次大规模评测（默认 500 题、约 2300 篇新闻），回答由评判模型对照参考答案判断。
+# 用开源数据集跑一次大规模评测，回答由评判模型对照参考答案判断（#159）：
+#   crud       CRUD-RAG 中文新闻问答（默认 500 题、约 2300 篇新闻，含应拒答题）
+#   t2ranking  T2Ranking 大规模段落检索（300 题、2 万段落；要下载 3.6GB，入库和向量化最贵）
+#   tableeval  TableEval 简体中文 Excel 表格问答（100 题）
+#   injection  参照 BIPIA 的攻击方式、在 CRUD-RAG 新闻里夹带指令的 30 道中文注入题
 # 模型调用费用明显高于 eval 任务（入库向量化 + 每题问答 + 评判），所以只手动运行。
 # 新闻语料版权属于原媒体，运行时下载、转换，不进仓库，也不上传为产物。
 on:
   workflow_dispatch:
     inputs:
+      dataset:
+        description: 数据集（crud / t2ranking / tableeval / injection）
+        type: choice
+        options: [crud, t2ranking, tableeval, injection]
+        default: crud
       one:
-        description: 单文档题数
+        description: 单文档题数（只对 crud 有效）
         default: "200"
       two:
         description: 双文档题数
@@ -53,6 +62,13 @@ jobs:
       # 固定到具体提交并校验摘要，保证每次评测用的是同一份数据。
       CRUD_RAG_COMMIT: f219391e46944fc838e4fe0f77b2fcde140f75e2
       CRUD_RAG_SHA256: b199fb281ac526c1c8da7364cad7ea22b7f6fe1d4167e511edbdda8ad3bd943a
+      T2RANKING_COMMIT: 2a369a430a70979223f1b9a41b1919774d46b432
+      T2RANKING_COLLECTION_SHA256: 07b84e543e9ba696124a727c00629d5bce586631648c436c98dd6e9b146da212
+      T2RANKING_QUERIES_SHA256: 1df544dd04bf9b6d0de0dd77e0f3a84a0d74fc4bb9a1ff67b7306de8169135ba
+      T2RANKING_QRELS_SHA256: 17f31db546ce3a5f861c9139939a97c19b0082a0a864be35a7821770a0705a06
+      TABLEEVAL_COMMIT: 67ee785c2ccd364892e021ccc3e32cd23fe6344d
+      TABLEEVAL_TEST_SHA256: 621931a1fe9d2fed6d7d910bb67070b08b0bf368b715f843911a062d33a4b0f5
+      TABLEEVAL_META_SHA256: 3b696cb9c2cde3dc0280d3253480f4f9d3697f191350c810ddc924b388b98789
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
@@ -68,24 +84,54 @@ jobs:
             echo "::error title=缺少密钥::请在仓库 Settings → Secrets and variables → Actions 添加 MODEL_API_KEY"
             exit 1
           fi
-      - name: 下载并转换 CRUD-RAG
+      - name: 脚本转换测试
+        run: python3 -I -m unittest discover -s scripts/eval
+      - name: 下载并转换数据集
         env:
+          DATASET: ${{ inputs.dataset }}
           ONE: ${{ inputs.one }}
           TWO: ${{ inputs.two }}
           THREE: ${{ inputs.three }}
           UNANSWERABLE: ${{ inputs.unanswerable }}
           DISTRACTORS: ${{ inputs.distractors }}
         run: |
-          mkdir -p "$RUNNER_TEMP/crud-source"
-          curl -sSfL -o "$RUNNER_TEMP/crud-source/split_merged.json" \
-            "https://raw.githubusercontent.com/IAAR-Shanghai/CRUD_RAG/$CRUD_RAG_COMMIT/data/crud_split/split_merged.json"
-          echo "$CRUD_RAG_SHA256  $RUNNER_TEMP/crud-source/split_merged.json" | sha256sum -c -
-          python3 -I scripts/eval/crud_rag.py "$RUNNER_TEMP/crud-source/split_merged.json" "$RUNNER_TEMP/crud-eval" \
-            --one "$ONE" --two "$TWO" --three "$THREE" --unanswerable "$UNANSWERABLE" --distractors "$DISTRACTORS"
+          src="$RUNNER_TEMP/source"
+          mkdir -p "$src"
+          fetch() { # 地址 文件 摘要
+            curl -sSfL --retry 3 -o "$src/$2" "$1"
+            echo "$3  $src/$2" | sha256sum -c -
+          }
+          crud_url="https://raw.githubusercontent.com/IAAR-Shanghai/CRUD_RAG/$CRUD_RAG_COMMIT/data/crud_split/split_merged.json"
+          case "$DATASET" in
+            crud)
+              fetch "$crud_url" split_merged.json "$CRUD_RAG_SHA256"
+              python3 -I scripts/eval/crud_rag.py "$src/split_merged.json" "$RUNNER_TEMP/eval-data" \
+                --one "$ONE" --two "$TWO" --three "$THREE" --unanswerable "$UNANSWERABLE" --distractors "$DISTRACTORS"
+              ;;
+            injection)
+              fetch "$crud_url" split_merged.json "$CRUD_RAG_SHA256"
+              python3 -I scripts/eval/injection.py "$src/split_merged.json" "$RUNNER_TEMP/eval-data"
+              ;;
+            t2ranking)
+              hf="https://huggingface.co/datasets/THUIR/T2Ranking/resolve/$T2RANKING_COMMIT/data"
+              fetch "$hf/queries.dev.tsv" queries.dev.tsv "$T2RANKING_QUERIES_SHA256"
+              fetch "$hf/qrels.retrieval.dev.tsv" qrels.retrieval.dev.tsv "$T2RANKING_QRELS_SHA256"
+              fetch "$hf/collection.tsv" collection.tsv "$T2RANKING_COLLECTION_SHA256"
+              python3 -I scripts/eval/t2ranking.py "$src/collection.tsv" "$src/queries.dev.tsv" \
+                "$src/qrels.retrieval.dev.tsv" "$RUNNER_TEMP/eval-data"
+              ;;
+            tableeval)
+              raw="https://raw.githubusercontent.com/wenge-research/TableEval/$TABLEEVAL_COMMIT"
+              fetch "$raw/data/TableEval-test.jsonl" TableEval-test.jsonl "$TABLEEVAL_TEST_SHA256"
+              fetch "$raw/data/TableEval-meta.jsonl" TableEval-meta.jsonl "$TABLEEVAL_META_SHA256"
+              python3 -I scripts/eval/tableeval.py "$src/TableEval-test.jsonl" "$src/TableEval-meta.jsonl" \
+                "$RUNNER_TEMP/eval-data" --base-url "$raw" --tables-dir "$src/tables"
+              ;;
+          esac
       - name: 运行评测
         env:
           MODEL_API_KEY: ${{ secrets.MODEL_API_KEY }}
-          EVAL_DATA_DIR: ${{ runner.temp }}/crud-eval
+          EVAL_DATA_DIR: ${{ runner.temp }}/eval-data
           CHAT_MODEL: ${{ inputs.chat_model }}
           EVAL_JUDGE_MODEL: ${{ inputs.judge_model }}
           EVAL_ROUNDS: ${{ inputs.rounds }}
