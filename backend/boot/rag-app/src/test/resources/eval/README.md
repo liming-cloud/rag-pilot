@@ -42,6 +42,17 @@ MODEL_API_KEY=... EVAL_DATA_DIR=/tmp/crud-eval ./mvnw verify -pl backend/boot/ra
 
 评判也会判错，结论用于校准门槛前先人工抽查。换评判模型或改评判提示词后，先手动运行 `judge-probe` 工作流做评判自检：样本由 `scripts/eval/judge_probe.py` 从 CRUD-RAG 生成，回答用参考答案构造（原样、补一句原文真话、只留前一半、换成别题答案），结论事先知道，报告给出每类的准确率。
 
+### 其他开源数据集（#159）
+
+`eval-public` 工作流的 `dataset` 输入选择数据集，转换脚本都在 `scripts/eval/`（附转换测试：在该目录运行 `python3 -m unittest`）；数据固定到提交号并校验摘要，只在运行时下载：
+
+| dataset | 数据 | 题数 | 许可证 | 说明 |
+| --- | --- | --- | --- | --- |
+| `crud` | CRUD-RAG | 500 | Apache 2.0 | 默认；应拒答题已排除语料里有相似报道的题（`crud_rag.py`） |
+| `t2ranking` | [T2Ranking](https://huggingface.co/datasets/THUIR/T2Ranking) dev | 300 题、2 万段落 | Apache 2.0 | 看大规模检索的召回；下载 3.6GB，入库向量化最贵 |
+| `tableeval` | [TableEval](https://github.com/wenge-research/TableEval) 简体中文 | 70 可答 + 30 拒答 | Apache 2.0 | Excel 表格问答 |
+| `injection` | CRUD-RAG 新闻 + 夹带指令 | 30 | 参照 [BIPIA](https://github.com/microsoft/BIPIA)（MIT）的攻击类型 | 五类攻击各 6 题，被带偏必须为 0 |
+
 ## 真实问题 → 评测题
 
 1. 管理员在“回答记录”页选“差评”或“答不上来”，点“导出为评测题草稿”。
