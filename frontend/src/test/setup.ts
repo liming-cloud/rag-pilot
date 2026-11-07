@@ -31,7 +31,9 @@ async function toNodeFormData(form: FormData) {
       converted.append(key, file as unknown as Blob, value.name);
     }
   }
-  return converted;
+  // MSW 3 在匹配处理器时会复制请求，流式的 FormData 会提前关闭，所以先编码成完整的字节再发。
+  const encoded = new Request("http://localhost", { method: "POST", body: converted });
+  return { body: await encoded.arrayBuffer(), contentType: encoded.headers.get("Content-Type") ?? "" };
 }
 
 // jsdom 没有 ResizeObserver；Radix 的 Checkbox 放在表单里时要用它量尺寸，测试里给一个什么也不做的实现。
@@ -45,11 +47,16 @@ globalThis.fetch = (input, init) =>
   originalFetch(typeof input === "string" && input.startsWith("/") ? `http://localhost${input}` : input, init);
 
 beforeAll(() => {
-  server.listen({ onUnhandledRequest: "error" });
+  server.listen({ onUnhandledFrame: "error" });
   // MSW 在 listen 时接管 fetch 并自己构造请求，FormData 的转换要套在它外面。
   const mswFetch = globalThis.fetch;
-  globalThis.fetch = async (input, init) =>
-    mswFetch(input, init?.body instanceof FormData ? { ...init, body: await toNodeFormData(init.body) } : init);
+  globalThis.fetch = async (input, init) => {
+    if (!(init?.body instanceof FormData)) return mswFetch(input, init);
+    const { body, contentType } = await toNodeFormData(init.body);
+    const headers = new Headers(init.headers);
+    headers.set("Content-Type", contentType);
+    return mswFetch(input, { ...init, headers, body });
+  };
 });
 afterEach(() => {
   server.resetHandlers();

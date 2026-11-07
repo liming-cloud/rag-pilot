@@ -221,7 +221,7 @@ describe("提问", () => {
     await screen.findByRole("region", { name: "问答：临期商品怎么处理？" });
     ask("那报损呢？");
 
-    expect(await screen.findByRole("status")).toHaveTextContent("正在理解你的追问…");
+    await vi.waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("正在理解你的追问…"));
     expect(screen.getByRole("button", { name: "停止生成" })).toBeInTheDocument();
     release();
     await vi.waitFor(() => expect(screen.queryByRole("status")).not.toBeInTheDocument());
