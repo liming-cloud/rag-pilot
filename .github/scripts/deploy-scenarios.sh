@@ -106,7 +106,7 @@ echo "SELECT 1 / 0;" > "$broken/broken/V209912310001__ci_broken.sql"
 echo '!broken' >> "$broken/.dockerignore"
 cat >> "$broken/app.Dockerfile" <<'EOF'
 COPY broken/V209912310001__ci_broken.sql /opt/rag/broken/
-ENV SPRING_FLYWAY_LOCATIONS=classpath:db/migration/identity,classpath:db/migration/knowledge,classpath:db/migration/answering,classpath:db/migration/evaluation,classpath:db/migration/settings,filesystem:/opt/rag/broken
+ENV SPRING_FLYWAY_LOCATIONS=classpath:db/migration/identity,classpath:db/migration/knowledge,classpath:db/migration/answering,classpath:db/migration/evaluation,classpath:db/migration/settings,classpath:db/migration/data,filesystem:/opt/rag/broken
 EOF
 if "$broken/upgrade.sh" --yes 2> "$work/upgrade-error.txt"; then
   echo "迁移失败的版本居然升级成功了" >&2

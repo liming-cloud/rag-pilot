@@ -87,6 +87,7 @@ class ApiContractTests {
         paths.put("GET /api/settings", "/api/settings");
         paths.put("GET /api/settings/chat", "/api/settings/chat");
         paths.put("GET /api/audit-logs", "/api/audit-logs");
+        paths.put("GET /api/data-grants", "/api/data-grants?granteeType=USER&granteeId=" + get("/api/auth/me").get("id").asLong());
         paths.forEach((name, path) -> endpoints.put(name, shape(get(path))));
 
         var permissions = new TreeSet<String>();
