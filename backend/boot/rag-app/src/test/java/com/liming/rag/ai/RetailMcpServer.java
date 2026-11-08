@@ -284,7 +284,11 @@ public final class RetailMcpServer implements AutoCloseable {
                 "required", List.of("store_id"), "additionalProperties", true);
         return List.of(
                 Map.of("name", "get_store_inventory", "description", "按门店和商品编码查询当前库存。只读。",
-                        "inputSchema", inputSchema, "annotations", read),
+                        "inputSchema", Map.of("type", "object", "properties", Map.of("store_id",
+                                Map.of("type", "string", "description", "门店编号"), "sku",
+                                Map.of("type", "string", "description", "商品编码；不填则返回该门店全部商品")),
+                                "required", List.of("store_id"), "additionalProperties", true),
+                        "annotations", read),
                 Map.of("name", "get_store_sales", "description", "按门店查询每日销售额。只读。",
                         "inputSchema", inputSchema, "annotations", read),
                 Map.of("name", "list_stores", "description", "门店主数据：编号、名称、所属区域。只读。",
