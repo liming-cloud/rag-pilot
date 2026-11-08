@@ -20,6 +20,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.resttestclient.TestRestTemplate;
+import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureTestRestTemplate;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -33,6 +35,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
  * 服务按令牌做第二道校验。范围外、错误受众、过期、工具名不符都被拒，并且断言没有拿到数据。
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@AutoConfigureTestRestTemplate
 @Testcontainers
 class ToolCallTests {
 
@@ -65,6 +68,8 @@ class ToolCallTests {
     @Autowired
     private ToolJwks jwks;
     @Autowired
+    private TestRestTemplate http;
+    @Autowired
     private ToolCaller caller;
     @Autowired
     private ToolTokenIssuer issuer;
@@ -91,14 +96,23 @@ class ToolCallTests {
     }
 
     @Test
-    @DisplayName("JWKS 只有公钥，没有私钥")
-    void publishesPublicKeysOnly() {
-        @SuppressWarnings("unchecked") // JWKS 的结构由 ToolJwks 约定。
-        var keys = (List<Map<String, Object>>) jwks.jwks().get("keys");
+    @DisplayName("JWKS 接口不用登录，只有公钥、没有私钥，（验签由范围内调用的测试覆盖）")
+    void publishesPublicKeysWithoutLogin() {
+        var response = http.getForEntity("/api/integration/jwks.json", Map.class);
 
+        assertThat(response.getStatusCode().value()).isEqualTo(200);
+        @SuppressWarnings("unchecked") // JWKS 的结构由 ToolJwks 约定。
+        var keys = (List<Map<String, Object>>) response.getBody().get("keys");
         assertThat(keys).hasSize(1);
         assertThat(keys.get(0)).containsEntry("kid", "test-key").containsEntry("alg", "ES256")
                 .doesNotContainKey("d");
+        assertThat(response.getBody()).isEqualTo(jwks.jwks());
+    }
+
+    @Test
+    @DisplayName("其他 /api 接口仍要登录：未登录访问返回 401")
+    void otherEndpointsStillRequireLogin() {
+        assertThat(http.getForEntity("/api/knowledge-bases", String.class).getStatusCode().value()).isEqualTo(401);
     }
 
     @Test

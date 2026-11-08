@@ -465,4 +465,4 @@ Compose 增加 web 服务（`deploy/web.Dockerfile`）：Node 24 构建前端，
 - **令牌注入**：SDK 的 client 是会话级、连接时用一个固定身份，而 `tools/call` 要用该提问人、该工具的令牌，所以不用 starter 的应用级单例，**每次调用新建一个 client**（服务令牌 `initialize`，用户令牌 `tools/call`，用完关闭），多一次握手的往返换来令牌绝不串用。依赖用 `spring-ai-mcp` 而不是 starter，optional，只在 rag-ai 引用。
 - **状态码**：SDK 对 401/403 以外的非 2xx 响应不给状态码，区分不了 429、4xx 和 502/503/504，所以在它的 `HttpClient` 外套一层记下状态码和 `Retry-After`（`RecordingHttpClient`），才能做到“只重试超时和 5xx、不重试 4xx、429 告诉用户稍后再试”。
 - **令牌与密钥**：JWT 用 JDK 自带的 ES256 签名手写（不新增 JWT 库）；私钥是 JWK，只从环境变量 `RAG_TOOL_SIGNING_KEY` 读；`ToolSigningKeys` 提供生成密钥、导出 JWKS 的命令行（运维手册）。
-- **JWKS 暂不开匿名 HTTP 接口**：`ArchitectureRulesTest` 要求每个接口都标权限点（`/api/auth` 除外），匿名公开接口需要放宽这条架构规则，属于“先停下来问人”的事项，本 PR 不做。1.x 先按规范允许的方式**离线交付公钥文件**（命令导出）；是否开放 `/api/integration/jwks.json`（建议给规则加这一条白名单并补违规样例），记在 #180 的未决问题里等人答复。
+- **JWKS 开匿名 HTTP 接口**（人同意，#180 未决问题 4）：`GET /api/integration/jwks.json` 只返回公钥，不要求登录，客户系统可直接拉取、密钥轮换不用人工交付。这是“每个接口都标权限点”规则的唯一例外：`ArchitectureRulesTest` 的白名单只认这个精确路径，另有路径相似但不在白名单的违规样例（`UnguardedJwksLookalike`）；也仍可用 `ToolSigningKeys jwks` 导出文件离线交付。
