@@ -22,6 +22,7 @@ import com.liming.rag.archfixture.infrastructure.RawSqlUpdate;
 import com.liming.rag.archfixture.infrastructure.RawSqlWrapper;
 import com.liming.rag.archfixture.web.ChecksRoleByHand;
 import com.liming.rag.archfixture.web.UnguardedEndpoint;
+import com.liming.rag.archfixture.web.UnguardedJwksLookalike;
 import com.liming.rag.archfixture.application.FixtureService;
 import com.liming.rag.archfixture.web.UnknownPermission;
 import com.liming.rag.archfixture.web.WebUsesServiceNestedType;
@@ -32,6 +33,7 @@ import com.tngtech.archunit.core.domain.JavaMethod;
 import com.tngtech.archunit.lang.ArchCondition;
 import com.tngtech.archunit.lang.ConditionEvents;
 import com.tngtech.archunit.lang.SimpleConditionEvent;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import com.liming.rag.archfixture.web.ModuleExceptionAdvice;
@@ -164,8 +166,14 @@ class ArchitectureRulesTest {
                     .map(mapping -> List.of(mapping.value()).contains("/api/auth"))
                     .orElse(false));
 
+    /** 唯一的匿名接口：工具调用令牌的验签公钥（JWKS，只含公钥，D-060），客户系统不登录就能拉取。 */
+    static final DescribedPredicate<JavaMethod> PUBLIC_JWKS_ENDPOINT = describe("公钥 JWKS 接口", method ->
+            method.tryGetAnnotationOfType(GetMapping.class)
+                    .map(mapping -> List.of(mapping.value()).equals(List.of("/api/integration/jwks.json")))
+                    .orElse(false));
+
     static final ArchRule ENDPOINTS_NEED_PERMISSION = methods()
-            .that(ENDPOINT).and(DescribedPredicate.not(AUTH_ENDPOINT))
+            .that(ENDPOINT).and(DescribedPredicate.not(AUTH_ENDPOINT)).and(DescribedPredicate.not(PUBLIC_JWKS_ENDPOINT))
             .should(new ArchCondition<>("在方法或类上标 @SaCheckPermission") {
                 @Override
                 public void check(JavaMethod method, ConditionEvents events) {
@@ -175,7 +183,7 @@ class ArchitectureRulesTest {
                     }
                 }
             })
-            .as("每个接口都标了权限点（@SaCheckPermission），/api/auth 除外（ROADMAP 第四节）");
+            .as("每个接口都标了权限点（@SaCheckPermission），/api/auth 和公钥 JWKS 接口除外（ROADMAP 第四节，D-060）");
 
     static final ArchRule PERMISSIONS_IN_CATALOG = classes()
             .should(new ArchCondition<>("只用各上下文清单里的权限点") {
@@ -284,6 +292,7 @@ class ArchitectureRulesTest {
         assertViolates(ONE_EXCEPTION_HANDLER, ModuleExceptionAdvice.class);
         assertViolates(NO_VALUE_INJECTION, ReadsConfigWithValue.class);
         assertViolates(ENDPOINTS_NEED_PERMISSION, UnguardedEndpoint.class);
+        assertViolates(ENDPOINTS_NEED_PERMISSION, UnguardedJwksLookalike.class);
         assertViolates(PERMISSIONS_IN_CATALOG, UnknownPermission.class);
         assertViolates(WEB_NOT_USING_SERVICE_NESTED_TYPES, WebUsesServiceNestedType.class, FixtureService.class);
     }

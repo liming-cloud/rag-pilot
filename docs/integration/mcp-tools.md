@@ -35,11 +35,11 @@
 | `tool` | 本令牌只用于这个工具名 |
 | `data_scope` | 我方判定出的数据范围，如 `{"stores":["S001","S002"],"regions":["east"]}`，按“门店 / 区域”两个维度 |
 
-- 公钥：我方提供 JWKS 地址（或离线交付公钥文件），支持密钥轮换（`kid`）。客户系统缓存 JWKS 并容忍 ≥ 60 秒时钟偏差。
+- 公钥：我方提供 JWKS 地址 `GET /api/integration/jwks.json`（匿名可读，只含公钥；也可离线交付公钥文件），支持密钥轮换（`kid`）。客户系统缓存 JWKS 并容忍 ≥ 60 秒时钟偏差。
 - 客户系统**不得**把收到的令牌转给别的服务（禁止令牌透传）；需要访问它自己的下游，用它自己的凭据。
 - **服务令牌**：`initialize` 和 `tools/list` 使用（`sub=service:rag-pilot`，`tool=*`，`data_scope` 为空），只用于连接和发现工具，不返回数据。
 - **注入方式（已验证）**：SDK 的 client 是会话级的，所以每次调用新建一个 client（`McpClient.sync(HttpClientStreamableHttpTransport)`）：先用服务令牌 `initialize`，再换成该提问人、该工具的令牌发 `tools/call`，用完关闭。令牌经 `McpSyncHttpClientRequestCustomizer` 从传输上下文（`transportContextProvider`）取，放进 `Authorization` 头。SDK 对 401/403 以外的非 2xx 响应不带状态码，所以在它用的 `HttpClient` 外面套一层记下状态码和 `Retry-After`，用来区分 429、4xx 和 502/503/504。
-- **签名密钥**：ES256 的 JWK（含私钥），只从环境变量 `RAG_TOOL_SIGNING_KEY` 读（D-059）；公钥用 JWKS 交给客户系统（导出命令见 `deploy/README.md`）。
+- **签名密钥**：ES256 的 JWK（含私钥），只从环境变量 `RAG_TOOL_SIGNING_KEY` 读（D-059）；公钥用 JWKS 交给客户系统（地址 `/api/integration/jwks.json`，也可用 `deploy/README.md` 里的命令导出文件）。
 - 与 MCP 授权规范的关系：规范里的 OAuth 流程（受保护资源元数据 RFC 9728、授权服务器发现、动态注册）面向“用户在浏览器里授权”的场景。本场景是服务端到服务端、客户与我方已线下约定，所以采用**预先配置**的信任：客户系统配置 `iss`、JWKS、`aud`，仍遵守“令牌放头里、校验受众、401/403 语义、不透传”。这是对规范的有意简化，评审时确认。
 - 若客户系统想用自己的账号体系鉴权，需要做账号映射，不在 1.x 范围。
 
