@@ -156,6 +156,7 @@
             "headingPath" : "string",
             "index" : "number"
           } ],
+          "dataCitations" : [ ],
           "id" : "number",
           "refusalReason" : "string",
           "refused" : "boolean",

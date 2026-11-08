@@ -31,18 +31,20 @@ public final class AnswerRecord implements AggregateRoot {
     }
 
     /**
-     * 当时给员工的回答。拒答时 {@code text} 是拒答话术，{@code citations} 为空。
+     * 当时给员工的回答。拒答时 {@code text} 是拒答话术，{@code citations}、{@code dataCitations} 为空。
      *
      * @param citations 引用的出处；原文不存在这里，展示时按当前授权读取（D-036）
+     * @param dataCitations 引用的数据出处（#182），与 {@code citations} 共用一套序号
      * @param topRelevance 重排后最高的相关度分数，没有检索结果时为 null
      * @param rewrittenQuestion 低分时改写后的问题，没有改写时为 null
      */
     public record Reply(String text, boolean refused, @Nullable RefusalReason refusalReason, List<Citation> citations,
-            @Nullable Double topRelevance, @Nullable String rewrittenQuestion) {
+            List<DataCitation> dataCitations, @Nullable Double topRelevance, @Nullable String rewrittenQuestion) {
 
         public Reply {
             Objects.requireNonNull(text, "回答不能为空");
             citations = List.copyOf(citations);
+            dataCitations = List.copyOf(dataCitations);
         }
     }
 

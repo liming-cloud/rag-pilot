@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.liming.rag.answering.domain.AnswerRecord;
 import com.liming.rag.answering.domain.AnswerRecordRepository;
 import com.liming.rag.answering.domain.Citation;
+import com.liming.rag.answering.domain.DataCitation;
 import com.liming.rag.answering.domain.RefusalReason;
 import com.liming.rag.shared.TenantId;
 import com.liming.rag.shared.UserId;
@@ -13,6 +14,7 @@ import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -28,11 +30,14 @@ class MybatisAnswerRecordRepository implements AnswerRecordRepository {
 
     private final AnswerRecordMapper mapper;
     private final CitationMapper citations;
+    private final DataCitationMapper dataCitations;
     private final Clock clock;
 
-    MybatisAnswerRecordRepository(AnswerRecordMapper mapper, CitationMapper citations, Clock clock) {
+    MybatisAnswerRecordRepository(AnswerRecordMapper mapper, CitationMapper citations,
+            DataCitationMapper dataCitations, Clock clock) {
         this.mapper = mapper;
         this.citations = citations;
+        this.dataCitations = dataCitations;
         this.clock = clock;
     }
 
@@ -60,6 +65,19 @@ class MybatisAnswerRecordRepository implements AnswerRecordRepository {
             cited.headingPath = citation.headingPath() == null ? "" : citation.headingPath();
             citations.insert(cited);
         }
+        for (var citation : reply.dataCitations()) {
+            var cited = new DataCitationDO();
+            cited.answerId = row.id;
+            cited.citationIndex = citation.index();
+            cited.tool = citation.tool();
+            cited.sourceSystem = citation.system();
+            cited.dataset = citation.dataset();
+            cited.conditions = citation.conditions();
+            cited.asOf = citation.asOf();
+            cited.queriedAt = citation.queriedAt();
+            cited.truncated = citation.truncated();
+            dataCitations.insert(cited);
+        }
         return record.withId(row.id);
     }
 
@@ -78,11 +96,21 @@ class MybatisAnswerRecordRepository implements AnswerRecordRepository {
             cited.computeIfAbsent(row.answerId, key -> new ArrayList<>()).add(new Citation(row.citationIndex,
                     row.chunkId, row.documentId, row.documentName, row.headingPath, null));
         }
+        var data = new HashMap<Long, List<DataCitation>>();
+        for (var row : dataCitations.selectList(new LambdaQueryWrapper<DataCitationDO>()
+                .in(DataCitationDO::getAnswerId, ids))) {
+            data.computeIfAbsent(row.answerId, key -> new ArrayList<>()).add(new DataCitation(row.citationIndex,
+                    row.tool, row.sourceSystem, row.dataset, row.conditions, row.asOf, row.queriedAt,
+                    Boolean.TRUE.equals(row.truncated)));
+        }
+        data.values().forEach(list -> list.sort(Comparator.comparingInt(DataCitation::index)));
         var records = new HashMap<Long, AnswerRecord>();
+        // 数据出处按回答编号单表查，只挂到下面按租户查出的回答上。
         for (var row : mapper.selectList(new LambdaQueryWrapper<AnswerRecordDO>()
                 .eq(AnswerRecordDO::getTenantId, tenantId.value())
                 .in(AnswerRecordDO::getId, ids))) {
-            records.put(row.id, toDomain(row, cited.getOrDefault(row.id, List.of())));
+            records.put(row.id, toDomain(row, cited.getOrDefault(row.id, List.of()),
+                    data.getOrDefault(row.id, List.of())));
         }
         return records;
     }
@@ -126,9 +154,10 @@ class MybatisAnswerRecordRepository implements AnswerRecordRepository {
                 .in(AnswerRecordDO::getId, ids));
     }
 
-    private static AnswerRecord toDomain(AnswerRecordDO row, List<Citation> citations) {
+    private static AnswerRecord toDomain(AnswerRecordDO row, List<Citation> citations,
+            List<DataCitation> dataCitations) {
         var reply = new AnswerRecord.Reply(row.answerText, Boolean.TRUE.equals(row.refused),
-                row.refusalReason == null ? null : RefusalReason.valueOf(row.refusalReason), citations,
+                row.refusalReason == null ? null : RefusalReason.valueOf(row.refusalReason), citations, dataCitations,
                 row.topRelevance, row.rewrittenQuestion);
         // 旧记录没有 knowledge_base_ids（D-047 之前没有记）。
         return AnswerRecord.restore(row.id, new TenantId(row.tenantId), new UserId(row.userId), row.question, reply,

@@ -14,7 +14,7 @@ class AnswerRecordTest {
     private static final UserId ASKER = new UserId(7);
     private final AnswerRecord record = AnswerRecord.record(new TenantId(1), ASKER, " 青柚在哪？ ",
             new AnswerRecord.Reply("A 区[1]。", false, null, List.of(new Citation(1, 100, 50, "陈列规范", "陈列规范", null)),
-                    0.9, null), List.of(3L)).withId(1);
+                    List.of(), 0.9, null), List.of(3L)).withId(1);
 
     @Test
     @DisplayName("新记录：问题去掉首尾空格，带上回答、引用和检索范围；还没有评价，待处理")

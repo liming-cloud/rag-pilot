@@ -31,6 +31,10 @@ class McpToolCallerTest {
     private static final JsonMapper JSON = JsonMapper.builder().build();
     private static final String RESULT = "{\"data\":[{\"store_id\":\"S001\",\"quantity\":24}],\"truncated\":false}";
 
+    private static final String TOOLS = "{\"tools\":[{\"name\":\"get_store_inventory\",\"title\":\"门店库存查询\","
+            + "\"description\":\"按门店查询库存。只读。\",\"inputSchema\":{\"type\":\"object\",\"properties\":"
+            + "{\"store_id\":{\"type\":\"string\"}},\"required\":[\"store_id\"]}}]}";
+
     private HttpServer server;
     private McpToolCaller caller;
     private ToolTokenIssuer tokens;
@@ -66,6 +70,24 @@ class McpToolCallerTest {
     private static ToolCall inventory() {
         return new ToolCall("retail", "get_store_inventory", Map.of("store_id", "S001"), "u-42",
                 Map.of("stores", List.of("S001")));
+    }
+
+    @Test
+    @DisplayName("列出工具：用服务令牌（sub=service:rag-pilot、tool=*、数据范围为空），返回名称、说明和参数结构")
+    void listsToolsWithServiceToken() throws Exception {
+        var tools = caller.list("retail");
+
+        assertThat(tools).singleElement().satisfies(tool -> {
+            assertThat(tool.name()).isEqualTo("get_store_inventory");
+            assertThat(tool.title()).isEqualTo("门店库存查询");
+            assertThat(tool.description()).isEqualTo("按门店查询库存。只读。");
+            assertThat(JSON.readTree(tool.inputSchema()).path("required").get(0).asString()).isEqualTo("store_id");
+        });
+        assertThat(toolCalls).hasValue(0);
+        var jwk = jwk();
+        assertThat(authorizations).isNotEmpty().allSatisfy(token -> assertThat(ToolJwt.verify(token, jwk).claims())
+                .containsEntry("sub", ToolTokenIssuer.SERVICE_SUBJECT).containsEntry("tool", ToolTokenIssuer.ANY_TOOL)
+                .containsEntry("data_scope", Map.of()));
     }
 
     @Test
@@ -188,6 +210,8 @@ class McpToolCallerTest {
         var unsigned = new McpToolCaller(noKey, new ToolTokenIssuer(noKey, Clock.systemUTC()), ObservationRegistry.NOOP);
         assertThatThrownBy(() -> unsigned.call(inventory())).isInstanceOfSatisfying(ToolCallException.class,
                 e -> assertThat(e.reason()).isEqualTo(Reason.NOT_CONFIGURED));
+        assertThatThrownBy(() -> unsigned.list("retail")).isInstanceOfSatisfying(ToolCallException.class,
+                e -> assertThat(e.reason()).isEqualTo(Reason.NOT_CONFIGURED));
         assertThat(authorizations).isEmpty();
     }
 
@@ -216,6 +240,7 @@ class McpToolCallerTest {
                         + JSON.writeValueAsString(request.path("params").path("protocolVersion").asString())
                         + ",\"capabilities\":{\"tools\":{}},\"serverInfo\":{\"name\":\"stub\",\"version\":\"1\"}}"));
                 case "tools/call" -> onToolCall.handle(exchange, id, toolCalls.incrementAndGet());
+                case "tools/list" -> reply(exchange, 200, rpcResult(id, TOOLS));
                 default -> reply(exchange, 202, "");
             }
         } catch (IOException e) {

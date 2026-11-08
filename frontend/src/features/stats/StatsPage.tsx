@@ -25,6 +25,8 @@ const REASONS: Record<string, string> = {
   LOW_RELEVANCE: "相关度低于门槛",
   MODEL_DECLINED: "模型判断资料不足",
   UNCITED: "回答没有可核对的引用",
+  DATA_DENIED: "无权查看要查的数据",
+  DATA_UNAVAILABLE: "数据暂时查不到",
 };
 
 /**

@@ -22,7 +22,8 @@ import org.jspecify.annotations.Nullable;
 /**
  * 记下最近一次响应的状态码和 {@code Retry-After}。MCP SDK 对 401/403 以外的非 2xx 响应只抛一个不带状态码的异常，
  * 区分不了 429（不重试、请用户稍后再试）、4xx（不重试）和 502/503/504（重试），所以在 SDK 用的 {@link HttpClient}
- * 外面套一层，响应头到达时记下状态。每次调用一个实例，不跨线程共享。
+ * 外面套一层，响应头到达时记下状态。只记 POST（JSON-RPC 消息）的响应：SDK 握手后另发的 GET（打开 SSE 流，服务器可以回 405）
+ * 和关闭会话的 DELETE 与调用结果无关，记下来会把超时误判成协议错误。每次调用一个实例，不跨线程共享。
  */
 final class RecordingHttpClient extends HttpClient {
 
@@ -55,21 +56,24 @@ final class RecordingHttpClient extends HttpClient {
     @Override
     public <T> HttpResponse<T> send(HttpRequest request, BodyHandler<T> handler)
             throws IOException, InterruptedException {
-        return delegate.send(request, record(handler));
+        return delegate.send(request, record(request, handler));
     }
 
     @Override
     public <T> CompletableFuture<HttpResponse<T>> sendAsync(HttpRequest request, BodyHandler<T> handler) {
-        return delegate.sendAsync(request, record(handler));
+        return delegate.sendAsync(request, record(request, handler));
     }
 
     @Override
     public <T> CompletableFuture<HttpResponse<T>> sendAsync(HttpRequest request, BodyHandler<T> handler,
             @Nullable PushPromiseHandler<T> pushHandler) {
-        return delegate.sendAsync(request, record(handler), pushHandler);
+        return delegate.sendAsync(request, record(request, handler), pushHandler);
     }
 
-    private <T> BodyHandler<T> record(BodyHandler<T> handler) {
+    private <T> BodyHandler<T> record(HttpRequest request, BodyHandler<T> handler) {
+        if (!"POST".equals(request.method())) {
+            return handler;
+        }
         return info -> {
             last.set(new Seen(info.statusCode(), retryAfter(info.headers().firstValue("Retry-After").orElse(null))));
             return handler.apply(info);

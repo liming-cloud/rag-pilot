@@ -76,12 +76,15 @@ docker compose --env-file .env --env-file release.env logs --tail 200 app   # �
 | 事件 | 什么时候出现 |
 | --- | --- |
 | `event=model_call_failed` | 模型调用失败或超时：`usage` 是用途（chat、rewrite、embedding、rerank），`error` 是异常类型（如 `HttpTimeoutException`、`ConnectException`） |
-| `event=answer_refused` | 答不上来：`reason` 是原因（`NO_EVIDENCE` 没检索到、`LOW_RELEVANCE` 相关度太低、`MODEL_DECLINED` 模型判断依据不足、`UNCITED` 回答没有有效引用），`top` 是最高相关度 |
+| `event=answer_refused` | 答不上来：`reason` 是原因（`NO_EVIDENCE` 没检索到、`LOW_RELEVANCE` 相关度太低、`MODEL_DECLINED` 模型判断依据不足、`UNCITED` 回答没有有效引用、`DATA_DENIED` 要查的数据无权查看、`DATA_UNAVAILABLE` 数据暂时查不到），`top` 是最高相关度 |
 | `event=query_rewritten` | 相关度偏低时换个说法再找一次：`outcome` 是结果（`REWRITTEN` 改写了、`NO_CHANGE` 没改、`TIMED_OUT` 改写超时、`SKIPPED_BELOW_FLOOR` 分数太低不改写直接拒答） |
 | `event=document_failed` | 文档入库失败：`kind=content` 是文件本身的问题，`kind=model` 是模型暂时不可用（10 分钟后自动重试一次） |
 | `event=login_failed`、`event=account_locked` | 登录失败（`reason`）、连续输错被锁 |
 | `event=data_scope_denied` | 数据问答的工具调用被范围判定拒绝（越权拒绝）：`user` 是账号编号，`code` 是 `tool_not_granted`（没授权这个工具）、`empty_scope`（没有授权任何站点）、`out_of_scope`（请求的站点不在授权范围内） |
 | `event=data_unit_master_unavailable`、`event=tool_call_failed purpose=unit_master` | 读取客户系统的站点主数据失败（`reason` 是失败原因）：授权页提示“稍后再试”，判定时区域授权展开不出站点、按没有处理（只拒绝，不放宽） |
+| `event=tool_call` | 数据问答的每次工具调用（含被范围判定拒绝、没发出的）：`tool` 工具名，`outcome` 成功 / 拒绝 / 失败，`code` 失败分类（`UNAVAILABLE` 超时或连不上、`REJECTED` 令牌被拒、`RATE_LIMITED` 限流、`TOOL_ERROR:<错误码>` 工具报错、`PROTOCOL` 协议错误或返回格式不符），`rows` 返回行数，`dropped` 丢弃的范围外行数，`units` 令牌里的站点数，`duration_ms` 耗时，`jti` 令牌编号（与客户系统日志对账）。同时在管理端审计里记一条 `DATA_TOOL_CALLED` |
+| `event=tool_rows_dropped` | 客户系统返回了范围外（或没有站点标识）的行，已丢弃、没给员工看：`dropped` 行数、`jti` 令牌编号；出现时请客户核查第二道校验 |
+| `event=tool_list_failed`、`event=tool_selection_failed`、`event=tool_selection_rejected` | 取客户系统的工具清单失败（`code`）；选工具时模型不可用；模型选了提问人不能用的工具（没有调用）。前两种按不查数据回答 |
 | `event=access_denied` | 越权被拒：缺的权限点（`permission`）或不能管理的知识库（`knowledgeBase`） |
 | `event=cache_failure` | Redis 出错或超时：`cache` 是哪种缓存、`op` 是什么操作。之后 30 秒内跳过 Redis（进程内的一级缓存照常用，没有时读数据库），问答照常；恢复后先清空 Redis 里的缓存再用。登录会话也在 Redis 里，Redis 不可用时**不能登录、已登录的请求会被拒绝** |
 
@@ -183,7 +186,7 @@ java -Dloader.main=com.liming.rag.ai.ToolSigningKeys -cp app/rag-app.jar \
   org.springframework.boot.loader.launch.PropertiesLauncher jwks "$RAG_TOOL_SIGNING_KEY"
 ```
 
-客户端点（`rag.ai.tools.endpoints.<连接名>.url/audience`）的部署配置随问答接入工具时（#182）一起提供，现在只有配置项没有入口；`RAG_TOOL_ISSUER` 是令牌的签发者标识（默认 `rag-pilot`），要和客户系统里配置的一致。私钥和主密钥一样要抄存到安全的地方，丢了只需重新生成并把新的 JWKS 交给客户系统。
+问答已接入工具（#182，D-062），但客户端点（`rag.ai.tools.endpoints.<连接名>.url/audience`）和可授权的工具清单（`rag.data.tools`）在 compose 里还没有配置入口，接客户系统前要先补（ROADMAP 待办）；`RAG_TOOL_ISSUER` 是令牌的签发者标识（默认 `rag-pilot`），要和客户系统里配置的一致。私钥和主密钥一样要抄存到安全的地方，丢了只需重新生成并把新的 JWKS 交给客户系统。
 
 ## 八、超级管理员忘记密码
 

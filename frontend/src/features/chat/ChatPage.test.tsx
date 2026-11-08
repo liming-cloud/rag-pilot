@@ -248,6 +248,7 @@ describe("提问", () => {
                   refused: true,
                   refusalReason: "UNCITED",
                   citations: [],
+                  dataCitations: [],
                   topRelevance: 0.8,
                 },
                 knowledgeBaseIds: [1],
