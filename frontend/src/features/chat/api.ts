@@ -16,13 +16,40 @@ export type Citation = {
   documentState: "CURRENT" | "EXPIRED" | "REPLACED";
 };
 
-/** 与后端 answering 模块的 Answer 一致；拒答时 text 是给用户看的说明，citations 为空。id 用于点赞点踩。 */
+/** 与后端 answering 模块的 DataCitation 一致（#182）：回答引用的数据出处，序号与资料引用是同一套。 */
+export type DataCitation = {
+  index: number;
+  tool: string;
+  /** 来源系统和数据集，如 ERP / store_inventory。 */
+  system: string;
+  dataset: string;
+  /** 客户系统实际执行的查询条件，如“store_id=S001，sku=A1001”。 */
+  conditions: string;
+  /** 数据截至时间；实时数据等于查询时间。 */
+  asOf: string;
+  queriedAt: string;
+  /** 结果超过条数上限，只列出了一部分。 */
+  truncated: boolean;
+};
+
+/**
+ * 与后端 answering 模块的 Answer 一致；拒答时 text 是给用户看的说明，citations、dataCitations 为空。id 用于点赞点踩。
+ * 拒答原因 DATA_DENIED、DATA_UNAVAILABLE：问题要查数据，但无权查看或暂时查不到，资料里也没有答案（#182）。
+ */
 export type Answer = {
   id: number | null;
   text: string;
   refused: boolean;
-  refusalReason: "NO_EVIDENCE" | "LOW_RELEVANCE" | "MODEL_DECLINED" | "UNCITED" | null;
+  refusalReason:
+    | "NO_EVIDENCE"
+    | "LOW_RELEVANCE"
+    | "MODEL_DECLINED"
+    | "UNCITED"
+    | "DATA_DENIED"
+    | "DATA_UNAVAILABLE"
+    | null;
   citations: Citation[];
+  dataCitations: DataCitation[];
   topRelevance: number | null;
   /** 低分改写和各阶段耗时，评测报告用，界面不显示。 */
   rewrite?: Record<string, unknown> | null;

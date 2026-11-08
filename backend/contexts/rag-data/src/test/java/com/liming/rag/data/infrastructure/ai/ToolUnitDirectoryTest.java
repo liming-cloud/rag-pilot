@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.liming.rag.ai.ToolCall;
+import com.liming.rag.ai.ToolCaller;
+import com.liming.rag.ai.ToolDefinition;
 import com.liming.rag.ai.ToolResult;
 import com.liming.rag.data.application.DataException;
 import com.liming.rag.data.application.DataProperties;
@@ -20,9 +22,17 @@ class ToolUnitDirectoryTest {
     private final List<ToolCall> calls = new ArrayList<>();
 
     private ToolUnitDirectory directory(Object data) {
-        return new ToolUnitDirectory(call -> {
-            calls.add(call);
-            return new ToolResult(Map.of("data", data), "jti-1");
+        return new ToolUnitDirectory(new ToolCaller() {
+            @Override
+            public ToolResult call(ToolCall call) {
+                calls.add(call);
+                return new ToolResult(Map.of("data", data), "jti-1");
+            }
+
+            @Override
+            public List<ToolDefinition> list(String endpoint) {
+                throw new UnsupportedOperationException();
+            }
         }, new DataProperties("retail", "list_stores", List.of()));
     }
 

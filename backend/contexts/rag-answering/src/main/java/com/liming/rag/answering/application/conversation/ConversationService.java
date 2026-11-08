@@ -274,7 +274,7 @@ public class ConversationService {
                 })
                 .toList();
         return new AskResult(answer.id(), answer.text(), answer.refused(), answer.refusalReason(), citations,
-                answer.topRelevance(), null, null);
+                answer.dataCitations(), answer.topRelevance(), null, null);
     }
 
     private static Citation.DocumentState state(DocumentFreshness document) {

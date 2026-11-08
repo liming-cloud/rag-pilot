@@ -74,7 +74,7 @@
   - 保持内部：只作外层方法参数或返回值、由调用方构造的类型（`Upload`、`NewTurn`、`AskRequest`）、聚合自己的状态枚举和异常、测试替身；
   - 自动检查：web 不读取 application 里 `Service` 的内部类型（只 new 出来当参数的除外，`ArchitectureRulesTest`）。
 - **依赖方向**：`domain` 只依赖 JDK（含 JSpecify 空值注解）、rag-shared 和本模块的 `domain`、`api`；`application` 不依赖 `infrastructure`、`web`；`web` 不依赖 `infrastructure`、`domain`（展示用 application 的查询结果 record）；`api` 不依赖本模块其他子包。
-- **上下文依赖**：identity 不依赖其他上下文；settings 依赖 identity；knowledge 依赖 identity、settings；data 依赖 identity；answering 依赖 identity、knowledge、settings（#182 起再依赖 data）；evaluation 不依赖其他上下文。平台层的 shared、ai、persistence、cache 都可以用（evaluation 经 ai 调评判模型），平台层不依赖上下文。各上下文在根包 `package-info.java` 的 `allowedDependencies` 里声明，`ModularityTests` 检查。上游要用到下游的东西时（如权限点清单），由上游在 `api` 里定义接口、下游实现，不反向依赖。
+- **上下文依赖**：identity 不依赖其他上下文；settings 依赖 identity；knowledge 依赖 identity、settings；data 依赖 identity；answering 依赖 identity、knowledge、settings、data（经 data 的 `api` 按数据范围查数据，D-062）；evaluation 不依赖其他上下文。平台层的 shared、ai、persistence、cache 都可以用（evaluation 经 ai 调评判模型），平台层不依赖上下文。各上下文在根包 `package-info.java` 的 `allowedDependencies` 里声明，`ModularityTests` 检查。上游要用到下游的东西时（如权限点清单），由上游在 `api` 里定义接口、下游实现，不反向依赖。
 - **输入**：web 只转交原始值（路径、查询参数和请求体里的字符串、数字），application 解析成枚举或值对象，不合规时抛本模块的业务异常；每个模块的解析写在一处。
 - **租户**：单租户部署，`TenantId` 为以后多租户预留；哪些端口和设置不分租户见 D-051。
 - **共享内核与通用工具**（rag-shared）：只放多个上下文共同依赖、用纯 Java 表达、很少变动的东西——模型概念（租户和用户标识、错误分类 `ErrorKind` 与 `BusinessException`、聚合根标记 `AggregateRoot`）和通用工具（分页 `Paged`、空串处理 `Texts`、枚举解析 `Enums`，D-053）；只有一个上下文用的工具留在该上下文。只依赖 JDK（空值注解 JSpecify 除外），没有资源文件（迁移、配置归各自模块），不放业务规则；当前用户、权限码、各上下文自己的标识不放这里。新增类型前先在 DECISIONS.md 记录理由（D-034、D-053）。

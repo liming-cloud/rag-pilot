@@ -29,6 +29,7 @@ const answered: Answer = {
     citation(2, { documentState: "EXPIRED", documentUpdatedAt: "2025-12-01T09:00:00+08:00" }),
     citation(3, { documentState: "REPLACED" }),
   ],
+  dataCitations: [],
   topRelevance: 0.9,
 };
 
@@ -70,5 +71,63 @@ describe("回答卡片（#145 A7、A8、A11）", () => {
 
     expect(within(screen.getByRole("list", { name: "换个问法" })).getAllByRole("listitem")).toHaveLength(2);
     expect(screen.getByText("还是找不到的话，请联系店长确认。")).toBeInTheDocument();
+  });
+
+  it("数据出处和资料并列：按编号排在来源里，点 [n] 看来源、查询条件、数据截至和查询时间（#182）", async () => {
+    const withData: Answer = {
+      ...answered,
+      text: "每天盘点两次[1]，现在还剩 24 瓶[2]。",
+      citations: [citation(1, {})],
+      dataCitations: [
+        {
+          index: 2,
+          tool: "get_store_inventory",
+          system: "ERP",
+          dataset: "store_inventory",
+          conditions: "store_id=S001，sku=A1001",
+          asOf: "2026-11-08T09:30:00+08:00",
+          queriedAt: "2026-11-08T09:30:02+08:00",
+          truncated: true,
+        },
+      ],
+    };
+    render(<AnswerCard answer={withData} />);
+
+    const sources = within(screen.getByRole("list", { name: "来源" })).getAllByRole("listitem");
+    expect(sources).toHaveLength(2);
+    expect(sources[0]).toHaveTextContent("[1] 资料1.md");
+    expect(sources[1]).toHaveTextContent("[2] 数据 · ERP / store_inventory");
+    expect(sources[1]).toHaveTextContent("数据截至");
+    expect(sources[1]).toHaveTextContent("只列出了一部分");
+
+    fireEvent.click(await screen.findByRole("button", { name: "查看数据出处 2" }));
+
+    const detail = screen.getByRole("region", { name: "数据出处" });
+    expect(detail).toHaveTextContent("ERP / store_inventory");
+    expect(detail).toHaveTextContent("查询条件store_id=S001，sku=A1001");
+    expect(detail).toHaveTextContent("数据截至");
+    expect(detail).toHaveTextContent("查询时间");
+    fireEvent.click(screen.getByRole("button", { name: "收起数据出处" }));
+    expect(screen.queryByRole("region", { name: "数据出处" })).not.toBeInTheDocument();
+  });
+
+  it("要查的数据无权查看或暂时查不到：如实说明，不给“换个问法”的建议（#182）", () => {
+    const denied: Answer = {
+      ...answered,
+      text: "无权查看所请求的站点的数据",
+      refused: true,
+      refusalReason: "DATA_DENIED",
+      citations: [],
+    };
+    const help = { tips: ["说出具体的商品名。"], contact: "还是找不到的话，请联系店长确认。" };
+    const { unmount } = render(<AnswerCard answer={denied} refusalHelp={help} />);
+
+    expect(screen.getByRole("heading", { name: "无权查看这些数据" })).toBeInTheDocument();
+    expect(screen.getByText("无权查看所请求的站点的数据")).toBeInTheDocument();
+    expect(screen.queryByRole("list", { name: "换个问法" })).not.toBeInTheDocument();
+    unmount();
+
+    render(<AnswerCard answer={{ ...denied, refusalReason: "DATA_UNAVAILABLE", text: "暂时查不到。" }} />);
+    expect(screen.getByRole("heading", { name: "暂时查不到数据" })).toBeInTheDocument();
   });
 });

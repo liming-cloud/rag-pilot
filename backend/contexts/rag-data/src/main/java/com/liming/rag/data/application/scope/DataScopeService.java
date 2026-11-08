@@ -4,6 +4,7 @@ import com.liming.rag.data.api.DataAccess;
 import com.liming.rag.data.api.ScopeDecision;
 import com.liming.rag.data.application.DataException;
 import com.liming.rag.data.application.DataGrantStore;
+import com.liming.rag.data.application.Grants;
 import com.liming.rag.data.application.ScopeUnit;
 import com.liming.rag.data.application.UnitMaster;
 import com.liming.rag.identity.api.UserDirectory;
@@ -46,8 +47,7 @@ public class DataScopeService implements DataAccess {
         }
         var needsMaster = !granted.regions().isEmpty() || !regions.isEmpty();
         var known = needsMaster ? masterUnits(tenantId) : List.<ScopeUnit>of();
-        var authorized = new HashSet<>(granted.units());
-        known.stream().filter(s -> granted.regions().contains(s.region())).forEach(s -> authorized.add(s.id()));
+        var authorized = authorized(granted, known);
         if (authorized.isEmpty()) {
             return denied(userId, "empty_scope", "没有被授权查看任何站点的数据");
         }
@@ -60,6 +60,26 @@ public class DataScopeService implements DataAccess {
             return denied(userId, "out_of_scope", "无权查看所请求的站点的数据");
         }
         return ScopeDecision.allow(requested);
+    }
+
+    /**
+     * 提问人可用的工具和可查看的站点，规则同 {@link #decide}（本人 ∪ 角色，区域按主数据展开，取不到主数据时区域不算）。
+     * 只用来告诉模型有哪些可选，每次调用仍要经 {@link #decide} 判定。
+     */
+    public AvailableScope available(TenantId tenantId, UserId userId) {
+        var granted = grants.findEffective(tenantId, userId, users.roleIds(tenantId, userId));
+        if (granted.tools().isEmpty()) {
+            return new AvailableScope(Set.of(), Set.of());
+        }
+        var known = granted.regions().isEmpty() ? List.<ScopeUnit>of() : masterUnits(tenantId);
+        return new AvailableScope(granted.tools(), authorized(granted, known));
+    }
+
+    /** 直接授权的站点，加上授权区域里的站点。 */
+    private static Set<String> authorized(Grants granted, List<ScopeUnit> known) {
+        var authorized = new HashSet<>(granted.units());
+        known.stream().filter(s -> granted.regions().contains(s.region())).forEach(s -> authorized.add(s.id()));
+        return authorized;
     }
 
     private List<ScopeUnit> masterUnits(TenantId tenantId) {

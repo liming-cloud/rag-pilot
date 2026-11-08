@@ -36,7 +36,7 @@ class AnswerServiceTest {
             prompts.add(user);
             return reply;
         }), (instructions, question) -> "", new AnsweringProperties(30, 8, 0.3, false, 0.03, Duration.ofSeconds(3)), TestSettings.RETAIL,
-                TestExecutor.VIRTUAL);
+                TestExecutor.VIRTUAL, TestData.none());
     }
 
     @Test
@@ -65,7 +65,7 @@ class AnswerServiceTest {
             prompts.add(user);
             return "在 03 号货架[1]。";
         }), (instructions, question) -> "", new AnsweringProperties(30, 8, 0.3, false, 0.03, Duration.ofSeconds(3)), TestSettings.RETAIL,
-                TestExecutor.VIRTUAL)
+                TestExecutor.VIRTUAL, TestData.none())
                 .ask(TENANT, USER, List.of(1L), "便当饭团晚上几点得撤下来啊");
 
         assertThat(answer.refused()).isFalse();
@@ -79,7 +79,7 @@ class AnswerServiceTest {
     void refusesWithConfiguredMessage() {
         var settings = new TestSettings(TestSettings.RETAIL_PACK, "资料里没有依据，请联系总部。");
         var answer = new AnswerService(query -> List.of(), (query, documents) -> List.of(), replying((system, user) -> "x"),
-                (instructions, question) -> "", new AnsweringProperties(30, 8, 0.3, false, 0.03, Duration.ofSeconds(3)), settings, TestExecutor.VIRTUAL)
+                (instructions, question) -> "", new AnsweringProperties(30, 8, 0.3, false, 0.03, Duration.ofSeconds(3)), settings, TestExecutor.VIRTUAL, TestData.none())
                 .ask(TENANT, USER, List.of(1L), "问");
 
         assertThat(answer.refused()).isTrue();
@@ -186,7 +186,7 @@ class AnswerServiceTest {
         };
         return new AnswerService(query -> List.of(SHELF), (query, documents) -> List.of(score), chat,
                 (instructions, question) -> "", new AnsweringProperties(30, 8, 0.3, false, 0.03, Duration.ofSeconds(3)), TestSettings.RETAIL,
-                TestExecutor.VIRTUAL);
+                TestExecutor.VIRTUAL, TestData.none());
     }
 
     /**
@@ -223,7 +223,7 @@ class AnswerServiceTest {
         return new AnswerService(query -> List.of(SHELF),
                 (query, documents) -> List.of(query.contains("货架") ? 0.9 : originalScore), chat, rewriting,
                 new AnsweringProperties(30, 8, 0.3, enabled, 0.03, Duration.ofMillis(300)), TestSettings.RETAIL,
-                TestExecutor.VIRTUAL);
+                TestExecutor.VIRTUAL, TestData.none());
     }
 
     @Test
@@ -319,7 +319,7 @@ class AnswerServiceTest {
         }, (query, documents) -> documents.stream()
                 .map(document -> (query.contains("冷冻") == document.contains("冷冻")) ? 0.9 : 0.05).toList(),
                 chat, (instructions, question) -> "", new AnsweringProperties(30, 8, 0.3, false, 0.03, Duration.ofSeconds(3)), TestSettings.RETAIL,
-                TestExecutor.VIRTUAL);
+                TestExecutor.VIRTUAL, TestData.none());
     }
 
     @Test
@@ -373,7 +373,7 @@ class AnswerServiceTest {
             throw new EmbeddingUnavailableException("向量化失败", new IllegalStateException());
         }, (query, documents) -> List.of(0.9), replying((system, user) -> "x"), (instructions, question) -> "",
                 new AnsweringProperties(30, 8, 0.3, false, 0.03, Duration.ofSeconds(3)), TestSettings.RETAIL,
-                TestExecutor.VIRTUAL);
+                TestExecutor.VIRTUAL, TestData.none());
 
         assertThatThrownBy(() -> answer.ask(TENANT, USER, List.of(1L), "青柚在哪"))
                 .isInstanceOfSatisfying(ModelUnavailableException.class, e -> {
@@ -401,7 +401,7 @@ class AnswerServiceTest {
             prompts.add(user);
             return "差额超过 20 元须填写说明单[1]。";
         }), (instructions, question) -> "", new AnsweringProperties(30, 8, 0.3, false, 0.03, Duration.ofSeconds(3)), TestSettings.RETAIL,
-                TestExecutor.VIRTUAL).ask(TENANT, USER, List.of(), "差额多少要写说明");
+                TestExecutor.VIRTUAL, TestData.none()).ask(TENANT, USER, List.of(), "差额多少要写说明");
 
         assertThat(prompts.getFirst()).contains("交班时双方清点钱箱。\n差额超过 20 元").doesNotContain("2. 差额");
         assertThat(answer.citations().getFirst().excerpt()).startsWith("1. 交班时");

@@ -53,6 +53,7 @@ const answerAboutExpiry: Answer = {
       documentState: "EXPIRED",
     },
   ],
+  dataCitations: [],
   topRelevance: 0.97,
 };
 
@@ -73,6 +74,7 @@ const answerAboutFrozen: Answer = {
       documentState: "REPLACED",
     },
   ],
+  dataCitations: [],
   topRelevance: 0.93,
 };
 
@@ -82,6 +84,7 @@ const refusal: Answer = {
   refused: true,
   refusalReason: "LOW_RELEVANCE",
   citations: [],
+  dataCitations: [],
   topRelevance: 0.04,
 };
 
@@ -92,8 +95,69 @@ const smallTalk: Answer = {
   refused: false,
   refusalReason: null,
   citations: [],
+  dataCitations: [],
   topRelevance: null,
 };
+
+/**
+ * 数据问答（#182）：资料和业务系统的数据并列引用，编号是同一套；数据出处带来源、条件、数据截至和查询时间。
+ * 原型给人确认展示位置（D-059），接口字段与后端 DataCitation 一致。
+ */
+const answerWithData: Answer = {
+  id: 707,
+  text: "饮料冷柜每天开店和闭店各盘点一次 [1]；S001 店青柚气泡水现在还剩 24 瓶 [2]。",
+  refused: false,
+  refusalReason: null,
+  citations: [
+    {
+      index: 1,
+      chunkId: 104,
+      documentId: 13,
+      documentName: "商品陈列与补货规范.md",
+      headingPath: "冷链 > 盘点",
+      excerpt: "饮料冷柜每天开店、闭店各盘点一次，缺货时当班补齐。",
+      documentUpdatedAt: "2026-10-26T09:00:00+08:00",
+      documentState: "CURRENT",
+    },
+  ],
+  dataCitations: [
+    {
+      index: 2,
+      tool: "get_store_inventory",
+      system: "ERP",
+      dataset: "store_inventory",
+      conditions: "store_id=S001，sku=A1001",
+      asOf: "2026-11-08T09:30:00+08:00",
+      queriedAt: "2026-11-08T09:30:02+08:00",
+      truncated: false,
+    },
+  ],
+  topRelevance: 0.88,
+};
+
+/** 要查的数据超出提问人的数据范围：没有发出查询，如实说无权查看。 */
+const dataDenied: Answer = {
+  id: 708,
+  text: "无权查看所请求的站点的数据",
+  refused: true,
+  refusalReason: "DATA_DENIED",
+  citations: [],
+  dataCitations: [],
+  topRelevance: null,
+};
+
+/** 数据查询失败：如实说暂时查不到，不编数据、不用旧数据。 */
+const dataUnavailable: Answer = {
+  id: 709,
+  text: "数据查询暂时不可用，暂时查不到。",
+  refused: true,
+  refusalReason: "DATA_UNAVAILABLE",
+  citations: [],
+  dataCitations: [],
+  topRelevance: null,
+};
+
+const DATA_ANSWERS = [answerWithData, dataDenied, dataUnavailable];
 
 function daysAgo(days: number, hour = 10): string {
   const date = new Date();
@@ -156,6 +220,17 @@ export function resetConversations() {
       turns: [turn(9031, "交班差额超过多少要写说明？", { ...answerAboutExpiry, id: 706 }, [1], daysAgo(4))],
     },
     {
+      id: 905,
+      ownerId: 2,
+      title: "冷柜饮料库存",
+      knowledgeBaseIds: [1],
+      lastAskedAt: daysAgo(0, 9),
+      turns: [
+        turn(9051, "S001 店青柚气泡水还剩多少？", answerWithData, [1], daysAgo(0, 9)),
+        turn(9052, "二店呢？", dataDenied, [1], daysAgo(0, 9)),
+      ],
+    },
+    {
       id: 904,
       ownerId: 2,
       title: "员工年假怎么请",
@@ -192,10 +267,16 @@ function notFound() {
   );
 }
 
-/** 按问题挑一个示例回答：含“谢谢”是寒暄，含“年假”找不到，含“冷冻”答冷冻柜，其余答临期。 */
+/**
+ * 按问题挑一个示例回答：含“谢谢”是寒暄，含“年假”找不到，含“冷冻”答冷冻柜；含“还剩”查库存数据，
+ * 含“二店”无权查看数据，含“销售”数据暂时查不到；其余答临期。
+ */
 function answerFor(question: string): Answer {
   if (question.includes("谢谢")) return smallTalk;
   if (question.includes("年假")) return refusal;
+  if (question.includes("二店")) return dataDenied;
+  if (question.includes("销售")) return dataUnavailable;
+  if (question.includes("还剩")) return answerWithData;
   if (question.includes("冷冻")) return answerAboutFrozen;
   return answerAboutExpiry;
 }
@@ -281,6 +362,7 @@ export function conversationHandlers(context: Context) {
           send(controller, "turn", { id: turnId });
           const steps = [
             ...(hasHistory ? ["正在理解你的追问…"] : []),
+            ...(answer === smallTalk ? [] : DATA_ANSWERS.includes(answer) ? ["正在查询数据…"] : []),
             ...(answer === smallTalk ? [] : ["正在检索资料…", "正在整理答案…"]),
           ];
           for (const text of steps) {

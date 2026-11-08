@@ -3,6 +3,7 @@ package com.liming.rag.answering.application.ask;
 import com.liming.rag.answering.application.AnsweringException;
 import com.liming.rag.answering.application.AnsweringProperties;
 import com.liming.rag.answering.domain.CitationParser;
+import com.liming.rag.answering.domain.DataCitation;
 import com.liming.rag.answering.domain.Question;
 import com.liming.rag.answering.domain.RefusalReason;
 import com.liming.rag.knowledge.api.KnowledgeSearch;
@@ -38,6 +39,10 @@ import org.springframework.stereotype.Service;
  * <p>提示词开头的角色、引用示例和拒答话术来自行业包和系统设置（D-045）；检索前用行业词表扩展检索用的问题
  * （{@link QueryExpansion}），低分改写和生成仍针对没扩展的问题。
  *
+ * <p>提问人有可用的数据工具时（#182），先由 {@link DataLookup} 判断要不要查数据、按数据范围查询；查到的数据和资料一起给模型，
+ * 编号接着资料往下排，回答引用它时带上数据出处。没有够分的资料但查到了数据，照样依据数据回答；数据被拒或查询失败时
+ * 如实说明（资料答得上来就在回答后补一句，答不上来就按数据的原因拒答），不编造数据。
+ *
  * <p>会话里追问时（D-036），检索规划给出的 1–2 个检索词各检索一次、合并候选，每条资料取对各检索词重排分数的最高值；
  * 生成时把前几轮对话放在资料之后，回答的依据仍只能是这一轮的资料。首字前按阶段推状态，可以中途停止。
  */
@@ -66,6 +71,7 @@ public class AnswerService {
     private final AnsweringSettings settings;
     private final String system;
     private final QueryExpansion expansion;
+    private final DataLookup data;
     private final int evidenceLimit;
     private final double minRelevance;
     private final boolean rewriteOnLowRelevance;
@@ -75,7 +81,7 @@ public class AnswerService {
      */
     AnswerService(KnowledgeSearch search, RelevanceScoring rerank, AnswerGeneration chat, QuestionRewriting rewriting,
             AnsweringProperties properties, AnsweringSettings settings,
-            @Qualifier("applicationTaskExecutor") AsyncTaskExecutor executor) {
+            @Qualifier("applicationTaskExecutor") AsyncTaskExecutor executor, DataLookup data) {
         var pack = settings.pack();
         this.retriever = new EvidenceRetriever(search, properties.candidates());
         this.reranker = new EvidenceReranker(rerank);
@@ -86,6 +92,7 @@ public class AnswerService {
         this.settings = settings;
         this.system = AnswerPrompt.system(pack);
         this.expansion = new QueryExpansion(pack.vocabulary());
+        this.data = data;
         this.evidenceLimit = properties.evidenceLimit();
         this.minRelevance = properties.minRelevance();
         this.rewriteOnLowRelevance = properties.rewriteOnLowRelevance();
@@ -115,7 +122,8 @@ public class AnswerService {
     public AskResult ask(TenantId tenantId, UserId userId, List<Long> knowledgeBaseIds, String question,
             Consumer<String> onDelta, Consumer<String> onStatus) {
         Consumer<String> withoutStages = status -> {
-            if (!SEARCHING_STATUS.equals(status) && !GENERATING_STATUS.equals(status)) {
+            if (!SEARCHING_STATUS.equals(status) && !GENERATING_STATUS.equals(status)
+                    && !DataLookup.QUERYING_STATUS.equals(status)) {
                 onStatus.accept(status);
             }
         };
@@ -130,6 +138,7 @@ public class AnswerService {
     public AskResult ask(AskRequest request, Consumer<String> onDelta, Consumer<String> onStatus, CompletionStage<?> stop) {
         var text = question(request.question());
         var clock = new StageClock();
+        var looked = data.lookup(request.tenantId(), request.userId(), text, request.history(), onStatus);
         onStatus.accept(SEARCHING_STATUS);
         var searchTexts = request.searchQueries() == null || request.searchQueries().isEmpty() ? List.of(text)
                 : request.searchQueries();
@@ -138,25 +147,24 @@ public class AnswerService {
         var queries = searchTexts.stream().map(searchText -> original.withText(expansion.expand(searchText))).toList();
         var candidates = union(queries.stream().map(retriever::retrieve).toList());
         clock.retrieved();
-        if (candidates.isEmpty()) {
-            return finish(refusal(RefusalReason.NO_EVIDENCE, null), clock, null);
-        }
         // 低分改写针对没扩展的问题：改写本身会补类别，扩展词混在问题里反而干扰改写。
-        var ranking = rank(queries, candidates, original, clock, onStatus);
-        var ranked = ranking.ranked();
-        var rewrite = ranking.rewrite();
-        double topRelevance = ranked.getFirst().score();
-        var evidence = evidence(ranked);
-        if (evidence.isEmpty()) {
-            return finish(refusal(RefusalReason.LOW_RELEVANCE, topRelevance), clock, rewrite);
+        var ranking = candidates.isEmpty() ? null : rank(queries, candidates, original, clock, onStatus);
+        var rewrite = ranking == null ? null : ranking.rewrite();
+        var topRelevance = ranking == null ? null : ranking.ranked().getFirst().score();
+        var evidence = ranking == null ? List.<Evidence>of() : evidence(ranking.ranked());
+        var found = looked != null && looked.found() ? looked : null;
+        if (evidence.isEmpty() && found == null) {
+            var reason = candidates.isEmpty() ? RefusalReason.NO_EVIDENCE : RefusalReason.LOW_RELEVANCE;
+            return finish(looked == null ? refusal(reason, topRelevance) : looked.refusal(topRelevance), clock, rewrite);
         }
         if (stop.toCompletableFuture().isDone()) {
             return finish(refusal(RefusalReason.MODEL_DECLINED, topRelevance), clock, rewrite);
         }
         onStatus.accept(GENERATING_STATUS);
         // 证据可能来自规划或改写后的检索，但回答针对员工原来的问题。
-        var prompt = EvidencePrompt.user(text, evidence, request.history());
-        return finish(generate(prompt, evidence, topRelevance, clock, onDelta, stop), clock, rewrite);
+        var prompt = EvidencePrompt.user(text, evidence, found, request.history());
+        var answer = generate(prompt, evidence, found, topRelevance, clock, onDelta, stop);
+        return finish(looked == null ? answer : looked.annotate(answer), clock, rewrite);
     }
 
     /** 重排候选；没有够分的证据且开了低分改写时，改写问题再检索、重排一次（{@link LowRelevanceRecovery}）。 */
@@ -204,9 +212,9 @@ public class AnswerService {
         return merged;
     }
 
-    /** 生成并校验引用：模型拒答、去掉标记后为空或没有有效引用都按拒答处理。 */
-    private AskResult generate(String prompt, List<Evidence> evidence, double topRelevance, StageClock clock,
-            Consumer<String> onDelta, CompletionStage<?> stop) {
+    /** 生成并校验引用：模型拒答、去掉标记后为空或没有有效引用都按拒答处理。数据的编号是资料条数 + 1。 */
+    private AskResult generate(String prompt, List<Evidence> evidence, @Nullable DataEvidence found,
+            @Nullable Double topRelevance, StageClock clock, Consumer<String> onDelta, CompletionStage<?> stop) {
         var gate = new NoAnswerGate(onDelta, clock::firstToken);
         var raw = chat.stream(system, prompt, gate, stop).strip();
         gate.flush();
@@ -216,14 +224,18 @@ public class AnswerService {
         if (reply.isEmpty() || raw.startsWith(AnswerPrompt.NO_ANSWER)) {
             return refusal(RefusalReason.MODEL_DECLINED, topRelevance);
         }
-        var parsed = CitationParser.parse(reply, evidence.size());
+        var dataIndex = evidence.size() + 1;
+        var parsed = CitationParser.parse(reply, found == null ? evidence.size() : dataIndex);
         if (parsed.cited().isEmpty()) {
             return refusal(RefusalReason.UNCITED, topRelevance);
         }
         var citations = parsed.cited().stream()
+                .filter(index -> index < dataIndex)
                 .map(index -> evidence.get(index - 1).citation(index))
                 .toList();
-        return AskResult.answered(parsed.text(), citations, topRelevance);
+        var dataCitations = found != null && parsed.cited().contains(dataIndex) ? List.of(found.citation(dataIndex))
+                : List.<DataCitation>of();
+        return AskResult.answered(parsed.text(), citations, dataCitations, topRelevance);
     }
 
     /** 拒答，话术用系统设置里当前的（D-045）。 */

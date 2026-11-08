@@ -12,27 +12,33 @@ import io.modelcontextprotocol.spec.McpError;
 import io.modelcontextprotocol.spec.McpSchema.CallToolRequest;
 import io.modelcontextprotocol.spec.McpSchema.CallToolResult;
 import io.modelcontextprotocol.spec.McpSchema.Implementation;
+import io.modelcontextprotocol.spec.McpSchema.ListToolsResult;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.time.Duration;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Function;
+import java.util.function.Supplier;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import tools.jackson.databind.json.JsonMapper;
 
 /**
  * 用 Spring AI 底层的 MCP Java SDK 客户端（Streamable HTTP）调用工具（D-058）。
  *
  * <p>SDK 客户端的会话是应用级的，连接和发现工具用服务令牌；而每次 {@code tools/call} 要换成该提问人、该工具的短期令牌，
  * 所以每次调用建一个客户端：先用服务令牌 {@code initialize}，再用用户令牌 {@code tools/call}，用完关闭。令牌经
- * 请求层的 customizer 从传输上下文取，不放进 URL。
+ * 请求层的 customizer 从传输上下文取，不放进 URL。列出工具（{@code tools/list}）只用服务令牌。
  */
 final class McpToolCaller implements ToolCaller {
 
     private static final Logger log = LoggerFactory.getLogger(McpToolCaller.class);
     private static final String TOKEN_KEY = "rag.tool.token";
     private static final Duration RETRY_DELAY = Duration.ofMillis(500);
+    private static final JsonMapper JSON = JsonMapper.builder().build();
 
     private final ToolProperties properties;
     private final ToolTokenIssuer tokens;
@@ -46,6 +52,26 @@ final class McpToolCaller implements ToolCaller {
 
     @Override
     public ToolResult call(ToolCall call) {
+        return observed(call, endpoint -> attempt(call, endpoint, client -> {
+            var jti = ToolTokenIssuer.newTokenId();
+            var result = client.callTool(new CallToolRequest(call.tool(), call.arguments()),
+                    tokens.issue(endpoint.resolvedAudience(), call.tool(), call.subject(), call.dataScope(), jti));
+            return toResult(call, result, jti);
+        }));
+    }
+
+    @Override
+    public List<ToolDefinition> list(String endpointName) {
+        var listing = new ToolCall(endpointName, ToolTokenIssuer.ANY_TOOL, Map.of(), ToolTokenIssuer.SERVICE_SUBJECT,
+                Map.of());
+        return observed(listing, endpoint -> attempt(listing, endpoint, client -> client.listTools().tools().stream()
+                .map(tool -> new ToolDefinition(tool.name(), tool.title() == null ? "" : tool.title(),
+                        tool.description() == null ? "" : tool.description(),
+                        JSON.writeValueAsString(tool.inputSchema() == null ? Map.of() : tool.inputSchema())))
+                .toList()));
+    }
+
+    private <T> T observed(ToolCall call, Function<ToolProperties.Endpoint, T> action) {
         var endpoint = properties.endpoints().get(call.endpoint());
         if (endpoint == null || !tokens.configured()) {
             throw failed(call, Reason.NOT_CONFIGURED, "数据查询暂未配置，暂时查不到。", null, null, null);
@@ -53,7 +79,7 @@ final class McpToolCaller implements ToolCaller {
         var observation = Observation.createNotStarted("rag.tool.call", observations)
                 .lowCardinalityKeyValue("tool", call.tool()).start();
         try (var scope = observation.openScope()) {
-            return attemptWithRetry(call, endpoint);
+            return withRetry(() -> action.apply(endpoint));
         } catch (RuntimeException e) {
             observation.error(e);
             throw e;
@@ -63,9 +89,9 @@ final class McpToolCaller implements ToolCaller {
     }
 
     /** 只读幂等：超时和 502/503/504 最多重试 1 次，间隔不少于 500 毫秒；其余失败不重试。 */
-    private ToolResult attemptWithRetry(ToolCall call, ToolProperties.Endpoint endpoint) {
+    private static <T> T withRetry(Supplier<T> attempt) {
         try {
-            return attempt(call, endpoint);
+            return attempt.get();
         } catch (ToolCallException first) {
             if (first.reason() != Reason.UNAVAILABLE) {
                 throw first;
@@ -76,14 +102,14 @@ final class McpToolCaller implements ToolCaller {
                 Thread.currentThread().interrupt();
                 throw first;
             }
-            return attempt(call, endpoint);
+            return attempt.get();
         }
     }
 
-    private ToolResult attempt(ToolCall call, ToolProperties.Endpoint endpoint) {
-        var audience = endpoint.resolvedAudience();
-        var jti = ToolTokenIssuer.newTokenId();
-        var token = new AtomicReference<>(tokens.issue(audience, ToolTokenIssuer.ANY_TOOL,
+    /** 建一个客户端，用服务令牌 {@code initialize} 后执行 {@code action}，用完关闭。 */
+    private <T> T attempt(ToolCall call, ToolProperties.Endpoint endpoint,
+            Function<SessionClient, T> action) {
+        var token = new AtomicReference<>(tokens.issue(endpoint.resolvedAudience(), ToolTokenIssuer.ANY_TOOL,
                 ToolTokenIssuer.SERVICE_SUBJECT, Map.of(), ToolTokenIssuer.newTokenId()));
         var seen = new AtomicReference<RecordingHttpClient.@Nullable Seen>();
         var uri = URI.create(endpoint.url());
@@ -100,12 +126,24 @@ final class McpToolCaller implements ToolCaller {
                 .clientInfo(new Implementation("rag-pilot", "1.0.0"))
                 .transportContextProvider(() -> McpTransportContext.create(Map.of(TOKEN_KEY, token.get()))).build()) {
             client.initialize();
-            token.set(tokens.issue(audience, call.tool(), call.subject(), call.dataScope(), jti));
-            return toResult(call, client.callTool(new CallToolRequest(call.tool(), call.arguments())), jti);
+            return action.apply(new SessionClient(client, token));
         } catch (ToolCallException e) {
             throw e;
         } catch (RuntimeException e) {
             throw classify(call, e, seen.get());
+        }
+    }
+
+    /** 已握手的客户端；{@code tools/call} 前把令牌换成该提问人、该工具的令牌。 */
+    private record SessionClient(McpSyncClient client, AtomicReference<String> token) {
+
+        CallToolResult callTool(CallToolRequest request, String userToken) {
+            token.set(userToken);
+            return client.callTool(request);
+        }
+
+        ListToolsResult listTools() {
+            return client.listTools();
         }
     }
 

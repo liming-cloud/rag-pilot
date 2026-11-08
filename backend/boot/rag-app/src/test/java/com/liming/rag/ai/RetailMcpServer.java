@@ -21,6 +21,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.function.Supplier;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
@@ -29,9 +31,28 @@ import tools.jackson.databind.json.JsonMapper;
  * 模拟新零售客户的 MCP 服务（D-059：只作测试和评测用，不进发布包）。按规范 D-058 做第二道校验：
  * 令牌签名（JWKS）、{@code iss}、{@code aud}、{@code exp}、{@code tool} 与被调用的工具一致，
  * 门店必须在令牌的 {@code data_scope} 内；返回 {@code data/source/query/asOf/queriedAt/truncated}。
- * 两个只读工具：{@code get_store_inventory}（库存）、{@code get_store_sales}（销售）。
+ * 只读工具：{@code get_store_inventory}（库存）、{@code get_store_sales}（销售）、{@code list_stores}（门店主数据）。
+ * 测试可设 {@link #fault} 让业务工具故意出错（#182：多返回范围外的行、超时、401/403/429、工具报错、协议错误、缺字段）。
  */
-final class RetailMcpServer implements AutoCloseable {
+public final class RetailMcpServer implements AutoCloseable {
+
+    /** 业务工具（不含 {@code list_stores}）的故障；{@link #NONE} 为正常。 */
+    public enum Fault {
+        NONE,
+        /** 不按令牌范围过滤，结果最前面多一行范围外门店的数据。 */
+        LEAK,
+        /** 3 秒后才响应（超过我方的超时）。 */
+        SLOW,
+        STATUS_401,
+        STATUS_403,
+        STATUS_429,
+        /** {@code isError:true}，{@code code=unavailable}。 */
+        TOOL_ERROR,
+        /** JSON-RPC 错误 -32602。 */
+        PROTOCOL_ERROR,
+        /** 返回缺 {@code asOf}，不符合 outputSchema。 */
+        BAD_SCHEMA
+    }
 
     private static final JsonMapper JSON = JsonMapper.builder().build();
     private static final Base64.Decoder BASE64URL = Base64.getUrlDecoder();
@@ -41,6 +62,10 @@ final class RetailMcpServer implements AutoCloseable {
             Map.of("store_id", "S001", "sku", "A1001", "name", "鲜牛奶 1L", "quantity", 24),
             Map.of("store_id", "S001", "sku", "A1002", "name", "酸奶 200g", "quantity", 8),
             Map.of("store_id", "S002", "sku", "A1001", "name", "鲜牛奶 1L", "quantity", 3));
+    private static final List<Map<String, Object>> STORES = List.of(
+            Map.of("store_id", "S001", "name", "一店", "region", "east"),
+            Map.of("store_id", "S002", "name", "二店", "region", "east"),
+            Map.of("store_id", "S003", "name", "三店", "region", "west"));
     private static final List<Map<String, Object>> SALES = List.of(
             Map.of("store_id", "S001", "date", "2026-11-06", "amount", 5230),
             Map.of("store_id", "S001", "date", "2026-11-07", "amount", 6120),
@@ -52,15 +77,20 @@ final class RetailMcpServer implements AutoCloseable {
     volatile String audience;
     /** 本服务的时钟相对真实时间拨快多少，测试用来模拟令牌过期。 */
     volatile Duration skew = Duration.ZERO;
-    /** 收到的每个 tools/call 的（令牌 jti，工具名，是否返回了数据），按顺序。 */
-    final List<String> served = new CopyOnWriteArrayList<>();
+    /** 收到的每个 tools/call 的（令牌 jti，工具名，是否返回了数据），按顺序；不含 {@code list_stores}。 */
+    public final List<String> served = new CopyOnWriteArrayList<>();
+    /** 业务工具的故障，测试结束后改回 {@link Fault#NONE}。 */
+    public volatile Fault fault = Fault.NONE;
 
     private final HttpServer server;
+    private final ExecutorService executor = Executors.newCachedThreadPool();
 
-    RetailMcpServer(String audience, Supplier<Map<String, Object>> jwks) throws IOException {
+    public RetailMcpServer(String audience, Supplier<Map<String, Object>> jwks) throws IOException {
         this.audience = audience;
         this.jwks = jwks;
         this.server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        // 多线程：慢响应时不挡住后面的请求。
+        server.setExecutor(executor);
         server.createContext("/mcp", this::handle);
         server.start();
     }
@@ -69,13 +99,14 @@ final class RetailMcpServer implements AutoCloseable {
         return Instant.now().plus(skew);
     }
 
-    String url() {
+    public String url() {
         return "http://127.0.0.1:" + server.getAddress().getPort() + "/mcp";
     }
 
     @Override
     public void close() {
         server.stop(0);
+        executor.shutdownNow();
     }
 
     private void handle(HttpExchange exchange) throws IOException {
@@ -149,10 +180,18 @@ final class RetailMcpServer implements AutoCloseable {
     private void call(HttpExchange exchange, String id, JsonNode params, Map<String, Object> claims)
             throws IOException {
         var tool = params.path("name").asString();
-        // 令牌只用于签发时指定的工具；拿 A 工具的令牌调 B 工具是 403。
-        if (!tool.equals(claims.get("tool"))) {
+        // 令牌只用于签发时指定的工具；拿 A 工具的令牌调 B 工具是 403。主数据用服务令牌（tool=*）调。
+        if (!tool.equals(claims.get("tool")) && !("list_stores".equals(tool) && "*".equals(claims.get("tool")))) {
             exchange.getResponseHeaders().add("WWW-Authenticate", "Bearer error=\"insufficient_scope\"");
             send(exchange, 403, "");
+            return;
+        }
+        if ("list_stores".equals(tool)) {
+            send(exchange, 200, result(id, content(Map.of("data", STORES), false)));
+            return;
+        }
+        if (fault(exchange, id)) {
+            served.add(claims.get("jti") + " " + tool + " " + fault);
             return;
         }
         var arguments = params.path("arguments");
@@ -166,6 +205,9 @@ final class RetailMcpServer implements AutoCloseable {
             return;
         }
         var rows = new ArrayList<Map<String, Object>>();
+        if (fault == Fault.LEAK) {
+            rows.add(Map.of("store_id", "S002", "sku", "A1001", "name", "鲜牛奶 1L", "quantity", 3));
+        }
         var query = new LinkedHashMap<String, Object>();
         query.put("store_id", store);
         var dataset = switch (tool) {
@@ -190,11 +232,41 @@ final class RetailMcpServer implements AutoCloseable {
         body.put("data", rows);
         body.put("source", Map.of("system", "ERP", "dataset", dataset));
         body.put("query", query);
-        body.put("asOf", now().toString());
+        if (fault != Fault.BAD_SCHEMA) {
+            body.put("asOf", now().toString());
+        }
         body.put("queriedAt", now().toString());
         body.put("truncated", false);
         served.add(claims.get("jti") + " " + tool + " rows=" + rows.size());
         send(exchange, 200, result(id, content(body, false)));
+    }
+
+    /** 故障时直接应答，返回 true；正常时返回 false。 */
+    private boolean fault(HttpExchange exchange, String id) throws IOException {
+        switch (fault) {
+            case SLOW -> {
+                try {
+                    Thread.sleep(3000);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+                send(exchange, 504, "");
+            }
+            case STATUS_401 -> send(exchange, 401, "");
+            case STATUS_403 -> send(exchange, 403, "");
+            case STATUS_429 -> {
+                exchange.getResponseHeaders().add("Retry-After", "5");
+                send(exchange, 429, "");
+            }
+            case TOOL_ERROR -> send(exchange, 200, result(id, content(Map.of("code", "unavailable", "message",
+                    "库存系统维护中。"), true)));
+            case PROTOCOL_ERROR -> send(exchange, 200,
+                    "{\"jsonrpc\":\"2.0\",\"id\":" + id + ",\"error\":{\"code\":-32602,\"message\":\"Invalid params\"}}");
+            default -> {
+                return false;
+            }
+        }
+        return true;
     }
 
     private static List<Map<String, Object>> tools() {
@@ -205,7 +277,9 @@ final class RetailMcpServer implements AutoCloseable {
                 Map.of("name", "get_store_inventory", "description", "按门店和商品编码查询当前库存。只读。",
                         "inputSchema", inputSchema, "annotations", read),
                 Map.of("name", "get_store_sales", "description", "按门店查询每日销售额。只读。",
-                        "inputSchema", inputSchema, "annotations", read));
+                        "inputSchema", inputSchema, "annotations", read),
+                Map.of("name", "list_stores", "description", "门店主数据：编号、名称、所属区域。只读。",
+                        "inputSchema", Map.of("type", "object"), "annotations", read));
     }
 
     private static Map<String, Object> content(Map<String, Object> structured, boolean error) {

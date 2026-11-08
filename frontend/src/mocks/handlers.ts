@@ -317,6 +317,7 @@ export const sampleAnswer: Answer = {
       documentState: "CURRENT",
     },
   ],
+  dataCitations: [],
   topRelevance: 0.97,
 };
 
