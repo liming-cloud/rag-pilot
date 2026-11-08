@@ -168,6 +168,21 @@ cd /opt/rag-pilot/rag-pilot-1.0.0.1
 - 备份里没有它。丢了也只需要重新录入服务商密钥，所以抄存一份比备份它更安全。
 - 没有设置时不能在管理端保存服务商密钥，系统仍可以用 `.env` 里的 `MODEL_API_KEY`。
 
+### 数据问答的工具调用签名密钥
+
+接客户系统的只读工具（`docs/integration/mcp-tools.md`，D-058、D-059）时，系统对每次调用签发一个 60 秒内有效的令牌，客户系统用公钥（JWKS）验签。签名私钥 `RAG_TOOL_SIGNING_KEY` 只从环境变量读，不进数据库、不进日志；没有设置时不能调用工具，其他功能不受影响。
+
+```bash
+# 生成一次（kid 随便取，轮换时换新的名字），输出整段 JSON 填进 .env 的 RAG_TOOL_SIGNING_KEY
+java -Dloader.main=com.liming.rag.ai.ToolSigningKeys -cp app/rag-app.jar \
+  org.springframework.boot.loader.launch.PropertiesLauncher generate key-1
+# 从私钥导出只含公钥的 JWKS，交给客户系统配置
+java -Dloader.main=com.liming.rag.ai.ToolSigningKeys -cp app/rag-app.jar \
+  org.springframework.boot.loader.launch.PropertiesLauncher jwks "$RAG_TOOL_SIGNING_KEY"
+```
+
+客户端点（`rag.ai.tools.endpoints.<连接名>.url/audience`）的部署配置随问答接入工具时（#182）一起提供，现在只有配置项没有入口；`RAG_TOOL_ISSUER` 是令牌的签发者标识（默认 `rag-pilot`），要和客户系统里配置的一致。私钥和主密钥一样要抄存到安全的地方，丢了只需重新生成并把新的 JWKS 交给客户系统。
+
 ## 八、超级管理员忘记密码
 
 全系统只有一个超级管理员。忘记密码或被锁定时：

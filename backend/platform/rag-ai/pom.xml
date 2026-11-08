@@ -47,6 +47,12 @@
             <artifactId>spring-ai-client-chat</artifactId>
             <optional>true</optional>
         </dependency>
+        <!-- MCP client（D-056、D-058）：工具调用，同样只在这里用，optional，运行时由 rag-app 带上。 -->
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-mcp</artifactId>
+            <optional>true</optional>
+        </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>

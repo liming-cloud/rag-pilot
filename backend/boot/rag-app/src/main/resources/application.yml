@@ -123,6 +123,17 @@ rag:
       hedge-model: ${CHAT_HEDGE_MODEL:deepseek-ai/DeepSeek-V4.1-Flash}
       # 轻量任务（会话标题）用的模型，用硅基流动的免费模型，不占回答的首字时间（D-036）；设为空时与 model 相同。
       light-model: ${CHAT_LIGHT_MODEL:Qwen/Qwen2.5-7B-Instruct}
+    # 数据问答的工具调用（D-058、D-059）：每次调用签发 ≤ 60 秒的 ES256 令牌，客户系统用对应的公钥（JWKS）验签。
+    tools:
+      # ES256 的 JWK（含私钥），只从环境变量读；为空时不能调用工具。生成见运维手册。
+      signing-key: ${RAG_TOOL_SIGNING_KEY:}
+      issuer: ${RAG_TOOL_ISSUER:rag-pilot}
+      timeout: 10s
+      # 客户 MCP 端点，一个部署一两个，如：
+      # endpoints:
+      #   retail:
+      #     url: https://erp.example.com/mcp
+      #     audience: https://erp.example.com/mcp   # 为空时用 url
   answering:
     # 检索候选数、送进提示词的证据数、重排相关度门槛（占位值，用评测集校准）。
     candidates: 30
