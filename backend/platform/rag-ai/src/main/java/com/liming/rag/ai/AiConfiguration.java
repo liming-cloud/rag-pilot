@@ -3,6 +3,7 @@ package com.liming.rag.ai;
 import com.liming.rag.cache.Caches;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.observation.ObservationRegistry;
+import java.time.Clock;
 import org.springframework.ai.chat.observation.ChatModelMeterObservationHandler;
 import org.springframework.ai.embedding.observation.EmbeddingModelMeterObservationHandler;
 import org.springframework.beans.factory.ObjectProvider;
@@ -25,6 +26,17 @@ class AiConfiguration {
         };
         var model = "openai".equals(provider) ? properties.embedding().model() : provider;
         return new CachedQuestionEmbeddings(client, model, caches);
+    }
+
+    @Bean
+    ToolTokenIssuer toolTokenIssuer(ToolProperties properties, Clock clock) {
+        return new ToolTokenIssuer(properties, clock);
+    }
+
+    @Bean
+    ToolCaller toolCaller(ToolProperties properties, ToolTokenIssuer tokens,
+            ObjectProvider<ObservationRegistry> observations) {
+        return new McpToolCaller(properties, tokens, observations.getIfAvailable(() -> ObservationRegistry.NOOP));
     }
 
     @Bean

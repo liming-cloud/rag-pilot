@@ -1,6 +1,6 @@
 # 数据问答对接规范：MCP 只读工具
 
-状态：草案，待评审（#166，决策见 D-058）。对应 ROADMAP M8；实现见 #168。
+状态：已定稿（#166，决策见 D-058），协议版本与令牌注入方式已在 #180 验证（D-060）。对应 ROADMAP M8；实现见 #180～#183。
 
 客户按本规范开放**只读**接口，我方就能把它接成“可信数据问答”的工具。规范只约定对接契约，不规定客户系统内部怎么实现。关键词“必须 / 应该 / 可以”的含义同 RFC 2119。
 
@@ -13,11 +13,11 @@
 ## 2. 传输
 
 - **Streamable HTTP**，单个 MCP 端点（如 `https://<客户域名>/mcp`），只用 POST；**不用 stdio**（客户系统是远端服务）。
-- 版本：以 MCP 规范 **2026-07-28** 为准（无协议级会话、无 GET 流；每个请求带 `MCP-Protocol-Version`、`Mcp-Method`、`Mcp-Name` 头，请求体 `_meta` 带版本和客户端信息）。客户系统若只支持 2025-11-25，也可接入：我方按服务器返回的 `UnsupportedProtocolVersionError` 里的 `supported` 回退。我方 MCP client 实际支持哪些版本，#168 开工时验证并写回本节。
+- 版本：**已验证（#180）**：我方 client 用的 MCP Java SDK 2.0.0（Spring AI 2.0.0 带的版本）支持 2024-11-05、2025-03-26、2025-06-18、**2025-11-25**，**不支持 2026-07-28**，所以 1.x 实际按 **2025-11-25** 对接：先 `initialize` 协商（可带 `Mcp-Session-Id`，服务器可以不发），再 `notifications/initialized`，然后 `tools/call`。客户系统若实现 2026-07-28（无会话），需要同时兼容 2025-11-25 的握手；规范 2026-07-28 的无会话形式待 SDK 支持后再接，届时更新本节。
 - 必须 HTTPS（内网测试环境可例外，要在连接配置里显式声明）；服务器必须校验 `Origin`（非法返回 403）。
 - 响应可以是 `application/json` 或 `text/event-stream`，我方两种都支持；只读查询建议直接返回 JSON。
 - 不使用 `subscriptions/listen`、`resources`、`prompts`、采样、征询（elicitation）；只实现 `tools/list`、`tools/call`。
-- 我方 client 用 Spring AI 的 MCP client（`spring-ai-starter-mcp-client`，配置 `spring.ai.mcp.client.streamable-http.connections.<名>.url/endpoint`），不自己写协议；它只出现在 rag-ai（D-056，#168）。
+- 我方 client 用 Spring AI 2.0 的 MCP 依赖（`spring-ai-mcp`，底层是 MCP Java SDK 的 `HttpClientStreamableHttpTransport`），不自己写协议；它只出现在 rag-ai（D-056）。没有用 starter 的自动配置：它的 client 是应用级单例，不能按调用换令牌（见第 3 节）。
 
 ## 3. 身份与令牌
 
@@ -37,7 +37,9 @@
 
 - 公钥：我方提供 JWKS 地址（或离线交付公钥文件），支持密钥轮换（`kid`）。客户系统缓存 JWKS 并容忍 ≥ 60 秒时钟偏差。
 - 客户系统**不得**把收到的令牌转给别的服务（禁止令牌透传）；需要访问它自己的下游，用它自己的凭据。
-- `tools/list` 使用我方的**服务令牌**（`sub=service:rag-pilot`，`data_scope` 为空），只用于发现工具，不返回数据。
+- **服务令牌**：`initialize` 和 `tools/list` 使用（`sub=service:rag-pilot`，`tool=*`，`data_scope` 为空），只用于连接和发现工具，不返回数据。
+- **注入方式（已验证）**：SDK 的 client 是会话级的，所以每次调用新建一个 client（`McpClient.sync(HttpClientStreamableHttpTransport)`）：先用服务令牌 `initialize`，再换成该提问人、该工具的令牌发 `tools/call`，用完关闭。令牌经 `McpSyncHttpClientRequestCustomizer` 从传输上下文（`transportContextProvider`）取，放进 `Authorization` 头。SDK 对 401/403 以外的非 2xx 响应不带状态码，所以在它用的 `HttpClient` 外面套一层记下状态码和 `Retry-After`，用来区分 429、4xx 和 502/503/504。
+- **签名密钥**：ES256 的 JWK（含私钥），只从环境变量 `RAG_TOOL_SIGNING_KEY` 读（D-059）；公钥用 JWKS 交给客户系统（导出命令见 `deploy/README.md`）。
 - 与 MCP 授权规范的关系：规范里的 OAuth 流程（受保护资源元数据 RFC 9728、授权服务器发现、动态注册）面向“用户在浏览器里授权”的场景。本场景是服务端到服务端、客户与我方已线下约定，所以采用**预先配置**的信任：客户系统配置 `iss`、JWKS、`aud`，仍遵守“令牌放头里、校验受众、401/403 语义、不透传”。这是对规范的有意简化，评审时确认。
 - 若客户系统想用自己的账号体系鉴权，需要做账号映射，不在 1.x 范围。
 
