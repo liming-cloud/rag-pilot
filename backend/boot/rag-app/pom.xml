@@ -54,6 +54,10 @@
         </dependency>
         <dependency>
             <groupId>${project.groupId}</groupId>
+            <artifactId>rag-data</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>${project.groupId}</groupId>
             <artifactId>rag-evaluation</artifactId>
         </dependency>
         <dependency>

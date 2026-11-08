@@ -1,6 +1,7 @@
 package com.liming.rag;
 
 import com.liming.rag.answering.api.AnsweringPermissions;
+import com.liming.rag.data.api.DataPermissions;
 import com.liming.rag.identity.api.IdentityPermissions;
 import com.liming.rag.identity.api.PermissionCatalog.Section;
 import com.liming.rag.knowledge.api.KnowledgePermissions;
@@ -15,7 +16,7 @@ import java.util.stream.Stream;
 final class AllPermissions {
 
     static final List<Section> SECTIONS = Stream.of(AnsweringPermissions.SECTIONS, KnowledgePermissions.SECTIONS,
-                    IdentityPermissions.SECTIONS, SettingsPermissions.SECTIONS)
+                    IdentityPermissions.SECTIONS, SettingsPermissions.SECTIONS, DataPermissions.SECTIONS)
             .flatMap(List::stream).sorted(Comparator.comparingInt(Section::position)).toList();
 
     static final Set<String> ALL = all();

@@ -55,6 +55,7 @@
         <module>rag-identity</module>
         <module>rag-settings</module>
         <module>rag-knowledge</module>
+        <module>rag-data</module>
         <module>rag-answering</module>
         <module>rag-evaluation</module>
     </modules>

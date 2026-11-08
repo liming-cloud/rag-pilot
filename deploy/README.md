@@ -80,6 +80,8 @@ docker compose --env-file .env --env-file release.env logs --tail 200 app   # �
 | `event=query_rewritten` | 相关度偏低时换个说法再找一次：`outcome` 是结果（`REWRITTEN` 改写了、`NO_CHANGE` 没改、`TIMED_OUT` 改写超时、`SKIPPED_BELOW_FLOOR` 分数太低不改写直接拒答） |
 | `event=document_failed` | 文档入库失败：`kind=content` 是文件本身的问题，`kind=model` 是模型暂时不可用（10 分钟后自动重试一次） |
 | `event=login_failed`、`event=account_locked` | 登录失败（`reason`）、连续输错被锁 |
+| `event=data_scope_denied` | 数据问答的工具调用被范围判定拒绝（越权拒绝）：`user` 是账号编号，`code` 是 `tool_not_granted`（没授权这个工具）、`empty_scope`（没有授权任何站点）、`out_of_scope`（请求的站点不在授权范围内） |
+| `event=data_unit_master_unavailable`、`event=tool_call_failed purpose=unit_master` | 读取客户系统的站点主数据失败（`reason` 是失败原因）：授权页提示“稍后再试”，判定时区域授权展开不出站点、按没有处理（只拒绝，不放宽） |
 | `event=access_denied` | 越权被拒：缺的权限点（`permission`）或不能管理的知识库（`knowledgeBase`） |
 | `event=cache_failure` | Redis 出错或超时：`cache` 是哪种缓存、`op` 是什么操作。之后 30 秒内跳过 Redis（进程内的一级缓存照常用，没有时读数据库），问答照常；恢复后先清空 Redis 里的缓存再用。登录会话也在 Redis 里，Redis 不可用时**不能登录、已登录的请求会被拒绝** |
 

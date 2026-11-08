@@ -3,6 +3,7 @@ package com.liming.rag;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.liming.rag.answering.api.AnsweringPermissions;
+import com.liming.rag.data.api.DataPermissions;
 import com.liming.rag.identity.api.IdentityPermissions;
 import com.liming.rag.knowledge.api.KnowledgePermissions;
 import com.liming.rag.settings.api.SettingsPermissions;
@@ -64,13 +65,13 @@ class RbacTests {
                 List.class).getBody();
 
         assertThat(catalog).extracting(group -> ((Map<String, Object>) group).get("menu")).containsExactly(
-                "对话", "知识库管理", "用户管理", "角色与权限", "审计记录", "模型管理", "回答记录", "运营概览", "系统设置");
+                "对话", "知识库管理", "用户管理", "角色与权限", "审计记录", "模型管理", "数据范围授权", "回答记录", "运营概览", "系统设置");
         var codes = new ArrayList<String>();
         for (var group : (List<Map<String, Object>>) catalog) {
             codes.add((String) ((Map<String, Object>) group.get("view")).get("code"));
             ((List<Map<String, Object>>) group.get("buttons")).forEach(button -> codes.add((String) button.get("code")));
         }
-        assertThat(codes).containsExactlyElementsOf(AllPermissions.ALL).hasSize(33);
+        assertThat(codes).containsExactlyElementsOf(AllPermissions.ALL).hasSize(35);
     }
 
     @Test
@@ -150,6 +151,12 @@ class RbacTests {
                 new Endpoint(SettingsPermissions.SETTING_UPDATE, HttpMethod.PUT, "/api/settings/CHAT_PLACEHOLDER",
                         Map.of("value", "权限测试")),
                 new Endpoint(SettingsPermissions.SETTING_UPDATE, HttpMethod.DELETE, "/api/settings/CHAT_PLACEHOLDER", null),
+                new Endpoint(DataPermissions.DATA_VIEW, HttpMethod.GET, "/api/data-grants/tools", null),
+                new Endpoint(DataPermissions.DATA_VIEW, HttpMethod.GET, "/api/data-grants/units", null),
+                new Endpoint(DataPermissions.DATA_VIEW, HttpMethod.GET, "/api/data-grants?granteeType=USER&granteeId={user}",
+                        null),
+                new Endpoint(DataPermissions.DATA_GRANT, HttpMethod.PUT, "/api/data-grants?granteeType=USER&granteeId={user}",
+                        Map.of("tools", List.of(), "units", List.of(), "regions", List.of())),
                 new Endpoint(IdentityPermissions.ROLE_DELETE, HttpMethod.DELETE, "/api/roles/{role}", null));
 
         var allowed = new HashMap<String, String>();

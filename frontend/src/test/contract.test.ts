@@ -11,6 +11,7 @@ const MOCK_PATHS: Record<string, string> = {
   "GET /api/knowledge-bases/:id/members": "/api/knowledge-bases/1/members",
   "GET /api/knowledge-bases/:id/role-grants": "/api/knowledge-bases/1/role-grants",
   "GET /api/conversations/:id": "/api/conversations/901",
+  "GET /api/data-grants": "/api/data-grants?granteeType=USER&granteeId=2",
   "GET /api/answers": "/api/answers?filter=all&status=all",
   "GET /api/answers/gaps": "/api/answers/gaps?days=30&status=all",
 };

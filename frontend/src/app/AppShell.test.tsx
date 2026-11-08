@@ -31,7 +31,7 @@ describe("页面外壳与管理端菜单", () => {
       within(menu)
         .getAllByRole("link")
         .map((link) => link.textContent),
-    ).toEqual(["运营概览", "知识库", "知识缺口", "回答记录", "用户", "角色与权限", "审计记录", "模型管理", "系统设置"]);
+    ).toEqual(["运营概览", "知识库", "知识缺口", "回答记录", "用户", "角色与权限", "审计记录", "数据范围授权", "模型管理", "系统设置"]);
     const groups = within(menu).getAllByRole("group");
     expect(groups.map((group) => group.getAttribute("aria-label"))).toEqual(["知识运营", "账号与权限", "系统配置"]);
     expect(
@@ -80,7 +80,7 @@ describe("页面外壳与管理端菜单", () => {
     expect(menu.closest("aside")).toHaveAttribute("data-rail", "true");
     expect(localStorage.getItem("admin.menu.rail")).toBe("collapsed");
     expect(within(menu).queryByRole("button", { name: "系统配置" })).not.toBeInTheDocument();
-    expect(within(menu).getAllByRole("link")).toHaveLength(9);
+    expect(within(menu).getAllByRole("link")).toHaveLength(10);
     expect(within(menu).getByRole("link", { name: "用户" })).toHaveAttribute("title", "用户");
 
     fireEvent.click(screen.getByRole("button", { name: "展开菜单" }));

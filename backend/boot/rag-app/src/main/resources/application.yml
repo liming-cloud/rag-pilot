@@ -28,6 +28,7 @@ spring:
       - classpath:db/migration/answering
       - classpath:db/migration/evaluation
       - classpath:db/migration/settings
+      - classpath:db/migration/data
 
 # MyBatis-Plus 的配置（Mapper XML 位置、分页插件）在平台组件 rag-persistence 里（D-053）。
 
@@ -134,6 +135,13 @@ rag:
       #   retail:
       #     url: https://erp.example.com/mcp
       #     audience: https://erp.example.com/mcp   # 为空时用 url
+  data:
+    # 数据问答授权（D-059）：站点（门店、网点等）主数据所在的客户连接名和只读工具名；可授权的工具清单（管理页从这里选），如：
+    # tools:
+    #   - name: get_store_inventory
+    #     title: 门店库存查询
+    endpoint: retail
+    units-tool: list_stores
   answering:
     # 检索候选数、送进提示词的证据数、重排相关度门槛（占位值，用评测集校准）。
     candidates: 30

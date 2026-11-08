@@ -6,6 +6,7 @@ import type { UsageStats } from "@/features/stats/api";
 import { auditHandlers } from "./audit";
 import { conversationHandlers, resetConversations } from "./conversations";
 import { gapHandlers, resetGaps, topGaps } from "./gaps";
+import { dataHandlers, resetData } from "./data";
 import { accountName, currentIdentity, forbidden, identityHandlers, resetIdentity } from "./identity";
 import { modelHandlers, resetModels } from "./models";
 import { matches, paginate } from "./page";
@@ -214,6 +215,7 @@ export function resetMockData() {
   roleGrants = { 1: [4] };
   resetIdentity();
   resetModels();
+  resetData();
   resetSettings();
   resetConversations();
 }
@@ -482,6 +484,7 @@ export const handlers = [
   ...auditHandlers,
   ...gapHandlers,
   ...modelHandlers,
+  ...dataHandlers,
   ...settingHandlers,
   http.get("/api/answers", ({ request }) => {
     const url = new URL(request.url);

@@ -31,6 +31,8 @@ export const AUDIT_ACTIONS: Record<string, string> = {
   ACCOUNTS_IMPORTED: "批量导入账号",
   DOCUMENT_DELETED: "删除资料",
   DOCUMENT_REPLACED: "替换资料",
+  DATA_GRANTED: "新增数据范围授权",
+  DATA_REVOKED: "收回数据范围授权",
   SETTING_CHANGED: "修改系统设置",
   SETTING_RESTORED: "系统设置恢复默认",
 };
@@ -42,6 +44,7 @@ export const AUDIT_TARGETS: Record<string, string> = {
   KNOWLEDGE_BASE: "知识库",
   DOCUMENT: "资料",
   SETTING: "系统设置",
+  DATA_GRANT: "数据范围授权",
 };
 
 export const AUDIT_RANGES = [7, 30, 90, 365] as const;

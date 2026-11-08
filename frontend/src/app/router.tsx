@@ -83,6 +83,10 @@ export const routes: RouteObject[] = [
         ...adminPage(PERMISSIONS.AUDIT_VIEW, () => import("@/features/audit/AuditPage").then((m) => m.AuditPage)),
       },
       {
+        path: "data",
+        ...adminPage(PERMISSIONS.DATA_VIEW, () => import("@/features/data/DataGrantsPage").then((m) => m.DataGrantsPage)),
+      },
+      {
         path: "gaps",
         ...adminPage(PERMISSIONS.ANSWER_VIEW, () => import("@/features/gaps/GapsPage").then((m) => m.GapsPage)),
       },

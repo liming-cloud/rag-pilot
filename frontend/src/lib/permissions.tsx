@@ -43,6 +43,8 @@ export const PERMISSIONS = {
   MODEL_TEST: "model:test",
   SETTING_VIEW: "setting:view",
   SETTING_UPDATE: "setting:update",
+  DATA_VIEW: "data:view",
+  DATA_GRANT: "data:grant",
 } as const;
 
 export type Permission = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
