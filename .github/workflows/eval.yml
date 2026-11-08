@@ -37,6 +37,7 @@ on:
       - backend/platform/rag-ai/**
       - backend/contexts/rag-knowledge/**
       - backend/contexts/rag-answering/**
+      - backend/contexts/rag-data/**
       - backend/contexts/rag-evaluation/**
       - backend/contexts/rag-settings/**
       - backend/boot/rag-app/src/test/resources/eval/**
@@ -96,11 +97,13 @@ jobs:
           if [ "$HEDGE_MODEL" = same ]; then export CHAT_HEDGE_MODEL=; elif [ -n "$HEDGE_MODEL" ]; then export CHAT_HEDGE_MODEL="$HEDGE_MODEL"; fi
           ./mvnw -B -ntp verify -pl backend/boot/rag-app -am \
             -Dtest.groups=eval -Dtest.excludedGroups=none \
-            -Dtest=EvaluationRun -Dsurefire.failIfNoSpecifiedTests=false
+            -Dtest=EvaluationRun,ToolEvaluationRun -Dsurefire.failIfNoSpecifiedTests=false
       - name: 保存报告
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: eval-report
-          path: backend/boot/rag-app/target/eval-report.md
+          path: |
+            backend/boot/rag-app/target/eval-report.md
+            backend/boot/rag-app/target/tool-eval-report.md
           if-no-files-found: ignore
