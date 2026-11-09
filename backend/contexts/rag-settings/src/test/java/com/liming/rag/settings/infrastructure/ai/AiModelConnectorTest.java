@@ -3,10 +3,10 @@ package com.liming.rag.settings.infrastructure.ai;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.liming.rag.ai.ModelCallException;
 import com.liming.rag.ai.ModelProbe;
-import com.liming.rag.ai.ModelRoute;
-import com.liming.rag.ai.ModelUsage;
+import com.liming.rag.ai.common.ModelCallException;
+import com.liming.rag.ai.common.ModelRoute;
+import com.liming.rag.ai.common.ModelUsage;
 import com.liming.rag.settings.application.model.ModelConnectionException;
 import com.liming.rag.settings.application.model.ModelConnector;
 import com.liming.rag.settings.application.model.ModelEndpoint;

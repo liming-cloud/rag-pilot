@@ -4,7 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.liming.rag.ai.EmbeddingClient;
-import com.liming.rag.ai.ModelCallException;
+import com.liming.rag.ai.common.ModelCallException;
 import com.liming.rag.knowledge.api.EmbeddingUnavailableException;
 import java.util.ArrayList;
 import java.util.List;

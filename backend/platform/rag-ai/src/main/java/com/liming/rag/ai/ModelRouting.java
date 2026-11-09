@@ -1,11 +1,15 @@
 package com.liming.rag.ai;
 
+import com.liming.rag.ai.common.ModelRoute;
+import com.liming.rag.ai.common.ModelUsage;
 import java.util.Optional;
 
 /**
  * 各用途当前用哪个服务商和模型，由系统设置模块（rag-settings）实现（D-044）。每次模型调用前都问一次，
  * 所以在管理端保存后下一次请求就生效；返回空表示这个用途没在界面配置过，用环境变量里的配置。
  * 本地确定性实现（离线开发、测试用）不受它影响。
+ *
+ * <p>这是由上下文实现的接口（SPI），不是 rag-ai 提供的能力：实现注册成 Spring Bean 即可，rag-ai 会取用；没有实现时全部用环境变量。
  */
 public interface ModelRouting {
 

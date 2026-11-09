@@ -1,7 +1,7 @@
 package com.liming.rag.knowledge.infrastructure.ai;
 
 import com.liming.rag.ai.EmbeddingClient;
-import com.liming.rag.ai.ModelCallException;
+import com.liming.rag.ai.common.ModelCallException;
 import com.liming.rag.knowledge.api.EmbeddingUnavailableException;
 import com.liming.rag.knowledge.application.TextEmbedding;
 import java.util.List;

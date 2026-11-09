@@ -179,10 +179,10 @@ cd /opt/rag-pilot/rag-pilot-1.0.0.1
 
 ```bash
 # 生成一次（kid 随便取，轮换时换新的名字），输出整段 JSON 填进 .env 的 RAG_TOOL_SIGNING_KEY
-java -Dloader.main=com.liming.rag.ai.ToolSigningKeys -cp app/rag-app.jar \
+java -Dloader.main=com.liming.rag.ai.tool.ToolSigningKeys -cp app/rag-app.jar \
   org.springframework.boot.loader.launch.PropertiesLauncher generate key-1
 # 从私钥导出只含公钥的 JWKS，交给客户系统配置
-java -Dloader.main=com.liming.rag.ai.ToolSigningKeys -cp app/rag-app.jar \
+java -Dloader.main=com.liming.rag.ai.tool.ToolSigningKeys -cp app/rag-app.jar \
   org.springframework.boot.loader.launch.PropertiesLauncher jwks "$RAG_TOOL_SIGNING_KEY"
 ```
 

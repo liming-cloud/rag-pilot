@@ -44,7 +44,7 @@
 - AI 能力只经平台层的 rag-ai（Spring AI 防腐层，D-052）：按能力提供文字生成（一次性、流式）、问题改写、向量化、重排、连通测试，参数和返回值都是自己的类型，内部用足 Spring AI 并打开它自带的观测；提示词和判断规则是上下文的策略，不放进 rag-ai；上下文只在 `infrastructure/ai` 里经自己按用途声明的端口调用它（D-054）。上下文层用 Enforcer 禁止依赖 Spring AI，`ArchitectureRulesTest` 检查代码。各用途用哪个服务商和模型由 rag-settings 经 `ModelRouting` 提供（D-043、D-044）。服务商密钥用 AES-GCM 加密存库，主密钥只从环境变量 `RAG_MASTER_KEY` 读；环境变量里的密钥同样只从环境变量读；接口、日志都不返回密钥明文，界面只显示后 4 位。
 - DDD：聚合只在 knowledge、answering；上下文模块之间只用对方的 `api` 包或监听事件，依赖方向见下面的“上下文依赖”。
 - 缓存只经平台层的 rag-cache（D-053、D-054）：上下文在 `application` 声明业务化的缓存端口（如 `AccessSnapshotCache`），`infrastructure/cache` 用 `Caches`、`TypedCache`、`CacheSpec` 实现；用不用 Redis、一级还是二级、过期时间都在 rag-cache 的配置里，上下文不知道。Redis 客户端 Redisson 和一级缓存 Caffeine 只在 rag-cache 里（上下文层用 Enforcer 禁止依赖，`ArchitectureRulesTest` 检查代码）。缓存什么、何时清除由上下文决定：改了被缓存的数据，在同一个事务里调端口的清除方法，提交后才清；不缓存可访问的知识库、检索结果和答案。application 的单元测试用端口的简单实现，infrastructure 的缓存实现用 `Caches.inMemory()` 测；集成测试绕过应用直接改库里被缓存的表时，调对应缓存端口的清除方法。不配 Redis 的模式由 `LocalCacheModeTests` 覆盖（`@TestRedis.WithoutRedis`）。
-- MyBatis-Plus 经平台组件 rag-persistence 引入，全局配置（Mapper XML 位置、分页插件）和分页转换 `Pages` 都在那里，上下文不自己声明 MyBatis-Plus（D-053）。它的 DO、Wrapper、Page 只出现在 infrastructure 包和 rag-persistence；查询结果映射到 infrastructure 里只有字段的 `XxxDO`，不用 `Map` 加强转（`bigint[]` 列在 `resultMap` 里指定 `ArrayTypeHandler`）；不引入 MapStruct，不做多层 DTO 转换。
+- MyBatis-Plus 经平台组件 rag-persistence 引入，全局配置（Mapper XML 位置、分页插件）和分页转换 `Pages`（`persistence.paging`）都在那里，上下文不自己声明 MyBatis-Plus（D-053）。它的 DO、Wrapper、Page 只出现在 infrastructure 包和 rag-persistence；查询结果映射到 infrastructure 里只有字段的 `XxxDO`，不用 `Map` 加强转（`bigint[]` 列在 `resultMap` 里指定 `ArrayTypeHandler`）；不引入 MapStruct，不做多层 DTO 转换。
 - SQL 只写在 Mapper XML（`src/main/resources/mapper/<模块名>/<Mapper 名>.xml`）里；不用 `@Select` 等 SQL 注解，条件构造器不拼原始 SQL（`apply`、`last`、`inSql`、`setSql` 等）；SQL 里不取数据库的当前时间（`now()` 等），时间由 `Clock` 传入。单表的增删改查、存在判断、计数和分页用 `BaseMapper` 加 `LambdaQueryWrapper`/`LambdaUpdateWrapper`，一张表一个 Mapper；XML 只写 upsert、多行插入、多表、聚合、递归和检索（D-053）。
 - 配置只通过各模块的 `@ConfigurationProperties` record 读取（如 `AnsweringProperties`），取值在构造时校验，非法配置启动失败；不用 `@Value`。
 - 要当前时间的类注入 rag-app 声明的 `Clock`（UTC），不直接调用 `now()`，测试传固定时钟。
@@ -78,7 +78,12 @@
 - **输入**：web 只转交原始值（路径、查询参数和请求体里的字符串、数字），application 解析成枚举或值对象，不合规时抛本模块的业务异常；每个模块的解析写在一处。
 - **租户**：单租户部署，`TenantId` 为以后多租户预留；哪些端口和设置不分租户见 D-051。
 - **共享内核与通用工具**（rag-shared）：只放多个上下文共同依赖、用纯 Java 表达、很少变动的东西——模型概念（租户和用户标识、错误分类 `ErrorKind` 与 `BusinessException`、聚合根标记 `AggregateRoot`）和通用工具（分页 `Paged`、空串处理 `Texts`、枚举解析 `Enums`，D-053）；只有一个上下文用的工具留在该上下文。只依赖 JDK（空值注解 JSpecify 除外），没有资源文件（迁移、配置归各自模块），不放业务规则；当前用户、权限码、各上下文自己的标识不放这里。新增类型前先在 DECISIONS.md 记录理由（D-034、D-053）。
-- **平台层模块**（shared、ai、persistence、cache）扁平：对外只公开接口、record、枚举和异常，实现类包内可见（shared 的通用工具是 final、私有构造、只有静态成员的工具类，D-053）；rag-app 只放启动类和全局配置（含唯一的异常出口 `ApiExceptionHandler`）。
+- **平台层模块**（D-064）：
+  - rag-shared 扁平：对外只公开接口、record、枚举、异常和无实例的工具类（final、私有构造、只有静态成员，D-053）。
+  - 能力组件 rag-ai、rag-cache、rag-persistence：**根包只放能力接口**（含由上下文实现的接口，如 `ModelRouting`），类注释写清是什么能力、怎么用、失败抛什么；**一种能力一个子包**（名字用能力的名词，如 `generation`、`typed`），放该能力的契约类型（调用方必须直接用的 record、枚举、异常、句柄接口，类型上标 `@NamedInterface("<能力名>")` 导出）、实现、配置和单元测试，实现类**包内私有**；模块内多个能力共用的放 `common`（`ModelCallException`、`ModelUsage`、`ModelRoute` 这类调用方必须处理的标 `@NamedInterface("common")`，其余默认不对外）。根包接口要用到包内私有的实现时，经子包里的公开工厂（如 `InMemoryCaches`），工厂不导出。
+  - 公开要克制：只有根包接口、标了 `@NamedInterface` 的契约类型、模块内跨子包必须用的类型可以 public；不为测试而公开；能用 JDK 类型表达就不新增类型；新增导出类型时在 PR 里写“调用方为什么必须直接用它”。
+  - 能力子包之间不互相依赖（要共用就下沉到 `common`），`common` 不依赖能力子包。上下文在 `allowedDependencies` 里写到能力粒度（如 `"ai :: tool"`，根包写 `"ai"`）。检查：`PackageLayoutTest`（根包只有接口、实现不 public、子包之间无依赖）、`ModularityTests`（只能用根包和 `@NamedInterface` 导出的类型），各有违规样例。
+  - rag-app 只放启动类和全局配置（含唯一的异常出口 `ApiExceptionHandler`）。
 - **聚合**：聚合根实现 `AggregateRoot`，只在 knowledge、answering 的 `domain` 包；`domain` 里的 `XxxRepository` 只为同包的聚合根 `Xxx` 而建。
 - **错误**：业务失败抛本模块继承 `BusinessException` 的异常（错误码 `<模块>_<原因>`，说明是给用户看的中文，不含内部信息）；领域对象检查不变量时抛的 `IllegalArgumentException` 由 application 转成业务异常。模块不写 `@RestControllerAdvice`，统一由 `ApiExceptionHandler` 转成带 `code` 的问题详情。
 - **资源**：Flyway 迁移在 `db/migration/<模块名>/`，Mapper XML 在 `mapper/<模块名>/`。单元测试与被测类同包；跨模块的集成测试放在 rag-app。

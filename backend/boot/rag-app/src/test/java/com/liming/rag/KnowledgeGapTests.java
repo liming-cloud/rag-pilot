@@ -10,7 +10,7 @@ import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 import com.liming.rag.ai.EmbeddingClient;
-import com.liming.rag.ai.ModelCallException;
+import com.liming.rag.ai.common.ModelCallException;
 import com.liming.rag.answering.application.ask.AskResult;
 import com.liming.rag.answering.application.review.AnswerLogService;
 import com.liming.rag.answering.domain.Citation;

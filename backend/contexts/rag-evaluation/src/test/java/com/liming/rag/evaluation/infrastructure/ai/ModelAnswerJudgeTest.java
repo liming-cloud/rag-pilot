@@ -3,7 +3,7 @@ package com.liming.rag.evaluation.infrastructure.ai;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.liming.rag.ai.ModelCallException;
+import com.liming.rag.ai.common.ModelCallException;
 import com.liming.rag.evaluation.api.AnswerJudge;
 import com.liming.rag.evaluation.api.JudgeUnavailableException;
 import org.junit.jupiter.api.DisplayName;

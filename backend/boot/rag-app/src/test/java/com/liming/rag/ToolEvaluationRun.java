@@ -2,9 +2,9 @@ package com.liming.rag;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.liming.rag.ai.RetailMcpServer;
+import com.liming.rag.ai.tool.RetailMcpServer;
 import com.liming.rag.ai.ToolJwks;
-import com.liming.rag.ai.ToolSigningKeys;
+import com.liming.rag.ai.tool.ToolSigningKeys;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;

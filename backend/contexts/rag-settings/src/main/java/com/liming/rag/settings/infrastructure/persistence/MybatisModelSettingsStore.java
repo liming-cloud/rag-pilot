@@ -6,7 +6,7 @@ import com.liming.rag.settings.application.model.ModelChange;
 import com.liming.rag.settings.application.model.ModelProvider;
 import com.liming.rag.settings.application.model.ModelSettingsStore;
 import com.liming.rag.settings.application.model.PurposeSetting;
-import com.liming.rag.persistence.Pages;
+import com.liming.rag.persistence.paging.Pages;
 import com.liming.rag.shared.Paged;
 import java.time.Clock;
 import java.time.OffsetDateTime;

@@ -8,6 +8,9 @@ import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.liming.rag.ai.PublicImplementation;
+import com.liming.rag.ai.common.CommonUsesTool;
+import com.liming.rag.ai.generation.PublicGeneration;
+import com.liming.rag.ai.rewriting.RewritingUsesTool;
 import com.liming.rag.archfixture.api.ApiLeaksDomain;
 import com.liming.rag.archfixture.application.ApplicationUsesInfrastructure;
 import com.liming.rag.archfixture.application.ApplicationUsesSaToken;
@@ -22,6 +25,9 @@ import com.tngtech.archunit.base.DescribedPredicate;
 import com.tngtech.archunit.core.domain.JavaClass;
 import com.tngtech.archunit.core.domain.JavaClasses;
 import com.tngtech.archunit.core.domain.JavaModifier;
+import com.tngtech.archunit.lang.ArchCondition;
+import com.tngtech.archunit.lang.ConditionEvents;
+import com.tngtech.archunit.lang.SimpleConditionEvent;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
 import com.tngtech.archunit.core.importer.ImportOption;
 import com.tngtech.archunit.lang.ArchRule;
@@ -37,7 +43,8 @@ import org.junit.jupiter.api.Test;
  * 目录结构与分层依赖，规范见 AGENTS.md“目录结构”。
  *
  * <p>上下文模块（identity、knowledge、answering、evaluation、settings）的类放在 api、web、application、domain、infrastructure 五个子包；
- * 平台层模块（shared、ai、persistence、cache）扁平，对外只公开接口、record、枚举、异常和无实例的工具类。
+ * 平台层的 shared 扁平；能力组件 ai、cache、persistence（#187）根包只放能力接口，一种能力一个子包，共用的放 common。
+ * 平台层对外只公开接口、record、枚举、异常和无实例的工具类（common 里模块内共用的类除外）。
  */
 class PackageLayoutTest {
 
@@ -101,18 +108,72 @@ class PackageLayoutTest {
     static final ArchRule TECH_MODULES_EXPOSE_CONTRACTS_ONLY = classes()
             .that().resideInAnyPackage("com.liming.rag.ai..", "com.liming.rag.shared..", "com.liming.rag.persistence..",
                     "com.liming.rag.cache..")
+            .and().resideOutsideOfPackage("..common..")
             .and().arePublic()
             .and().areNotInterfaces()
             .and().areNotEnums()
             .and().areNotAssignableTo(Throwable.class)
             .and(not(PLATFORM_UTILITY))
             .should().beAssignableTo(Record.class)
-            .as("平台层模块（shared、ai、persistence、cache）对外只公开接口、record、枚举、异常和无实例的工具类（D-053），实现类包内可见");
+            .as("平台层模块（shared、ai、persistence、cache）对外只公开接口、record、枚举、异常和无实例的工具类（D-053），"
+                    + "实现类包内可见；模块内共用的类放 common");
+
+    private static final String CAPABILITY_MODULE = "com\\.liming\\.rag\\.(ai|cache|persistence)";
+
+    static final ArchRule CAPABILITY_ROOT_ONLY_INTERFACES = classes()
+            .that().haveNameMatching(CAPABILITY_MODULE + "\\.\\w+")
+            .and().doNotHaveSimpleName("package-info")
+            .should().beInterfaces().andShould().bePublic()
+            .as("能力组件（ai、cache、persistence）的根包只放能力接口，其余按能力放子包、共用的放 common（#187）");
+
+    /** 实现了本模块根包能力接口的类，如 {@code SpringAiTextGeneration}。 */
+    static final DescribedPredicate<JavaClass> CAPABILITY_IMPLEMENTATION =
+            new DescribedPredicate<>("实现了本模块根包能力接口的类") {
+                @Override
+                public boolean test(JavaClass c) {
+                    return !c.isInterface() && c.getAllRawInterfaces().stream().anyMatch(i ->
+                            i.getPackageName().matches(CAPABILITY_MODULE)
+                                    && c.getPackageName().startsWith(i.getPackageName() + "."));
+                }
+            };
+
+    static final ArchRule CAPABILITY_IMPLEMENTATIONS_NOT_PUBLIC = classes()
+            .that(CAPABILITY_IMPLEMENTATION)
+            .should().notBePublic()
+            .as("实现根包能力接口的类包内可见，调用方只能经接口使用（#187）");
+
+    static final ArchRule CAPABILITIES_ARE_INDEPENDENT = classes()
+            .should(new ArchCondition<JavaClass>("不依赖同一模块里别的能力子包（共用的下沉到 common，common 不依赖能力子包）") {
+                @Override
+                public void check(JavaClass c, ConditionEvents events) {
+                    var from = capabilityOf(c);
+                    if (from == null) {
+                        return;
+                    }
+                    for (var dependency : c.getDirectDependenciesFromSelf()) {
+                        var to = capabilityOf(dependency.getTargetClass());
+                        if (to != null && !to.equals(from) && !to.endsWith(".common")
+                                && to.substring(0, to.indexOf('.')).equals(from.substring(0, from.indexOf('.')))) {
+                            events.add(SimpleConditionEvent.violated(c, c.getName() + " 依赖 "
+                                    + dependency.getTargetClass().getName()));
+                        }
+                    }
+                }
+            })
+            .as("能力子包之间不互相依赖，common 不依赖能力子包（#187）");
+
+    /** 类所在的能力子包，如 {@code ai.generation}；不在能力组件的子包里为 null。 */
+    private static String capabilityOf(JavaClass c) {
+        var matcher = java.util.regex.Pattern.compile("com\\.liming\\.rag\\.(ai|cache|persistence)\\.(\\w+)(\\..*)?")
+                .matcher(c.getPackageName());
+        return matcher.matches() ? matcher.group(1) + "." + matcher.group(2) : null;
+    }
 
     static final List<ArchRule> RULES = List.of(CONTEXT_CLASSES_IN_LAYERS, DOMAIN_IS_PURE, DOMAIN_ONLY_IN_CORE,
             APPLICATION_NOT_ON_SA_TOKEN,
             APPLICATION_NOT_ON_ADAPTERS, WEB_NOT_ON_INFRASTRUCTURE, WEB_NOT_ON_DOMAIN, API_SELF_CONTAINED,
-            TECH_MODULES_EXPOSE_CONTRACTS_ONLY);
+            TECH_MODULES_EXPOSE_CONTRACTS_ONLY, CAPABILITY_ROOT_ONLY_INTERFACES, CAPABILITY_IMPLEMENTATIONS_NOT_PUBLIC,
+            CAPABILITIES_ARE_INDEPENDENT);
 
     @Test
     @DisplayName("每个主代码包都有 package-info.java 并标 @NullMarked：默认不为 null，可以为 null 的地方写 @Nullable（#145）")
@@ -160,5 +221,9 @@ class PackageLayoutTest {
         assertViolates(API_SELF_CONTAINED, ApiLeaksDomain.class);
         assertViolates(TECH_MODULES_EXPOSE_CONTRACTS_ONLY, PublicImplementation.class);
         assertViolates(TECH_MODULES_EXPOSE_CONTRACTS_ONLY, SharedUtilityWithState.class);
+        assertViolates(CAPABILITY_ROOT_ONLY_INTERFACES, PublicImplementation.class);
+        assertViolates(CAPABILITY_IMPLEMENTATIONS_NOT_PUBLIC, PublicGeneration.class);
+        assertViolates(CAPABILITIES_ARE_INDEPENDENT, RewritingUsesTool.class);
+        assertViolates(CAPABILITIES_ARE_INDEPENDENT, CommonUsesTool.class);
     }
 }

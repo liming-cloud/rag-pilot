@@ -5,7 +5,7 @@
  * Markdown 报告（CI 的运行摘要）。之后要把结果写入 eval_runs 时，再按上下文补齐分层（#136 Q9）。
  */
 // 允许依赖的模块（#136）：上下文只能依赖这些模块，以及它们 api 包公开的类型；方向见 AGENTS.md“上下文依赖”。
-@ApplicationModule(allowedDependencies = {"shared", "ai"})
+@ApplicationModule(allowedDependencies = {"shared", "ai", "ai :: common"})
 @NullMarked
 package com.liming.rag.evaluation;
 

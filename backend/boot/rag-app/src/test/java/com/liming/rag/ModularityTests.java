@@ -27,4 +27,13 @@ class ModularityTests {
         assertThatThrownBy(fixture::verify).isInstanceOf(Violations.class).hasMessageContaining("upstream")
                 .hasMessageContaining("downstream");
     }
+
+    @Test
+    @DisplayName("能力组件的子包默认不对外：只能用根包接口和标了 @NamedInterface 的契约，引用内部类型被拦下")
+    void catchesInternalOfCapability() {
+        var fixture = ApplicationModules.of("com.liming.archcapability", location -> true);
+
+        assertThatThrownBy(fixture::verify).isInstanceOf(Violations.class).hasMessageContaining("Internal")
+                .hasMessageNotContaining("Contract").hasMessageNotContaining("Capability.");
+    }
 }

@@ -1,7 +1,7 @@
 package com.liming.rag.answering.infrastructure.ai;
 
-import com.liming.rag.ai.ModelCallException;
 import com.liming.rag.ai.QueryRewriting;
+import com.liming.rag.ai.common.ModelCallException;
 import com.liming.rag.answering.application.ModelUnavailableException;
 import com.liming.rag.answering.application.ask.QuestionRewriting;
 import org.springframework.stereotype.Component;

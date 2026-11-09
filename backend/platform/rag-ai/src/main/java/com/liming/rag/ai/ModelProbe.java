@@ -1,9 +1,17 @@
 package com.liming.rag.ai;
 
+import com.liming.rag.ai.common.ModelCallException;
+import com.liming.rag.ai.common.ModelRoute;
+import com.liming.rag.ai.common.ModelUsage;
 import java.util.List;
 import org.jspecify.annotations.Nullable;
 
-/** 给模型管理用（D-043、D-044）：环境变量里的默认配置、连通测试、读服务商的模型列表。都不返回密钥明文。 */
+/**
+ * 模型管理用的能力（D-043、D-044）：读环境变量里的默认配置、对某个用途做连通测试、读服务商的模型列表。都不返回密钥明文。
+ *
+ * <p>用法：管理端先取 {@link #environment} 展示默认值，再对用户填的地址、密钥和模型调测试。
+ * 失败：连通测试和读模型列表不抛异常，失败写在结果里。
+ */
 public interface ModelProbe {
 
     /** 这个用途在环境变量里配的地址、密钥和模型。 */

@@ -5,7 +5,7 @@ import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.when;
 
 import com.liming.rag.ai.EmbeddingClient;
-import com.liming.rag.ai.ModelCallException;
+import com.liming.rag.ai.common.ModelCallException;
 import com.liming.rag.knowledge.application.ingestion.IngestionWorker;
 import java.nio.charset.StandardCharsets;
 import java.time.OffsetDateTime;

@@ -1,8 +1,8 @@
 package com.liming.rag.data.infrastructure.ai;
 
-import com.liming.rag.ai.ToolCall;
-import com.liming.rag.ai.ToolCallException;
 import com.liming.rag.ai.ToolCaller;
+import com.liming.rag.ai.tool.ToolCall;
+import com.liming.rag.ai.tool.ToolCallException;
 import com.liming.rag.data.application.DataException;
 import com.liming.rag.data.application.DataProperties;
 import com.liming.rag.data.application.ScopeUnit;
