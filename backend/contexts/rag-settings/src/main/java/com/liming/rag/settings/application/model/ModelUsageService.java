@@ -4,6 +4,7 @@ import com.liming.rag.identity.api.AuditTrail;
 import com.liming.rag.settings.api.StatsZone;
 import com.liming.rag.settings.application.SettingsException;
 import com.liming.rag.shared.Enums;
+import com.liming.rag.shared.Paged;
 import com.liming.rag.shared.TenantId;
 import com.liming.rag.shared.UserId;
 import java.math.BigDecimal;
@@ -79,11 +80,11 @@ public class ModelUsageService {
     }
 
     /**
-     * 统计 {@code from} 到 {@code to}（含）的用量；不传时看最近 {@value #DEFAULT_RANGE_DAYS} 天，{@code groupBy} 默认按日。
+     * 统计 {@code from} 到 {@code to}（含）的用量；不传时看最近 {@value #DEFAULT_RANGE_DAYS} 天，{@code groupBy} 默认按明细，分页返回。
      * 日期写 {@code yyyy-MM-dd}，最长一年。
      */
     @Transactional(readOnly = true)
-    public UsageReport usage(@Nullable String from, @Nullable String to, @Nullable String groupBy) {
+    public UsageReport usage(@Nullable String from, @Nullable String to, @Nullable String groupBy, int page, int size) {
         var end = date(to, today());
         var start = date(from, end.minusDays(DEFAULT_RANGE_DAYS - 1));
         if (start.isAfter(end)) {
@@ -93,25 +94,33 @@ public class ModelUsageService {
             throw invalid("一次最多看一年");
         }
         var by = Enums.parseOrNull(UsageGroupBy.class, groupBy,
-                () -> invalid("分组只能是 DAY、MONTH、PURPOSE 或 MODEL"));
-        var grouping = by == null ? UsageGroupBy.DAY : by;
+                () -> invalid("分组只能是 DETAIL、DAY、MONTH、PURPOSE 或 MODEL"));
+        var grouping = by == null ? UsageGroupBy.DETAIL : by;
         var prices = new LinkedHashMap<String, ModelPrice>();
         store.prices().forEach(price -> prices.put(price.model(), price));
         var rows = store.usage(start, end);
 
         var groups = new LinkedHashMap<String, Tally>();
-        var total = new Tally();
+        var total = new Tally(null);
         for (var row : rows) {
-            var tally = groups.computeIfAbsent(key(grouping, row), key -> new Tally());
+            var tally = groups.computeIfAbsent(key(grouping, row), key -> new Tally(grouping == UsageGroupBy.DETAIL ? row : null));
             tally.add(row, prices.get(row.model()));
             total.add(row, prices.get(row.model()));
         }
         var result = new ArrayList<>(groups.entrySet().stream().map(e -> e.getValue().group(e.getKey())).toList());
         // 日期、月份最新的在前；用途、模型用得多的在前。
-        result.sort(grouping == UsageGroupBy.DAY || grouping == UsageGroupBy.MONTH
-                ? Comparator.comparing(UsageGroup::key).reversed()
-                : Comparator.comparingLong((UsageGroup g) -> g.inputTokens() + g.outputTokens()).reversed());
-        return new UsageReport(start, end, grouping, result, total.group("合计"));
+        Comparator<UsageGroup> byTokens = Comparator
+                .comparingLong((UsageGroup g) -> g.inputTokens() + g.outputTokens()).reversed();
+        result.sort(switch (grouping) {
+            case DAY, MONTH -> Comparator.comparing(UsageGroup::key).reversed();
+            case DETAIL -> Comparator.comparing(UsageGroup::key).reversed().thenComparing(byTokens);
+            case PURPOSE, MODEL -> byTokens;
+        });
+        var paging = new Paged.Request(page, size);
+        var from0 = (int) Math.min(paging.offset(), result.size());
+        var pageItems = result.subList(from0, Math.min(result.size(), from0 + paging.size()));
+        return new UsageReport(start, end, grouping,
+                new Paged<>(List.copyOf(pageItems), result.size(), paging.page(), paging.size()), total.group("合计"));
     }
 
     /** 有用量或填过单价的模型，没填过单价的两个价格为 null。 */
@@ -168,6 +177,7 @@ public class ModelUsageService {
 
     private static String key(UsageGroupBy by, UsageRow row) {
         return switch (by) {
+            case DETAIL -> row.day() + " " + row.purpose() + " " + row.provider() + " " + row.model();
             case DAY -> row.day().toString();
             case MONTH -> row.day().toString().substring(0, 7);
             case PURPOSE -> row.purpose();
@@ -198,11 +208,16 @@ public class ModelUsageService {
 
     /** 一组的累计：调用数、token、费用，以及是否有没填单价的用量。 */
     private static final class Tally {
+        private final @Nullable UsageRow detail;
         private long calls;
         private long input;
         private long output;
         private BigDecimal cost = BigDecimal.ZERO;
         private boolean unpriced;
+
+        Tally(@Nullable UsageRow detail) {
+            this.detail = detail;
+        }
 
         void add(UsageRow row, @Nullable ModelPrice price) {
             calls += row.calls();
@@ -218,7 +233,12 @@ public class ModelUsageService {
         }
 
         UsageGroup group(String key) {
-            return new UsageGroup(key, calls, input, output, cost.setScale(4, RoundingMode.HALF_UP), unpriced);
+            var scaled = cost.setScale(4, RoundingMode.HALF_UP);
+            if (detail == null) {
+                return new UsageGroup(key, null, null, null, calls, input, output, scaled, unpriced);
+            }
+            return new UsageGroup(detail.day().toString(), detail.purpose(), detail.provider(), detail.model(), calls,
+                    input, output, scaled, unpriced);
         }
     }
 }

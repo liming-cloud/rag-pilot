@@ -138,11 +138,15 @@ export async function restoreChange(id: number): Promise<UsageConfig> {
 /** 用量统计里的用途：四个可配用途加入库向量化（嵌入不能在界面配置）。 */
 export type UsagePurpose = Usage | "EMBEDDING";
 
-export type UsageGroupBy = "DAY" | "MONTH" | "PURPOSE" | "MODEL";
+/** DETAIL 不合并：每天、每个用途、服务商、模型各一行。 */
+export type UsageGroupBy = "DETAIL" | "DAY" | "MONTH" | "PURPOSE" | "MODEL";
 
-/** 统计表的一行。key 随分组而变：日期、月份、用途名、“模型 · 服务商域名”。cost 按当前单价估算（元）；unpriced 表示有用量没填单价，费用偏低。 */
+/** 统计表的一行。key 随分组而变：日期、月份、用途名、“模型 · 服务商域名”；明细行的 key 是日期，另带用途、服务商域名和模型。cost 按当前单价估算（元）；unpriced 表示有用量没填单价，费用偏低。 */
 export type UsageGroup = {
   key: string;
+  purpose: UsagePurpose | null;
+  provider: string | null;
+  model: string | null;
   calls: number;
   inputTokens: number;
   outputTokens: number;
@@ -157,15 +161,16 @@ export type UsageReport = {
   from: string;
   to: string;
   groupBy: UsageGroupBy;
-  groups: UsageGroup[];
+  groups: Page<UsageGroup>;
+  /** 整段合计，不受分页影响。 */
   total: UsageGroup;
   /** 有用量或填过单价的模型。 */
   prices: ModelPrice[];
 };
 
-export type UsageFilter = { groupBy: UsageGroupBy; from?: string };
+export type UsageFilter = { groupBy: UsageGroupBy; from?: string; page: number; size: number };
 
-/** 不传 from 看最近 30 天。 */
+/** 不传 from 看最近 30 天；分页由后端做。 */
 export async function fetchUsageReport(filter: UsageFilter): Promise<UsageReport> {
   return json(await authFetch(`/api/models/usage${query(filter)}`), "读取用量失败");
 }

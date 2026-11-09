@@ -168,8 +168,8 @@ class ModelUsageTests {
                 Map.class);
         assertThat(negative.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
 
-        var report = http.getForEntity("/api/models/usage?groupBy=MODEL", Map.class).getBody();
-        var groups = (List<Map<String, Object>>) report.get("groups");
+        var report = http.getForEntity("/api/models/usage?groupBy=MODEL&size=100", Map.class).getBody();
+        var groups = (List<Map<String, Object>>) ((Map<String, Object>) report.get("groups")).get("items");
         // 2 百万输入 × 2 元 + 0.5 百万输出 × 8 元 = 8 元。
         assertThat(groups).filteredOn(group -> String.valueOf(group.get("key")).startsWith("priced-model"))
                 .singleElement().satisfies(group -> {
@@ -203,9 +203,9 @@ class ModelUsageTests {
     /** 管理端按模型汇总的 [调用数, 输入 token, 输出 token]。 */
     @SuppressWarnings("unchecked")
     private Map<String, long[]> usageByModel() {
-        var report = http.getForEntity("/api/models/usage?groupBy=MODEL", Map.class).getBody();
+        var report = http.getForEntity("/api/models/usage?groupBy=MODEL&size=100", Map.class).getBody();
         var result = new HashMap<String, long[]>();
-        for (var group : (List<Map<String, Object>>) report.get("groups")) {
+        for (var group : (List<Map<String, Object>>) ((Map<String, Object>) report.get("groups")).get("items")) {
             var model = String.valueOf(group.get("key")).split(" · ")[0];
             result.put(model, new long[] {((Number) group.get("calls")).longValue(),
                     ((Number) group.get("inputTokens")).longValue(), ((Number) group.get("outputTokens")).longValue()});

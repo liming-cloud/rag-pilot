@@ -8,6 +8,7 @@ import com.liming.rag.settings.application.model.ModelUsageService;
 import com.liming.rag.settings.application.model.PriceView;
 import com.liming.rag.settings.application.model.UsageGroup;
 import com.liming.rag.settings.application.model.UsageReport;
+import com.liming.rag.shared.Paged;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
@@ -26,7 +27,8 @@ class ModelUsageController {
     record PriceRequest(String model, @Nullable BigDecimal inputPerMillion, @Nullable BigDecimal outputPerMillion) {
     }
 
-    record UsageResponse(LocalDate from, LocalDate to, String groupBy, List<UsageGroup> groups, UsageGroup total,
+    /** 分页响应（D-039）：{@code groups} 是 {@code {items, total, page, size}}。 */
+    record UsageResponse(LocalDate from, LocalDate to, String groupBy, Paged<UsageGroup> groups, UsageGroup total,
             List<PriceView> prices) {
         static UsageResponse of(UsageReport report, List<PriceView> prices) {
             return new UsageResponse(report.from(), report.to(), report.groupBy().name(), report.groups(),
@@ -42,13 +44,15 @@ class ModelUsageController {
         this.currentUser = currentUser;
     }
 
-    /** 日期写 yyyy-MM-dd，不传看最近 30 天；groupBy 取 DAY、MONTH、PURPOSE、MODEL，默认 DAY。 */
+    /** 日期写 yyyy-MM-dd，不传看最近 30 天；groupBy 取 DETAIL、DAY、MONTH、PURPOSE、MODEL，默认 DETAIL；分页。 */
     @SaCheckPermission(SettingsPermissions.MODEL_VIEW)
     @GetMapping("/api/models/usage")
     UsageResponse usage(@RequestParam(name = "from", required = false) String from,
             @RequestParam(name = "to", required = false) String to,
-            @RequestParam(name = "groupBy", required = false) String groupBy) {
-        return UsageResponse.of(usage.usage(from, to, groupBy), usage.prices());
+            @RequestParam(name = "groupBy", required = false) String groupBy,
+            @RequestParam(name = "page", defaultValue = "1") int page,
+            @RequestParam(name = "size", defaultValue = "20") int size) {
+        return UsageResponse.of(usage.usage(from, to, groupBy, page, size), usage.prices());
     }
 
     @SaCheckPermission(SettingsPermissions.MODEL_UPDATE)

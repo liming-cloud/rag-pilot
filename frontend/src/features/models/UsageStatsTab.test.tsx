@@ -25,26 +25,47 @@ describe("模型管理页的用量标签", () => {
     resetModels();
   });
 
-  it("默认按日看最近 30 天，最新的在前，末行是合计；缺单价的行标出", async () => {
+  it("单价表在最上面；下面是分页的明细列表：日期、用途、模型、服务商等列，最新的在前，合计在表上方", async () => {
     renderStats();
+    const prices = await screen.findByRole("table", { name: "模型单价" });
     const table = await usageTable();
+    expect(prices.compareDocumentPosition(table) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 
-    await within(table).findByText("合计");
-    const rows = within(table).getAllByRole("row");
+    expect(within(table).getAllByRole("columnheader").map((header) => header.textContent)).toEqual([
+      "日期",
+      "用途",
+      "模型",
+      "服务商",
+      "调用次数",
+      "输入 token",
+      "输出 token",
+      "估算费用",
+    ]);
+    const rows = await vi.waitFor(() => {
+      const found = within(table).getAllByRole("row");
+      expect(found.length).toBeGreaterThan(2);
+      return found;
+    });
+    expect(rows).toHaveLength(21);
     const firstCell = (row: HTMLElement) => within(row).getAllByRole("cell").at(0)?.textContent ?? "";
-    expect(firstCell(rows[1]!) > firstCell(rows[2]!)).toBe(true);
-    expect(within(rows.at(-1)!).getByText("合计")).toBeInTheDocument();
-    // 轻量任务、入库向量化的模型没填单价，每天的费用都是“不全”的。
-    expect(within(table).getAllByText("缺单价").length).toBeGreaterThan(0);
+    expect(firstCell(rows[1]!) >= firstCell(rows[2]!)).toBe(true);
+    expect(within(rows[1]!).getByText(/api\./)).toBeInTheDocument();
+    expect(screen.getByLabelText("合计")).toHaveTextContent("合计：调用");
+    // 轻量任务、入库向量化的模型没填单价，合计的费用是“不全”的。
+    expect(within(screen.getByLabelText("合计")).getByText("缺单价")).toBeInTheDocument();
+    expect(screen.getByText(/共 \d+ 条/)).toBeInTheDocument();
   });
 
-  it("按用途看：用中文名，用得多的在前；按月看：每月一行", async () => {
+  it("翻页后换一批行；换统计方式回到第 1 页：按用途用中文名、用得多的在前，按月每月一行", async () => {
     renderStats();
     const table = await usageTable();
-    fireEvent.change(screen.getByLabelText("统计方式"), { target: { value: "PURPOSE" } });
+    await within(table).findAllByText("回答");
+    fireEvent.click(await screen.findByRole("button", { name: /下一页/ }));
+    await vi.waitFor(() => expect(screen.getByRole("button", { name: /上一页/ })).toBeEnabled());
 
+    fireEvent.change(screen.getByLabelText("统计方式"), { target: { value: "PURPOSE" } });
     expect(await within(table).findByText("入库向量化")).toBeInTheDocument();
-    const purposes = within(table).getAllByRole("row").slice(1, -1).map((row) => within(row).getAllByRole("cell")[0]!.textContent);
+    const purposes = within(table).getAllByRole("row").slice(1).map((row) => within(row).getAllByRole("cell")[0]!.textContent);
     expect(purposes[0]).toBe("回答");
     expect(purposes).toEqual(expect.arrayContaining(["回答", "重排", "轻量任务", "入库向量化"]));
 
