@@ -1,6 +1,6 @@
 name: 缺陷
-description: main 变红，或行为与文档、验收标准不符
-title: "fix: "
+description: main 变红，或行为与合同、文档、验收标准不符
+title: ""
 labels: ["kind/bug"]
 body:
   - type: textarea
@@ -14,7 +14,7 @@ body:
     id: expected
     attributes:
       label: 期望
-      description: 依据的文档、决策或验收标准
+      description: 依据的合同、文档、决定或验收标准（链接）
     validations:
       required: true
   - type: textarea

@@ -522,3 +522,23 @@ Compose 增加 web 服务（`deploy/web.Dockerfile`）：Node 24 构建前端，
 - **接口**：`GET /api/models/usage?from=&to=&groupBy=DETAIL|DAY|MONTH|PURPOSE|MODEL&page=&size=`（`model:view`，默认最近 30 天、按明细，最长一年；`groups` 分页，`total` 是整段合计；响应带模型单价列表）、`PUT /api/models/prices`（`model:update`）。界面是模型管理页的“用量”标签：单价表在最上面，下面是分页的用量列表（明细带日期、用途、模型、服务商，也可按日、月、用途、模型合并），合计在列表上方（原型调整，人在 2026-11-09 提出）。
 - **写库**：每次调用一次 upsert，在独立事务里（`REQUIRES_NEW`），调用方回滚也不丢已花的 token；高并发下同一行会有短暂的行锁排队，当前规模可以接受，吞吐上去后再改成批量累加。
 - **没做的**：预算上限和告警、按知识库或按人统计（D-056 决定不做）；按 `ModelPurpose` 细分嵌入模型的切换（M9 后续）。
+
+## D-066 与 domain-forge 统一 Issue 和 PR 约定（2026-11-09）
+
+两个仓库都由 AI 编码工具主导研发，Issue 模板、PR 模板和提交前缀原来各写一套。人答复的四个决定：
+
+- **同一份文件**：两个仓库各放一份内容相同的 `.github/ISSUE_TEMPLATE/`（结果、缺陷、不稳定测试）、`.github/pull_request_template.md` 和 `scripts/check_pr_guard.sh`，修改时同步另一个仓库；不建组织级 `.github` 仓库，本地 AI 要能直接读到模板。项目特有的内容（验证命令、评测、截图）写在 AGENTS.md，不写进模板。
+- **前缀**：提交信息和 PR 标题只用 `feat`、`fix`、`build`、`docs`，CI 新增 `guard` 任务检查 PR 标题和 wip 提交（脚本来自 domain-forge）。
+- **结果模板**：取两边字段之长——目标、已确认的决定、未决问题、验收标准、改动范围（含不做的）、开工（前置、分支、风险）、实施记录；原“要做的”“不做的”并入“改动范围”。Issue 标题不加前缀，用标签分类。
+- **度量标签**：两个仓库共用 `rework`（合并后返工的 PR）和 `escaped-defect`（合并后才发现的缺陷），为以后统计一次通过率和逃逸缺陷。
+
+## D-067 工程优化的范围与答复（2026-11-09，#196～#201、#167）
+
+综合本仓库与 domain-forge 的长处定了一份工程北极星：目标是“AI 写的改动一次就对；出错由机器当场发现；人只做决定”，规范分 A 一致性、B 错误与日志、C 类型与编译、D 简洁、E 测试、F 流程六组，正文由 #196 写进 `docs/engineering/北极星.md`。对照北极星排了 6 个结果 Issue，放进里程碑「1.1 工程与体验质量」；测试提速并入已有的 #167，不另建。人的答复（全部按推荐）：
+
+- **文档（#196）**：AGENTS.md 改为不超过 80 行的路由表，规则正文搬到 `docs/rules/` 规则卡，每张卡标检查方式；本文件拆成 `docs/decisions/` 下每篇不超过 40 行的短决策记录；文档自检写成 JUnit `DocLinksTest`，不引入 Python。
+- **一致性（#197）**：`Document` 加版本号乐观锁（兼容迁移），后台任务只更新自己负责的列；限流状态过期即删；入库执行器交给 Spring 管理。
+- **异常（#198）**：领域层的规则违规直接抛 `BusinessException` 的子类，放在本模块的 `domain` 包，不新增共享类型；取代 AGENTS.md 里“领域 `IllegalArgumentException` 由 application 转成业务异常”的规定，并由架构规则禁止 `domain` 抛 `IllegalArgumentException`。日志统一为 `event=` 格式。
+- **门禁（#199）**：编译加 `-Werror`；引入 `maven-checkstyle-plugin`，只开圈复杂度 ≤10、方法语句 ≤30 两条；项目级 `.claude/settings.json` 的 hook 拦截在 main 上提交和强推。
+- **简化与性能（#200）**：运营概览的“缺口 Top”只用已存的向量，不调模型、不写库；检索并行以多轮 eval 为准。向量化不走 `ModelRoutes` 的问题归 M9（要重建向量），不在本轮。
+- **前端（#201）**：不引入 OpenAPI 生成类型，扩大现有契约测试，覆盖写接口和 SSE。

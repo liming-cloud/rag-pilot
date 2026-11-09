@@ -114,3 +114,20 @@ jobs:
         run: npm test
       - name: 生产构建
         run: npm run build
+
+  # PR 标题前缀只用 feat/fix/build/docs，PR 内不含 wip 提交；脚本与 domain-forge 一致（D-066）。
+  guard:
+    name: guard
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: 检查标题前缀与 WIP 提交
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: scripts/check_pr_guard.sh "$PR_TITLE" "$BASE_SHA" "$HEAD_SHA"

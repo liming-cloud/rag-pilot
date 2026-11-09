@@ -1,6 +1,6 @@
 name: 不稳定测试
 description: 同一代码时而通过时而失败的测试；先搜索已有 Issue，有就追加记录。评测指标的波动不用这个模板
-title: "[不稳定测试] "
+title: ""
 labels: ["kind/flake"]
 body:
   - type: input
@@ -21,7 +21,7 @@ body:
     id: log
     attributes:
       label: 日志
-      description: 失败测试的完整日志（CI 的 test-reports 产物），不只是断言行
+      description: 失败测试的完整日志（CI 的测试报告产物），不只是断言行
       render: text
     validations:
       required: true
@@ -30,6 +30,6 @@ body:
     attributes:
       label: 处理
       value: |
-        - [ ] 再次出现且没修好时，先用 `@Disabled("#本 Issue")` 隔离
+        - [ ] 再次出现且没修好时，先禁用该测试并在注释里链接本 Issue
         - [ ] 定位根因
-        - [ ] 修复并恢复测试（根因在产品代码时按缺陷处理）
+        - [ ] 修复并恢复测试（根因在产品代码时同时加 `kind/bug`）

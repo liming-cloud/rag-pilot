@@ -1,5 +1,5 @@
 name: 结果
-description: 路线图上一个能验收的结果，一个 PR 交付；过程中的修复、决策、文档、测试都放进同一个 PR
+description: 一项能验收的完整结果，由 PR 交付；过程中的修复、决定、文档、测试都放进同一个 PR
 title: ""
 labels: ["kind/result", "status/needs-decision"]
 body:
@@ -10,21 +10,19 @@ body:
     id: goal
     attributes:
       label: 目标
-      description: 交付什么结果、解决什么问题；对应哪个 GitHub Milestone（方向见 ROADMAP.md）
+      description: 交付什么结果、解决什么问题、为什么现在做；对应哪个里程碑或产品验收场景
     validations:
       required: true
   - type: textarea
-    id: work
+    id: decisions
     attributes:
-      label: 要做的
-      description: 主要改动；涉及界面的先做 MSW 原型
-    validations:
-      required: true
+      label: 已确认的决定
+      description: 已由人答复的决定，链接决策记录；没有写“无”
   - type: textarea
     id: questions
     attributes:
       label: 未决问题
-      description: 需要人决定的事（见 AGENTS.md“先停下来问人”）。答复后勾选，并写进 DECISIONS.md；没有写“无”
+      description: 需要人决定的事（见 AGENTS.md），附建议。答复后勾选，并写进决策记录；没有写“无”
       value: "- [ ] "
     validations:
       required: true
@@ -32,22 +30,24 @@ body:
     id: acceptance
     attributes:
       label: 验收标准
-      description: 每条写明怎么验证：测试类名、评测指标和门槛（几轮）、或手工步骤和记录位置
+      description: 每条写明怎么验证：测试名、命令或脚本、指标和门槛（几轮）、或手工步骤和记录位置
       value: "- [ ] "
     validations:
       required: true
   - type: textarea
-    id: out
+    id: scope
     attributes:
-      label: 不做的
-      description: 明确不在本 Issue 范围内的事
+      label: 改动范围
+      description: 主要改动和涉及的模块、入口；明确不做的事和不能碰的部分；涉及界面的先做原型
+    validations:
+      required: true
   - type: textarea
     id: start
     attributes:
       label: 开工
-      description: 前置 Issue（要先合并的）、分支名、第一步做什么；新会话从这里接着做
+      description: 前置 Issue（要先合并的，同时用 blocked by 标注）、分支名、第一步、已知风险；新会话从这里接着做
   - type: textarea
     id: history
     attributes:
       label: 实施记录
-      description: PR 链接；质量类结果写每轮评测数据的摘要
+      description: PR 链接；质量类结果写每轮测量数据的摘要
