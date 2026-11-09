@@ -103,12 +103,14 @@ class ModelUsageTests {
         assertThat(TestDocuments.awaitProcessed(http, kb, uploaded, null)).containsEntry("status", "READY");
         assertThat(TestAsk.ask(http, null, List.of(kb), QUESTION)).containsEntry("refused", false);
 
-        var byModel = usageByModel();
+        var byModel = awaitUsage("usage-embed", "EMBEDDING · usage-embed");
         for (var key : List.of("EMBEDDING · usage-embed", "ANSWER · usage-answer", "RERANK · usage-rerank")) {
             assertThat(served).as("假服务商应收到 " + key).containsKey(key);
         }
+        byModel = awaitUsage("usage-rerank", "RERANK · usage-rerank");
         assertThat(byModel.get("usage-embed")).as("嵌入").containsExactly(served.get("EMBEDDING · usage-embed"));
         assertThat(byModel.get("usage-rerank")).as("重排").containsExactly(served.get("RERANK · usage-rerank"));
+        byModel = awaitUsage("usage-answer", "ANSWER · usage-answer");
         assertThat(byModel.get("usage-answer")).as("回答").containsExactly(served.get("ANSWER · usage-answer"));
 
         // 管理端把回答换到界面添加的服务商和新模型：之后的用量记到新模型名下，旧模型的不变。
@@ -121,7 +123,7 @@ class ModelUsageTests {
                 .getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(TestAsk.ask(http, null, List.of(kb), QUESTION)).containsEntry("refused", false);
 
-        var switched = usageByModel();
+        var switched = awaitUsage("usage-answer-new", "ANSWER · usage-answer-new");
         assertThat(switched.get("usage-answer-new")).as("新模型").containsExactly(served.get("ANSWER · usage-answer-new"));
         assertThat(switched.get("usage-answer")).as("旧模型不变").containsExactly(oldAnswer);
 
@@ -178,6 +180,24 @@ class ModelUsageTests {
                 .hasSize(1).allSatisfy(group -> assertThat(group).containsEntry("unpriced", true));
         assertThat(((List<Map<String, Object>>) report.get("prices")).stream().map(price -> price.get("model")))
                 .contains("priced-model", "free-model");
+    }
+
+    /**
+     * 后台线程（缺口问题补存向量等）的调用可能在断言时还没记完：等管理端汇总的这个模型追平假服务商返回过的数（最多 10 秒）。
+     */
+    private Map<String, long[]> awaitUsage(String model, String servedKey) {
+        long deadline = System.nanoTime() + java.time.Duration.ofSeconds(10).toNanos();
+        var found = usageByModel();
+        while (!java.util.Arrays.equals(found.get(model), served.get(servedKey)) && System.nanoTime() < deadline) {
+            try {
+                Thread.sleep(100);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                break;
+            }
+            found = usageByModel();
+        }
+        return found;
     }
 
     /** 管理端按模型汇总的 [调用数, 输入 token, 输出 token]。 */
