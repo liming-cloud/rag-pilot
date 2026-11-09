@@ -1,8 +1,8 @@
 package com.liming.rag.settings.infrastructure.cache;
 
-import com.liming.rag.cache.CacheSpec;
+import com.liming.rag.cache.typed.CacheSpec;
 import com.liming.rag.cache.Caches;
-import com.liming.rag.cache.TypedCache;
+import com.liming.rag.cache.typed.TypedCache;
 import com.liming.rag.settings.application.system.SavedSettingsCache;
 import com.liming.rag.settings.application.system.SystemSettingsStore;
 import java.util.List;

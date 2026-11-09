@@ -2,7 +2,7 @@ package com.liming.rag;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.liming.rag.cache.CacheSpec;
+import com.liming.rag.cache.typed.CacheSpec;
 import com.liming.rag.cache.Caches;
 import com.liming.rag.identity.api.IdentityPermissions;
 import java.util.ArrayList;

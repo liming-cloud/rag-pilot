@@ -3,10 +3,10 @@ package com.liming.rag.data.infrastructure.ai;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.liming.rag.ai.ToolCall;
 import com.liming.rag.ai.ToolCaller;
-import com.liming.rag.ai.ToolDefinition;
-import com.liming.rag.ai.ToolResult;
+import com.liming.rag.ai.tool.ToolCall;
+import com.liming.rag.ai.tool.ToolDefinition;
+import com.liming.rag.ai.tool.ToolResult;
 import com.liming.rag.data.application.DataException;
 import com.liming.rag.data.application.DataProperties;
 import com.liming.rag.data.application.Fakes;

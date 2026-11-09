@@ -3,8 +3,8 @@ package com.liming.rag.answering.infrastructure.ai;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.liming.rag.ai.ModelCallException;
 import com.liming.rag.ai.TextGeneration;
+import com.liming.rag.ai.common.ModelCallException;
 import com.liming.rag.answering.application.ModelUnavailableException;
 import java.util.ArrayList;
 import java.util.List;

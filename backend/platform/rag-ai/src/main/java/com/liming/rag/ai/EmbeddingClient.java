@@ -1,9 +1,13 @@
 package com.liming.rag.ai;
 
+import com.liming.rag.ai.common.ModelCallException;
 import java.util.List;
 
 /**
- * 文本向量化端口。知识模块入库和检索都只依赖这个接口，不直接接触厂商 SDK。
+ * 文本向量化能力。知识模块入库和检索都只依赖这个接口，不直接接触厂商 SDK。
+ *
+ * <p>用法：入库用 {@link #embed}（批量），检索时用 {@link #embedQuestion}（同一问题的向量有缓存）。
+ * 失败：模型不可用或返回的向量维度不对时抛 {@link ModelCallException}。
  */
 public interface EmbeddingClient {
 

@@ -499,3 +499,14 @@ Compose 增加 web 服务（`deploy/web.Dockerfile`）：Node 24 构建前端，
 - **结果**（`eval` 3 轮，run 42512937262）：工具选择正确率 100% / 96.3% / 100%，参数正确率 100%，越权调用 0，注入题没有被带偏；回答含期望数值 85.2%～88.9%、无需工具题误调用 0～12.5%（1/8，只报告不设门槛）。
 - **评测发现的问题**：第一次运行参数正确率只有 37%，原因是模拟服务的库存工具没有在参数结构里声明 `sku`（对接规范里有），模型不知道参数名；补上后达标。说明参数结构要写全是对接规范的要求，客户系统的工具说明质量直接影响参数正确率，试点时要核对。
 - **耗时**：PR 自动跑 1 轮约 19 分钟；手动 3 轮约 55 分钟，`eval` 超时从 60 分钟放宽到 90 分钟。
+
+## D-064 平台层能力组件的目录规范：根包只放能力接口，一种能力一个子包（2026-11-09，#187）
+
+人在 2026-11-08 委托 AI 梳理并决定（#187 的 R1～R6），落实如下。编号说明：#187 里写的 D-061 已被 #181 占用，改记为 D-064。
+
+- **结构**：rag-ai、rag-cache、rag-persistence 的根包只放能力接口；一种能力一个子包（rag-ai：`generation`、`rewriting`、`embedding`、`rerank`、`probe`、`tool`；rag-cache：`typed`、`kv`；rag-persistence：`paging`），共用的放 `common`。契约类型标 `@NamedInterface` 导出，实现、配置、属性包内私有；去掉模块的 `Type.OPEN`，上下文的 `allowedDependencies` 写到能力粒度。规则正文见 AGENTS.md“目录结构”。
+- **对外公开清单**（调用方为什么必须直接用）：根包接口——`TextGeneration`、`QueryRewriting`、`EmbeddingClient`、`RerankClient`、`ModelProbe`、`ToolCaller`、`ToolJwks`、`ModelRouting`（由 settings 实现）、`Caches`、`KeyValueStores`；`common` 导出——`ModelCallException`（上下文要把它转成自己的异常）、`ModelUsage`（用途枚举，出现在 `ModelRouting`、`ModelProbe` 的签名里）、`ModelRoute`（同上）；`tool` 导出——`ToolCall`、`ToolResult`、`ToolDefinition`、`ToolCallException`（`ToolCaller` 的参数、返回值和异常）；`typed` 导出——`TypedCache`、`CacheSpec`（取缓存要声明的名字和类型，返回的句柄）；`kv` 导出——`KeyValueStore`（`KeyValueStores` 返回的句柄）；`paging` 导出——`Pages`。
+- **改为包内私有**：`ToolProperties`；`CacheStore` 本来就是包内私有。`AiProperties`、`CacheProperties`、`ModelRoutes`、`OpenAiChatModels`、`ModelCallFailures`、`TestRoutes`（测试）是模块内跨子包用的，在 `common` 里 public 但不导出，外部引用会被 `ModularityTests` 拦下。`ToolSigningKeys` 是命令行入口（Java 启动器要求 public），不导出，类名改为 `com.liming.rag.ai.tool.ToolSigningKeys`（部署手册同步）。
+- **根包接口里的静态工厂**（`Caches.inMemory()`、`KeyValueStores.inMemory(clock)`、`TextGeneration.fixed(…)`）需要创建包内私有的实现，经子包里的公开工厂（`InMemoryCaches`、`InMemoryKeyValueStores`、`FixedTextGenerations`）；这些工厂不导出，调用方的写法不变。
+- **不改的**：行为、接口签名、配置项名称（`rag.ai.*`、`rag.cache.*`）；上下文层代码只改 import 和 `allowedDependencies`。日志里的类名随包名变（如 `com.liming.rag.cache.typed.JsonCaches`），事件名 `event=…` 不变。
+- **检查**：`PackageLayoutTest` 加三条（根包只放 public 接口、实现根包接口的类不能 public、能力子包之间无依赖且 `common` 不依赖能力子包），`TECH_MODULES_EXPOSE_CONTRACTS_ONLY` 放过 `common`；`ModularityTests` 用 `archcapability` 样例确认没导出的内部类型被拦下。

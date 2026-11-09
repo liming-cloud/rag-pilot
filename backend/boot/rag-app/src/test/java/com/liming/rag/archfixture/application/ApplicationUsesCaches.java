@@ -1,8 +1,8 @@
 package com.liming.rag.archfixture.application;
 
-import com.liming.rag.cache.CacheSpec;
+import com.liming.rag.cache.typed.CacheSpec;
 import com.liming.rag.cache.Caches;
-import com.liming.rag.cache.TypedCache;
+import com.liming.rag.cache.typed.TypedCache;
 
 /** 违规样例（D-054）：应用层直接用缓存组件，应在 application 声明业务化的缓存端口，由 infrastructure 用 rag-cache 实现。 */
 public class ApplicationUsesCaches {

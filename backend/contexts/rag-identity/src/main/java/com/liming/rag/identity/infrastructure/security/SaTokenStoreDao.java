@@ -5,7 +5,7 @@ import cn.dev33.satoken.context.SaHolder;
 import cn.dev33.satoken.dao.SaTokenDao;
 import cn.dev33.satoken.dao.auto.SaTokenDaoByObjectFollowString;
 import cn.dev33.satoken.util.SaFoxUtil;
-import com.liming.rag.cache.KeyValueStore;
+import com.liming.rag.cache.kv.KeyValueStore;
 import com.liming.rag.cache.KeyValueStores;
 import java.time.Duration;
 import java.util.List;

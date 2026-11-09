@@ -1,7 +1,7 @@
 package com.liming.rag.evaluation.infrastructure.ai;
 
-import com.liming.rag.ai.ModelCallException;
 import com.liming.rag.ai.TextGeneration;
+import com.liming.rag.ai.common.ModelCallException;
 import com.liming.rag.evaluation.api.AnswerJudge;
 import com.liming.rag.evaluation.api.JudgeUnavailableException;
 import java.time.Duration;

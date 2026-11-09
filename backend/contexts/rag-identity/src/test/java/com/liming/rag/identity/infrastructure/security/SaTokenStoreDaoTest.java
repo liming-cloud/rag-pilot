@@ -4,7 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import cn.dev33.satoken.context.mock.SaTokenContextMockUtil;
 import cn.dev33.satoken.dao.SaTokenDao;
-import com.liming.rag.cache.KeyValueStore;
+import com.liming.rag.cache.kv.KeyValueStore;
 import com.liming.rag.cache.KeyValueStores;
 import java.time.Clock;
 import java.time.Duration;

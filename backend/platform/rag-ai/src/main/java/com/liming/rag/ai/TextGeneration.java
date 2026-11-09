@@ -1,5 +1,6 @@
 package com.liming.rag.ai;
 
+import com.liming.rag.ai.generation.FixedTextGenerations;
 import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.CompletionStage;
@@ -9,6 +10,9 @@ import java.util.function.Consumer;
  * 文字生成能力（Spring AI 防腐层，#145）：一次性生成、流式生成（可停止、带备用请求）。上下文只依赖这个接口，
  * 不接触 Spring AI 的类型；实现内部用 Spring AI 的 {@code ChatClient}，并留下框架自带的观测（耗时、token 用量）。
  * 提示词是调用方的策略，这里只负责怎么调用模型。
+ *
+ * <p>用法：{@code complete(系统提示, 用户消息)} 取完整回复；{@code stream(…, onDelta)} 边生成边收，返回完整回复。
+ * 失败：模型不可用、超时、没有可用的回复时抛 {@link ModelCallException}。
  */
 public interface TextGeneration {
 
@@ -48,7 +52,7 @@ public interface TextGeneration {
      * @throws IllegalStateException 没有密钥
      */
     static TextGeneration fixed(String baseUrl, String apiKey, String model, Duration timeout, int maxTokens) {
-        return new FixedTextGeneration(baseUrl, apiKey, model, timeout, maxTokens);
+        return FixedTextGenerations.create(baseUrl, apiKey, model, timeout, maxTokens);
     }
 
     /**

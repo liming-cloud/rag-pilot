@@ -1,8 +1,8 @@
 package com.liming.rag.identity.infrastructure.cache;
 
-import com.liming.rag.cache.CacheSpec;
+import com.liming.rag.cache.typed.CacheSpec;
 import com.liming.rag.cache.Caches;
-import com.liming.rag.cache.TypedCache;
+import com.liming.rag.cache.typed.TypedCache;
 import com.liming.rag.identity.application.role.AccessSnapshot;
 import com.liming.rag.identity.application.role.AccessSnapshotCache;
 import java.util.function.Supplier;
