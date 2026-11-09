@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.liming.rag.settings.infrastructure.persistence.ModelPriceMapper">
+
+    <insert id="save">
+        INSERT INTO model_price (model, input_per_million, output_per_million, updated_at)
+        VALUES (#{model}, #{inputPerMillion}, #{outputPerMillion}, #{updatedAt})
+        ON CONFLICT (model) DO UPDATE
+        SET input_per_million = EXCLUDED.input_per_million, output_per_million = EXCLUDED.output_per_million,
+            updated_at = EXCLUDED.updated_at
+    </insert>
+</mapper>

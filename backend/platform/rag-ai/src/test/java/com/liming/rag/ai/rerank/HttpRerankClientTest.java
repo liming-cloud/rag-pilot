@@ -5,7 +5,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.liming.rag.ai.common.AiProperties;
 import com.liming.rag.ai.common.ModelCallException;
+import com.liming.rag.ai.common.ModelCallUsage;
 import com.liming.rag.ai.common.TestRoutes;
+import com.liming.rag.ai.common.TestUsage;
 import com.sun.net.httpserver.HttpServer;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
@@ -23,6 +25,7 @@ class HttpRerankClientTest {
 
     private HttpServer server;
     private final AtomicReference<String> request = new AtomicReference<>();
+    private final TestUsage usage = new TestUsage();
 
     @AfterEach
     void stop() {
@@ -39,6 +42,21 @@ class HttpRerankClientTest {
         assertThat(client.score("冷柜几度", List.of("a", "b", "c"))).containsExactly(0.4, 0.0, 0.9);
         assertThat(request.get()).contains("\"model\":\"bge-reranker\"").contains("\"query\":\"冷柜几度\"");
         assertThat(client.score("冷柜几度", List.of())).isEmpty();
+    }
+
+    @Test
+    @DisplayName("重排报一次用量，token 取服务商返回的 meta.tokens；服务商没返回时记 0，仍算一次调用（#169）")
+    void reportsUsage() throws Exception {
+        var client = client(200, "{\"results\":[{\"index\":0,\"relevance_score\":0.4}],"
+                + "\"meta\":{\"tokens\":{\"input_tokens\":120,\"output_tokens\":0}}}");
+        client.score("q", List.of("a"));
+        stop();
+        client(200, "{\"results\":[{\"index\":0,\"relevance_score\":0.4}]}").score("q", List.of("a"));
+
+        assertThat(usage.calls).extracting(ModelCallUsage::purpose, ModelCallUsage::model, ModelCallUsage::inputTokens,
+                ModelCallUsage::outputTokens).containsExactly(
+                        org.assertj.core.groups.Tuple.tuple("RERANK", "bge-reranker", 120L, 0L),
+                        org.assertj.core.groups.Tuple.tuple("RERANK", "bge-reranker", 0L, 0L));
     }
 
     @Test
@@ -59,7 +77,7 @@ class HttpRerankClientTest {
             port = socket.getLocalPort();
         }
         var client = new HttpRerankClient(properties("http://127.0.0.1:" + port + "/v1"),
-                TestRoutes.environmentOnly(properties("http://127.0.0.1:" + port + "/v1")));
+                TestRoutes.environmentOnly(properties("http://127.0.0.1:" + port + "/v1")), usage.reports());
 
         assertThatThrownBy(() -> client.score("q", List.of("a"))).isInstanceOf(ModelCallException.class)
                 .hasMessageContaining("暂时不可用");
@@ -77,7 +95,7 @@ class HttpRerankClientTest {
         });
         server.start();
         var properties = properties("http://127.0.0.1:" + server.getAddress().getPort() + "/v1");
-        return new HttpRerankClient(properties, TestRoutes.of(properties, Map.of()));
+        return new HttpRerankClient(properties, TestRoutes.of(properties, Map.of()), usage.reports());
     }
 
     private static AiProperties properties(String baseUrl) {

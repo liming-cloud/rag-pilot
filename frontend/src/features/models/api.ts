@@ -53,6 +53,14 @@ export type ModelChange = {
   restoredFrom: number | null;
 };
 
+export const PURPOSE_NAMES: Record<UsagePurpose, string> = {
+  ANSWER: "回答",
+  HEDGE: "备用回答",
+  LIGHT: "轻量任务",
+  RERANK: "重排",
+  EMBEDDING: "入库向量化",
+};
+
 export const USAGE_LABELS: Record<Usage, { name: string; description: string }> = {
   ANSWER: { name: "回答", description: "生成回答；低分改写和追问检索词也用它" },
   HEDGE: { name: "备用回答", description: "回答迟迟不出第一个字时，另发一个请求，用先出字的那个" },
@@ -127,11 +135,58 @@ export async function restoreChange(id: number): Promise<UsageConfig> {
   return json(await authFetch(`/api/models/changes/${id}/restore`, { method: "POST" }), "恢复失败");
 }
 
-/** 模型管理的查询键；changes、available 是前缀。 */
+/** 用量统计里的用途：四个可配用途加入库向量化（嵌入不能在界面配置）。 */
+export type UsagePurpose = Usage | "EMBEDDING";
+
+export type UsageGroupBy = "DAY" | "MONTH" | "PURPOSE" | "MODEL";
+
+/** 统计表的一行。key 随分组而变：日期、月份、用途名、“模型 · 服务商域名”。cost 按当前单价估算（元）；unpriced 表示有用量没填单价，费用偏低。 */
+export type UsageGroup = {
+  key: string;
+  calls: number;
+  inputTokens: number;
+  outputTokens: number;
+  cost: number;
+  unpriced: boolean;
+};
+
+/** 一个模型每百万 token 的单价（元）；没填过为 null。 */
+export type ModelPrice = { model: string; inputPerMillion: number | null; outputPerMillion: number | null };
+
+export type UsageReport = {
+  from: string;
+  to: string;
+  groupBy: UsageGroupBy;
+  groups: UsageGroup[];
+  total: UsageGroup;
+  /** 有用量或填过单价的模型。 */
+  prices: ModelPrice[];
+};
+
+export type UsageFilter = { groupBy: UsageGroupBy; from?: string };
+
+/** 不传 from 看最近 30 天。 */
+export async function fetchUsageReport(filter: UsageFilter): Promise<UsageReport> {
+  return json(await authFetch(`/api/models/usage${query(filter)}`), "读取用量失败");
+}
+
+/** 填或改一个模型的单价（元 / 百万 token）。 */
+export async function saveModelPrice(price: Required<ModelPrice>): Promise<ModelPrice> {
+  const response = await authFetch("/api/models/prices", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(price),
+  });
+  return json(response, "保存单价失败");
+}
+
+/** 模型管理的查询键；changes、available、usage 是前缀。 */
 export const modelKeys = {
   settings: ["model-settings"],
   changes: ["model-changes"],
   changePage: (filter: Parameters<typeof fetchModelChanges>[0]) => ["model-changes", filter] as const,
   available: ["available-models"],
   availableFor: (providerId: string) => ["available-models", providerId] as const,
+  usage: ["model-usage"],
+  usageReport: (filter: UsageFilter) => ["model-usage", filter] as const,
 } as const;

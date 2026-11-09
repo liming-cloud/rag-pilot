@@ -29,12 +29,13 @@ describe("模型管理页", () => {
   beforeEach(() => signInAs("admin"));
   afterEach(() => window.history.pushState({}, "", "/"));
 
-  it("分三个标签，服务商在前、默认打开；标签记在地址里；嵌入只读", async () => {
+  it("分四个标签，服务商在前、默认打开；标签记在地址里；嵌入只读", async () => {
     const router = renderPage("/admin/models");
 
     expect((await screen.findAllByRole("tab")).map((tab) => tab.textContent)).toEqual([
       "服务商",
       "用途与模型",
+      "用量",
       "变更记录",
     ]);
     expect(screen.getByRole("tab", { name: "服务商" })).toHaveAttribute("aria-selected", "true");

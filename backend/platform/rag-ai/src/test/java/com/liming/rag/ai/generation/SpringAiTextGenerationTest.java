@@ -7,7 +7,9 @@ import com.liming.rag.ai.common.AiProperties;
 import com.liming.rag.ai.common.ModelRoute;
 import com.liming.rag.ai.common.ModelUsage;
 import com.liming.rag.ai.common.OpenAiChatModels;
+import com.liming.rag.ai.common.ModelCallUsage;
 import com.liming.rag.ai.common.TestRoutes;
+import com.liming.rag.ai.common.TestUsage;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import java.io.IOException;
@@ -32,6 +34,7 @@ class SpringAiTextGenerationTest {
     private final List<String> paths = Collections.synchronizedList(new ArrayList<>());
     private final List<String> bodies = Collections.synchronizedList(new ArrayList<>());
     private final java.util.Map<ModelUsage, ModelRoute> overrides = new java.util.concurrent.ConcurrentHashMap<>();
+    private final TestUsage usage = new TestUsage();
     private HttpServer server;
 
     @AfterEach
@@ -55,6 +58,38 @@ class SpringAiTextGenerationTest {
         assertThat(awaitModels(3)).containsExactly("m", "db-answer", "db-light");
         assertThat(paths).containsExactly("/v1/chat/completions", "/db/v1/chat/completions",
                 "/db/v1/chat/completions");
+    }
+
+    @Test
+    @DisplayName("一次性、流式、轻量任务调用结束后各报一次用量，数值与服务商返回的一致，用途和实际用的模型对得上（#169）")
+    void reportsUsagePerCall() throws Exception {
+        start((call, model) -> new Reply(0, 200, "回答"));
+        var gateway = gateway(null, null, "light-m");
+        var baseUrl = "http://127.0.0.1:" + server.getAddress().getPort() + "/v1";
+
+        gateway.complete("系统", "问题");
+        gateway.stream("系统", "问题", delta -> {
+        });
+        gateway.complete("系统", "标题", new TextGeneration.Limits(16, List.of(), TextGeneration.Tier.LIGHT));
+
+        assertThat(usage.calls).containsExactly(
+                new ModelCallUsage("ANSWER", baseUrl, "m", 11, 7),
+                new ModelCallUsage("ANSWER", baseUrl, "m", 11, 7),
+                new ModelCallUsage("LIGHT", baseUrl, "light-m", 11, 7));
+    }
+
+    @Test
+    @DisplayName("管理端切换模型后，用量记到新模型名下（#169）")
+    void reportsUsageUnderSwitchedModel() throws Exception {
+        start((call, model) -> new Reply(0, 200, "回答"));
+        var gateway = gateway(null);
+
+        gateway.complete("系统", "问题");
+        overrides.put(ModelUsage.ANSWER, databaseRoute("db-answer"));
+        gateway.complete("系统", "问题");
+
+        assertThat(usage.calls).extracting(ModelCallUsage::model).containsExactly("m", "db-answer");
+        assertThat(usage.calls.getLast().baseUrl()).endsWith("/db/v1");
     }
 
     @Test
@@ -278,7 +313,8 @@ class SpringAiTextGenerationTest {
     private static void respondWhole(HttpExchange exchange, Reply reply) throws IOException {
         try (exchange) {
             var body = ("{\"id\":\"c\",\"object\":\"chat.completion\",\"created\":1,\"model\":\"m\",\"choices\":[{\"index\":0,"
-                    + "\"message\":{\"role\":\"assistant\",\"content\":\"" + reply.text().replace("\"", "\\\"") + "\"},\"finish_reason\":\"stop\"}]}")
+                    + "\"message\":{\"role\":\"assistant\",\"content\":\"" + reply.text().replace("\"", "\\\"") + "\"},\"finish_reason\":\"stop\"}],"
+                    + "\"usage\":{\"prompt_tokens\":11,\"completion_tokens\":7,\"total_tokens\":18}}")
                     .getBytes(StandardCharsets.UTF_8);
             exchange.getResponseHeaders().add("Content-Type", "application/json");
             exchange.sendResponseHeaders(200, body.length);
@@ -307,6 +343,10 @@ class SpringAiTextGenerationTest {
                         + "\"},\"finish_reason\":null}]}\n\n").getBytes(StandardCharsets.UTF_8));
                 out.flush();
             }
+            // 像开了 stream_options.include_usage 的服务商：最后一段没有 choices，只带用量。
+            out.write(("data: {\"id\":\"c\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"m\","
+                    + "\"choices\":[],\"usage\":{\"prompt_tokens\":11,\"completion_tokens\":7,\"total_tokens\":18}}\n\n")
+                    .getBytes(StandardCharsets.UTF_8));
             out.write("data: [DONE]\n\n".getBytes(StandardCharsets.UTF_8));
         } catch (IOException e) {
             // 被取消的请求，客户端已断开。
@@ -333,7 +373,7 @@ class SpringAiTextGenerationTest {
                 Duration.ofSeconds(10), null, null,
                 new AiProperties.Chat("openai", "m", 0.1, 256, hedgeAfter, hedgeModel, lightModel));
         return new SpringAiTextGeneration(properties, new OpenAiChatModels(properties, registry),
-                TestRoutes.of(properties, overrides));
+                TestRoutes.of(properties, overrides), usage.reports());
     }
 
     private ModelRoute databaseRoute(String model) {

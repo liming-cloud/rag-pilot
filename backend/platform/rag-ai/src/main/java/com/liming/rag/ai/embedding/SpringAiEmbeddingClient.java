@@ -4,6 +4,8 @@ import com.liming.rag.ai.EmbeddingClient;
 import com.liming.rag.ai.common.AiProperties;
 import com.liming.rag.ai.common.ModelCallException;
 import com.liming.rag.ai.common.ModelCallFailures;
+import com.liming.rag.ai.common.ModelCallUsage;
+import com.liming.rag.ai.common.UsageReports;
 import io.micrometer.observation.ObservationRegistry;
 import java.util.ArrayList;
 import java.util.List;
@@ -24,8 +26,10 @@ final class SpringAiEmbeddingClient implements EmbeddingClient {
     private final EmbeddingModel model;
     private final int batchSize;
     private final String modelName;
+    private final String baseUrl;
+    private final UsageReports usage;
 
-    SpringAiEmbeddingClient(AiProperties properties, ObservationRegistry observations) {
+    SpringAiEmbeddingClient(AiProperties properties, ObservationRegistry observations, UsageReports usage) {
         var options = OpenAiEmbeddingOptions.builder()
                 .baseUrl(properties.baseUrl())
                 .apiKey(properties.requireApiKey())
@@ -36,6 +40,8 @@ final class SpringAiEmbeddingClient implements EmbeddingClient {
         this.model = OpenAiEmbeddingModel.builder().options(options).observationRegistry(observations).build();
         this.batchSize = Math.max(1, properties.embedding().batchSize());
         this.modelName = properties.embedding().model();
+        this.baseUrl = properties.baseUrl();
+        this.usage = usage;
     }
 
     @Override
@@ -45,7 +51,11 @@ final class SpringAiEmbeddingClient implements EmbeddingClient {
             var batch = texts.subList(start, Math.min(texts.size(), start + batchSize));
             List<float[]> result;
             try {
-                result = model.embed(batch);
+                var response = model.embedForResponse(batch);
+                result = response.getResults().stream().map(embedding -> embedding.getOutput()).toList();
+                var tokens = response.getMetadata().getUsage();
+                usage.report(ModelCallUsage.EMBEDDING, baseUrl, modelName,
+                        tokens.getPromptTokens() == null ? 0 : tokens.getPromptTokens(), 0);
             } catch (RuntimeException e) {
                 throw ModelCallFailures.failed("embedding", modelName, "向量化失败：嵌入模型服务暂时不可用，请稍后重试", e);
             }

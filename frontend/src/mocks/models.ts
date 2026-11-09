@@ -1,5 +1,15 @@
 import { http, HttpResponse } from "msw";
-import type { ModelChange, ModelSettings, Provider, Usage, UsageConfig } from "@/features/models/api";
+import type {
+  ModelChange,
+  ModelPrice,
+  ModelSettings,
+  Provider,
+  Usage,
+  UsageConfig,
+  UsageGroup,
+  UsageGroupBy,
+  UsageReport,
+} from "@/features/models/api";
 import { accountName, currentIdentity, forbidden } from "./identity";
 import { paginate } from "./page";
 
@@ -13,7 +23,12 @@ const ENV_PROVIDER = "环境变量（硅基流动）";
 
 type StoredProvider = Omit<Provider, "usedBy" | "source"> & { id: number };
 
+/** 用量的日聚合行：和后端 model_usage_daily 一致，只有数字，没有问题原文和提问的人。 */
+type UsageRow = { day: string; purpose: string; provider: string; model: string; calls: number; input: number; output: number };
+
 const state = {
+  usageRows: [] as UsageRow[],
+  prices: [] as ModelPrice[],
   providers: [] as StoredProvider[],
   usages: [] as UsageConfig[],
   changes: [] as ModelChange[],
@@ -31,7 +46,72 @@ function minutesAgo(minutes: number) {
   return new Date(Date.now() - minutes * 60_000).toISOString();
 }
 
+/** 最近 60 天的假用量：回答和重排天天有，轻量任务隔天有，入库向量化只在周一（批量上传）有。 */
+function seedUsage(): UsageRow[] {
+  const rows: UsageRow[] = [];
+  for (let ago = 0; ago < 60; ago++) {
+    const date = new Date(Date.now() - ago * 86_400_000);
+    const day = date.toISOString().slice(0, 10);
+    const load = 20 + ((ago * 37) % 23);
+    rows.push(
+      { day, purpose: "ANSWER", provider: "api.deepseek.com", model: "deepseek-chat", calls: load, input: load * 2600, output: load * 310 },
+      { day, purpose: "RERANK", provider: "api.siliconflow.cn", model: "BAAI/bge-reranker-v2-m3", calls: load, input: load * 1800, output: 0 },
+    );
+    if (ago % 2 === 0) {
+      rows.push({ day, purpose: "LIGHT", provider: "api.siliconflow.cn", model: "Qwen/Qwen2.5-7B-Instruct", calls: 6, input: 900, output: 120 });
+    }
+    if (date.getUTCDay() === 1) {
+      rows.push({ day, purpose: "EMBEDDING", provider: "api.siliconflow.cn", model: "BAAI/bge-m3", calls: 14, input: 380_000, output: 0 });
+    }
+  }
+  return rows;
+}
+
+function usageReport(url: URL): UsageReport {
+  const to = new Date().toISOString().slice(0, 10);
+  const from = url.searchParams.get("from") ?? new Date(Date.now() - 29 * 86_400_000).toISOString().slice(0, 10);
+  const groupBy = (url.searchParams.get("groupBy") ?? "DAY") as UsageGroupBy;
+  const key = (row: UsageRow) =>
+    ({ DAY: row.day, MONTH: row.day.slice(0, 7), PURPOSE: row.purpose, MODEL: `${row.model} · ${row.provider}` })[groupBy];
+  const empty = (groupKey: string): UsageGroup => ({
+    key: groupKey,
+    calls: 0,
+    inputTokens: 0,
+    outputTokens: 0,
+    cost: 0,
+    unpriced: false,
+  });
+  const groups = new Map<string, UsageGroup>();
+  const total = empty("合计");
+  for (const row of state.usageRows.filter((candidate) => candidate.day >= from && candidate.day <= to)) {
+    const price = state.prices.find((candidate) => candidate.model === row.model);
+    const cost = price
+      ? ((price.inputPerMillion ?? 0) * row.input + (price.outputPerMillion ?? 0) * row.output) / 1e6
+      : 0;
+    const group = groups.get(key(row)) ?? empty(key(row));
+    groups.set(group.key, group);
+    for (const target of [group, total]) {
+      target.calls += row.calls;
+      target.inputTokens += row.input;
+      target.outputTokens += row.output;
+      target.cost += cost;
+      target.unpriced ||= !price;
+    }
+  }
+  const sorted = [...groups.values()].sort((a, b) =>
+    groupBy === "DAY" || groupBy === "MONTH" ? b.key.localeCompare(a.key) : b.inputTokens + b.outputTokens - (a.inputTokens + a.outputTokens),
+  );
+  const models = new Set([...state.usageRows.map((row) => row.model), ...state.prices.map((price) => price.model)]);
+  const prices = [...models].sort().map((model) => state.prices.find((price) => price.model === model) ?? { model, inputPerMillion: null, outputPerMillion: null });
+  return { from, to, groupBy, groups: sorted, total, prices };
+}
+
 export function resetModels() {
+  state.usageRows = seedUsage();
+  state.prices = [
+    { model: "deepseek-chat", inputPerMillion: 2, outputPerMillion: 8 },
+    { model: "BAAI/bge-reranker-v2-m3", inputPerMillion: 0.5, outputPerMillion: 0 },
+  ];
   state.providers = [
     { id: 1, name: "DeepSeek 官方", baseUrl: "https://api.deepseek.com/v1", apiKeyLast4: "8f2a" },
     { id: 2, name: "门店机房 vLLM", baseUrl: "http://10.20.0.8:8000/v1", apiKeyLast4: null },
@@ -159,6 +239,20 @@ const AVAILABLE: Record<string, string[]> = {
 };
 
 export const modelHandlers = [
+  http.get(
+    "/api/models/usage",
+    ({ request }) => forbidden("model:view") ?? HttpResponse.json(usageReport(new URL(request.url))),
+  ),
+  http.put("/api/models/prices", async ({ request }) => {
+    const denied = forbidden("model:update");
+    if (denied) return denied;
+    const price = (await request.json()) as ModelPrice;
+    if ((price.inputPerMillion ?? -1) < 0 || (price.outputPerMillion ?? -1) < 0) {
+      return problem(400, "SETTINGS_INVALID", "输入单价必须是 0 到 1000000 之间的数");
+    }
+    state.prices = [...state.prices.filter((candidate) => candidate.model !== price.model), price];
+    return HttpResponse.json(price);
+  }),
   http.get("/api/models/available", ({ request }) => {
     const denied = forbidden("model:update");
     if (denied) return denied;

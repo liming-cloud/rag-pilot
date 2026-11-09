@@ -1,6 +1,7 @@
 package com.liming.rag.ai.common;
 
 import com.liming.rag.ai.ModelRouting;
+import com.liming.rag.ai.UsageRecording;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.observation.ObservationRegistry;
 import org.springframework.ai.chat.observation.ChatModelMeterObservationHandler;
@@ -17,6 +18,11 @@ class AiConfiguration {
     @Bean
     ModelRoutes modelRoutes(AiProperties properties, ObjectProvider<ModelRouting> routing) {
         return new ModelRoutes(properties, routing);
+    }
+
+    @Bean
+    UsageReports usageReports(ObjectProvider<UsageRecording> recording) {
+        return new UsageReports(recording);
     }
 
     /** 文字生成和问题改写共用的对话模型；只在用真实模型时创建（本地确定性实现不需要密钥）。 */

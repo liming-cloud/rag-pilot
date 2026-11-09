@@ -3,6 +3,7 @@ package com.liming.rag.ai.embedding;
 import com.liming.rag.ai.EmbeddingClient;
 import com.liming.rag.ai.common.AiProperties;
 import com.liming.rag.ai.common.Providers;
+import com.liming.rag.ai.common.UsageReports;
 import com.liming.rag.cache.Caches;
 import io.micrometer.observation.ObservationRegistry;
 import org.springframework.beans.factory.ObjectProvider;
@@ -14,11 +15,11 @@ class EmbeddingConfiguration {
 
     @Bean
     EmbeddingClient embeddingClient(AiProperties properties, ObjectProvider<ObservationRegistry> observations,
-            Caches caches) {
+            Caches caches, UsageReports usage) {
         var provider = properties.embedding().provider();
         EmbeddingClient client = switch (provider) {
             case "openai" -> new SpringAiEmbeddingClient(properties,
-                    observations.getIfAvailable(() -> ObservationRegistry.NOOP));
+                    observations.getIfAvailable(() -> ObservationRegistry.NOOP), usage);
             case "hashing" -> new HashingEmbeddingClient();
             default -> throw Providers.unknown("embedding", provider, "openai 或 hashing");
         };

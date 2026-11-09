@@ -40,6 +40,8 @@ public final class OpenAiChatModels {
                 .maxTokens(properties.chat().maxTokens())
                 .timeout(properties.timeout())
                 .maxRetries(0)
+                // 流式调用也要服务商在最后一段带上 token 用量（#169）。
+                .streamUsage(true)
                 .build();
     }
 

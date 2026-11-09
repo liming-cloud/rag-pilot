@@ -30,7 +30,9 @@ class ModelCallFailureLogTest {
         }
         var properties = new AiProperties("http://127.0.0.1:" + port + "/v1", "sk-secret-test-key",
                 Duration.ofSeconds(2), new AiProperties.Embedding("openai", "BAAI/bge-m3", 16), null, null);
-        var client = new SpringAiEmbeddingClient(properties, io.micrometer.observation.ObservationRegistry.NOOP);
+        var client = new SpringAiEmbeddingClient(properties, io.micrometer.observation.ObservationRegistry.NOOP,
+                new com.liming.rag.ai.common.UsageReports(new org.springframework.beans.factory.support.StaticListableBeanFactory()
+                        .getBeanProvider(com.liming.rag.ai.UsageRecording.class)));
 
         assertThatThrownBy(() -> client.embed(List.of("保险柜密码是多少"))).isInstanceOf(ModelCallException.class);
 
