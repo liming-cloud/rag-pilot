@@ -5,6 +5,7 @@ import com.liming.rag.ai.common.ModelCallFailures;
 import com.liming.rag.ai.common.ModelRoutes;
 import com.liming.rag.ai.common.ModelUsage;
 import com.liming.rag.ai.common.OpenAiChatModels;
+import com.liming.rag.ai.common.UsageReports;
 import java.util.List;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.messages.SystemMessage;
@@ -25,10 +26,12 @@ final class SpringAiQueryRewriting implements QueryRewriting {
 
     private final OpenAiChatModels models;
     private final ModelRoutes routes;
+    private final UsageReports usage;
 
-    SpringAiQueryRewriting(OpenAiChatModels models, ModelRoutes routes) {
+    SpringAiQueryRewriting(OpenAiChatModels models, ModelRoutes routes, UsageReports usage) {
         this.models = models;
         this.routes = routes;
+        this.usage = usage;
     }
 
     @Override
@@ -37,8 +40,13 @@ final class SpringAiQueryRewriting implements QueryRewriting {
         var options = models.options(route).mutate().maxTokens(MAX_TOKENS).stop(List.of("\n")).build();
         var prompt = new Prompt(List.of(new SystemMessage(instructions), new UserMessage(question)), options);
         try {
-            var rewritten = ChatClient.create(models.model(route), models.observations()).prompt(prompt).call()
-                    .content();
+            var response = ChatClient.create(models.model(route), models.observations()).prompt(prompt).call()
+                    .chatResponse();
+            if (response == null) {
+                return "";
+            }
+            usage.report(ModelUsage.ANSWER, route, response.getMetadata().getUsage());
+            var rewritten = response.getResult() == null ? null : response.getResult().getOutput().getText();
             return rewritten == null ? "" : rewritten.strip();
         } catch (RuntimeException e) {
             throw ModelCallFailures.failed("rewrite", route.model(), "改写问题失败：对话模型服务暂时不可用", e);

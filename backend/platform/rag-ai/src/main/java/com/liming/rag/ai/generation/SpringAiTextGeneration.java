@@ -8,18 +8,21 @@ import com.liming.rag.ai.common.ModelRoute;
 import com.liming.rag.ai.common.ModelRoutes;
 import com.liming.rag.ai.common.ModelUsage;
 import com.liming.rag.ai.common.OpenAiChatModels;
+import com.liming.rag.ai.common.UsageReports;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.UserMessage;
+import org.springframework.ai.chat.metadata.Usage;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.openai.OpenAiChatOptions;
 import reactor.core.publisher.Flux;
@@ -39,12 +42,15 @@ final class SpringAiTextGeneration implements TextGeneration {
     private final OpenAiChatModels models;
     private final ModelRoutes routes;
     private final Duration hedgeAfter;
+    private final UsageReports usage;
     /** 按地址和密钥缓存 ChatClient，与 {@link OpenAiChatModels} 的模型一一对应。 */
     private final Map<String, ChatClient> clients = new ConcurrentHashMap<>();
 
-    SpringAiTextGeneration(AiProperties properties, OpenAiChatModels models, ModelRoutes routes) {
+    SpringAiTextGeneration(AiProperties properties, OpenAiChatModels models, ModelRoutes routes,
+            UsageReports usage) {
         this.models = models;
         this.routes = routes;
+        this.usage = usage;
         this.hedgeAfter = properties.chat().hedgeAfter();
     }
 
@@ -62,25 +68,27 @@ final class SpringAiTextGeneration implements TextGeneration {
                 key -> ChatClient.create(models.model(route), models.observations()));
     }
 
-    private ModelRoute route(Limits limits) {
-        return routes.resolve(limits.tier() == Tier.LIGHT ? ModelUsage.LIGHT : ModelUsage.ANSWER);
-    }
-
     @Override
     public String complete(String systemPrompt, String userMessage) {
         var route = routes.resolve(ModelUsage.ANSWER);
-        return call(route, prompt(systemPrompt, userMessage, options(route)));
+        return call(route, ModelUsage.ANSWER, prompt(systemPrompt, userMessage, options(route)));
     }
 
     @Override
     public String complete(String systemPrompt, String userMessage, Limits limits) {
-        var route = route(limits);
-        return call(route, prompt(systemPrompt, userMessage, limited(route, limits)));
+        var usage = limits.tier() == Tier.LIGHT ? ModelUsage.LIGHT : ModelUsage.ANSWER;
+        var route = routes.resolve(usage);
+        return call(route, usage, prompt(systemPrompt, userMessage, limited(route, limits)));
     }
 
-    private String call(ModelRoute route, Prompt prompt) {
+    private String call(ModelRoute route, ModelUsage purpose, Prompt prompt) {
         try {
-            var text = client(route).prompt(prompt).call().content();
+            var response = client(route).prompt(prompt).call().chatResponse();
+            if (response == null) {
+                return "";
+            }
+            usage.report(purpose, route, response.getMetadata().getUsage());
+            var text = response.getResult() == null ? null : response.getResult().getOutput().getText();
             return text == null ? "" : text;
         } catch (RuntimeException e) {
             throw unavailable(route, e);
@@ -103,12 +111,12 @@ final class SpringAiTextGeneration implements TextGeneration {
     @Override
     public String stream(String systemPrompt, String userMessage, Consumer<String> onDelta, CompletionStage<?> stop) {
         var answer = routes.resolve(ModelUsage.ANSWER);
-        var main = deltas(answer, prompt(systemPrompt, userMessage, options(answer)));
+        var main = deltas(answer, ModelUsage.ANSWER, prompt(systemPrompt, userMessage, options(answer)));
         var deltas = hedgeAfter == null ? main
                 : Flux.firstWithValue(main, Mono.delay(hedgeAfter)
                         .map(tick -> routes.resolve(ModelUsage.HEDGE))
                         .doOnNext(hedge -> log.info("对话模型 {} 内没出首字，发出备用请求（{}）", hedgeAfter, hedge.model()))
-                        .flatMapMany(hedge -> deltas(hedge, prompt(systemPrompt, userMessage, options(hedge)))));
+                        .flatMapMany(hedge -> deltas(hedge, ModelUsage.HEDGE, prompt(systemPrompt, userMessage, options(hedge)))));
         var text = new StringBuilder();
         try {
             // suppressCancel：流正常结束时 takeUntilOther 会取消这个 Mono，不能连带把停止信号也取消掉，
@@ -123,9 +131,29 @@ final class SpringAiTextGeneration implements TextGeneration {
         return text.toString();
     }
 
-    /** 只保留有文字的片段，这样“先出字”指的是真正的首字，而不是只带角色的空片段。 */
-    private Flux<String> deltas(ModelRoute route, Prompt prompt) {
-        return client(route).prompt(prompt).stream().content().filter(delta -> !delta.isEmpty());
+    /**
+     * 只保留有文字的片段，这样“先出字”指的是真正的首字，而不是只带角色的空片段。服务商在最后一段带上 token 用量，
+     * 流正常结束时记一次；中途被停止或因备用请求取消的流收不到用量，不记（#169，统计会略少）。
+     */
+    private Flux<String> deltas(ModelRoute route, ModelUsage purpose, Prompt prompt) {
+        var tokens = new AtomicReference<Usage>();
+        return client(route).prompt(prompt).stream().chatResponse()
+                .doOnNext(response -> {
+                    var seen = response.getMetadata().getUsage();
+                    if (seen != null && seen.getTotalTokens() != null && seen.getTotalTokens() > 0) {
+                        tokens.set(seen);
+                    }
+                })
+                .doOnComplete(() -> {
+                    var seen = tokens.get();
+                    if (seen == null) {
+                        usage.report(purpose.name(), route, 0, 0);
+                    } else {
+                        usage.report(purpose, route, seen);
+                    }
+                })
+                .mapNotNull(response -> response.getResult() == null ? null : response.getResult().getOutput().getText())
+                .filter(delta -> !delta.isEmpty());
     }
 
     private static Prompt prompt(String systemPrompt, String userMessage, OpenAiChatOptions options) {

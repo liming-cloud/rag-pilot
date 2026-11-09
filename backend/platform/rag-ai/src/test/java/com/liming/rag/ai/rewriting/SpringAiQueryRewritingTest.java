@@ -7,7 +7,9 @@ import com.liming.rag.ai.QueryRewriting;
 import com.liming.rag.ai.common.AiProperties;
 import com.liming.rag.ai.common.ModelCallException;
 import com.liming.rag.ai.common.OpenAiChatModels;
+import com.liming.rag.ai.common.ModelCallUsage;
 import com.liming.rag.ai.common.TestRoutes;
+import com.liming.rag.ai.common.TestUsage;
 import com.sun.net.httpserver.HttpServer;
 import io.micrometer.observation.ObservationRegistry;
 import java.io.IOException;
@@ -25,6 +27,7 @@ import org.junit.jupiter.api.Test;
 class SpringAiQueryRewritingTest {
 
     private final List<String> bodies = Collections.synchronizedList(new ArrayList<>());
+    private final TestUsage usage = new TestUsage();
     private HttpServer server;
 
     @AfterEach
@@ -44,6 +47,17 @@ class SpringAiQueryRewritingTest {
         assertThat(bodies.getFirst()).contains("\"role\":\"system\"", "你负责把员工的问题改写成规范说法", "纠正错别字",
                 "\"content\":\"临期的东西打几者\"",
                 "\"max_tokens\":64", "\"stop\":\"\\n\"", "\"model\":\"m\"");
+    }
+
+    @Test
+    @DisplayName("改写调用报一次回答用途的用量，数值与服务商返回的一致（#169）")
+    void reportsUsage() throws Exception {
+        start(200, "临期商品打几折？");
+
+        rewriting().rewrite("规则", "问题");
+
+        assertThat(usage.calls).containsExactly(new ModelCallUsage("ANSWER",
+                "http://127.0.0.1:" + server.getAddress().getPort() + "/v1", "m", 30, 5));
     }
 
     @Test
@@ -68,7 +82,7 @@ class SpringAiQueryRewritingTest {
         var properties = new AiProperties("http://127.0.0.1:" + server.getAddress().getPort() + "/v1", "test-key",
                 Duration.ofSeconds(5), null, null, new AiProperties.Chat("openai", "m", 0.1, 256, null, null, null));
         return new SpringAiQueryRewriting(new OpenAiChatModels(properties, ObservationRegistry.NOOP),
-                TestRoutes.of(properties, Map.of()));
+                TestRoutes.of(properties, Map.of()), usage.reports());
     }
 
     private void start(int status, String text) throws IOException {
@@ -78,7 +92,8 @@ class SpringAiQueryRewritingTest {
                 bodies.add(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
                 var body = (status == 200
                         ? "{\"id\":\"c\",\"object\":\"chat.completion\",\"created\":1,\"model\":\"m\",\"choices\":[{\"index\":0,"
-                                + "\"message\":{\"role\":\"assistant\",\"content\":\"" + text + "\"},\"finish_reason\":\"stop\"}]}"
+                                + "\"message\":{\"role\":\"assistant\",\"content\":\"" + text + "\"},\"finish_reason\":\"stop\"}],"
+                                + "\"usage\":{\"prompt_tokens\":30,\"completion_tokens\":5,\"total_tokens\":35}}"
                         : "{\"error\":{\"message\":\"busy\"}}").getBytes(StandardCharsets.UTF_8);
                 exchange.getResponseHeaders().add("Content-Type", "application/json");
                 exchange.sendResponseHeaders(status, body.length);

@@ -75,6 +75,7 @@ docker compose --env-file .env --env-file release.env logs --tail 200 app   # �
 
 | 事件 | 什么时候出现 |
 | --- | --- |
+| `event=model_usage_record_failed` | 记模型用量失败（只写日志，不影响这次问答）：`purpose` 是用途，`model` 是模型名；多半是数据库暂时不可用，管理端“用量”会少这几次 |
 | `event=model_call_failed` | 模型调用失败或超时：`usage` 是用途（chat、rewrite、embedding、rerank），`error` 是异常类型（如 `HttpTimeoutException`、`ConnectException`） |
 | `event=answer_refused` | 答不上来：`reason` 是原因（`NO_EVIDENCE` 没检索到、`LOW_RELEVANCE` 相关度太低、`MODEL_DECLINED` 模型判断依据不足、`UNCITED` 回答没有有效引用、`DATA_DENIED` 要查的数据无权查看、`DATA_UNAVAILABLE` 数据暂时查不到），`top` 是最高相关度 |
 | `event=query_rewritten` | 相关度偏低时换个说法再找一次：`outcome` 是结果（`REWRITTEN` 改写了、`NO_CHANGE` 没改、`TIMED_OUT` 改写超时、`SKIPPED_BELOW_FLOOR` 分数太低不改写直接拒答） |

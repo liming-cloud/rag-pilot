@@ -7,6 +7,7 @@ import com.liming.rag.ai.common.ModelCallFailures;
 import com.liming.rag.ai.common.ModelRoute;
 import com.liming.rag.ai.common.ModelRoutes;
 import com.liming.rag.ai.common.ModelUsage;
+import com.liming.rag.ai.common.UsageReports;
 import java.net.ProxySelector;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -28,11 +29,13 @@ final class HttpRerankClient implements RerankClient {
     private final JsonMapper json = JsonMapper.builder().build();
     private final AiProperties properties;
     private final ModelRoutes routes;
+    private final UsageReports usage;
 
-    HttpRerankClient(AiProperties properties, ModelRoutes routes) {
+    HttpRerankClient(AiProperties properties, ModelRoutes routes, UsageReports usage) {
         properties.requireApiKey();
         this.properties = properties;
         this.routes = routes;
+        this.usage = usage;
         this.http = HttpClient.newBuilder()
                 .connectTimeout(properties.timeout())
                 .proxy(ProxySelector.getDefault())
@@ -51,7 +54,7 @@ final class HttpRerankClient implements RerankClient {
             throw ModelCallFailures.failed("rerank", route.model(), "重排失败：模型服务返回 HTTP " + response.statusCode(),
                     null);
         }
-        return scores(response.body(), documents.size());
+        return scores(route, response.body(), documents.size());
     }
 
     private HttpRequest request(ModelRoute route, String query, List<String> documents) {
@@ -82,15 +85,24 @@ final class HttpRerankClient implements RerankClient {
     }
 
     /** 按序号放回原来的顺序；没给分的文档记 0 分。 */
-    private List<Double> scores(String body, int size) {
+    private List<Double> scores(ModelRoute route, String body, int size) {
         var scores = new ArrayList<>(Collections.nCopies(size, 0.0));
-        for (var result : json.readTree(body).path("results")) {
+        var tree = json.readTree(body);
+        for (var result : tree.path("results")) {
             int index = result.path("index").asInt(-1);
             if (index < 0 || index >= size) {
                 throw new ModelCallException("重排失败：模型返回了越界的序号");
             }
             scores.set(index, result.path("relevance_score").asDouble());
         }
+        reportUsage(route, tree);
         return scores;
+    }
+
+    /** 硅基流动在 {@code meta.tokens}，Jina 在 {@code usage}；都没有时 token 记 0，只算一次调用。 */
+    private void reportUsage(ModelRoute route, tools.jackson.databind.JsonNode tree) {
+        var tokens = tree.path("meta").path("tokens");
+        long input = tokens.path("input_tokens").asLong(tree.path("usage").path("total_tokens").asLong(0));
+        usage.report(ModelUsage.RERANK.name(), route, input, tokens.path("output_tokens").asLong(0));
     }
 }

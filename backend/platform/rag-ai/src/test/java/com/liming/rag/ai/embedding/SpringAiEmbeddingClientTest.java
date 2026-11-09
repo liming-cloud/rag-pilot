@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.liming.rag.ai.EmbeddingClient;
 import com.liming.rag.ai.common.AiProperties;
+import com.liming.rag.ai.common.TestUsage;
 import com.sun.net.httpserver.HttpServer;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
@@ -59,10 +60,14 @@ class SpringAiEmbeddingClientTest {
                 }
             });
 
-            var vectors = new SpringAiEmbeddingClient(properties, registry).embed(List.of("临期商品"));
+            var usage = new TestUsage();
+            var vectors = new SpringAiEmbeddingClient(properties, registry, usage.reports()).embed(List.of("临期商品"));
 
             assertThat(vectors).hasSize(1);
             assertThat(calls).hasValue(2);
+            // 入库向量化的用量（#169）：嵌入只有输入 token；被限流重试的失败请求不计。
+            assertThat(usage.calls).containsExactly(new com.liming.rag.ai.common.ModelCallUsage("EMBEDDING",
+                    properties.baseUrl(), "BAAI/bge-m3", 1, 0));
             // 向量化也留下 Spring AI 的观测（#145），由 Actuator 汇总成指标。
             assertThat(observed).contains("gen_ai.client.operation");
         } finally {

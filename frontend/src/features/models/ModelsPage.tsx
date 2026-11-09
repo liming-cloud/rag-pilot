@@ -6,18 +6,20 @@ import { cn } from "@/lib/utils";
 import { ChangesTab } from "./ChangesTab";
 import { ProvidersTab } from "./ProvidersTab";
 import { UsagesTab } from "./UsagesTab";
+import { UsageStatsTab } from "./UsageStatsTab";
 import { fetchModelSettings, modelKeys } from "./api";
 
 const TABS = [
   { key: "providers", label: "服务商" },
   { key: "usages", label: "用途与模型" },
+  { key: "stats", label: "用量" },
   { key: "changes", label: "变更记录" },
 ] as const;
 
 type Tab = (typeof TABS)[number]["key"];
 
 /**
- * 模型管理（#120、D-043）：分“服务商”“用途与模型”“变更记录”三个标签（先有服务商，才能给用途选模型），标签记在地址里，刷新后不丢。
+ * 模型管理（#120、D-043）：分“服务商”“用途与模型”“用量”“变更记录”四个标签（先有服务商，才能给用途选模型），标签记在地址里，刷新后不丢。
  * 换模型在弹窗里做：从服务商的模型列表里选（不提供列表时手填），“测试并保存”一步完成，测不通不保存；
  * 恢复变更前先确认。嵌入模型只显示。
  */
@@ -66,6 +68,7 @@ export function ModelsPage() {
           </div>
           {tab === "usages" && <UsagesTab settings={settings.data} />}
           {tab === "providers" && <ProvidersTab settings={settings.data} />}
+          {tab === "stats" && <UsageStatsTab />}
           {tab === "changes" && <ChangesTab />}
         </>
       )}

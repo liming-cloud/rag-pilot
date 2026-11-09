@@ -510,3 +510,15 @@ Compose 增加 web 服务（`deploy/web.Dockerfile`）：Node 24 构建前端，
 - **根包接口里的静态工厂**（`Caches.inMemory()`、`KeyValueStores.inMemory(clock)`、`TextGeneration.fixed(…)`）需要创建包内私有的实现，经子包里的公开工厂（`InMemoryCaches`、`InMemoryKeyValueStores`、`FixedTextGenerations`）；这些工厂不导出，调用方的写法不变。
 - **不改的**：行为、接口签名、配置项名称（`rag.ai.*`、`rag.cache.*`）；上下文层代码只改 import 和 `allowedDependencies`。日志里的类名随包名变（如 `com.liming.rag.cache.typed.JsonCaches`），事件名 `event=…` 不变。
 - **检查**：`PackageLayoutTest` 加三条（根包只放 public 接口、实现根包接口的类不能 public、能力子包之间无依赖且 `common` 不依赖能力子包），`TECH_MODULES_EXPOSE_CONTRACTS_ONLY` 放过 `common`；`ModularityTests` 用 `archcapability` 样例确认没导出的内部类型被拦下。
+
+## D-065 模型用量与费用统计的实施结论：只存日聚合、服务商存域名、费用按当前单价估算（2026-11-09，#169）
+
+落实 D-056（人对 #169 的五个未决问题全按推荐答复）：
+
+- **谁来报**：rag-ai 在根包声明 SPI `UsageRecording`（同 `ModelRouting`，由 settings 实现），文字生成（一次性、流式）、问题改写、重排、入库向量化每调用一次报一次 `ModelCallUsage`（用途、服务商地址、模型、输入输出 token）；记录失败只写日志 `event=model_usage_record_failed`，不影响问答。评判模型（评测）和连通测试不记。
+- **token 从哪来**：对话和嵌入取 Spring AI 响应里的用量；流式调用打开 `stream_options.include_usage`，在流正常结束时报一次。**中途被员工停止、或备用请求里被取消的那一路收不到用量，不记**，统计会略少；服务商没返回用量时记 0 token、仍算一次调用。重排没有 Spring AI 抽象，读响应里的 `meta.tokens`（硅基流动）或 `usage.total_tokens`（Jina 风格），都没有则记 0。查询向量缓存命中不调模型，不计。
+- **存什么**：`model_usage_daily`（日 × 用途 × 服务商 × 模型 → 调用数、输入、输出 token）和 `model_price`（模型 → 每百万 token 输入、输出单价，元）。**服务商只存地址的域名**（不是管理端的服务商名称：改名不影响历史，也不会把带密钥的地址存下来）；用途含 `EMBEDDING`（入库向量化）。不存提示词、回答、问题原文，也不记是谁问的；测试断言表里只有这 7 列、没有原文。一天按统计时区（`StatsZone`）划分，保留 365 天，每天 3:15 清理。
+- **单价与费用**：管理员按模型手填，不内置价目表；币种固定为元。费用 = 当前单价 × token，**改价后历史用量也按新价算**，所以只是“大约”；没填单价的模型不计费用，所在行和合计标“缺单价”。改单价经 `AuditTrail` 记 `MODEL_PRICE_CHANGED`。
+- **接口**：`GET /api/models/usage?from=&to=&groupBy=DAY|MONTH|PURPOSE|MODEL`（`model:view`，默认最近 30 天、按日，最长一年；响应带模型单价列表）、`PUT /api/models/prices`（`model:update`）。界面是模型管理页的“用量”标签。
+- **写库**：每次调用一次 upsert，在独立事务里（`REQUIRES_NEW`），调用方回滚也不丢已花的 token；高并发下同一行会有短暂的行锁排队，当前规模可以接受，吞吐上去后再改成批量累加。
+- **没做的**：预算上限和告警、按知识库或按人统计（D-056 决定不做）；按 `ModelPurpose` 细分嵌入模型的切换（M9 后续）。
