@@ -70,11 +70,14 @@ function seedUsage(): UsageRow[] {
 function usageReport(url: URL): UsageReport {
   const to = new Date().toISOString().slice(0, 10);
   const from = url.searchParams.get("from") ?? new Date(Date.now() - 29 * 86_400_000).toISOString().slice(0, 10);
-  const groupBy = (url.searchParams.get("groupBy") ?? "DAY") as UsageGroupBy;
+  const groupBy = (url.searchParams.get("groupBy") ?? "DETAIL") as UsageGroupBy;
   const key = (row: UsageRow) =>
-    ({ DAY: row.day, MONTH: row.day.slice(0, 7), PURPOSE: row.purpose, MODEL: `${row.model} · ${row.provider}` })[groupBy];
-  const empty = (groupKey: string): UsageGroup => ({
-    key: groupKey,
+    ({ DETAIL: `${row.day} ${row.purpose} ${row.provider} ${row.model}`, DAY: row.day, MONTH: row.day.slice(0, 7), PURPOSE: row.purpose, MODEL: `${row.model} · ${row.provider}` })[groupBy];
+  const empty = (groupKey: string, row?: UsageRow): UsageGroup => ({
+    key: row ? row.day : groupKey,
+    purpose: row ? (row.purpose as UsageGroup["purpose"]) : null,
+    provider: row?.provider ?? null,
+    model: row?.model ?? null,
     calls: 0,
     inputTokens: 0,
     outputTokens: 0,
@@ -88,8 +91,8 @@ function usageReport(url: URL): UsageReport {
     const cost = price
       ? ((price.inputPerMillion ?? 0) * row.input + (price.outputPerMillion ?? 0) * row.output) / 1e6
       : 0;
-    const group = groups.get(key(row)) ?? empty(key(row));
-    groups.set(group.key, group);
+    const group = groups.get(key(row)) ?? empty(key(row), groupBy === "DETAIL" ? row : undefined);
+    groups.set(key(row), group);
     for (const target of [group, total]) {
       target.calls += row.calls;
       target.inputTokens += row.input;
@@ -99,11 +102,15 @@ function usageReport(url: URL): UsageReport {
     }
   }
   const sorted = [...groups.values()].sort((a, b) =>
-    groupBy === "DAY" || groupBy === "MONTH" ? b.key.localeCompare(a.key) : b.inputTokens + b.outputTokens - (a.inputTokens + a.outputTokens),
+    groupBy === "DETAIL" || groupBy === "DAY" || groupBy === "MONTH"
+      ? b.key.localeCompare(a.key) : b.inputTokens + b.outputTokens - (a.inputTokens + a.outputTokens),
   );
   const models = new Set([...state.usageRows.map((row) => row.model), ...state.prices.map((price) => price.model)]);
   const prices = [...models].sort().map((model) => state.prices.find((price) => price.model === model) ?? { model, inputPerMillion: null, outputPerMillion: null });
-  return { from, to, groupBy, groups: sorted, total, prices };
+  const page = Number(url.searchParams.get("page") ?? 1);
+  const size = Number(url.searchParams.get("size") ?? 20);
+  const groupPage = { items: sorted.slice((page - 1) * size, page * size), total: sorted.length, page, size };
+  return { from, to, groupBy, groups: groupPage, total, prices };
 }
 
 export function resetModels() {

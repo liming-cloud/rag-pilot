@@ -519,6 +519,6 @@ Compose 增加 web 服务（`deploy/web.Dockerfile`）：Node 24 构建前端，
 - **token 从哪来**：对话和嵌入取 Spring AI 响应里的用量；流式调用打开 `stream_options.include_usage`，在流正常结束时报一次。**中途被员工停止、或备用请求里被取消的那一路收不到用量，不记**，统计会略少；服务商没返回用量时记 0 token、仍算一次调用。重排没有 Spring AI 抽象，读响应里的 `meta.tokens`（硅基流动）或 `usage.total_tokens`（Jina 风格），都没有则记 0。查询向量缓存命中不调模型，不计。
 - **存什么**：`model_usage_daily`（日 × 用途 × 服务商 × 模型 → 调用数、输入、输出 token）和 `model_price`（模型 → 每百万 token 输入、输出单价，元）。**服务商只存地址的域名**（不是管理端的服务商名称：改名不影响历史，也不会把带密钥的地址存下来）；用途含 `EMBEDDING`（入库向量化）。不存提示词、回答、问题原文，也不记是谁问的；测试断言表里只有这 7 列、没有原文。一天按统计时区（`StatsZone`）划分，保留 365 天，每天 3:15 清理。
 - **单价与费用**：管理员按模型手填，不内置价目表；币种固定为元。费用 = 当前单价 × token，**改价后历史用量也按新价算**，所以只是“大约”；没填单价的模型不计费用，所在行和合计标“缺单价”。改单价经 `AuditTrail` 记 `MODEL_PRICE_CHANGED`。
-- **接口**：`GET /api/models/usage?from=&to=&groupBy=DAY|MONTH|PURPOSE|MODEL`（`model:view`，默认最近 30 天、按日，最长一年；响应带模型单价列表）、`PUT /api/models/prices`（`model:update`）。界面是模型管理页的“用量”标签。
+- **接口**：`GET /api/models/usage?from=&to=&groupBy=DETAIL|DAY|MONTH|PURPOSE|MODEL&page=&size=`（`model:view`，默认最近 30 天、按明细，最长一年；`groups` 分页，`total` 是整段合计；响应带模型单价列表）、`PUT /api/models/prices`（`model:update`）。界面是模型管理页的“用量”标签：单价表在最上面，下面是分页的用量列表（明细带日期、用途、模型、服务商，也可按日、月、用途、模型合并），合计在列表上方（原型调整，人在 2026-11-09 提出）。
 - **写库**：每次调用一次 upsert，在独立事务里（`REQUIRES_NEW`），调用方回滚也不丢已花的 token；高并发下同一行会有短暂的行锁排队，当前规模可以接受，吞吐上去后再改成批量累加。
 - **没做的**：预算上限和告警、按知识库或按人统计（D-056 决定不做）；按 `ModelPurpose` 细分嵌入模型的切换（M9 后续）。

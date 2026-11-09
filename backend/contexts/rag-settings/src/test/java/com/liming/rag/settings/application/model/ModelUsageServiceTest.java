@@ -55,47 +55,67 @@ class ModelUsageServiceTest {
         store.rows.put("2026-11-09 RERANK api.example.com free", new long[] {1, 100, 0});
         service.savePrice(TENANT, ADMIN, "m1", new BigDecimal("2"), new BigDecimal("8"));
 
-        var report = service.usage("2026-11-09", "2026-11-10", "purpose");
+        var report = service.usage("2026-11-09", "2026-11-10", "purpose", 1, 20);
 
         assertThat(report.groupBy()).isEqualTo(UsageGroupBy.PURPOSE);
-        assertThat(report.groups()).extracting(UsageGroup::key).containsExactly("ANSWER", "RERANK");
-        assertThat(report.groups().getFirst().cost()).isEqualByComparingTo("8");
-        assertThat(report.groups().getFirst().unpriced()).isFalse();
-        assertThat(report.groups().getLast().cost()).isEqualByComparingTo("0");
-        assertThat(report.groups().getLast().unpriced()).isTrue();
+        assertThat(report.groups().items()).extracting(UsageGroup::key).containsExactly("ANSWER", "RERANK");
+        assertThat(report.groups().items().getFirst().cost()).isEqualByComparingTo("8");
+        assertThat(report.groups().items().getFirst().unpriced()).isFalse();
+        assertThat(report.groups().items().getLast().cost()).isEqualByComparingTo("0");
+        assertThat(report.groups().items().getLast().unpriced()).isTrue();
         assertThat(report.total().calls()).isEqualTo(4);
         assertThat(report.total().inputTokens()).isEqualTo(2_000_100);
         assertThat(report.total().cost()).isEqualByComparingTo("8");
     }
 
     @Test
-    @DisplayName("按日、按月分组，最新的在前；默认看最近 30 天、按日；范围外的用量不统计")
+    @DisplayName("按日、按月分组，最新的在前；默认看最近 30 天、按明细；范围外的用量不统计")
     void groupsByDayAndMonth() {
         store.rows.put("2026-10-31 ANSWER h m", new long[] {1, 10, 1});
         store.rows.put("2026-11-02 ANSWER h m", new long[] {2, 20, 2});
         store.rows.put("2026-11-09 ANSWER h m", new long[] {4, 40, 4});
         store.rows.put("2026-09-01 ANSWER h m", new long[] {8, 80, 8});
 
-        assertThat(service.usage("2026-10-01", "2026-11-30", "MONTH").groups()).extracting(UsageGroup::key,
+        assertThat(service.usage("2026-10-01", "2026-11-30", "MONTH", 1, 20).groups().items()).extracting(UsageGroup::key,
                 UsageGroup::calls).containsExactly(org.assertj.core.groups.Tuple.tuple("2026-11", 6L),
                         org.assertj.core.groups.Tuple.tuple("2026-10", 1L));
-        var defaults = service.usage(null, null, null);
-        assertThat(defaults.groupBy()).isEqualTo(UsageGroupBy.DAY);
+        var defaults = service.usage(null, null, null, 1, 20);
+        assertThat(defaults.groupBy()).isEqualTo(UsageGroupBy.DETAIL);
         assertThat(defaults.to()).isEqualTo(LocalDate.parse("2026-11-10"));
         assertThat(defaults.from()).isEqualTo(LocalDate.parse("2026-10-12"));
-        assertThat(defaults.groups()).extracting(UsageGroup::key).containsExactly("2026-11-09", "2026-11-02",
-                "2026-10-31");
+        assertThat(defaults.groups().items()).extracting(UsageGroup::key, UsageGroup::model)
+                .containsExactly(org.assertj.core.groups.Tuple.tuple("2026-11-09", "m"),
+                        org.assertj.core.groups.Tuple.tuple("2026-11-02", "m"),
+                        org.assertj.core.groups.Tuple.tuple("2026-10-31", "m"));
+    }
+
+    @Test
+    @DisplayName("明细分页：每页条数与页码生效，总条数不受分页影响，合计包含全部页；明细行带用途、服务商和模型")
+    void pagesDetailRows() {
+        for (int day = 1; day <= 5; day++) {
+            store.rows.put("2026-11-0" + day + " ANSWER api.example.com m", new long[] {1, 10, 1});
+        }
+
+        var second = service.usage("2026-11-01", "2026-11-09", "DETAIL", 2, 2);
+
+        assertThat(second.groups().total()).isEqualTo(5);
+        assertThat(second.groups().page()).isEqualTo(2);
+        assertThat(second.groups().items()).extracting(UsageGroup::key).containsExactly("2026-11-03", "2026-11-02");
+        assertThat(second.groups().items().getFirst()).extracting(UsageGroup::purpose, UsageGroup::provider,
+                UsageGroup::model).containsExactly("ANSWER", "api.example.com", "m");
+        assertThat(second.total().calls()).isEqualTo(5);
+        assertThat(service.usage("2026-11-01", "2026-11-09", "DETAIL", 9, 2).groups().items()).isEmpty();
     }
 
     @Test
     @DisplayName("日期格式、范围、分组不合规时拒绝，说明原因")
     void rejectsBadQueries() {
-        assertThatThrownBy(() -> service.usage("11/01", null, null)).isInstanceOf(SettingsException.class)
+        assertThatThrownBy(() -> service.usage("11/01", null, null, 1, 20)).isInstanceOf(SettingsException.class)
                 .hasMessageContaining("yyyy-MM-dd");
-        assertThatThrownBy(() -> service.usage("2026-11-09", "2026-11-01", null))
+        assertThatThrownBy(() -> service.usage("2026-11-09", "2026-11-01", null, 1, 20))
                 .hasMessageContaining("不能晚于");
-        assertThatThrownBy(() -> service.usage("2025-01-01", "2026-11-01", null)).hasMessageContaining("一年");
-        assertThatThrownBy(() -> service.usage(null, null, "USER")).hasMessageContaining("分组");
+        assertThatThrownBy(() -> service.usage("2025-01-01", "2026-11-01", null, 1, 20)).hasMessageContaining("一年");
+        assertThatThrownBy(() -> service.usage(null, null, "USER", 1, 20)).hasMessageContaining("分组");
     }
 
     @Test
