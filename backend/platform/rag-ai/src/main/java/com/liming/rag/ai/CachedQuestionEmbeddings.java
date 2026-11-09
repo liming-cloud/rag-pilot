@@ -1,8 +1,8 @@
 package com.liming.rag.ai;
 
-import com.liming.rag.cache.CacheSpec;
+import com.liming.rag.cache.typed.CacheSpec;
 import com.liming.rag.cache.Caches;
-import com.liming.rag.cache.TypedCache;
+import com.liming.rag.cache.typed.TypedCache;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;

@@ -1,10 +1,11 @@
-package com.liming.rag.cache;
+package com.liming.rag.cache.typed;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
+import com.liming.rag.cache.common.CacheProperties;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;

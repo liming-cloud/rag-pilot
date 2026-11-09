@@ -1,8 +1,8 @@
 package com.liming.rag.data.infrastructure.cache;
 
-import com.liming.rag.cache.CacheSpec;
+import com.liming.rag.cache.typed.CacheSpec;
 import com.liming.rag.cache.Caches;
-import com.liming.rag.cache.TypedCache;
+import com.liming.rag.cache.typed.TypedCache;
 import com.liming.rag.data.application.ScopeUnit;
 import com.liming.rag.data.application.UnitCache;
 import com.liming.rag.shared.TenantId;

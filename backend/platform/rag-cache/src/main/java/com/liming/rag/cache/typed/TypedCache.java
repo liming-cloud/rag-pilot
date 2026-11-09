@@ -1,11 +1,13 @@
-package com.liming.rag.cache;
+package com.liming.rag.cache.typed;
 
+import org.springframework.modulith.NamedInterface;
 import java.util.function.Supplier;
 import org.jspecify.annotations.Nullable;
 
 /**
  * 一种缓存的读和清除。缓存出错时不抛异常：读直接走加载，清除只记日志（恢复后组件会清掉全部缓存）。
  */
+@NamedInterface("typed")
 public interface TypedCache<V> {
 
     /**

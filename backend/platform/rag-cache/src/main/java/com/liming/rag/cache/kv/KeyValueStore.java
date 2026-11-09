@@ -1,5 +1,6 @@
-package com.liming.rag.cache;
+package com.liming.rag.cache.kv;
 
+import org.springframework.modulith.NamedInterface;
 import java.time.Duration;
 import java.util.List;
 import org.jspecify.annotations.Nullable;
@@ -8,6 +9,7 @@ import org.jspecify.annotations.Nullable;
  * 一组键值数据的存储，存的是权威数据（如登录会话），背后没有数据库可以回退：不加一级缓存、不降级，出错直接抛运行时异常。
  * 没有 Redis 时存在进程内，应用重启后丢失（D-054）。
  */
+@NamedInterface("kv")
 public interface KeyValueStore {
 
     /** {@link #remaining} 的返回值：键不存在。 */

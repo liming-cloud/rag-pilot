@@ -1,5 +1,6 @@
-package com.liming.rag.cache;
+package com.liming.rag.cache.kv;
 
+import com.liming.rag.cache.common.RedisKeys;
 import java.time.Duration;
 import java.util.List;
 import org.jspecify.annotations.Nullable;
@@ -67,7 +68,7 @@ final class RedisKeyValueStore implements KeyValueStore {
 
     @Override
     public List<String> keys(String prefix) {
-        var options = KeysScanOptions.defaults().pattern(RedisCacheStore.escape(namespace + prefix) + "*").chunkSize(500);
+        var options = KeysScanOptions.defaults().pattern(RedisKeys.escape(namespace + prefix) + "*").chunkSize(500);
         return redis.getKeys().getKeysStream(options).map(key -> key.substring(namespace.length())).toList();
     }
 

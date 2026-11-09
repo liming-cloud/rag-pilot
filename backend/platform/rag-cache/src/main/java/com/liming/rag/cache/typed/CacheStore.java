@@ -1,4 +1,4 @@
-package com.liming.rag.cache;
+package com.liming.rag.cache.typed;
 
 import java.time.Duration;
 import org.jspecify.annotations.Nullable;

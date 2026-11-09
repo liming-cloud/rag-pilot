@@ -1,5 +1,6 @@
-package com.liming.rag.cache;
+package com.liming.rag.cache.typed;
 
+import com.liming.rag.cache.common.RedisKeys;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -62,7 +63,7 @@ final class RedisCacheStore implements CacheStore {
     public void bumpAndDeleteByPrefix(String generationKey, String prefix) {
         // 先加一：之后才写回的旧值都会被拒绝，再慢慢删已有的键。
         redis.getAtomicLong(generationKey).incrementAndGet();
-        var options = KeysScanOptions.defaults().pattern(escape(prefix) + "*").chunkSize(BATCH);
+        var options = KeysScanOptions.defaults().pattern(RedisKeys.escape(prefix) + "*").chunkSize(BATCH);
         var batch = new ArrayList<String>(BATCH);
         for (var key : redis.getKeys().getKeys(options)) {
             batch.add(key);
@@ -78,10 +79,5 @@ final class RedisCacheStore implements CacheStore {
 
     private RScript script() {
         return redis.getScript(StringCodec.INSTANCE);
-    }
-
-    /** SCAN 的匹配模式里 {@code * ? [ ] \} 是通配符，前缀里的要转义。 */
-    static String escape(String prefix) {
-        return prefix.replaceAll("([*?\\[\\]\\\\])", "\\\\$1");
     }
 }

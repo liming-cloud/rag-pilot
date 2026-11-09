@@ -1,4 +1,4 @@
-package com.liming.rag.cache;
+package com.liming.rag.cache.common;
 
 import java.time.Duration;
 import java.util.Map;
@@ -15,13 +15,13 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * @param caches 按缓存名覆盖默认值，只写要改的项
  */
 @ConfigurationProperties("rag.cache")
-record CacheProperties(String prefix, Duration retryAfter, @Nullable Redis redis, Tiers defaults,
+public record CacheProperties(String prefix, Duration retryAfter, @Nullable Redis redis, Tiers defaults,
         @Nullable Map<String, Tiers> caches) {
 
     private static final Redis NO_REDIS =
             new Redis(false, "localhost", 6379, null, Duration.ofMillis(500), Duration.ofSeconds(2));
 
-    CacheProperties {
+    public CacheProperties {
         if (prefix == null || prefix.isBlank() || prefix.contains("*")) {
             throw new IllegalArgumentException("rag.cache.prefix 不能为空，也不能含 *");
         }
@@ -44,18 +44,18 @@ record CacheProperties(String prefix, Duration retryAfter, @Nullable Redis redis
     }
 
     /** 单元测试用：不用 Redis，一级缓存容量 10000、过期 5 分钟。 */
-    static CacheProperties localOnly() {
+    public static CacheProperties localOnly() {
         return new CacheProperties("rag:cache", Duration.ofSeconds(30), null,
                 new Tiers(new Local(true, 10_000L, Duration.ofMinutes(5)), new Remote(true, Duration.ofHours(1))),
                 null);
     }
 
-    boolean redisEnabled() {
+    public boolean redisEnabled() {
         return redis != null && redis.enabled();
     }
 
     /** 一种缓存最终用哪几层；没有 Redis 时二级不生效，只开了二级的缓存退回一级。 */
-    Policy policy(String cache) {
+    public Policy policy(String cache) {
         var policy = resolve(defaults, caches == null ? null : caches.get(cache));
         if (redisEnabled()) {
             return policy;
@@ -96,10 +96,10 @@ record CacheProperties(String prefix, Duration retryAfter, @Nullable Redis redis
      * @param enabled 打开后缓存有二级、会话存进 Redis（应用重启后不用重新登录）；Redis 不在时应用起不来
      * @param timeout 命令超时，超时按缓存出错处理
      */
-    record Redis(boolean enabled, String host, int port, @Nullable String password, Duration timeout,
+    public record Redis(boolean enabled, String host, int port, @Nullable String password, Duration timeout,
             Duration connectTimeout) {
 
-        Redis {
+        public Redis {
             if (enabled) {
                 if (host == null || host.isBlank() || port <= 0) {
                     throw new IllegalArgumentException("rag.cache.redis 打开时 host、port 必须填");
@@ -111,17 +111,17 @@ record CacheProperties(String prefix, Duration retryAfter, @Nullable Redis redis
     }
 
     /** 一种缓存的两层配置；覆盖时没写的项沿用默认值。 */
-    record Tiers(@Nullable Local local, @Nullable Remote remote) {
+    public record Tiers(@Nullable Local local, @Nullable Remote remote) {
     }
 
     /** 一级缓存：进程内（Caffeine），超过容量时淘汰，写入后过了过期时间失效。 */
-    record Local(@Nullable Boolean enabled, @Nullable Long maxSize, @Nullable Duration ttl) {
+    public record Local(@Nullable Boolean enabled, @Nullable Long maxSize, @Nullable Duration ttl) {
     }
 
     /** 二级缓存：Redis，只在 {@code rag.cache.redis.enabled} 打开时生效。 */
-    record Remote(@Nullable Boolean enabled, @Nullable Duration ttl) {
+    public record Remote(@Nullable Boolean enabled, @Nullable Duration ttl) {
     }
 
-    record Policy(boolean local, long maxSize, Duration localTtl, boolean remote, Duration remoteTtl) {
+    public record Policy(boolean local, long maxSize, Duration localTtl, boolean remote, Duration remoteTtl) {
     }
 }

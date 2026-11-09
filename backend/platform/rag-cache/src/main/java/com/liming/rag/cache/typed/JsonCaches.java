@@ -1,9 +1,11 @@
-package com.liming.rag.cache;
+package com.liming.rag.cache.typed;
 
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
+import com.liming.rag.cache.Caches;
+import com.liming.rag.cache.common.CacheProperties;
 import java.time.Clock;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
