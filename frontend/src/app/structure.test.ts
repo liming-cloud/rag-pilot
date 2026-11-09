@@ -2,7 +2,7 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { PERMISSIONS } from "@/lib/permissions";
 
-// 前端目录规范见 AGENTS.md“目录结构”：feature 之间只能引用对方的 api.ts，feature 不引用 app。
+// 前端目录规范见 规则卡 A-11：feature 之间只能引用对方的 api.ts，feature 不引用 app。
 const src = path.resolve(import.meta.dirname, "..");
 const ALLOWED_TOP = [
   "app",
@@ -46,7 +46,7 @@ export function importProblems(file: string, source: string): string[] {
   return problems;
 }
 
-/** feature 里直接写的原生表单、表格元素；这些要用 components/ui 里的 shadcn 组件（AGENTS.md：界面只用 shadcn/ui）。 */
+/** feature 里直接写的原生表单、表格元素；这些要用 components/ui 里的 shadcn 组件（规则卡 F-01：界面只用 shadcn/ui）。 */
 export function nativeElementProblems(file: string, source: string): string[] {
   if (!file.startsWith("features/") || /\.test\.tsx?$/.test(file)) return [];
   return [...source.matchAll(/<(input|select|textarea|table|label|option)[\s>]/g)].map(

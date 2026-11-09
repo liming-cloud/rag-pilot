@@ -7,7 +7,7 @@ import com.liming.rag.knowledge.api.SearchQuery;
 import java.util.List;
 
 /**
- * 检索步骤：调用 knowledge 的混合检索，把结果转成证据。权限过滤不在这里，在 knowledge 的检索 SQL 里（AGENTS.md）。
+ * 检索步骤：调用 knowledge 的混合检索，把结果转成证据。权限过滤不在这里，在 knowledge 的检索 SQL 里（规则卡 A-05）。
  */
 final class EvidenceRetriever {
 

@@ -52,7 +52,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
- * 把 AGENTS.md 里能明确判定的约束写成规则。每条规则先检查生产代码，再用 archfixture 里故意违规的样例确认规则能拦下。
+ * 把 docs/rules/ 里能明确判定的约束写成规则。每条规则先检查生产代码，再用 archfixture 里故意违规的样例确认规则能拦下。
  * 模块之间的依赖由 {@link ModularityTests} 检查，这里不重复。
  */
 class ArchitectureRulesTest {

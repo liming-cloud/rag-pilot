@@ -40,7 +40,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
- * 目录结构与分层依赖，规范见 AGENTS.md“目录结构”。
+ * 目录结构与分层依赖，规范见 规则卡 A-11。
  *
  * <p>上下文模块（identity、knowledge、answering、evaluation、settings）的类放在 api、web、application、domain、infrastructure 五个子包；
  * 平台层的 shared 扁平；能力组件 ai、cache、persistence（#187）根包只放能力接口，一种能力一个子包，共用的放 common。

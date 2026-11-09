@@ -7,7 +7,7 @@ import org.jspecify.annotations.Nullable;
 
 /**
  * 账号的规则（D-038、#136）：用户名、显示名的格式，以及连续输错密码后的锁定。新建账号、批量导入、登录都按这里判断，
- * 不各写一份。identity 不建 domain 包（AGENTS.md），规则收在应用层这一处。
+ * 不各写一份。identity 不建 domain 包（规则卡 A-11），规则收在应用层这一处。
  */
 public final class AccountRules {
 

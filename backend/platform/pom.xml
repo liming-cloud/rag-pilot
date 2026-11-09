@@ -11,7 +11,7 @@
         <relativePath>../../pom.xml</relativePath>
     </parent>
 
-    <!-- 平台层：不含业务的共享内核（rag-shared）和技术能力（rag-ai，Spring AI 防腐层）。上下文只经这里的能力接口使用外部框架（AGENTS.md“框架选用”）。 -->
+    <!-- 平台层：不含业务的共享内核（rag-shared）和技术能力（rag-ai，Spring AI 防腐层）。上下文只经这里的能力接口使用外部框架（规则卡 A-07、A-09）。 -->
     <artifactId>rag-platform</artifactId>
     <packaging>pom</packaging>
 

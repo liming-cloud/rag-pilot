@@ -1,4 +1,4 @@
-# 部署：db + redis + app + web（Nginx 提供前端并转发 /api，见 DECISIONS.md D-029）。员工访问 web 的端口。
+# 部署：db + redis + app + web（Nginx 提供前端并转发 /api，见 D-029）。员工访问 web 的端口。
 # 在发布包解压后的目录里使用（#138）：包里有编译好的 app/rag-app.jar 和 web/dist，app、web 镜像由 build.sh 在宿主机上构建，
 # 安装、升级、备份恢复见 README.md：
 #   docker compose -f compose.yml --env-file .env --env-file release.env up -d
@@ -14,7 +14,7 @@ x-logging: &logging
 
 services:
   db:
-    # ParadeDB（PostgreSQL 18）：同时提供 pgvector 向量检索与 pg_search BM25（jieba 中文分词），见 DECISIONS.md D-007。
+    # ParadeDB（PostgreSQL 18）：同时提供 pgvector 向量检索与 pg_search BM25（jieba 中文分词），见 D-007。
     # 按摘要锁定，从镜像仓库拉（#138）；用镜像源或内网仓库时在 .env 里设 RAG_DB_IMAGE，摘要保持不变。
     image: ${RAG_DB_IMAGE:-paradedb/paradedb@sha256:9b15fc383bcd771f1e32e222bd1603c4c29856c481f6bd06f1960e89608c02f0}
     environment:

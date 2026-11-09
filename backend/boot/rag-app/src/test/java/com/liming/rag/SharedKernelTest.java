@@ -24,7 +24,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
- * 共享内核（rag-shared）的边界，以及聚合根的位置。定义见 AGENTS.md“目录结构”、DECISIONS.md D-034、D-053。
+ * 共享内核（rag-shared）的边界，以及聚合根的位置。定义见 规则卡 A-11、D-034、D-053。
  */
 class SharedKernelTest {
 

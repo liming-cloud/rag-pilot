@@ -11,12 +11,12 @@
         <relativePath>../../pom.xml</relativePath>
     </parent>
 
-    <!-- 上下文层：各业务上下文，只依赖平台层的能力接口和彼此的 api 包；不直接依赖 Spring AI（AGENTS.md“框架选用”）。 -->
+    <!-- 上下文层：各业务上下文，只依赖平台层的能力接口和彼此的 api 包；不直接依赖 Spring AI（规则卡 A-07、A-09）。 -->
     <artifactId>rag-contexts</artifactId>
     <packaging>pom</packaging>
 
     <!--
-      框架选用（AGENTS.md）：上下文只经平台层的能力接口使用 AI 能力，不直接或间接依赖 Spring AI。rag-ai 把 Spring AI 声明为
+      框架选用（规则卡 A-07、A-09）：上下文只经平台层的能力接口使用 AI 能力，不直接或间接依赖 Spring AI。rag-ai 把 Spring AI 声明为
       optional，不会传给依赖它的上下文；这里再用 Enforcer 兜底，有人加了直接依赖或换了传递依赖时构建失败。
     -->
     <build>
@@ -41,7 +41,7 @@
                                         <exclude>redis.clients:*</exclude>
                                     </excludes>
                                     <searchTransitive>true</searchTransitive>
-                                    <message>上下文不能依赖 Spring AI 和 Redis 客户端：AI 能力经平台层 rag-ai、缓存经 rag-cache 的接口使用（AGENTS.md“框架选用”，D-053）。</message>
+                                    <message>上下文不能依赖 Spring AI 和 Redis 客户端：AI 能力经平台层 rag-ai、缓存经 rag-cache 的接口使用（规则卡 A-07、A-09，D-053）。</message>
                                 </bannedDependencies>
                             </rules>
                         </configuration>
