@@ -8,7 +8,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 /**
- * MyBatis-Plus 的全局配置（D-053）：SQL 只写在各模块的 {@code mapper/<模块名>/*.xml} 里，不用注解（AGENTS.md“约束”）；
+ * MyBatis-Plus 的全局配置（D-053）：SQL 只写在各模块的 {@code mapper/<模块名>/*.xml} 里，不用注解（规则卡 B-02）；
  * 单表分页用 {@code selectPage}，由分页插件补上 {@code count} 和 {@code LIMIT/OFFSET}，多表分页仍写在 XML 里。
  */
 @Configuration

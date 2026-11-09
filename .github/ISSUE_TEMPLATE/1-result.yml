@@ -22,7 +22,7 @@ body:
     id: questions
     attributes:
       label: 未决问题
-      description: 需要人决定的事（见 AGENTS.md），附建议。答复后勾选，并写进决策记录；没有写“无”
+      description: 需要人决定的事（见 AGENTS.md「先停下来问人」），附建议。答复后勾选，并写进决策记录；没有写“无”
       value: "- [ ] "
     validations:
       required: true

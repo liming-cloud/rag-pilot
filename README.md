@@ -41,11 +41,11 @@
 
 ## 技术栈
 
-JDK 25、Spring Boot 4.1、Spring AI 2.0、Spring Modulith 2.1、MyBatis-Plus、Sa-Token、Flyway、PostgreSQL 18（ParadeDB：pgvector 向量检索 + BM25 中文分词）。前端为 React 19 + Vite + Tailwind CSS v4 + shadcn/ui。选型理由见 [DECISIONS.md](DECISIONS.md)。
+JDK 25、Spring Boot 4.1、Spring AI 2.0、Spring Modulith 2.1、MyBatis-Plus、Sa-Token、Flyway、PostgreSQL 18（ParadeDB：pgvector 向量检索 + BM25 中文分词）。前端为 React 19 + Vite + Tailwind CSS v4 + shadcn/ui。选型理由见 [决策记录](docs/decisions/README.md)。
 
 ## 模块
 
-后端按类型分三层聚合：`backend/platform`（平台层）、`backend/contexts`（上下文层）、`backend/boot`（启动层），规则见 AGENTS.md“目录结构”。
+后端按类型分三层聚合：`backend/platform`（平台层）、`backend/contexts`（上下文层）、`backend/boot`（启动层），规则见规则卡 [A-11](docs/rules/20-架构.md)。
 
 | 模块 | 层 | 职责 |
 | --- | --- | --- |
@@ -93,4 +93,6 @@ npm run dev        # 接口转发到本机 8080 端口的后端
 npm run lint && npm test && npm run build
 ```
 
-协作流程见 [AGENTS.md](AGENTS.md)：每项工作先开 Issue，再建分支、开 PR，CI 通过后 squash 合并，不直接推送 main。
+协作流程见 [AGENTS.md](AGENTS.md)（路由，规则在 [docs/rules/](docs/rules/00-索引.md)）：每项工作先开 Issue，再建分支、开 PR，CI 通过后 squash 合并，不直接推送 main。
+
+工程指标（口径见[北极星](docs/engineering/北极星.md)）：规则可执行率（带自动检查的规则卡 ÷ 全部规则卡）基线为 27 ÷ 56 ≈ 48%（#196 合并时，随[规则卡索引](docs/rules/00-索引.md)更新）。

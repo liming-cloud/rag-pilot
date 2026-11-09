@@ -286,7 +286,7 @@ const sampleReviews: AnswerReview[] = [
 let reviews: AnswerReview[] = [];
 resetMockData();
 
-// 与后端一致：RFC 9457 问题详情，带稳定的错误码 code（见 AGENTS.md、D-034）。
+// 与后端一致：RFC 9457 问题详情，带稳定的错误码 code（见规则卡 A-19、D-034）。
 const problem = (status: number, code: string, detail: string) =>
   HttpResponse.json({ status, code, detail }, { status });
 

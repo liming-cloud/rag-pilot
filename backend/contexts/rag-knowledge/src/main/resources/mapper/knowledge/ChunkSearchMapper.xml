@@ -3,7 +3,7 @@
 <mapper namespace="com.liming.rag.knowledge.infrastructure.persistence.ChunkSearchMapper">
 
     <!--
-      用户能访问的知识库 = 直接授权给本人的 ∪ 授权给其角色的（D-038）。这是检索链路里唯一的权限过滤定义（AGENTS.md）：
+      用户能访问的知识库 = 直接授权给本人的 ∪ 授权给其角色的（D-038）。这是检索链路里唯一的权限过滤定义（规则卡 A-05）：
       nearest、keyword 两条召回 SQL 和 accessibleContents 都只在这个范围里查；KnowledgeBaseMemberMapper 列出可访问的库时
       也引用它。roleIds 由检索服务向 identity 查得，不由调用方传入。
     -->

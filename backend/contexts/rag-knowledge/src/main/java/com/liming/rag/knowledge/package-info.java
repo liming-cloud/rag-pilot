@@ -5,7 +5,7 @@
  * 通知只有监听 identity 的 {@code RoleDeleted}（同一事务里同步收回授权）。MyBatis-Plus 的 DO、Wrapper、Page
  * 只允许出现在 infrastructure 包。
  */
-// 允许依赖的模块（#136）：上下文只能依赖这些模块，以及它们 api 包公开的类型；方向见 AGENTS.md“上下文依赖”。
+// 允许依赖的模块（#136）：上下文只能依赖这些模块，以及它们 api 包公开的类型；方向见 规则卡 A-10。
 @ApplicationModule(allowedDependencies = {"shared", "ai", "ai :: common", "identity :: api", "settings :: api"})
 @NullMarked
 package com.liming.rag.knowledge;

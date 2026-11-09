@@ -9,7 +9,7 @@ import org.springframework.modulith.core.Violations;
 
 /**
  * 模块边界（Spring Modulith）：只通过开放模块和 api 包依赖，没有循环依赖，并且每个上下文只依赖它在 {@code package-info}
- * 里声明的模块（{@code allowedDependencies}，方向见 AGENTS.md“上下文依赖”，#136）。
+ * 里声明的模块（{@code allowedDependencies}，方向见 规则卡 A-10，#136）。
  */
 class ModularityTests {
 
