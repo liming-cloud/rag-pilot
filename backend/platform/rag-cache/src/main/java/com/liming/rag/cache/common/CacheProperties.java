@@ -22,19 +22,31 @@ public record CacheProperties(String prefix, Duration retryAfter, @Nullable Redi
             new Redis(false, "localhost", 6379, null, Duration.ofMillis(500), Duration.ofSeconds(2));
 
     public CacheProperties {
+        requirePrefix(prefix);
+        positive("rag.cache.retry-after", retryAfter);
+        redis = redis == null ? NO_REDIS : redis;
+        requireDefaults(defaults);
+        caches = caches == null ? Map.of() : Map.copyOf(caches);
+        resolve(defaults, null);
+        requireSomeTier(defaults, caches);
+    }
+
+    private static void requirePrefix(String prefix) {
         if (prefix == null || prefix.isBlank() || prefix.contains("*")) {
             throw new IllegalArgumentException("rag.cache.prefix 不能为空，也不能含 *");
         }
-        positive("rag.cache.retry-after", retryAfter);
-        redis = redis == null ? NO_REDIS : redis;
+    }
+
+    private static void requireDefaults(Tiers defaults) {
         if (defaults == null || defaults.local() == null || defaults.remote() == null
                 || defaults.local().enabled() == null || defaults.local().maxSize() == null
                 || defaults.remote().enabled() == null) {
             throw new IllegalArgumentException(
                     "rag.cache.defaults 的 local（enabled、max-size、ttl）和 remote（enabled、ttl）都要填");
         }
-        caches = caches == null ? Map.of() : Map.copyOf(caches);
-        resolve(defaults, null);
+    }
+
+    private static void requireSomeTier(Tiers defaults, Map<String, Tiers> caches) {
         for (var entry : caches.entrySet()) {
             var policy = resolve(defaults, entry.getValue());
             if (!policy.local() && !policy.remote()) {

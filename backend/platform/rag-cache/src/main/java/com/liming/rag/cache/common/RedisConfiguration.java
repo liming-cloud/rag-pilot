@@ -16,9 +16,9 @@ class RedisConfiguration {
     RedissonClient redissonClient(CacheProperties properties) {
         var redis = properties.redis();
         var config = new Config();
+        config.setPassword(redis.password() == null || redis.password().isBlank() ? null : redis.password());
         config.useSingleServer()
                 .setAddress("redis://" + redis.host() + ":" + redis.port())
-                .setPassword(redis.password() == null || redis.password().isBlank() ? null : redis.password())
                 .setTimeout((int) redis.timeout().toMillis())
                 .setConnectTimeout((int) redis.connectTimeout().toMillis());
         return Redisson.create(config);

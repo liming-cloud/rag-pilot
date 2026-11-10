@@ -86,6 +86,17 @@ public record IndustryPackFile(String name, @DefaultValue Answer answer, @Defaul
 
     private void validate(String code) {
         require(name != null && !name.isBlank() && name.length() <= 20, code, "name 不能为空，最多 20 个字");
+        validatePrompts(code);
+        for (var key : SettingKey.values()) {
+            value(key).ifPresent(value -> SettingRules.problem(key, value).ifPresent(problem ->
+                    require(false, code, key + "：" + problem)));
+        }
+        validateChat(code);
+        markers.forEach(marker -> require(marker != null && !marker.isBlank(), code, "markers 不能有空词"));
+        validateVocabulary(code);
+    }
+
+    private void validatePrompts(String code) {
         for (var text : new String[] {answer.role(), answer.citationExample(), rewrite.role()}) {
             require(text == null || (!text.isBlank() && text.length() <= 200), code, "提示词里的角色和示例不能为空，最多 200 个字");
         }
@@ -95,10 +106,9 @@ public record IndustryPackFile(String name, @DefaultValue Answer answer, @Defaul
             rewrite.hints().forEach(hint -> require(hint != null && !hint.isBlank() && hint.length() <= 100, code,
                     "rewrite.hints 每条不能为空，最多 100 个字"));
         }
-        for (var key : SettingKey.values()) {
-            value(key).ifPresent(value -> SettingRules.problem(key, value).ifPresent(problem ->
-                    require(false, code, key + "：" + problem)));
-        }
+    }
+
+    private void validateChat(String code) {
         if (chat.refusalTips() != null) {
             require(chat.refusalTips().size() <= 3, code, "chat.refusal-tips 最多 3 条");
             chat.refusalTips().forEach(tip -> require(tip != null && !tip.isBlank() && tip.length() <= 60, code,
@@ -106,7 +116,9 @@ public record IndustryPackFile(String name, @DefaultValue Answer answer, @Defaul
         }
         require(chat.refusalContact() == null || chat.refusalContact().length() <= 100, code,
                 "chat.refusal-contact 最多 100 个字");
-        markers.forEach(marker -> require(marker != null && !marker.isBlank(), code, "markers 不能有空词"));
+    }
+
+    private void validateVocabulary(String code) {
         var seen = new HashSet<String>();
         for (var term : vocabulary) {
             require(term.term() != null && !term.term().isBlank() && !term.members().isEmpty(), code,

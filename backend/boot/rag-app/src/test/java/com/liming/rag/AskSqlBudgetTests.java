@@ -102,6 +102,7 @@ class AskSqlBudgetTests {
         throw new AssertionError("预热那一问的问题向量 5 秒内没有存好");
     }
 
+    @SuppressWarnings("unchecked") // 上传响应按原始 Map 读。
     private void upload(long knowledgeBaseId, String filename, String text) {
         var file = new ByteArrayResource(text.getBytes(StandardCharsets.UTF_8)) {
             @Override

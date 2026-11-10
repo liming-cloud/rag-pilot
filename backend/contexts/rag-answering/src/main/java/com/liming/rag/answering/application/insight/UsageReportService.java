@@ -126,13 +126,18 @@ public class UsageReportService {
         if (days != null && week != null) {
             throw invalid("最近几天和按周只能选一个");
         }
-        if (week == null) {
-            int span = days == null ? 30 : days;
-            if (span < 1 || span > MAX_DAYS) {
-                throw invalid("统计天数只能是 1 到 " + MAX_DAYS + " 天");
-            }
-            return new Period(today.minusDays(span - 1L), today, false);
+        return week == null ? recentDays(days, today) : weekStarting(week, today);
+    }
+
+    private static Period recentDays(@Nullable Integer days, LocalDate today) {
+        int span = days == null ? 30 : days;
+        if (span < 1 || span > MAX_DAYS) {
+            throw invalid("统计天数只能是 1 到 " + MAX_DAYS + " 天");
         }
+        return new Period(today.minusDays(span - 1L), today, false);
+    }
+
+    private static Period weekStarting(String week, LocalDate today) {
         LocalDate monday;
         try {
             monday = LocalDate.parse(week);

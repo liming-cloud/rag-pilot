@@ -14,13 +14,18 @@ public final class SettingRules {
 
     /** 不合格时返回给管理员看的原因。文字项是只有一个元素的列表。 */
     public static Optional<String> problem(SettingKey key, List<String> value) {
-        if (!key.list()) {
-            if (value.size() != 1 || value.getFirst() == null || value.getFirst().isBlank()) {
-                return Optional.of("不能为空；要用默认值请恢复默认");
-            }
-            return value.getFirst().strip().length() > key.maxLength()
-                    ? Optional.of("最多 " + key.maxLength() + " 个字") : Optional.empty();
+        return key.list() ? listProblem(key, value) : textProblem(key, value);
+    }
+
+    private static Optional<String> textProblem(SettingKey key, List<String> value) {
+        if (value.size() != 1 || value.getFirst() == null || value.getFirst().isBlank()) {
+            return Optional.of("不能为空；要用默认值请恢复默认");
         }
+        return value.getFirst().strip().length() > key.maxLength()
+                ? Optional.of("最多 " + key.maxLength() + " 个字") : Optional.empty();
+    }
+
+    private static Optional<String> listProblem(SettingKey key, List<String> value) {
         if (value.size() > SettingKey.MAX_QUESTIONS) {
             return Optional.of("最多 " + SettingKey.MAX_QUESTIONS + " 个问题");
         }

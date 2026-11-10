@@ -95,6 +95,7 @@ class CacheOutageTests {
         assertThat(access.roleIds(TENANT, new UserId(admin))).isEmpty();
     }
 
+    @SuppressWarnings("unchecked") // 上传响应按原始 Map 读。
     private void upload(long knowledgeBaseId, String filename, String text) {
         var file = new ByteArrayResource(text.getBytes(StandardCharsets.UTF_8)) {
             @Override

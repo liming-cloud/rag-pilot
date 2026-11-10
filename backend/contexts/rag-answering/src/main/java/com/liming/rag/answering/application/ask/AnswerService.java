@@ -140,8 +140,7 @@ public class AnswerService {
         var clock = new StageClock();
         var looked = data.lookup(request.tenantId(), request.userId(), text, request.history(), onStatus);
         onStatus.accept(SEARCHING_STATUS);
-        var searchTexts = request.searchQueries() == null || request.searchQueries().isEmpty() ? List.of(text)
-                : request.searchQueries();
+        var searchTexts = searchTexts(request, text);
         var original = new SearchRequest(searchTexts.getFirst(), request.tenantId(), request.userId(),
                 request.knowledgeBaseIds());
         var queries = searchTexts.stream().map(searchText -> original.withText(expansion.expand(searchText))).toList();
@@ -152,10 +151,9 @@ public class AnswerService {
         var rewrite = ranking == null ? null : ranking.rewrite();
         var topRelevance = ranking == null ? null : ranking.ranked().getFirst().score();
         var evidence = ranking == null ? List.<Evidence>of() : evidence(ranking.ranked());
-        var found = looked != null && looked.found() ? looked : null;
+        var found = found(looked);
         if (evidence.isEmpty() && found == null) {
-            var reason = candidates.isEmpty() ? RefusalReason.NO_EVIDENCE : RefusalReason.LOW_RELEVANCE;
-            return finish(looked == null ? refusal(reason, topRelevance) : looked.refusal(topRelevance), clock, rewrite);
+            return finish(noEvidence(looked, candidates.isEmpty(), topRelevance), clock, rewrite);
         }
         if (stop.toCompletableFuture().isDone()) {
             return finish(refusal(RefusalReason.MODEL_DECLINED, topRelevance), clock, rewrite);
@@ -165,6 +163,21 @@ public class AnswerService {
         var prompt = EvidencePrompt.user(text, evidence, found, request.history());
         var answer = generate(prompt, evidence, found, topRelevance, clock, onDelta, stop);
         return finish(looked == null ? answer : looked.annotate(answer), clock, rewrite);
+    }
+
+    private static List<String> searchTexts(AskRequest request, String text) {
+        return request.searchQueries() == null || request.searchQueries().isEmpty() ? List.of(text)
+                : request.searchQueries();
+    }
+
+    private static @Nullable DataEvidence found(@Nullable DataEvidence looked) {
+        return looked != null && looked.found() ? looked : null;
+    }
+
+    /** 资料和数据都没有可用的：查过数据的按数据的原因拒答，否则按有没有候选区分。 */
+    private AskResult noEvidence(@Nullable DataEvidence looked, boolean noCandidates, @Nullable Double topRelevance) {
+        var reason = noCandidates ? RefusalReason.NO_EVIDENCE : RefusalReason.LOW_RELEVANCE;
+        return looked == null ? refusal(reason, topRelevance) : looked.refusal(topRelevance);
     }
 
     /** 重排候选；没有够分的证据且开了低分改写时，改写问题再检索、重排一次（{@link LowRelevanceRecovery}）。 */
