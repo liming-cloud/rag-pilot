@@ -95,4 +95,4 @@ npm run lint && npm test && npm run build
 
 协作流程见 [AGENTS.md](AGENTS.md)（路由，规则在 [docs/rules/](docs/rules/00-索引.md)）：每项工作先开 Issue，再建分支、开 PR，CI 通过后 squash 合并，不直接推送 main。
 
-工程指标（口径见[北极星](docs/engineering/北极星.md)）：规则可执行率（带自动检查的规则卡 ÷ 全部规则卡）基线为 27 ÷ 56 ≈ 48%（#196 合并时），#198 后为 28 ÷ 56 = 50%（随[规则卡索引](docs/rules/00-索引.md)更新）。
+工程指标（口径见[北极星](docs/engineering/北极星.md)）：规则可执行率（带自动检查的规则卡 ÷ 全部规则卡）基线为 27 ÷ 56 ≈ 48%（#196 合并时），#198 后为 28 ÷ 56 = 50%，#199 后为 29 ÷ 57 ≈ 51%（随[规则卡索引](docs/rules/00-索引.md)更新）。

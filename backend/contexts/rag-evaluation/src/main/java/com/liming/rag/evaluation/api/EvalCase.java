@@ -27,13 +27,21 @@ public record EvalCase(String id, String question, Kind kind, List<String> expec
     }
 
     public EvalCase {
-        expectedDocuments = expectedDocuments == null ? List.of() : List.copyOf(expectedDocuments);
-        keywords = keywords == null ? List.of() : List.copyOf(keywords);
+        expectedDocuments = copy(expectedDocuments);
+        keywords = copy(keywords);
         style = style == null || style.isBlank() ? DEFAULT_STYLE : style;
-        referenceAnswer = referenceAnswer == null || referenceAnswer.isBlank() ? null : referenceAnswer;
-        history = history == null ? List.of() : List.copyOf(history);
-        searchAs = searchAs == null || searchAs.isBlank() ? null : searchAs;
-        forbidden = forbidden == null ? List.of() : List.copyOf(forbidden);
+        referenceAnswer = blankToNull(referenceAnswer);
+        history = copy(history);
+        searchAs = blankToNull(searchAs);
+        forbidden = copy(forbidden);
+    }
+
+    private static List<String> copy(@Nullable List<String> values) {
+        return values == null ? List.of() : List.copyOf(values);
+    }
+
+    private static @Nullable String blankToNull(@Nullable String value) {
+        return value == null || value.isBlank() ? null : value;
     }
 
     public EvalCase(String id, String question, Kind kind, List<String> expectedDocuments, List<String> keywords,

@@ -55,30 +55,34 @@ class MybatisAnswerRecordRepository implements AnswerRecordRepository {
         row.rewrittenQuestion = reply.rewrittenQuestion();
         row.knowledgeBaseIds = record.knowledgeBaseIds().toArray(Long[]::new);
         mapper.insert(row);
-        for (var citation : reply.citations()) {
-            var cited = new CitationDO();
-            cited.answerId = row.id;
-            cited.citationIndex = citation.index();
-            cited.chunkId = citation.chunkId();
-            cited.documentId = citation.documentId();
-            cited.documentName = citation.documentName();
-            cited.headingPath = citation.headingPath() == null ? "" : citation.headingPath();
-            citations.insert(cited);
-        }
-        for (var citation : reply.dataCitations()) {
-            var cited = new DataCitationDO();
-            cited.answerId = row.id;
-            cited.citationIndex = citation.index();
-            cited.tool = citation.tool();
-            cited.sourceSystem = citation.system();
-            cited.dataset = citation.dataset();
-            cited.conditions = citation.conditions();
-            cited.asOf = citation.asOf();
-            cited.queriedAt = citation.queriedAt();
-            cited.truncated = citation.truncated();
-            dataCitations.insert(cited);
-        }
+        reply.citations().forEach(citation -> citations.insert(citationRow(row.id, citation)));
+        reply.dataCitations().forEach(citation -> dataCitations.insert(dataCitationRow(row.id, citation)));
         return record.withId(row.id);
+    }
+
+    private static CitationDO citationRow(Long answerId, Citation citation) {
+        var cited = new CitationDO();
+        cited.answerId = answerId;
+        cited.citationIndex = citation.index();
+        cited.chunkId = citation.chunkId();
+        cited.documentId = citation.documentId();
+        cited.documentName = citation.documentName();
+        cited.headingPath = citation.headingPath() == null ? "" : citation.headingPath();
+        return cited;
+    }
+
+    private static DataCitationDO dataCitationRow(Long answerId, DataCitation citation) {
+        var cited = new DataCitationDO();
+        cited.answerId = answerId;
+        cited.citationIndex = citation.index();
+        cited.tool = citation.tool();
+        cited.sourceSystem = citation.system();
+        cited.dataset = citation.dataset();
+        cited.conditions = citation.conditions();
+        cited.asOf = citation.asOf();
+        cited.queriedAt = citation.queriedAt();
+        cited.truncated = citation.truncated();
+        return cited;
     }
 
     @Override

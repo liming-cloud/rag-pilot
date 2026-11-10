@@ -12,6 +12,7 @@ import java.util.Optional;
 import org.springframework.stereotype.Component;
 import tools.jackson.core.JacksonException;
 import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
@@ -59,17 +60,22 @@ class AiToolSelection implements ToolSelection {
             if (!arguments.isMissingNode() && !arguments.isNull() && !arguments.isObject()) {
                 return Optional.empty();
             }
-            var values = new LinkedHashMap<String, Object>();
-            if (arguments.isObject()) {
-                JSON.convertValue(arguments, OBJECT).forEach((key, value) -> {
-                    if (value != null) {
-                        values.put(key, value);
-                    }
-                });
-            }
-            return Optional.of(new ToolChoice(tool.asString().strip(), values));
+            return Optional.of(new ToolChoice(tool.asString().strip(), values(arguments)));
         } catch (JacksonException e) {
             return Optional.empty();
         }
+    }
+
+    /** 参数里值为 null 的项去掉；没写参数时为空表。 */
+    private static Map<String, Object> values(JsonNode arguments) {
+        var values = new LinkedHashMap<String, Object>();
+        if (arguments.isObject()) {
+            JSON.convertValue(arguments, OBJECT).forEach((key, value) -> {
+                if (value != null) {
+                    values.put(key, value);
+                }
+            });
+        }
+        return values;
     }
 }

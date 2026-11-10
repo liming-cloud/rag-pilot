@@ -18,28 +18,44 @@ record ToolOutput(List<Map<String, Object>> rows, String system, String dataset,
 
     /** 返回不符合约定时为 null。 */
     static @Nullable ToolOutput parse(Map<String, Object> content) {
+        if (!(content.get("source") instanceof Map<?, ?> source)
+                || !(source.get("system") instanceof String system) || system.isBlank()
+                || !(source.get("dataset") instanceof String dataset) || dataset.isBlank()) {
+            return null;
+        }
+        return parse(content, system, dataset);
+    }
+
+    private static @Nullable ToolOutput parse(Map<String, Object> content, String system, String dataset) {
         try {
-            if (!(content.get("data") instanceof List<?> data) || !(content.get("source") instanceof Map<?, ?> source)
-                    || !(source.get("system") instanceof String system) || system.isBlank()
-                    || !(source.get("dataset") instanceof String dataset) || dataset.isBlank()
+            if (!(content.get("data") instanceof List<?> data)
                     || !(content.get("query") instanceof Map<?, ?> query)
                     || !(content.get("asOf") instanceof String asOf)
                     || !(content.get("queriedAt") instanceof String queriedAt)
                     || !(content.get("truncated") instanceof Boolean truncated)) {
                 return null;
             }
-            var rows = new ArrayList<Map<String, Object>>();
-            for (var row : data) {
-                if (!(row instanceof Map<?, ?> map)) {
-                    return null;
-                }
-                rows.add(stringKeys(map));
+            var rows = rows(data);
+            if (rows == null) {
+                return null;
             }
             return new ToolOutput(rows, system, dataset, stringKeys(query), OffsetDateTime.parse(asOf),
                     OffsetDateTime.parse(queriedAt), truncated);
         } catch (DateTimeParseException e) {
             return null;
         }
+    }
+
+    /** 每一行都要是对象，有一行不是就为 null。 */
+    private static @Nullable List<Map<String, Object>> rows(List<?> data) {
+        var rows = new ArrayList<Map<String, Object>>();
+        for (var row : data) {
+            if (!(row instanceof Map<?, ?> map)) {
+                return null;
+            }
+            rows.add(stringKeys(map));
+        }
+        return rows;
     }
 
     private static Map<String, Object> stringKeys(Map<?, ?> map) {

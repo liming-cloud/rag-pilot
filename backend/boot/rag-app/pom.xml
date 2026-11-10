@@ -160,6 +160,31 @@
                     </execution>
                 </executions>
             </plugin>
+            <!-- 复杂度门禁的违规样例（#199）：测试前对 archfixture/complexity 跑同一份规则，只出报告，由 ComplexityGateTest 断言。 -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-checkstyle-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>checkstyle-fixture</id>
+                        <phase>process-test-classes</phase>
+                        <goals>
+                            <goal>check</goal>
+                        </goals>
+                        <configuration>
+                            <sourceDirectories>
+                                <sourceDirectory>${project.build.testSourceDirectory}</sourceDirectory>
+                            </sourceDirectories>
+                            <includes>com/liming/rag/archfixture/complexity/*.java</includes>
+                            <outputFile>${project.build.directory}/checkstyle-fixture.xml</outputFile>
+                            <cacheFile>${project.build.directory}/checkstyle-fixture-cachefile</cacheFile>
+                            <consoleOutput>false</consoleOutput>
+                            <logViolationsToConsole>false</logViolationsToConsole>
+                            <failOnViolation>false</failOnViolation>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
         </plugins>
     </build>
 </project>

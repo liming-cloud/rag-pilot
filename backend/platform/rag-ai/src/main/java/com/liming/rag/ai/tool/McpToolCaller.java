@@ -55,7 +55,7 @@ final class McpToolCaller implements ToolCaller {
     public ToolResult call(ToolCall call) {
         return observed(call, endpoint -> attempt(call, endpoint, client -> {
             var jti = ToolTokenIssuer.newTokenId();
-            var result = client.callTool(new CallToolRequest(call.tool(), call.arguments()),
+            var result = client.callTool(CallToolRequest.builder(call.tool()).arguments(call.arguments()).build(),
                     tokens.issue(endpoint.resolvedAudience(), call.tool(), call.subject(), call.dataScope(), jti));
             return toResult(call, result, jti);
         }));
@@ -79,7 +79,7 @@ final class McpToolCaller implements ToolCaller {
         }
         var observation = Observation.createNotStarted("rag.tool.call", observations)
                 .lowCardinalityKeyValue("tool", call.tool()).start();
-        try (var scope = observation.openScope()) {
+        try (var _ = observation.openScope()) {
             return withRetry(() -> action.apply(endpoint));
         } catch (RuntimeException e) {
             observation.error(e);
@@ -124,7 +124,7 @@ final class McpToolCaller implements ToolCaller {
                 .build();
         try (McpSyncClient client = McpClient.sync(transport).requestTimeout(properties.timeout())
                 .initializationTimeout(properties.timeout())
-                .clientInfo(new Implementation("rag-pilot", "1.0.0"))
+                .clientInfo(Implementation.builder("rag-pilot", "1.0.0").build())
                 .transportContextProvider(() -> McpTransportContext.create(Map.of(TOKEN_KEY, token.get()))).build()) {
             client.initialize();
             return action.apply(new SessionClient(client, token));
@@ -168,6 +168,22 @@ final class McpToolCaller implements ToolCaller {
     }
 
     private ToolCallException classify(ToolCall call, RuntimeException e, RecordingHttpClient.@Nullable Seen seen) {
+        var byStatus = classifyStatus(call, e, seen);
+        if (byStatus != null) {
+            return byStatus;
+        }
+        var timedOut = hasCause(e, java.util.concurrent.TimeoutException.class)
+                || hasCause(e, java.net.http.HttpTimeoutException.class);
+        if (!timedOut && findCause(e, McpError.class) != null) {
+            return failed(call, Reason.PROTOCOL, "数据查询的协议出错，暂时查不到。", null, null, e);
+        }
+        // 超时、连不上、502/503/504。
+        return failed(call, Reason.UNAVAILABLE, "数据查询暂时不可用，暂时查不到。", null, null, e);
+    }
+
+    /** 按 HTTP 状态码和授权异常分类；502/503/504 和没有状态码的交给 {@link #classify} 继续判断。 */
+    private @Nullable ToolCallException classifyStatus(ToolCall call, RuntimeException e,
+            RecordingHttpClient.@Nullable Seen seen) {
         var status = seen == null ? 0 : seen.status();
         if (status == 401 || status == 403 || hasCause(e, McpHttpClientTransportAuthorizationException.class)) {
             return failed(call, Reason.REJECTED, "数据查询没有通过授权，暂时查不到。", null, null, e);
@@ -178,13 +194,7 @@ final class McpToolCaller implements ToolCaller {
         if (status >= 400 && status != 502 && status != 503 && status != 504) {
             return failed(call, Reason.PROTOCOL, "数据查询的协议出错，暂时查不到。", null, null, e);
         }
-        var timedOut = hasCause(e, java.util.concurrent.TimeoutException.class)
-                || hasCause(e, java.net.http.HttpTimeoutException.class);
-        if (!timedOut && findCause(e, McpError.class) != null) {
-            return failed(call, Reason.PROTOCOL, "数据查询的协议出错，暂时查不到。", null, null, e);
-        }
-        // 超时、连不上、502/503/504。
-        return failed(call, Reason.UNAVAILABLE, "数据查询暂时不可用，暂时查不到。", null, null, e);
+        return null;
     }
 
     private static boolean hasCause(Throwable e, Class<? extends Throwable> type) {

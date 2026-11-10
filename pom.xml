@@ -35,6 +35,9 @@
         <maven-surefire-plugin.version>3.6.1</maven-surefire-plugin.version>
         <!-- 上下文层禁止依赖 Spring AI（#145，见 backend/contexts/pom.xml）。 -->
         <maven-enforcer-plugin.version>3.6.3</maven-enforcer-plugin.version>
+        <!-- 复杂度门禁（#199，D-067）：只开两条规则，版本与 domain-forge 一致。 -->
+        <maven-checkstyle-plugin.version>3.6.0</maven-checkstyle-plugin.version>
+        <checkstyle.version>14.3.0</checkstyle.version>
         <!-- 调用真实模型的评测、耗时测量默认不跑；评测任务用 -Dtest.groups=eval -Dtest.excludedGroups=none 运行。 -->
         <test.groups></test.groups>
         <test.excludedGroups>eval,benchmark</test.excludedGroups>
@@ -172,10 +175,11 @@
                         <release>${java.version}</release>
                         <!-- 保留参数名，Spring MVC 和 MyBatis 绑定参数时需要。 -->
                         <parameters>true</parameters>
-                        <!-- 打开全部编译告警（#145）；告警不让构建失败，但要清零，确实要留的在代码里用 @SuppressWarnings 并写明原因。 -->
+                        <!-- 打开全部编译告警（#145），有告警构建失败（#199）；确实要留的在代码里用 @SuppressWarnings 并写明原因。 -->
                         <showWarnings>true</showWarnings>
                         <compilerArgs>
                             <arg>-Xlint:all</arg>
+                            <arg>-Werror</arg>
                             <arg>-Xmaxwarns</arg>
                             <arg>10000</arg>
                         </compilerArgs>
@@ -202,5 +206,37 @@
                 </plugin>
             </plugins>
         </pluginManagement>
+        <plugins>
+            <!-- 复杂度门禁（#199，D-067）：生产代码的方法圈复杂度 ≤ 10、可执行语句 ≤ 30，规则在 backend/checkstyle.xml。 -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-checkstyle-plugin</artifactId>
+                <version>${maven-checkstyle-plugin.version}</version>
+                <dependencies>
+                    <dependency>
+                        <groupId>com.puppycrawl.tools</groupId>
+                        <artifactId>checkstyle</artifactId>
+                        <version>${checkstyle.version}</version>
+                    </dependency>
+                </dependencies>
+                <configuration>
+                    <configLocation>${maven.multiModuleProjectDirectory}/backend/checkstyle.xml</configLocation>
+                    <includeTestSourceDirectory>false</includeTestSourceDirectory>
+                    <consoleOutput>true</consoleOutput>
+                    <failOnViolation>true</failOnViolation>
+                    <violationSeverity>warning</violationSeverity>
+                    <inputEncoding>UTF-8</inputEncoding>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>checkstyle</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>check</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
     </build>
 </project>

@@ -99,11 +99,11 @@ class ToolCallTests {
 
     @Test
     @DisplayName("JWKS 接口不用登录，只有公钥、没有私钥，（验签由范围内调用的测试覆盖）")
+    @SuppressWarnings("unchecked") // JWKS 响应按原始 Map 读，结构由 ToolJwks 约定。
     void publishesPublicKeysWithoutLogin() {
         var response = http.getForEntity("/api/integration/jwks.json", Map.class);
 
         assertThat(response.getStatusCode().value()).isEqualTo(200);
-        @SuppressWarnings("unchecked") // JWKS 的结构由 ToolJwks 约定。
         var keys = (List<Map<String, Object>>) response.getBody().get("keys");
         assertThat(keys).hasSize(1);
         assertThat(keys.get(0)).containsEntry("kid", "test-key").containsEntry("alg", "ES256")
