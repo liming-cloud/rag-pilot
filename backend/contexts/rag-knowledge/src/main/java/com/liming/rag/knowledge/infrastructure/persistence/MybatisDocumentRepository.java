@@ -1,6 +1,7 @@
 package com.liming.rag.knowledge.infrastructure.persistence;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.liming.rag.knowledge.domain.Chunk;
 import com.liming.rag.knowledge.domain.Document;
 import com.liming.rag.knowledge.domain.DocumentRepository;
@@ -25,29 +26,59 @@ class MybatisDocumentRepository implements DocumentRepository {
 
     @Override
     public void save(Document document) {
-        var row = new DocumentDO();
-        row.setId(document.id());
-        row.setTenantId(document.tenantId().value());
-        row.setKnowledgeBaseId(document.knowledgeBaseId());
-        row.setFilename(document.filename());
-        row.setMediaType(document.mediaType());
-        row.setSha256(document.sha256());
-        row.setSizeBytes(document.sizeBytes());
-        row.setStatus(document.status().name());
-        row.setError(document.error());
-        row.setChunkCount(document.chunkCount());
-        row.setReplacesDocumentId(document.replacesDocumentId());
-        row.setEffectiveFrom(document.validity().effectiveFrom());
-        row.setExpiresOn(document.validity().expiresOn());
-        row.setReprocessable(document.reprocessable());
-        row.setRetryAt(document.retryAt());
-        row.setAttempts(document.attempts());
-        if (row.getId() == null) {
+        if (document.id() == null) {
+            var row = new DocumentDO();
+            row.setTenantId(document.tenantId().value());
+            row.setKnowledgeBaseId(document.knowledgeBaseId());
+            row.setFilename(document.filename());
+            row.setMediaType(document.mediaType());
+            row.setSha256(document.sha256());
+            row.setSizeBytes(document.sizeBytes());
+            row.setStatus(document.status().name());
+            row.setError(document.error());
+            row.setChunkCount(document.chunkCount());
+            row.setReplacesDocumentId(document.replacesDocumentId());
+            row.setEffectiveFrom(document.validity().effectiveFrom());
+            row.setExpiresOn(document.validity().expiresOn());
+            row.setReprocessable(document.reprocessable());
+            row.setRetryAt(document.retryAt());
+            row.setAttempts(document.attempts());
             documents.insert(row);
             document.assignId(row.getId());
-        } else {
-            documents.updateById(row);
+            return;
         }
+        // 乐观锁：版本号不是读取时的那个，说明文档已被别的操作改过，不更新（0 行）。
+        update(document, outcome(document)
+                .set(DocumentDO::getEffectiveFrom, document.validity().effectiveFrom())
+                .set(DocumentDO::getExpiresOn, document.validity().expiresOn())
+                .eq(DocumentDO::getVersion, document.version()));
+    }
+
+    @Override
+    public void saveOutcome(Document document) {
+        // 处理要几分钟，期间管理员可能改了有效期：只写处理结果，条件是文档还在解析中（没被删除、没被别人处理完）。
+        update(document, outcome(document).eq(DocumentDO::getStatus, DocumentStatus.PARSING.name()));
+    }
+
+    /** 处理状态相关的列，版本号加一。 */
+    private static LambdaUpdateWrapper<DocumentDO> outcome(Document document) {
+        return new LambdaUpdateWrapper<DocumentDO>()
+                .set(DocumentDO::getStatus, document.status().name())
+                .set(DocumentDO::getError, document.error())
+                .set(DocumentDO::getChunkCount, document.chunkCount())
+                .set(DocumentDO::getReprocessable, document.reprocessable())
+                .set(DocumentDO::getRetryAt, document.retryAt())
+                .set(DocumentDO::getAttempts, document.attempts())
+                .setIncrBy(DocumentDO::getVersion, 1)
+                .eq(DocumentDO::getTenantId, document.tenantId().value())
+                .eq(DocumentDO::getId, document.id());
+    }
+
+    private void update(Document document, LambdaUpdateWrapper<DocumentDO> wrapper) {
+        if (documents.update(wrapper) == 0) {
+            throw new Document.ConcurrentChangeException();
+        }
+        document.versionSaved();
     }
 
     @Override
@@ -127,7 +158,7 @@ class MybatisDocumentRepository implements DocumentRepository {
     }
 
     static Document toDomain(DocumentDO row) {
-        return Document.restore(row.getId(), new TenantId(row.getTenantId()), row.getKnowledgeBaseId(),
+        return Document.restore(row.getId(), row.getVersion(), new TenantId(row.getTenantId()), row.getKnowledgeBaseId(),
                 row.getFilename(), row.getMediaType(), row.getSha256(), row.getSizeBytes(),
                 DocumentStatus.valueOf(row.getStatus()), row.getError(), row.getChunkCount(), row.getCreatedAt(),
                 row.getReplacesDocumentId(), new Validity(row.getEffectiveFrom(), row.getExpiresOn()),

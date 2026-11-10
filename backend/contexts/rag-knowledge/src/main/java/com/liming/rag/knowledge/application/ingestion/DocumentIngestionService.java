@@ -130,7 +130,7 @@ public class DocumentIngestionService {
                     "只有因模型暂时不可用而失败的文档才能重新处理；文件本身有问题时请改好后重新上传");
         }
         document.reprocess();
-        documents.save(document);
+        save(document);
         events.publishEvent(new DocumentReceived(tenantId, document.id()));
         return row(document);
     }
@@ -162,8 +162,17 @@ public class DocumentIngestionService {
         knowledgeBases.getManageable(tenantId, actor, knowledgeBaseId);
         var document = inKnowledgeBase(tenantId, knowledgeBaseId, documentId, "文档不存在");
         document.changeValidity(validity(date(effectiveFrom, null), date(expiresOn, null)));
-        documents.save(document);
+        save(document);
         return row(document);
+    }
+
+    /** 保存文档；读取之后被别的操作（另一位管理员、后台处理）改过时，这次修改作废，让管理员刷新后重试。 */
+    private void save(Document document) {
+        try {
+            documents.save(document);
+        } catch (Document.ConcurrentChangeException e) {
+            throw new KnowledgeException(KnowledgeException.Reason.CONFLICT, "这份文档刚在别处更新过，请刷新后重试");
+        }
     }
 
     /** 这个知识库里的文档；不在这个库里时按不存在处理。 */

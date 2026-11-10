@@ -2,6 +2,7 @@ package com.liming.rag.knowledge.domain;
 
 import com.liming.rag.shared.AggregateRoot;
 import com.liming.rag.shared.TenantId;
+import java.io.Serial;
 import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.util.Objects;
@@ -14,6 +15,7 @@ import org.jspecify.annotations.Nullable;
  * 模型暂时不可用导致的失败可以重新处理（回到 PARSING），第一次失败后 {@link #AUTO_RETRY_DELAY} 自动重试一次；
  * 文件内容的问题（编码、没有文字、损坏）不能重新处理，要改好文件重新上传（#145 A9）。
  * 有效期（{@link Validity}）决定哪天参与检索，可以随时修改，与处理状态无关。
+ * 版本号做乐观锁：读取之后被别的操作改过的文档不能整份保存（#197）。
  */
 public final class Document implements AggregateRoot {
 
@@ -23,6 +25,7 @@ public final class Document implements AggregateRoot {
     public static final Duration AUTO_RETRY_DELAY = Duration.ofMinutes(10);
 
     private Long id;
+    private long version;
     private final TenantId tenantId;
     private final long knowledgeBaseId;
     private final String filename;
@@ -43,10 +46,11 @@ public final class Document implements AggregateRoot {
     /** 第几次处理，从 1 开始。 */
     private int attempts;
 
-    private Document(@Nullable Long id, TenantId tenantId, long knowledgeBaseId, String filename, String mediaType,
+    private Document(@Nullable Long id, long version, TenantId tenantId, long knowledgeBaseId, String filename, String mediaType,
             String sha256, long sizeBytes, DocumentStatus status, String error, int chunkCount,
             OffsetDateTime createdAt, @Nullable Long replacesDocumentId, Validity validity, Retry retry) {
         this.id = id;
+        this.version = version;
         this.tenantId = Objects.requireNonNull(tenantId, "租户不能为空");
         this.knowledgeBaseId = knowledgeBaseId;
         this.filename = Objects.requireNonNull(filename, "文件名不能为空");
@@ -64,6 +68,17 @@ public final class Document implements AggregateRoot {
         this.attempts = retry.attempts();
     }
 
+    /** 保存时发现文档已被别的操作改过（版本号不一致），或后台写处理结果时文档已被删除、不在解析中。 */
+    public static final class ConcurrentChangeException extends RuntimeException {
+
+        @Serial
+        private static final long serialVersionUID = 1L;
+
+        public ConcurrentChangeException() {
+            super("文档刚被别的操作改过");
+        }
+    }
+
     /**
      * 重新处理的状态，仓储恢复聚合时用。
      *
@@ -77,15 +92,15 @@ public final class Document implements AggregateRoot {
     /** 接收一份上传的文件，进入解析状态；{@code replacesDocumentId} 不为空时是它的新版本，解析成功后替换它。 */
     public static Document received(TenantId tenantId, long knowledgeBaseId, UploadedFile file, @Nullable Long replacesDocumentId,
             Validity validity) {
-        return new Document(null, tenantId, knowledgeBaseId, file.filename(), file.mediaType(), file.sha256(),
+        return new Document(null, 0, tenantId, knowledgeBaseId, file.filename(), file.mediaType(), file.sha256(),
                 file.sizeBytes(), DocumentStatus.PARSING, null, 0, null, replacesDocumentId, validity, Retry.FIRST);
     }
 
     /** 仓储从数据库恢复聚合时使用，不做状态校验。 */
-    public static Document restore(long id, TenantId tenantId, long knowledgeBaseId, String filename,
+    public static Document restore(long id, long version, TenantId tenantId, long knowledgeBaseId, String filename,
             String mediaType, String sha256, long sizeBytes, DocumentStatus status, String error, int chunkCount,
             OffsetDateTime createdAt, @Nullable Long replacesDocumentId, Validity validity, Retry retry) {
-        return new Document(id, tenantId, knowledgeBaseId, filename, mediaType, sha256, sizeBytes, status, error,
+        return new Document(id, version, tenantId, knowledgeBaseId, filename, mediaType, sha256, sizeBytes, status, error,
                 chunkCount, createdAt, replacesDocumentId, validity, retry);
     }
 
@@ -172,8 +187,17 @@ public final class Document implements AggregateRoot {
         this.id = newId;
     }
 
+    /** 仓储写入成功后调用：版本号加一，与数据库一致。 */
+    public void versionSaved() {
+        version++;
+    }
+
     public Long id() {
         return id;
+    }
+
+    public long version() {
+        return version;
     }
 
     public TenantId tenantId() {

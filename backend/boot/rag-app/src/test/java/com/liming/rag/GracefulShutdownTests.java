@@ -20,7 +20,8 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 
 /**
  * 停机时等后台任务做完（#135）：流式回答、会话轮次的保存、标题生成都在 {@code applicationTaskExecutor} 里跑，
- * 关闭应用时它最多等 30 秒，期间数据库连接还能用，正在生成的一轮能保存下来。
+ * 关闭应用时它最多等 30 秒，期间数据库连接还能用，正在生成的一轮能保存下来。后台入库的 {@code ingestionTaskExecutor}
+ * 也一样（#197）。
  *
  * <p>要真的关闭应用，所以自己启动一个应用上下文，不用测试框架缓存的那个。
  */
@@ -46,20 +47,22 @@ class GracefulShutdownTests {
         var context = new SpringApplicationBuilder(RagApplication.class)
                 .web(WebApplicationType.NONE)
                 .run(arguments.toArray(String[]::new));
-        var executor = context.getBean("applicationTaskExecutor", AsyncTaskExecutor.class);
         var jdbc = context.getBean(JdbcTemplate.class);
         jdbc.execute("CREATE TABLE shutdown_probe (note text)");
-        var started = new CountDownLatch(1);
-        executor.execute(() -> {
-            started.countDown();
-            try {
-                Thread.sleep(WORK);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                return;
-            }
-            jdbc.update("INSERT INTO shutdown_probe VALUES ('saved')");
-        });
+        var executors = List.of("applicationTaskExecutor", "ingestionTaskExecutor");
+        var started = new CountDownLatch(executors.size());
+        for (var name : executors) {
+            context.getBean(name, AsyncTaskExecutor.class).execute(() -> {
+                started.countDown();
+                try {
+                    Thread.sleep(WORK);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    return;
+                }
+                jdbc.update("INSERT INTO shutdown_probe VALUES (?)", name);
+            });
+        }
         assertThat(started.await(5, TimeUnit.SECONDS)).isTrue();
 
         long start = System.nanoTime();
@@ -71,7 +74,7 @@ class GracefulShutdownTests {
                 POSTGRES.getPassword());
                 var rows = connection.createStatement().executeQuery("SELECT count(*) FROM shutdown_probe")) {
             rows.next();
-            assertThat(rows.getInt(1)).as("后台任务在停机过程中写进了库").isEqualTo(1);
+            assertThat(rows.getInt(1)).as("每个执行器的后台任务都在停机过程中写进了库").isEqualTo(executors.size());
         }
     }
 }

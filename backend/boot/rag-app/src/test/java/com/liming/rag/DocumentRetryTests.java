@@ -8,10 +8,13 @@ import com.liming.rag.ai.EmbeddingClient;
 import com.liming.rag.ai.common.ModelCallException;
 import com.liming.rag.knowledge.application.ingestion.IngestionWorker;
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -24,6 +27,7 @@ import org.springframework.boot.testcontainers.service.connection.ServiceConnect
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -61,12 +65,21 @@ class DocumentRetryTests {
     private IngestionWorker worker;
 
     private final AtomicBoolean modelDown = new AtomicBoolean();
+    /** 不为 null 时向量化先报告“已开始”，再等放行，用来在处理中途插入别的操作。 */
+    private volatile CountDownLatch embeddingStarted;
+    private volatile CountDownLatch embeddingReleased;
 
     @BeforeEach
     void setUp() {
         TestLogin.asAdmin(http);
         modelDown.set(false);
+        embeddingStarted = null;
+        embeddingReleased = null;
         when(embeddings.embed(anyList())).thenAnswer(invocation -> {
+            if (embeddingStarted != null) {
+                embeddingStarted.countDown();
+                assertThat(embeddingReleased.await(30, TimeUnit.SECONDS)).isTrue();
+            }
             if (modelDown.get()) {
                 throw new ModelCallException("向量化失败：嵌入模型服务暂时不可用，请稍后重试");
             }
@@ -136,6 +149,27 @@ class DocumentRetryTests {
         assertThat(jdbc.queryForObject("select count(*) from document where knowledge_base_id = ?", Integer.class, kb))
                 .isEqualTo(1);
         assertThat(jdbc.queryForObject("select count(*) from document where id = ?", Integer.class, id)).isZero();
+    }
+
+    @Test
+    @DisplayName("后台处理期间管理员改了有效期：处理完成后有效期仍是新值，文档可用（#197）")
+    void validityChangedDuringProcessingSurvives() throws InterruptedException {
+        long kb = createKnowledgeBase("处理中改有效期知识库");
+        embeddingStarted = new CountDownLatch(1);
+        embeddingReleased = new CountDownLatch(1);
+        var uploaded = upload(kb, "盘点规范.txt", "月底最后一天闭店后全员盘点。");
+        long id = ((Number) uploaded.get("id")).longValue();
+        assertThat(embeddingStarted.await(30, TimeUnit.SECONDS)).as("后台已读出文档并开始向量化").isTrue();
+
+        var expiresOn = LocalDate.now().plusDays(30).toString();
+        var changed = http.exchange("/api/knowledge-bases/{kb}/documents/{id}/validity", HttpMethod.PUT,
+                new HttpEntity<>(Map.of("effectiveFrom", "", "expiresOn", expiresOn)), Map.class, kb, id);
+        assertThat(changed.getStatusCode()).isEqualTo(HttpStatus.OK);
+        embeddingReleased.countDown();
+
+        assertThat(awaitProcessed(kb, uploaded)).containsEntry("status", "READY");
+        assertThat(jdbc.queryForObject("select expires_on from document where id = ?", LocalDate.class, id))
+                .isEqualTo(LocalDate.parse(expiresOn));
     }
 
     private Map<String, Object> awaitProcessed(long kb, Map<String, Object> document) {

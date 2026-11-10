@@ -151,6 +151,14 @@ public final class InMemoryKnowledge {
         }
 
         @Override
+        public void saveOutcome(Document document) {
+            if (!rows.containsKey(document.id())) {
+                throw new Document.ConcurrentChangeException();
+            }
+            rows.put(document.id(), document);
+        }
+
+        @Override
         public void saveChunks(Document document, List<Chunk> values, List<float[]> embeddings) {
             chunks.put(document.id(), List.copyOf(values));
         }

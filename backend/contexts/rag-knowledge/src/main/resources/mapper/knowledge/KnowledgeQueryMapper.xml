@@ -59,7 +59,7 @@
     </sql>
 
     <select id="documents" resultType="com.liming.rag.knowledge.infrastructure.persistence.DocumentRowDO">
-        SELECT d.id, d.tenant_id, d.knowledge_base_id, d.filename, d.media_type, d.sha256, d.size_bytes, d.status,
+        SELECT d.id, d.version, d.tenant_id, d.knowledge_base_id, d.filename, d.media_type, d.sha256, d.size_bytes, d.status,
                d.error, d.chunk_count, d.created_at, d.replaces_document_id, d.effective_from, d.expires_on,
                d.reprocessable, d.retry_at, d.attempts, old.filename AS replaces_filename
         FROM document d

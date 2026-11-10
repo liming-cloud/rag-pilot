@@ -54,7 +54,7 @@ class IngestionPipeline {
         } catch (EmbeddingUnavailableException e) {
             // 模型暂时不可用不是文件的问题：可以重新处理，第一次失败后自动重试一次（#145 A9）。
             document.markModelUnavailable(e.getMessage(), OffsetDateTime.now(clock));
-            documents.save(document);
+            documents.saveOutcome(document);
             log.warn("event=document_failed document={} kind=model attempts={} retryAt={}", document.id(),
                     document.attempts(), document.retryAt());
         }
@@ -62,7 +62,7 @@ class IngestionPipeline {
 
     private void failed(Document document, String reason) {
         document.markFailed(reason);
-        documents.save(document);
+        documents.saveOutcome(document);
         log.warn("event=document_failed document={} kind=content attempts={}", document.id(), document.attempts());
     }
 }
