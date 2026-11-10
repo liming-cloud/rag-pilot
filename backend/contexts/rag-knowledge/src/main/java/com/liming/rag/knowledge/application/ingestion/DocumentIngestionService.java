@@ -85,8 +85,8 @@ public class DocumentIngestionService {
         var previous = replacesDocumentId == null ? null : inKnowledgeBase(tenantId, knowledgeBaseId,
                 replacesDocumentId, "要替换的文档不存在");
         var inheritedExpiry = previous == null ? null : previous.validity().expiresOn();
-        var validity = validity(date(upload.effectiveFrom(), null), date(upload.expiresOn(), inheritedExpiry));
-        var file = uploaded(filename, upload.content());
+        var validity = new Validity(date(upload.effectiveFrom(), null), date(upload.expiresOn(), inheritedExpiry));
+        var file = UploadedFile.of(filename, upload.content());
         var existing = documents.findInKnowledgeBase(knowledgeBase.id(), file.sha256());
         if (existing.isPresent()) {
             if (existing.get().status() != DocumentStatus.FAILED) {
@@ -161,7 +161,7 @@ public class DocumentIngestionService {
             String effectiveFrom, String expiresOn) {
         knowledgeBases.getManageable(tenantId, actor, knowledgeBaseId);
         var document = inKnowledgeBase(tenantId, knowledgeBaseId, documentId, "文档不存在");
-        document.changeValidity(validity(date(effectiveFrom, null), date(expiresOn, null)));
+        document.changeValidity(new Validity(date(effectiveFrom, null), date(expiresOn, null)));
         save(document);
         return row(document);
     }
@@ -186,15 +186,6 @@ public class DocumentIngestionService {
         return DocumentRow.of(document, null, calendar.state(document.validity()));
     }
 
-    private static UploadedFile uploaded(String filename, byte[] content) {
-        try {
-            return UploadedFile.of(filename, content);
-        } catch (UploadedFile.UnsupportedTypeException e) {
-            throw new KnowledgeException(KnowledgeException.Reason.UNSUPPORTED_TYPE, e.getMessage());
-        } catch (IllegalArgumentException e) {
-            throw new KnowledgeException(KnowledgeException.Reason.INVALID, e.getMessage());
-        }
-    }
 
     private static KnowledgeException duplicate(String filename) {
         return new KnowledgeException(KnowledgeException.Reason.CONFLICT, "这份文件已经在知识库里了：" + filename);
@@ -215,11 +206,4 @@ public class DocumentIngestionService {
         }
     }
 
-    private static Validity validity(LocalDate effectiveFrom, LocalDate expiresOn) {
-        try {
-            return new Validity(effectiveFrom, expiresOn);
-        } catch (IllegalArgumentException e) {
-            throw new KnowledgeException(KnowledgeException.Reason.INVALID, e.getMessage());
-        }
-    }
 }

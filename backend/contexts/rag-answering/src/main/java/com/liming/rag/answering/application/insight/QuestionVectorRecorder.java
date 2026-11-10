@@ -38,7 +38,7 @@ class QuestionVectorRecorder {
                 var vector = embeddings.embed(event.question());
                 gapRecords.saveVectors(event.tenantId(), Map.of(event.answerId(), vector));
             } catch (ModelUnavailableException e) {
-                log.warn("回答 {} 的问题向量没算成，知识缺口归类时再补：{}", event.answerId(), e.getMessage());
+                log.warn("event=question_vector_failed answer={} error={}", event.answerId(), e.code());
             }
         });
     }

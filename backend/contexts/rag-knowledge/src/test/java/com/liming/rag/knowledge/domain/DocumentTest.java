@@ -26,7 +26,7 @@ class DocumentTest {
     @Test
     @DisplayName("失败必须给出原因，且已完成的文档不能再改状态")
     void failureRules() {
-        assertThatThrownBy(() -> received().markFailed(" ")).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> received().markFailed(" ")).isInstanceOf(IllegalStateException.class);
 
         var document = received();
         document.markFailed("文件不是 UTF-8 编码");

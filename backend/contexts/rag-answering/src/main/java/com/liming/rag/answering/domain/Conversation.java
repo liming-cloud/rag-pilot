@@ -1,6 +1,7 @@
 package com.liming.rag.answering.domain;
 
 import com.liming.rag.shared.AggregateRoot;
+import com.liming.rag.shared.ErrorKind;
 import com.liming.rag.shared.TenantId;
 import com.liming.rag.shared.UserId;
 import java.io.Serial;
@@ -37,14 +38,14 @@ public final class Conversation implements AggregateRoot {
         USER
     }
 
-    /** 操作人不是会话的主人。对外按“会话不存在”处理，不暴露别人的会话是否存在。 */
-    public static final class NotOwnerException extends RuntimeException {
+    /** 操作人不是会话的主人。对外按“会话不存在”处理（{@code ANSWERING_NOT_FOUND}），不暴露别人的会话是否存在。 */
+    public static final class NotOwnerException extends AnsweringRuleException {
 
         @Serial
         private static final long serialVersionUID = 1L;
 
         NotOwnerException() {
-            super("只能操作自己的会话");
+            super(ErrorKind.NOT_FOUND, "NOT_FOUND", "会话不存在");
         }
     }
 
@@ -89,7 +90,7 @@ public final class Conversation implements AggregateRoot {
     }
 
     /**
-     * @throws IllegalArgumentException 一个知识库都没选
+     * @throws AnsweringRuleException 一个知识库都没选
      */
     public static Conversation start(TenantId tenantId, UserId owner, List<Long> knowledgeBaseIds, Instant at) {
         return new Conversation(null, tenantId, owner, 0, NEW_TITLE, TitleSource.NEW, knowledgeBaseIds, at,
@@ -127,13 +128,13 @@ public final class Conversation implements AggregateRoot {
 
     /**
      * @throws NotOwnerException 不是本人
-     * @throws IllegalArgumentException 标题为空或超过 {@value #MAX_TITLE_LENGTH} 字
+     * @throws AnsweringRuleException 标题为空或超过 {@value #MAX_TITLE_LENGTH} 字
      */
     public void rename(UserId by, String newTitle) {
         requireOwner(by);
         var value = newTitle == null ? "" : newTitle.strip();
         if (value.isEmpty() || value.length() > MAX_TITLE_LENGTH) {
-            throw new IllegalArgumentException("标题不能为空，且不超过 " + MAX_TITLE_LENGTH + " 个字");
+            throw AnsweringRuleException.invalid("标题不能为空，且不超过 " + MAX_TITLE_LENGTH + " 个字");
         }
         this.title = value;
         this.titleSource = TitleSource.USER;
@@ -143,7 +144,7 @@ public final class Conversation implements AggregateRoot {
      * 改选知识库，从下一个问题起生效。
      *
      * @throws NotOwnerException 不是本人
-     * @throws IllegalArgumentException 一个知识库都没选
+     * @throws AnsweringRuleException 一个知识库都没选
      */
     public void selectKnowledgeBases(UserId by, List<Long> ids) {
         requireOwner(by);
@@ -154,11 +155,11 @@ public final class Conversation implements AggregateRoot {
      * 检查能不能替换这一轮：只能替换主线最后一轮（D-036：重新生成最后一条、修改最后一个问题）。
      * {@code replacesTurnId} 为 null 表示接着问，总是可以。
      *
-     * @throws IllegalArgumentException 要替换的不是主线最后一轮
+     * @throws AnsweringRuleException 要替换的不是主线最后一轮
      */
     public void checkReplaceable(@Nullable Long replacesTurnId) {
         if (replacesTurnId != null && (tail == null || tail.turnId() != replacesTurnId)) {
-            throw new IllegalArgumentException("只能重新生成或修改最后一轮");
+            throw AnsweringRuleException.invalid("只能重新生成或修改最后一轮");
         }
     }
 
@@ -166,7 +167,7 @@ public final class Conversation implements AggregateRoot {
      * 把一轮接到主线末尾，或替换主线最后一轮（替换时新的一轮接在被替换那一轮的上一轮之后），同时记下这次提问。
      *
      * @return 新的一轮接在哪一轮之后；是第一轮时为 null
-     * @throws IllegalArgumentException 要替换的不是主线最后一轮
+     * @throws AnsweringRuleException 要替换的不是主线最后一轮
      */
     public @Nullable Long appendTurn(long turnId, @Nullable Long replacesTurnId, String question, Instant at) {
         checkReplaceable(replacesTurnId);
@@ -199,7 +200,7 @@ public final class Conversation implements AggregateRoot {
     private static List<Long> distinct(List<Long> ids) {
         var values = ids == null ? List.<Long>of() : ids.stream().filter(Objects::nonNull).distinct().toList();
         if (values.isEmpty()) {
-            throw new IllegalArgumentException("至少要选一个知识库");
+            throw AnsweringRuleException.invalid("至少要选一个知识库");
         }
         return values;
     }

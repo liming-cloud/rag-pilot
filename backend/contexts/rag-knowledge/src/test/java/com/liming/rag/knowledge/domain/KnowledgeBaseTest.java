@@ -24,9 +24,9 @@ class KnowledgeBaseTest {
         assertThat(created.name()).isEqualTo("门店规范");
         assertThat(created.members()).containsExactly(ADMIN);
         assertThat(created.addedMembers()).containsExactly(ADMIN);
-        assertThatThrownBy(() -> KnowledgeBase.create(TENANT, " ", ADMIN)).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> KnowledgeBase.create(TENANT, " ", ADMIN)).isInstanceOf(KnowledgeRuleException.class);
         assertThatThrownBy(() -> KnowledgeBase.create(TENANT, "长".repeat(101), ADMIN))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(KnowledgeRuleException.class);
     }
 
     @Test
@@ -63,7 +63,7 @@ class KnowledgeBaseTest {
     void cannotRevokeSelf() {
         var kb = KnowledgeBase.restore(10, TENANT, "门店规范", List.of(ADMIN, STAFF), List.of());
 
-        assertThatThrownBy(() -> kb.revoke(ADMIN, ADMIN)).isInstanceOf(IllegalArgumentException.class)
+        assertThatThrownBy(() -> kb.revoke(ADMIN, ADMIN)).isInstanceOf(KnowledgeRuleException.class)
                 .hasMessage("不能撤销自己的权限");
         kb.revoke(ADMIN, STAFF);
 

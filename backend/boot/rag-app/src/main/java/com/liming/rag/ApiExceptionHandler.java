@@ -30,7 +30,7 @@ import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExcep
 @RestControllerAdvice
 class ApiExceptionHandler extends ResponseEntityExceptionHandler {
 
-    private static final Logger LOG = LoggerFactory.getLogger(ApiExceptionHandler.class);
+    private static final Logger log = LoggerFactory.getLogger(ApiExceptionHandler.class);
 
     @ExceptionHandler(BusinessException.class)
     ProblemDetail business(BusinessException exception) {
@@ -45,9 +45,11 @@ class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     /** 没有角色或没有权限点都是 403；说明里不写缺的是哪个权限，避免暴露权限设计，日志里记下（#145 C1）。 */
     @ExceptionHandler({NotRoleException.class, NotPermissionException.class})
     ProblemDetail forbidden(RuntimeException exception) {
-        var missing = exception instanceof NotPermissionException permission ? "permission=" + permission.getPermission()
-                : "role=" + ((NotRoleException) exception).getRole();
-        LOG.warn("event=access_denied user={} {}", currentUser(), missing);
+        if (exception instanceof NotPermissionException permission) {
+            log.warn("event=access_denied user={} permission={}", currentUser(), permission.getPermission());
+        } else {
+            log.warn("event=access_denied user={} role={}", currentUser(), ((NotRoleException) exception).getRole());
+        }
         return problem(HttpStatus.FORBIDDEN, "FORBIDDEN", "没有权限执行此操作");
     }
 
@@ -62,7 +64,7 @@ class ApiExceptionHandler extends ResponseEntityExceptionHandler {
 
     @ExceptionHandler(Exception.class)
     ProblemDetail unexpected(Exception exception) {
-        LOG.error("接口处理出错", exception);
+        log.error("event=unexpected_error", exception);
         return problem(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR", "服务出错了，请稍后再试");
     }
 

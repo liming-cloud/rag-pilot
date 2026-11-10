@@ -57,14 +57,14 @@ final class SseChannel {
      * 在后台线程里做完 {@code work} 并结束事件流。业务异常发 {@code error} 事件；意外错误记日志、发通用的
      * {@code error} 事件——后台线程里的异常不经过全局异常处理器，不能让连接一直挂到超时。
      */
-    void run(Work work, Logger log, String failure) {
+    void run(Work work, Logger log) {
         try {
             work.run(this);
             complete();
         } catch (BusinessException e) {
             fail(e.code(), e.getMessage());
         } catch (RuntimeException e) {
-            log.error(failure, e);
+            log.error("event=answer_stream_failed", e);
             fail("INTERNAL_ERROR", "回答时出错，请稍后再试");
         }
     }

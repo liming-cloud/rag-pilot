@@ -2,6 +2,7 @@ package com.liming.rag.answering.infrastructure.persistence;
 
 import com.liming.rag.answering.application.review.AnswerReview;
 import com.liming.rag.answering.application.review.AnswerReviews;
+import com.liming.rag.answering.domain.AnswerRecord;
 import com.liming.rag.shared.Paged;
 import com.liming.rag.shared.TenantId;
 import java.time.OffsetDateTime;
@@ -38,6 +39,7 @@ class MybatisAnswerReviews implements AnswerReviews {
         return new AnswerReview(row.id, row.userId, null, row.question, row.answerText, row.refused,
                 row.refusalReason, row.topRelevance, row.rating, row.feedbackComment, row.createdAt,
                 row.citedDocuments == null ? List.of() : Arrays.asList(row.citedDocuments.split("\u001F")),
-                row.rewrittenQuestion, row.reviewStatus, row.resolutionNote, row.resolvedAt);
+                row.rewrittenQuestion, AnswerRecord.ReviewStatus.valueOf(row.reviewStatus), row.resolutionNote,
+                row.resolvedAt);
     }
 }

@@ -51,11 +51,7 @@ public class KnowledgeGrantService {
     @Transactional
     public void revoke(TenantId tenantId, UserId actor, long knowledgeBaseId, UserId userId) {
         var knowledgeBase = knowledgeBases.getManageable(tenantId, actor, knowledgeBaseId);
-        try {
-            knowledgeBase.revoke(actor, userId);
-        } catch (IllegalArgumentException e) {
-            throw new KnowledgeException(KnowledgeException.Reason.INVALID, e.getMessage());
-        }
+        knowledgeBase.revoke(actor, userId);
         repository.save(knowledgeBase);
         audit(tenantId, actor, "KB_MEMBER_REVOKED", knowledgeBase, "知识库“" + knowledgeBase.name() + "”撤销账号 "
                 + username(tenantId, userId) + " 的授权");

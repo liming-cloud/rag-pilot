@@ -79,8 +79,11 @@ class KnowledgeAccessTests {
 
         long adminId = ((Number) list(admin, "/api/knowledge-bases/" + store + "/members").getFirst().get("userId"))
                 .longValue();
-        assertThat(send(HttpMethod.DELETE, "/api/knowledge-bases/" + store + "/members/" + adminId, admin))
-                .as("不能撤销自己的权限，否则这个库会从自己的列表里消失").isEqualTo(HttpStatus.BAD_REQUEST);
+        var revokeSelf = http.exchange("/api/knowledge-bases/" + store + "/members/" + adminId, HttpMethod.DELETE,
+                new HttpEntity<>(auth(admin)), String.class);
+        assertThat(revokeSelf.getStatusCode()).as("不能撤销自己的权限，否则这个库会从自己的列表里消失")
+                .isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(revokeSelf.getBody()).contains("\"code\":\"KNOWLEDGE_INVALID\"").contains("不能撤销自己的权限");
         assertThat(send(HttpMethod.DELETE, "/api/knowledge-bases/" + store + "/members/" + staffId, admin))
                 .isEqualTo(HttpStatus.NO_CONTENT);
         assertThat(list(staff, "/api/knowledge-bases")).isEmpty();

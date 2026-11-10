@@ -1,5 +1,6 @@
 package com.liming.rag.knowledge.domain;
 
+import com.liming.rag.shared.ErrorKind;
 import java.io.Serial;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -31,14 +32,15 @@ public record UploadedFile(String filename, String mediaType, String sha256, lon
             "xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             "xls", "application/vnd.ms-excel");
 
-    /** 文件类型不支持。和其他不合格的情况分开，接口按“不支持的类型”报错。 */
-    public static final class UnsupportedTypeException extends IllegalArgumentException {
+    /** 文件类型不支持。和其他不合格的情况分开，接口按“不支持的类型”报错（{@code KNOWLEDGE_UNSUPPORTED_TYPE}）。 */
+    public static final class UnsupportedTypeException extends KnowledgeRuleException {
 
         @Serial
         private static final long serialVersionUID = 1L;
 
         UnsupportedTypeException() {
-            super("目前支持 PDF、Word（.docx）、Excel（.xlsx / .xls）、TXT 和 Markdown；旧版 .doc 请先另存为 .docx");
+            super(ErrorKind.UNSUPPORTED, "UNSUPPORTED_TYPE",
+                    "目前支持 PDF、Word（.docx）、Excel（.xlsx / .xls）、TXT 和 Markdown；旧版 .doc 请先另存为 .docx");
         }
     }
 
@@ -46,11 +48,11 @@ public record UploadedFile(String filename, String mediaType, String sha256, lon
      * 收下一份文件。
      *
      * @throws UnsupportedTypeException 扩展名不支持
-     * @throws IllegalArgumentException 文件名太长、文件是空的或超过 50 MB
+     * @throws KnowledgeRuleException 文件名太长、文件是空的或超过 50 MB
      */
     public static UploadedFile of(String filename, byte[] content) {
         if (filename != null && filename.length() > MAX_FILENAME_LENGTH) {
-            throw new IllegalArgumentException("文件名不能超过 " + MAX_FILENAME_LENGTH + " 个字符");
+            throw KnowledgeRuleException.invalid("文件名不能超过 " + MAX_FILENAME_LENGTH + " 个字符");
         }
         var dot = filename == null ? -1 : filename.lastIndexOf('.');
         var mediaType = SUPPORTED_TYPES.get(dot < 0 ? "" : filename.substring(dot + 1).toLowerCase(Locale.ROOT));
@@ -58,10 +60,10 @@ public record UploadedFile(String filename, String mediaType, String sha256, lon
             throw new UnsupportedTypeException();
         }
         if (content.length == 0) {
-            throw new IllegalArgumentException("文件是空的");
+            throw KnowledgeRuleException.invalid("文件是空的");
         }
         if (content.length > MAX_SIZE_BYTES) {
-            throw new IllegalArgumentException("单个文件不能超过 50 MB");
+            throw KnowledgeRuleException.invalid("单个文件不能超过 50 MB");
         }
         return new UploadedFile(filename, mediaType, sha256(content), content.length);
     }

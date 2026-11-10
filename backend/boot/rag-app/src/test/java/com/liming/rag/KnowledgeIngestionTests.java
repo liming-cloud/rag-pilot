@@ -95,6 +95,10 @@ class KnowledgeIngestionTests {
 
         var pptx = upload(knowledgeBaseId, "门店培训.pptx", "PK".getBytes(StandardCharsets.US_ASCII));
         assertThat(pptx.getStatusCode()).isEqualTo(HttpStatus.UNSUPPORTED_MEDIA_TYPE);
+        assertThat(pptx.getBody()).containsEntry("code", "KNOWLEDGE_UNSUPPORTED_TYPE");
+        var empty = upload(knowledgeBaseId, "空白.txt", new byte[0]);
+        assertThat(empty.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(empty.getBody()).containsEntry("code", "KNOWLEDGE_INVALID").containsEntry("detail", "文件是空的");
 
         var brokenPdf = upload(knowledgeBaseId, "收银规范.pdf", "%PDF-1.7".getBytes(StandardCharsets.US_ASCII));
         var brokenPdfResult = TestDocuments.awaitProcessed(http, knowledgeBaseId, brokenPdf.getBody(), null);

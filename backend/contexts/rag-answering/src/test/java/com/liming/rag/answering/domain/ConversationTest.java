@@ -28,7 +28,7 @@ class ConversationTest {
         assertThat(conversation.title()).isEqualTo("新对话");
         assertThat(conversation.titleSource()).isEqualTo(Conversation.TitleSource.NEW);
         assertThat(conversation.knowledgeBaseIds()).containsExactly(3L, 4L);
-        assertThatThrownBy(() -> Conversation.start(TENANT, OWNER, List.of(), Instant.now())).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> Conversation.start(TENANT, OWNER, List.of(), Instant.now())).isInstanceOf(AnsweringRuleException.class);
     }
 
     @Test
@@ -36,7 +36,8 @@ class ConversationTest {
     void onlyOwnerCanChange() {
         var conversation = started();
 
-        assertThatThrownBy(() -> conversation.requireOwner(OTHER)).isInstanceOf(Conversation.NotOwnerException.class);
+        assertThatThrownBy(() -> conversation.requireOwner(OTHER)).isInstanceOf(Conversation.NotOwnerException.class)
+                .hasMessage("会话不存在").hasFieldOrPropertyWithValue("code", "ANSWERING_NOT_FOUND");
         assertThatThrownBy(() -> conversation.rename(OTHER, "偷改")).isInstanceOf(Conversation.NotOwnerException.class);
         assertThatThrownBy(() -> conversation.selectKnowledgeBases(OTHER, List.of(3L)))
                 .isInstanceOf(Conversation.NotOwnerException.class);
@@ -52,8 +53,8 @@ class ConversationTest {
 
         assertThat(conversation.title()).isEqualTo("冷柜温度");
         assertThat(conversation.titleSource()).isEqualTo(Conversation.TitleSource.USER);
-        assertThatThrownBy(() -> conversation.rename(OWNER, "  ")).isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> conversation.rename(OWNER, "长".repeat(41))).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> conversation.rename(OWNER, "  ")).isInstanceOf(AnsweringRuleException.class);
+        assertThatThrownBy(() -> conversation.rename(OWNER, "长".repeat(41))).isInstanceOf(AnsweringRuleException.class);
     }
 
     @Test
@@ -97,7 +98,7 @@ class ConversationTest {
 
         assertThat(conversation.knowledgeBaseIds()).containsExactly(4L, 5L);
         assertThatThrownBy(() -> conversation.selectKnowledgeBases(OWNER, List.of()))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(AnsweringRuleException.class);
     }
 
     @Test
@@ -119,12 +120,12 @@ class ConversationTest {
     void replacesOnlyTheLastTurn() {
         var conversation = started();
 
-        assertThatThrownBy(() -> conversation.checkReplaceable(10L)).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> conversation.checkReplaceable(10L)).isInstanceOf(AnsweringRuleException.class);
         conversation.appendTurn(10, null, "青柚在哪？", Instant.now());
         conversation.appendTurn(11, null, "补货先做什么？", Instant.now());
 
         assertThatThrownBy(() -> conversation.appendTurn(12, 10L, "改问", Instant.now()))
-                .isInstanceOf(IllegalArgumentException.class).hasMessage("只能重新生成或修改最后一轮");
+                .isInstanceOf(AnsweringRuleException.class).hasMessage("只能重新生成或修改最后一轮");
         assertThat(conversation.tail()).as("被拒绝时主线不变").isEqualTo(new Conversation.MainLineTail(11, 10L));
         conversation.checkReplaceable(11L);
         conversation.checkReplaceable(null);

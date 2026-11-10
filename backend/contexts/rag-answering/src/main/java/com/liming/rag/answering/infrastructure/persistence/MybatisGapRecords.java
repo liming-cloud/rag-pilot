@@ -1,6 +1,7 @@
 package com.liming.rag.answering.infrastructure.persistence;
 
 import com.liming.rag.answering.application.insight.GapRecords;
+import com.liming.rag.answering.domain.AnswerRecord;
 import com.liming.rag.shared.TenantId;
 import java.time.OffsetDateTime;
 import java.util.Arrays;
@@ -36,7 +37,8 @@ class MybatisGapRecords implements GapRecords {
     private static GapRecord toRecord(GapRecordDO row) {
         return new GapRecord(row.id, row.userId, row.question, row.createdAt, row.refused, row.feedbackComment,
                 row.citedDocuments == null ? List.of() : Arrays.asList(row.citedDocuments.split("\u001F")),
-                row.reviewStatus, row.knowledgeBaseIds == null ? List.of() : List.of(row.knowledgeBaseIds),
+                AnswerRecord.ReviewStatus.valueOf(row.reviewStatus),
+                row.knowledgeBaseIds == null ? List.of() : List.of(row.knowledgeBaseIds),
                 toVector(row.questionEmbedding));
     }
 

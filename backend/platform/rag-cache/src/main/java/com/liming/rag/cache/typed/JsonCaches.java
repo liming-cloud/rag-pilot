@@ -211,7 +211,8 @@ final class JsonCaches implements Caches {
             try {
                 return json.readValue(cached, spec.type());
             } catch (JacksonException e) {
-                log.info("缓存 {} 里的值读不回来（可能是升级后结构变了），重新加载：{}", spec.name(), e.getClass().getSimpleName());
+                // 多半是升级后结构变了：当作没缓存，重新加载。
+                log.info("event=cache_value_unreadable cache={} error={}", spec.name(), e.getClass().getSimpleName());
                 return null;
             }
         }

@@ -3,7 +3,6 @@ package com.liming.rag.answering.application.ask;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.liming.rag.answering.application.AnsweringException;
 import com.liming.rag.answering.application.AnsweringProperties;
 import com.liming.rag.answering.application.ModelUnavailableException;
 import com.liming.rag.answering.application.TestExecutor;
@@ -12,6 +11,7 @@ import com.liming.rag.answering.domain.RefusalReason;
 import com.liming.rag.answering.domain.RefusalReason;
 import com.liming.rag.knowledge.api.EmbeddingUnavailableException;
 import com.liming.rag.knowledge.api.SearchHit;
+import com.liming.rag.shared.BusinessException;
 import com.liming.rag.shared.ErrorKind;
 import com.liming.rag.shared.TenantId;
 import com.liming.rag.shared.UserId;
@@ -105,8 +105,8 @@ class AnswerServiceTest {
     @DisplayName("空问题报参数错误")
     void validatesInput() {
         var service = service(List.of(), List.of(), "x");
-        assertThatThrownBy(() -> service.ask(TENANT, USER, List.of(1L), " ")).isInstanceOf(AnsweringException.class)
-                .extracting("kind").isEqualTo(ErrorKind.INVALID);
+        assertThatThrownBy(() -> service.ask(TENANT, USER, List.of(1L), " ")).isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("code", "ANSWERING_INVALID").extracting("kind").isEqualTo(ErrorKind.INVALID);
     }
 
     @Test

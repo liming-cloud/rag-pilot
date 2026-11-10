@@ -4,6 +4,7 @@ import com.liming.rag.answering.application.AnsweringException;
 import com.liming.rag.answering.application.AnsweringProperties;
 import com.liming.rag.answering.application.review.AnswerReview;
 import com.liming.rag.answering.application.review.AnswerReviews;
+import com.liming.rag.answering.domain.AnswerRecord;
 import com.liming.rag.identity.api.IdentityPermissions;
 import com.liming.rag.identity.api.UserDirectory;
 import com.liming.rag.settings.api.StatsZone;
@@ -115,7 +116,7 @@ public class UsageReportService {
                     asker == null ? "" : asker.displayName(), row.question(), row.refused() ? "答不上来" : "已回答",
                     "UP".equals(row.rating()) ? "有帮助" : "DOWN".equals(row.rating()) ? "没帮助" : "",
                     row.comment() == null ? "" : row.comment(), String.join("、", row.citedDocuments()),
-                    !followUp ? "" : "RESOLVED".equals(row.reviewStatus()) ? "已处理" : "待处理"));
+                    !followUp ? "" : row.reviewStatus() == AnswerRecord.ReviewStatus.RESOLVED ? "已处理" : "待处理"));
         }
         return new UsageExport("运营明细_" + period.from() + "_" + period.to() + ".csv", csv.toString());
     }

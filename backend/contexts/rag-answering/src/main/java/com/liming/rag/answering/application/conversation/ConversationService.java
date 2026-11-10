@@ -4,6 +4,7 @@ import com.liming.rag.answering.application.AnsweringException;
 import com.liming.rag.answering.application.ask.AskResult;
 import com.liming.rag.answering.application.review.AnswerLogService;
 import com.liming.rag.answering.domain.AnswerRecordRepository;
+import com.liming.rag.answering.domain.AnsweringRuleException;
 import com.liming.rag.answering.domain.Citation;
 import com.liming.rag.answering.domain.Conversation;
 import com.liming.rag.answering.domain.ConversationRepository;
@@ -98,23 +99,19 @@ public class ConversationService {
      * 重命名和改选知识库，两项都可以不传。改选时只保留已授权的库。
      *
      * @throws AnsweringException 会话不存在或不是自己的
-     * @throws AnsweringException 标题不合法，或改选后一个已授权的库都不剩
+     * @throws AnsweringRuleException 标题不合法，或改选后一个已授权的库都不剩
      */
     @Transactional
     public ConversationViews.Summary update(TenantId tenantId, UserId userId, long id, String title,
             List<Long> knowledgeBaseIds) {
         var conversation = owned(tenantId, userId, id);
-        try {
-            if (title != null) {
-                conversation.rename(userId, title);
-            }
-            if (knowledgeBaseIds != null) {
-                // 一个都没点名时交给聚合拒绝，不能当成“全部已授权的库”。
-                conversation.selectKnowledgeBases(userId, knowledgeBaseIds.isEmpty() ? List.of()
-                        : access.scope(tenantId, userId, knowledgeBaseIds));
-            }
-        } catch (IllegalArgumentException e) {
-            throw invalid(e.getMessage());
+        if (title != null) {
+            conversation.rename(userId, title);
+        }
+        if (knowledgeBaseIds != null) {
+            // 一个都没点名时交给聚合拒绝，不能当成“全部已授权的库”。
+            conversation.selectKnowledgeBases(userId, knowledgeBaseIds.isEmpty() ? List.of()
+                    : access.scope(tenantId, userId, knowledgeBaseIds));
         }
         return summary(save(conversation));
     }
@@ -130,16 +127,12 @@ public class ConversationService {
      * 提问前要用到的东西：会话、主线历史（替换时不含被替换的那一轮）、这一轮实际检索的库（所选的库与当前授权取交集）。
      *
      * @throws AnsweringException 会话不存在或不是自己的
-     * @throws AnsweringException 要替换的不是主线最后一轮
+     * @throws AnsweringRuleException 要替换的不是主线最后一轮
      */
     @Transactional(readOnly = true)
     TurnContext prepareTurn(TenantId tenantId, UserId userId, long id, @Nullable Long replacesTurnId) {
         var conversation = owned(tenantId, userId, id);
-        try {
-            conversation.checkReplaceable(replacesTurnId);
-        } catch (IllegalArgumentException e) {
-            throw invalid(e.getMessage());
-        }
+        conversation.checkReplaceable(replacesTurnId);
         var mainLine = conversations.mainLine(id);
         var history = replacesTurnId == null ? mainLine : mainLine.subList(0, mainLine.size() - 1);
         var recorded = recordedAnswers(tenantId, history);
@@ -189,12 +182,7 @@ public class ConversationService {
         var recorded = answer == null ? null
                 : log.recordSearched(tenantId, userId, question, answer, knowledgeBaseIds);
         var now = clock.instant();
-        Long parent;
-        try {
-            parent = conversation.appendTurn(turnId, replacesTurnId, question, now);
-        } catch (IllegalArgumentException e) {
-            throw invalid(e.getMessage());
-        }
+        var parent = conversation.appendTurn(turnId, replacesTurnId, question, now);
         save(conversation);
         var turn = new ConversationTurn(turnId, parent, question.strip(), status,
                 recorded == null ? null : recorded.id(), knowledgeBaseIds, now);
@@ -243,11 +231,7 @@ public class ConversationService {
     /** 自己的会话；不存在或不是自己的都按不存在处理。 */
     Conversation owned(TenantId tenantId, UserId userId, long id) {
         var conversation = conversations.find(tenantId, id).orElseThrow(ConversationService::notFound);
-        try {
-            conversation.requireOwner(userId);
-        } catch (Conversation.NotOwnerException e) {
-            throw notFound();
-        }
+        conversation.requireOwner(userId);
         return conversation;
     }
 

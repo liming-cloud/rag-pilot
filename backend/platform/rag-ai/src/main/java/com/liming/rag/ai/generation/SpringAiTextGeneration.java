@@ -115,7 +115,7 @@ final class SpringAiTextGeneration implements TextGeneration {
         var deltas = hedgeAfter == null ? main
                 : Flux.firstWithValue(main, Mono.delay(hedgeAfter)
                         .map(tick -> routes.resolve(ModelUsage.HEDGE))
-                        .doOnNext(hedge -> log.info("对话模型 {} 内没出首字，发出备用请求（{}）", hedgeAfter, hedge.model()))
+                        .doOnNext(hedge -> log.info("event=model_hedge_sent after={} model={}", hedgeAfter, hedge.model()))
                         .flatMapMany(hedge -> deltas(hedge, ModelUsage.HEDGE, prompt(systemPrompt, userMessage, options(hedge)))));
         var text = new StringBuilder();
         try {

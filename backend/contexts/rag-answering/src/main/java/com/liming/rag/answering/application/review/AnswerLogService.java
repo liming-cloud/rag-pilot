@@ -103,11 +103,7 @@ public class AnswerLogService {
             throw invalid("处理状态只能是 RESOLVED 或 OPEN");
         }
         var record = find(tenantId, answerId);
-        try {
-            record.review(by, parsed, note);
-        } catch (IllegalArgumentException e) {
-            throw invalid(e.getMessage());
-        }
+        record.review(by, parsed, note);
         records.saveReview(record);
     }
 
@@ -171,13 +167,7 @@ public class AnswerLogService {
             throw invalid("评分只能是 UP 或 DOWN");
         }
         var record = find(tenantId, answerId);
-        try {
-            record.rate(by, parsed, comment);
-        } catch (AnswerRecord.NotAskerException e) {
-            throw notFound();
-        } catch (IllegalArgumentException e) {
-            throw invalid(e.getMessage());
-        }
+        record.rate(by, parsed, comment);
         records.saveFeedback(record);
     }
 
@@ -185,11 +175,7 @@ public class AnswerLogService {
     @Transactional
     public void clearRating(TenantId tenantId, UserId by, long answerId) {
         var record = find(tenantId, answerId);
-        try {
-            record.clearRating(by);
-        } catch (AnswerRecord.NotAskerException e) {
-            throw notFound();
-        }
+        record.clearRating(by);
         records.saveFeedback(record);
     }
 

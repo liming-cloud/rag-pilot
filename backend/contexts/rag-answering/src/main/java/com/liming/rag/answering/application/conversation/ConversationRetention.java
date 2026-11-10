@@ -17,7 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Component
 public class ConversationRetention {
 
-    private static final Logger LOG = LoggerFactory.getLogger(ConversationRetention.class);
+    private static final Logger log = LoggerFactory.getLogger(ConversationRetention.class);
 
     private final ConversationRepository conversations;
     private final AnsweringProperties.Conversation settings;
@@ -35,7 +35,7 @@ public class ConversationRetention {
     public int purge() {
         int deleted = conversations.deleteInactiveSince(clock.instant().minus(settings.retention()));
         if (deleted > 0) {
-            LOG.info("清理了 {} 个超过保留期的会话", deleted);
+            log.info("event=retention_purged target=conversation rows={}", deleted);
         }
         return deleted;
     }

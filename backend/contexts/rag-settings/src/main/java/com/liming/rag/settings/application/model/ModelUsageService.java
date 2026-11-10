@@ -74,7 +74,7 @@ public class ModelUsageService {
     public int purge() {
         int deleted = store.deleteBefore(today().minusDays(RETENTION_DAYS));
         if (deleted > 0) {
-            log.info("清理了 {} 行超过保留期的模型用量", deleted);
+            log.info("event=retention_purged target=model_usage rows={}", deleted);
         }
         return deleted;
     }

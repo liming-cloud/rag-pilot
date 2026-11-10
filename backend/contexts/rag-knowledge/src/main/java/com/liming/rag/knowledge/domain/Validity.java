@@ -14,10 +14,10 @@ public record Validity(LocalDate effectiveFrom, LocalDate expiresOn) {
     /** 长期有效：现有文档迁移后都是这个。 */
     public static final Validity ALWAYS = new Validity(null, null);
 
-    /** @throws IllegalArgumentException 失效日期早于生效日期时 */
+    /** @throws KnowledgeRuleException 失效日期早于生效日期时 */
     public Validity {
         if (effectiveFrom != null && expiresOn != null && expiresOn.isBefore(effectiveFrom)) {
-            throw new IllegalArgumentException("失效日期不能早于生效日期");
+            throw KnowledgeRuleException.invalid("失效日期不能早于生效日期");
         }
     }
 

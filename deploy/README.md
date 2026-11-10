@@ -77,17 +77,28 @@ docker compose --env-file .env --env-file release.env logs --tail 200 app   # �
 | --- | --- |
 | `event=model_usage_record_failed` | 记模型用量失败（只写日志，不影响这次问答）：`purpose` 是用途，`model` 是模型名；多半是数据库暂时不可用，管理端“用量”会少这几次 |
 | `event=model_call_failed` | 模型调用失败或超时：`usage` 是用途（chat、rewrite、embedding、rerank），`error` 是异常类型（如 `HttpTimeoutException`、`ConnectException`） |
+| `event=model_hedge_sent` | 对话模型在 `after` 时间内没出首字，发出了备用请求（`model` 是备用请求用的模型），用先出字的那个；经常出现说明模型服务慢 |
+| `event=small_talk_fallback`、`event=title_generation_failed` | 降级：寒暄回复生成失败，改用固定的一句；会话标题生成失败（`conversation`），保留问题截断。`error` 是异常类型，多半同时有 `model_call_failed` |
+| `event=gap_grouping_degraded`、`event=question_vector_failed` | 降级：知识缺口归类时嵌入模型不可用，退回按原文分组（`fallback=text`）；记回答时问题向量没算成（`answer`），归类时再补 |
+| `event=answer_stream_failed`、`event=unexpected_error` | 意外错误（带堆栈）：会话提问的事件流里出错、接口处理出错，员工看到“稍后再试”；请把这段日志交给开发 |
 | `event=answer_refused` | 答不上来：`reason` 是原因（`NO_EVIDENCE` 没检索到、`LOW_RELEVANCE` 相关度太低、`MODEL_DECLINED` 模型判断依据不足、`UNCITED` 回答没有有效引用、`DATA_DENIED` 要查的数据无权查看、`DATA_UNAVAILABLE` 数据暂时查不到），`top` 是最高相关度 |
 | `event=query_rewritten` | 相关度偏低时换个说法再找一次：`outcome` 是结果（`REWRITTEN` 改写了、`NO_CHANGE` 没改、`TIMED_OUT` 改写超时、`SKIPPED_BELOW_FLOOR` 分数太低不改写直接拒答） |
-| `event=document_failed` | 文档入库失败：`kind=content` 是文件本身的问题，`kind=model` 是模型暂时不可用（10 分钟后自动重试一次） |
-| `event=login_failed`、`event=account_locked` | 登录失败（`reason`）、连续输错被锁 |
+| `event=document_failed` | 文档入库失败：`kind=content` 是文件本身的问题，`kind=model` 是模型暂时不可用（10 分钟后自动重试一次），`kind=error` 是意外错误（带堆栈） |
+| `event=document_retried` | 模型暂时不可用而失败的文档自动重新处理：`attempts` 是第几次处理 |
+| `event=document_deferred`、`event=document_discarded` | 正在停机，文档留在“解析中”，下次启动时重新处理；处理期间文档被删除，结果不写回 |
+| `event=document_file_orphaned` | 文档已删除，但原始文件（`sha256`）没删掉，留在存储目录里，不影响使用，可以手工清理 |
+| `event=login_failed`、`event=account_locked` | 登录失败（`reason`：`unknown_user`、`locked`、`disabled`、`bad_password`，密码错误时 `attempts` 是连续输错次数）、连续输错被锁 |
+| `event=admin_created`、`event=admin_password_reset` | 启动时按 `RAG_ADMIN_USERNAME` 创建了超级管理员；按 `RAG_ADMIN_RESET_PASSWORD` 重置了超级管理员的密码并解锁（重置后请删掉这个环境变量再重启） |
+| `event=admin_missing`、`event=admin_reset_skipped` | 还没有任何账号，也没设置 `RAG_ADMIN_USERNAME` 和 `RAG_ADMIN_PASSWORD`（设置后重启）；设置了 `RAG_ADMIN_RESET_PASSWORD` 但还没有超级管理员，没有重置 |
 | `event=data_scope_denied` | 数据问答的工具调用被范围判定拒绝（越权拒绝）：`user` 是账号编号，`code` 是 `tool_not_granted`（没授权这个工具）、`empty_scope`（没有授权任何站点）、`out_of_scope`（请求的站点不在授权范围内） |
 | `event=data_unit_master_unavailable`、`event=tool_call_failed purpose=unit_master` | 读取客户系统的站点主数据失败（`reason` 是失败原因）：授权页提示“稍后再试”，判定时区域授权展开不出站点、按没有处理（只拒绝，不放宽） |
 | `event=tool_call` | 数据问答的每次工具调用（含被范围判定拒绝、没发出的）：`tool` 工具名，`outcome` 成功 / 拒绝 / 失败，`code` 失败分类（`UNAVAILABLE` 超时或连不上、`REJECTED` 令牌被拒、`RATE_LIMITED` 限流、`TOOL_ERROR:<错误码>` 工具报错、`PROTOCOL` 协议错误或返回格式不符），`rows` 返回行数，`dropped` 丢弃的范围外行数，`units` 令牌里的站点数，`duration_ms` 耗时，`jti` 令牌编号（与客户系统日志对账）。同时在管理端审计里记一条 `DATA_TOOL_CALLED` |
 | `event=tool_rows_dropped` | 客户系统返回了范围外（或没有站点标识）的行，已丢弃、没给员工看：`dropped` 行数、`jti` 令牌编号；出现时请客户核查第二道校验 |
 | `event=tool_list_failed`、`event=tool_selection_failed`、`event=tool_selection_rejected` | 取客户系统的工具清单失败（`code`）；选工具时模型不可用；模型选了提问人不能用的工具（没有调用）。前两种按不查数据回答 |
-| `event=access_denied` | 越权被拒：缺的权限点（`permission`）或不能管理的知识库（`knowledgeBase`） |
+| `event=access_denied` | 越权被拒：缺的权限点（`permission`）、角色（`role`）或不能管理的知识库（`knowledgeBase`） |
 | `event=cache_failure` | Redis 出错或超时：`cache` 是哪种缓存、`op` 是什么操作。之后 30 秒内跳过 Redis（进程内的一级缓存照常用，没有时读数据库），问答照常；恢复后先清空 Redis 里的缓存再用。登录会话也在 Redis 里，Redis 不可用时**不能登录、已登录的请求会被拒绝** |
+| `event=cache_recovered`、`event=cache_value_unreadable` | Redis 恢复，已清空缓存后重新使用；缓存里的值读不回来（`cache`，多半是升级后结构变了），当作没缓存重新加载 |
+| `event=retention_purged` | 定时清理超过保留期的数据：`target` 是哪种（`conversation` 会话、`audit` 审计记录、`model_usage` 模型用量），`rows` 是条数 |
 
 ```bash
 docker compose --env-file .env --env-file release.env logs --since 24h app | grep 'event=model_call_failed'

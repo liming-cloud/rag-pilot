@@ -1,6 +1,7 @@
 package com.liming.rag.answering.domain;
 
 import com.liming.rag.shared.AggregateRoot;
+import com.liming.rag.shared.ErrorKind;
 import com.liming.rag.shared.TenantId;
 import com.liming.rag.shared.UserId;
 import java.io.Serial;
@@ -48,14 +49,14 @@ public final class AnswerRecord implements AggregateRoot {
         }
     }
 
-    /** 评价人不是提问人。对外按“回答不存在”处理，不暴露别人的回答是否存在。 */
-    public static final class NotAskerException extends RuntimeException {
+    /** 评价人不是提问人。对外按“回答不存在”处理（{@code ANSWERING_NOT_FOUND}），不暴露别人的回答是否存在。 */
+    public static final class NotAskerException extends AnsweringRuleException {
 
         @Serial
         private static final long serialVersionUID = 1L;
 
         NotAskerException() {
-            super("只有提问人能评价这条回答");
+            super(ErrorKind.NOT_FOUND, "NOT_FOUND", "回答不存在");
         }
     }
 
@@ -114,7 +115,7 @@ public final class AnswerRecord implements AggregateRoot {
 
     /**
      * @throws NotAskerException 评价人不是提问人
-     * @throws IllegalArgumentException 留言超过 {@value #MAX_COMMENT_LENGTH} 字
+     * @throws AnsweringRuleException 留言超过 {@value #MAX_COMMENT_LENGTH} 字
      */
     public void rate(UserId by, Rating newRating, String newComment) {
         requireAsker(by);
@@ -132,7 +133,7 @@ public final class AnswerRecord implements AggregateRoot {
     /**
      * 标记为已处理，或重新打开。重新打开时清掉处理说明和处理人。
      *
-     * @throws IllegalArgumentException 处理说明超过 {@value #MAX_COMMENT_LENGTH} 字
+     * @throws AnsweringRuleException 处理说明超过 {@value #MAX_COMMENT_LENGTH} 字
      */
     public void review(UserId by, ReviewStatus newStatus, String note) {
         Objects.requireNonNull(by);
@@ -155,7 +156,7 @@ public final class AnswerRecord implements AggregateRoot {
     private static String trimmed(String text, String label) {
         var value = text == null ? "" : text.strip();
         if (value.length() > MAX_COMMENT_LENGTH) {
-            throw new IllegalArgumentException(label + "不能超过 " + MAX_COMMENT_LENGTH + " 个字");
+            throw AnsweringRuleException.invalid(label + "不能超过 " + MAX_COMMENT_LENGTH + " 个字");
         }
         return value.isEmpty() ? null : value;
     }

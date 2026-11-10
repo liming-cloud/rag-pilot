@@ -31,7 +31,7 @@ public class AuditService implements AuditTrail {
     /** 操作类型是各上下文定的常量名，如 ROLE_CREATED。 */
     private static final Pattern ACTION = Pattern.compile("[A-Z][A-Z_]{0,49}");
 
-    private static final Logger LOG = LoggerFactory.getLogger(AuditService.class);
+    private static final Logger log = LoggerFactory.getLogger(AuditService.class);
 
     private final AuditLogs logs;
     private final Clock clock;
@@ -74,7 +74,7 @@ public class AuditService implements AuditTrail {
     public int purge() {
         int deleted = logs.deleteBefore(OffsetDateTime.now(clock).minus(RETENTION));
         if (deleted > 0) {
-            LOG.info("清理了 {} 条超过保留期的审计记录", deleted);
+            log.info("event=retention_purged target=audit rows={}", deleted);
         }
         return deleted;
     }

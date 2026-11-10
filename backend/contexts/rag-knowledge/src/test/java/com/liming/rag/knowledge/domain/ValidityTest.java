@@ -42,7 +42,7 @@ class ValidityTest {
     @DisplayName("失效日期不能早于生效日期；同一天可以")
     void rejectsReversedRange() {
         assertThatThrownBy(() -> new Validity(TODAY, TODAY.minusDays(1)))
-                .isInstanceOf(IllegalArgumentException.class).hasMessage("失效日期不能早于生效日期");
+                .isInstanceOf(KnowledgeRuleException.class).hasMessage("失效日期不能早于生效日期");
         assertThat(new Validity(TODAY, TODAY).isCurrent(TODAY)).isTrue();
     }
 
