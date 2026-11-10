@@ -29,7 +29,7 @@ public final class TextChunker {
 
     TextChunker(int maxTokens, int overlapTokens) {
         if (maxTokens <= 0 || overlapTokens < 0 || overlapTokens >= maxTokens) {
-            throw new IllegalArgumentException("分块参数不合法");
+            throw new IllegalStateException("分块参数不合法");
         }
         this.maxTokens = maxTokens;
         this.overlapTokens = overlapTokens;

@@ -49,7 +49,7 @@ class AnswerRecordTest {
         assertThatThrownBy(() -> record.clearRating(new UserId(8)))
                 .isInstanceOf(AnswerRecord.NotAskerException.class);
         assertThatThrownBy(() -> record.rate(ASKER, AnswerRecord.Rating.DOWN, "很".repeat(501)))
-                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("500");
+                .isInstanceOf(AnsweringRuleException.class).hasMessageContaining("500");
     }
 
     @Test
@@ -67,6 +67,6 @@ class AnswerRecordTest {
         assertThat(record.resolvedBy()).isNull();
 
         assertThatThrownBy(() -> record.review(admin, AnswerRecord.ReviewStatus.RESOLVED, "很".repeat(501)))
-                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("500");
+                .isInstanceOf(AnsweringRuleException.class).hasMessageContaining("500");
     }
 }

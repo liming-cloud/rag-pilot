@@ -96,6 +96,9 @@ class AnswerReviewLoopTests {
 
         assertThat(markReview(id, Map.of("status", "RESOLVED", "note", "很".repeat(501)), null))
                 .isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(http.exchange("/api/answers/{id}/review", HttpMethod.PATCH,
+                new HttpEntity<>(Map.of("status", "RESOLVED", "note", "很".repeat(501))), String.class, id).getBody())
+                .contains("\"code\":\"ANSWERING_INVALID\"");
         assertThat(markReview(id, Map.of("status", "MAYBE"), null)).isEqualTo(HttpStatus.BAD_REQUEST);
         assertThat(markReview(999_999, Map.of("status", "RESOLVED"), null)).isEqualTo(HttpStatus.NOT_FOUND);
         assertThat(markReview(id, Map.of("status", "RESOLVED"), staffToken())).isEqualTo(HttpStatus.FORBIDDEN);

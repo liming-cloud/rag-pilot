@@ -9,6 +9,7 @@ import com.liming.rag.answering.application.AnsweringProperties;
 import com.liming.rag.answering.application.InMemoryAnswering;
 import com.liming.rag.answering.application.TestSettings;
 import com.liming.rag.answering.application.review.AnswerReview;
+import com.liming.rag.answering.domain.AnswerRecord;
 import java.time.Clock;
 import java.time.DayOfWeek;
 import java.time.Duration;
@@ -124,7 +125,7 @@ class UsageReportServiceTest {
     private static AnswerReview review(long id, String question, boolean refused, String rating, String status,
             OffsetDateTime at) {
         return new AnswerReview(id, 7, null, question, "x", refused, refused ? "NO_EVIDENCE" : null, null, rating,
-                null, at, refused ? List.of() : List.of("陈列规范"), null, status, null, null);
+                null, at, refused ? List.of() : List.of("陈列规范"), null, AnswerRecord.ReviewStatus.valueOf(status), null, null);
     }
 
     private static void assertReason(ThrowingCallable call, AnsweringException.Reason reason) {

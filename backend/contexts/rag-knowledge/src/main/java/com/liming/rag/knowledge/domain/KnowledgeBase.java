@@ -46,12 +46,12 @@ public final class KnowledgeBase implements AggregateRoot {
     /**
      * 新建知识库，建库的人自动获得直接授权。
      *
-     * @throws IllegalArgumentException 当名称为空或超过 {@value #MAX_NAME_LENGTH} 个字符时
+     * @throws KnowledgeRuleException 当名称为空或超过 {@value #MAX_NAME_LENGTH} 个字符时
      */
     public static KnowledgeBase create(TenantId tenantId, String name, UserId creator) {
         var trimmed = name == null ? "" : name.strip();
         if (trimmed.isEmpty() || trimmed.length() > MAX_NAME_LENGTH) {
-            throw new IllegalArgumentException("知识库名称必须是 1 到 " + MAX_NAME_LENGTH + " 个字符");
+            throw KnowledgeRuleException.invalid("知识库名称必须是 1 到 " + MAX_NAME_LENGTH + " 个字符");
         }
         var created = new KnowledgeBase(null, tenantId, trimmed, Set.of(), Set.of());
         created.grant(Objects.requireNonNull(creator, "建库人不能为空"));
@@ -90,11 +90,11 @@ public final class KnowledgeBase implements AggregateRoot {
     /**
      * 撤销账号的直接授权；没有授权时不算变化。
      *
-     * @throws IllegalArgumentException 撤销的是自己
+     * @throws KnowledgeRuleException 撤销的是自己
      */
     public void revoke(UserId actor, UserId user) {
         if (Objects.equals(actor, user)) {
-            throw new IllegalArgumentException("不能撤销自己的权限");
+            throw KnowledgeRuleException.invalid("不能撤销自己的权限");
         }
         if (members.remove(user) && !addedMembers.remove(user)) {
             removedMembers.add(user);

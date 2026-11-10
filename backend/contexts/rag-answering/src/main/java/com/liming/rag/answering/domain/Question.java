@@ -8,11 +8,11 @@ public record Question(String text) {
 
     public static final int MAX_LENGTH = 500;
 
-    /** @throws IllegalArgumentException 为空或太长 */
+    /** @throws AnsweringRuleException 为空或太长 */
     public Question {
         text = text == null ? "" : text.strip();
         if (!fits(text)) {
-            throw new IllegalArgumentException("问题不能为空，且不超过 " + MAX_LENGTH + " 个字");
+            throw AnsweringRuleException.invalid("问题不能为空，且不超过 " + MAX_LENGTH + " 个字");
         }
     }
 

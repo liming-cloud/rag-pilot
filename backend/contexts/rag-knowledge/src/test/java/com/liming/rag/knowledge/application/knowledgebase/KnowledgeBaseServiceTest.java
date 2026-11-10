@@ -7,6 +7,7 @@ import com.liming.rag.knowledge.application.InMemoryKnowledge;
 import com.liming.rag.knowledge.application.Grantee;
 import com.liming.rag.knowledge.application.KnowledgeQueries;
 import com.liming.rag.knowledge.application.KnowledgeException;
+import com.liming.rag.shared.BusinessException;
 import com.liming.rag.shared.Paged;
 
 import static com.liming.rag.knowledge.application.InMemoryKnowledge.OTHER_TENANT;
@@ -174,8 +175,9 @@ class KnowledgeBaseServiceTest {
         assertThat(searched).hasSize(1);
     }
 
+    /** 按错误码断言：规则违规可能来自 application 的 KnowledgeException，也可能来自领域对象（D-067），错误码是同一套。 */
     private static void assertReason(ThrowingCallable call, KnowledgeException.Reason reason) {
-        assertThatThrownBy(call).isInstanceOfSatisfying(KnowledgeException.class,
-                e -> assertThat(e.reason()).isEqualTo(reason));
+        assertThatThrownBy(call).isInstanceOfSatisfying(BusinessException.class,
+                e -> assertThat(e.code()).isEqualTo("KNOWLEDGE_" + reason.name()));
     }
 }

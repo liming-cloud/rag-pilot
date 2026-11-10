@@ -12,6 +12,7 @@ import com.liming.rag.identity.api.RoleDeleted;
 import com.liming.rag.knowledge.api.KnowledgeBaseRef;
 import com.liming.rag.knowledge.api.SearchHit;
 import com.liming.rag.knowledge.api.SearchQuery;
+import com.liming.rag.shared.BusinessException;
 import com.liming.rag.shared.UserId;
 import java.util.ArrayList;
 import java.util.List;
@@ -98,8 +99,9 @@ class KnowledgeGrantServiceTest {
                 "KB_ROLE_GRANTED 知识库“门店规范”授权给角色 #" + STORE_ROLE);
     }
 
+    /** 按错误码断言：规则违规可能来自 application 的 KnowledgeException，也可能来自领域对象（D-067），错误码是同一套。 */
     private static void assertReason(ThrowingCallable call, KnowledgeException.Reason reason) {
-        assertThatThrownBy(call).isInstanceOfSatisfying(KnowledgeException.class,
-                e -> assertThat(e.reason()).isEqualTo(reason));
+        assertThatThrownBy(call).isInstanceOfSatisfying(BusinessException.class,
+                e -> assertThat(e.code()).isEqualTo("KNOWLEDGE_" + reason.name()));
     }
 }

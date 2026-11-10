@@ -127,8 +127,7 @@ public final class Document implements AggregateRoot {
     /**
      * 处理失败。
      *
-     * @throws IllegalStateException 当文档不在解析状态时
-     * @throws IllegalArgumentException 当没有给出失败原因时
+     * @throws IllegalStateException 当文档不在解析状态，或没有给出失败原因时
      */
     public void markFailed(String reason) {
         fail(reason);
@@ -139,8 +138,7 @@ public final class Document implements AggregateRoot {
     /**
      * 模型暂时不可用导致处理失败：可以重新处理；第一次处理失败时 {@link #AUTO_RETRY_DELAY} 后自动重试。
      *
-     * @throws IllegalStateException 当文档不在解析状态时
-     * @throws IllegalArgumentException 当没有给出失败原因时
+     * @throws IllegalStateException 当文档不在解析状态，或没有给出失败原因时
      */
     public void markModelUnavailable(String reason, OffsetDateTime now) {
         fail(reason);
@@ -167,7 +165,7 @@ public final class Document implements AggregateRoot {
     private void fail(String reason) {
         requireParsing();
         if (reason == null || reason.isBlank()) {
-            throw new IllegalArgumentException("失败原因不能为空");
+            throw new IllegalStateException("失败原因不能为空");
         }
         this.status = DocumentStatus.FAILED;
         this.error = reason.length() > MAX_ERROR_LENGTH ? reason.substring(0, MAX_ERROR_LENGTH) : reason;

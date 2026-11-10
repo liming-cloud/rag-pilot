@@ -29,7 +29,7 @@ public final class UsageReports {
         try {
             target.record(new ModelCallUsage(purpose, baseUrl, model, Math.max(0, inputTokens), Math.max(0, outputTokens)));
         } catch (RuntimeException e) {
-            log.warn("event=model_usage_record_failed purpose={} model={} 原因={}", purpose, model, e.toString());
+            log.warn("event=model_usage_record_failed purpose={} model={} error={}", purpose, model, e.toString());
         }
     }
 

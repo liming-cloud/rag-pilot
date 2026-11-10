@@ -173,7 +173,7 @@ class KnowledgeGapServiceTest {
     private static GapRecord gap(long id, String question, int hoursAgo, boolean refused, String status,
             List<Long> knowledgeBaseIds, float[] vector) {
         return new GapRecord(id, 7, question, NOW.minusHours(hoursAgo), refused, refused ? null : "没帮助",
-                refused ? List.of() : List.of("陈列规范"), status, knowledgeBaseIds, vector);
+                refused ? List.of() : List.of("陈列规范"), AnswerRecord.ReviewStatus.valueOf(status), knowledgeBaseIds, vector);
     }
 
     private static AskResult refused() {

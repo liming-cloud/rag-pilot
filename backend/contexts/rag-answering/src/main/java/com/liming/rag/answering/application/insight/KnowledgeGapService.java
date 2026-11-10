@@ -114,7 +114,7 @@ public class KnowledgeGapService {
         try {
             clusters = QuestionClusters.bySimilarity(vectors(tenantId, texts, byText), properties.gaps().similarity());
         } catch (ModelUnavailableException e) {
-            log.warn("知识缺口归类时嵌入模型不可用，退回按原文分组：{}", e.getMessage());
+            log.warn("event=gap_grouping_degraded fallback=text error={}", e.code());
             grouping = GapGrouping.TEXT;
             clusters = QuestionClusters.byText(texts);
         }
@@ -183,11 +183,7 @@ public class KnowledgeGapService {
         }
         var open = found.values().stream()
                 .filter(record -> record.reviewStatus() == AnswerRecord.ReviewStatus.OPEN).toList();
-        try {
-            open.forEach(record -> record.review(by, AnswerRecord.ReviewStatus.RESOLVED, note));
-        } catch (IllegalArgumentException e) {
-            throw invalid(e.getMessage());
-        }
+        open.forEach(record -> record.review(by, AnswerRecord.ReviewStatus.RESOLVED, note));
         // 一类可能有上千条：读一次、写一次，不逐条往返（#136）。
         records.saveReviews(open);
         return open.size();
@@ -211,7 +207,7 @@ public class KnowledgeGapService {
                 .map(entry -> new KnowledgeBaseRef(entry.getKey(), knowledgeBaseNames.get(entry.getKey())))
                 .toList();
         return new GapGroup(latestOfRepresentative.id(), representative, members.size(),
-                (int) members.stream().filter(record -> "OPEN".equals(record.reviewStatus())).count(),
+                (int) members.stream().filter(record -> record.reviewStatus() == AnswerRecord.ReviewStatus.OPEN).count(),
                 (int) members.stream().filter(GapRecord::refused).count(),
                 (int) members.stream().filter(record -> !record.refused()).count(),
                 texts.size(), members.getFirst().createdAt(),
@@ -222,7 +218,7 @@ public class KnowledgeGapService {
                             record.createdAt(), record.refused(), record.comment(),
                             record.knowledgeBaseIds().stream().filter(knowledgeBaseNames::containsKey)
                                     .map(knowledgeBaseNames::get).toList(),
-                            record.citedDocuments(), record.reviewStatus());
+                            record.citedDocuments(), record.reviewStatus().name());
                 }).toList());
     }
 

@@ -66,7 +66,7 @@ public class AuthService {
         if (!matches) {
             int attempts = accounts.incrementFailedLogins(account.id());
             var lockedUntil = AccountRules.lockedUntil(attempts, now);
-            loginFailed(account.username(), "bad_password attempts=" + attempts);
+            loginFailed(account.username(), "bad_password", attempts);
             if (lockedUntil == null) {
                 throw badCredentials();
             }
@@ -86,9 +86,17 @@ public class AuthService {
 
     /** 登录失败留一行日志（#145 C1）；不合规的用户名不原样写进日志，防止伪造日志行。 */
     private static void loginFailed(String username, String reason) {
-        var shown = username != null && AccountRules.USERNAME.matcher(username.strip()).matches() ? username.strip()
+        log.warn("event=login_failed username={} reason={}", shown(username), reason);
+    }
+
+    /** 密码错误时带上连续输错的次数。 */
+    private static void loginFailed(String username, String reason, int attempts) {
+        log.warn("event=login_failed username={} reason={} attempts={}", shown(username), reason, attempts);
+    }
+
+    private static String shown(String username) {
+        return username != null && AccountRules.USERNAME.matcher(username.strip()).matches() ? username.strip()
                 : "(不合规)";
-        log.warn("event=login_failed username={} reason={}", shown, reason);
     }
 
     public void logout() {

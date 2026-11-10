@@ -28,9 +28,11 @@ class UploadedFileTest {
     @DisplayName("类型不支持单独报出；空文件、超过 50 MB、文件名太长是不合格")
     void rejectsBadFiles() {
         assertThatThrownBy(() -> UploadedFile.of("旧版.doc", TEXT)).isInstanceOf(UploadedFile.UnsupportedTypeException.class);
-        assertThatThrownBy(() -> UploadedFile.of(null, TEXT)).isInstanceOf(UploadedFile.UnsupportedTypeException.class);
-        assertThatThrownBy(() -> UploadedFile.of("空.txt", new byte[0])).isInstanceOf(IllegalArgumentException.class)
-                .isNotInstanceOf(UploadedFile.UnsupportedTypeException.class).hasMessage("文件是空的");
+        assertThatThrownBy(() -> UploadedFile.of(null, TEXT)).isInstanceOf(UploadedFile.UnsupportedTypeException.class)
+                .hasFieldOrPropertyWithValue("code", "KNOWLEDGE_UNSUPPORTED_TYPE");
+        assertThatThrownBy(() -> UploadedFile.of("空.txt", new byte[0])).isInstanceOf(KnowledgeRuleException.class)
+                .isNotInstanceOf(UploadedFile.UnsupportedTypeException.class).hasMessage("文件是空的")
+                .hasFieldOrPropertyWithValue("code", "KNOWLEDGE_INVALID");
         assertThatThrownBy(() -> UploadedFile.of("大.txt", new byte[(int) UploadedFile.MAX_SIZE_BYTES + 1]))
                 .hasMessage("单个文件不能超过 50 MB");
         assertThatThrownBy(() -> UploadedFile.of("长".repeat(252) + ".txt", TEXT))

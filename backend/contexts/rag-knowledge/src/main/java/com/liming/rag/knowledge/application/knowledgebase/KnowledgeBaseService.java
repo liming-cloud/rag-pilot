@@ -66,12 +66,7 @@ public class KnowledgeBaseService implements KnowledgeAccess {
     /** 建库，建库的人自动获得直接授权。 */
     @Transactional
     public KnowledgeBaseRef create(TenantId tenantId, UserId creator, String name) {
-        KnowledgeBase knowledgeBase;
-        try {
-            knowledgeBase = KnowledgeBase.create(tenantId, name, creator);
-        } catch (IllegalArgumentException e) {
-            throw new KnowledgeException(KnowledgeException.Reason.INVALID, e.getMessage());
-        }
+        var knowledgeBase = KnowledgeBase.create(tenantId, name, creator);
         if (knowledgeBases.existsByName(tenantId, knowledgeBase.name())) {
             throw nameTaken(knowledgeBase.name());
         }

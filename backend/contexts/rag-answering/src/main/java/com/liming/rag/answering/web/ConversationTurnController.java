@@ -31,7 +31,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 @SaCheckPermission(IdentityPermissions.CHAT_USE)
 class ConversationTurnController {
 
-    private static final Logger LOG = LoggerFactory.getLogger(ConversationTurnController.class);
+    private static final Logger log = LoggerFactory.getLogger(ConversationTurnController.class);
 
     private final ConversationAskService turns;
     private final CurrentUser currentUser;
@@ -63,7 +63,7 @@ class ConversationTurnController {
         channel.send("turn", Map.of("id", pending.turnId()));
         streams.execute(() -> channel.run(events -> events.send("done", turns.run(pending,
                 new ConversationAskService.Events(status -> events.send("status", Map.of("text", status)),
-                        delta -> events.send("delta", Map.of("text", delta))))), LOG, "会话提问出错"));
+                        delta -> events.send("delta", Map.of("text", delta))))), log));
         return channel.emitter();
     }
 

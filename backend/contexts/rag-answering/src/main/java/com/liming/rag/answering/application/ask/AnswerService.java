@@ -180,11 +180,7 @@ public class AnswerService {
 
     /** 员工的问题，规则见 {@link Question}。 */
     public static String question(String text) {
-        try {
-            return new Question(text).text();
-        } catch (IllegalArgumentException e) {
-            throw new AnsweringException(AnsweringException.Reason.INVALID, e.getMessage());
-        }
+        return new Question(text).text();
     }
 
     /** 合并几个检索词的候选，同一分块只留第一次出现的。 */

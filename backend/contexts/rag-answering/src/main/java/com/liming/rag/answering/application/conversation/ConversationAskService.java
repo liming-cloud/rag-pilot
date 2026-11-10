@@ -32,7 +32,7 @@ import org.springframework.stereotype.Service;
 @Service
 public class ConversationAskService {
 
-    private static final Logger LOG = LoggerFactory.getLogger(ConversationAskService.class);
+    private static final Logger log = LoggerFactory.getLogger(ConversationAskService.class);
 
     static final String UNDERSTANDING_STATUS = "正在理解你的追问…";
 
@@ -159,7 +159,7 @@ public class ConversationAskService {
         try {
             return acceptSmallTalk(light.reply(SMALL_TALK_SYSTEM, question, SMALL_TALK_MAX_TOKENS));
         } catch (RuntimeException e) {
-            LOG.debug("寒暄回复生成失败，用固定回复", e);
+            log.warn("event=small_talk_fallback error={}", e.getClass().getSimpleName());
             return SMALL_TALK_FALLBACK;
         }
     }
@@ -191,7 +191,8 @@ public class ConversationAskService {
                     conversations.applyGeneratedTitle(pending.tenantId(), pending.conversationId(), title));
         } catch (RuntimeException e) {
             // 标题生成失败不影响使用，保留问题截断。
-            LOG.debug("会话标题生成失败", e);
+            log.warn("event=title_generation_failed conversation={} error={}", pending.conversationId(),
+                    e.getClass().getSimpleName());
         }
     }
 

@@ -115,8 +115,9 @@ class ConversationTests {
         String path = "/api/conversations/" + id;
 
         assertThat(exchange(HttpMethod.GET, path, null, other).getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
-        assertThat(exchange(HttpMethod.PATCH, path, Map.of("title", "偷改"), other).getStatusCode())
-                .isEqualTo(HttpStatus.NOT_FOUND);
+        var stolen = exchange(HttpMethod.PATCH, path, Map.of("title", "偷改"), other);
+        assertThat(stolen.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(stolen.getBody()).containsEntry("code", "ANSWERING_NOT_FOUND").containsEntry("detail", "会话不存在");
         assertThat(exchange(HttpMethod.DELETE, path, null, other).getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
         assertThat(exchange(HttpMethod.GET, path, null, owner).getBody()).containsEntry("title", "新对话");
     }
@@ -136,13 +137,16 @@ class ConversationTests {
 
         var renamed = exchange(HttpMethod.PATCH, path, Map.of("title", "  冷柜温度  "), staff);
         assertThat(renamed.getBody()).containsEntry("title", "冷柜温度");
-        assertThat(exchange(HttpMethod.PATCH, path, Map.of("title", "长".repeat(41)), staff).getStatusCode())
-                .isEqualTo(HttpStatus.BAD_REQUEST);
+        var tooLong = exchange(HttpMethod.PATCH, path, Map.of("title", "长".repeat(41)), staff);
+        assertThat(tooLong.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(tooLong.getBody()).containsEntry("code", "ANSWERING_INVALID");
 
         var narrowed = exchange(HttpMethod.PATCH, path, Map.of("knowledgeBaseIds", List.of(goods, manager)), staff);
         assertThat(ids(narrowed.getBody().get("knowledgeBaseIds"))).containsExactly(goods);
-        assertThat(exchange(HttpMethod.PATCH, path, Map.of("knowledgeBaseIds", List.of(manager)), staff).getStatusCode())
-                .as("全是无权限的库时不能保存，否则会话没有可检索的库").isEqualTo(HttpStatus.BAD_REQUEST);
+        var unauthorized = exchange(HttpMethod.PATCH, path, Map.of("knowledgeBaseIds", List.of(manager)), staff);
+        assertThat(unauthorized.getStatusCode()).as("全是无权限的库时不能保存，否则会话没有可检索的库")
+                .isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(unauthorized.getBody()).containsEntry("code", "ANSWERING_INVALID");
 
         var detail = exchange(HttpMethod.GET, path, null, staff).getBody();
         assertThat(detail.get("knowledgeBases").toString()).contains("会话测试改选库二").doesNotContain("会话测试改选库三");

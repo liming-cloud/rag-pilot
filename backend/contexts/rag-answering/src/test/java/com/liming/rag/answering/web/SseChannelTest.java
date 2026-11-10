@@ -67,7 +67,7 @@ class SseChannelTest {
         channel.run(events -> {
             events.send("delta", java.util.Map.of("text", "每周二"));
             events.send("done", java.util.Map.of("id", 1));
-        }, LOG, "出错");
+        }, LOG);
 
         assertThat(emitter.events).containsExactly("delta", "done");
         assertThat(emitter.completed).isTrue();
@@ -84,7 +84,7 @@ class SseChannelTest {
             emitter.failOnSend = false;
             events.send("done", java.util.Map.of("id", 1));
             reached.add("做完");
-        }, LOG, "出错");
+        }, LOG);
 
         assertThat(reached).containsExactly("断开之后", "做完");
         assertThat(emitter.events).as("断开后的事件不再发").isEmpty();
@@ -96,7 +96,7 @@ class SseChannelTest {
     void stopsSendingAfterTimeout() {
         emitter.timeout.run();
 
-        channel.run(events -> events.send("done", java.util.Map.of("id", 1)), LOG, "出错");
+        channel.run(events -> events.send("done", java.util.Map.of("id", 1)), LOG);
 
         assertThat(emitter.events).isEmpty();
         assertThat(emitter.completed).isFalse();
@@ -107,14 +107,14 @@ class SseChannelTest {
     void reportsFailures() {
         channel.run(events -> {
             throw new Failed();
-        }, LOG, "出错");
+        }, LOG);
         assertThat(emitter.events).containsExactly("error");
         assertThat(emitter.completed).isTrue();
 
         var other = new RecordingEmitter();
         new SseChannel(other).run(events -> {
             throw new IllegalStateException("数据库连接串 jdbc:postgresql://secret");
-        }, LOG, "会话提问出错");
+        }, LOG);
         assertThat(other.events).containsExactly("error");
         assertThat(other.completed).isTrue();
     }

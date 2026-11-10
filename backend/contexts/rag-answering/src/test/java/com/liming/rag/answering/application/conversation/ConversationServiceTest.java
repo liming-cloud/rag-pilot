@@ -13,6 +13,7 @@ import com.liming.rag.answering.domain.Citation;
 import com.liming.rag.answering.domain.Conversation;
 import com.liming.rag.answering.domain.ConversationTurn;
 import com.liming.rag.knowledge.api.DocumentFreshness;
+import com.liming.rag.shared.BusinessException;
 import com.liming.rag.shared.UserId;
 import java.time.Clock;
 import java.time.OffsetDateTime;
@@ -220,9 +221,10 @@ class ConversationServiceTest {
         return new Citation(1, 100, 50, "陈列规范", "陈列规范 > 饮料", null);
     }
 
+    /** 按错误码断言：规则违规可能来自 application 的 AnsweringException，也可能来自领域对象（D-067），错误码是同一套。 */
     private static void assertReason(ThrowingCallable call, AnsweringException.Reason reason) {
-        assertThatThrownBy(call).isInstanceOfSatisfying(AnsweringException.class,
-                e -> assertThat(e.reason()).isEqualTo(reason));
+        assertThatThrownBy(call).isInstanceOfSatisfying(BusinessException.class,
+                e -> assertThat(e.code()).isEqualTo("ANSWERING_" + reason.name()));
     }
 
     private static ConversationService.NewTurn newTurn(long conversationId, long turnId, String question,

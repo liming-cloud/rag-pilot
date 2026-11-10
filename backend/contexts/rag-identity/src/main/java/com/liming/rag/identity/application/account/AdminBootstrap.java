@@ -62,20 +62,21 @@ class AdminBootstrap implements ApplicationRunner {
 
     private void createSuperAdmin(Role superRole) {
         if (admin.username().isBlank() || admin.password().isBlank()) {
-            log.warn("还没有任何账号：请设置 RAG_ADMIN_USERNAME 和 RAG_ADMIN_PASSWORD 后重启，以创建超级管理员");
+            // 还没有任何账号：设置 RAG_ADMIN_USERNAME 和 RAG_ADMIN_PASSWORD 后重启，才会创建超级管理员。
+            log.warn("event=admin_missing");
             return;
         }
         PasswordRules.check(admin.username(), admin.password());
         var created = accounts.insert(new Account(null, tenant, admin.username(), "超级管理员",
                 passwords.hash(admin.password()), true, false, 0, null));
         roles.setUserRoles(created.id(), List.of(superRole.id()));
-        log.info("已创建超级管理员 {}", admin.username());
+        log.info("event=admin_created username={}", admin.username());
     }
 
     private void resetSuperAdminPassword(Role superRole) {
         var superAdmins = roles.userIds(superRole.id());
         if (superAdmins.isEmpty()) {
-            log.warn("设置了 RAG_ADMIN_RESET_PASSWORD，但还没有超级管理员，没有重置");
+            log.warn("event=admin_reset_skipped reason=no_admin");
             return;
         }
         var account = accounts.find(superAdmins.getFirst()).orElseThrow();
@@ -84,7 +85,7 @@ class AdminBootstrap implements ApplicationRunner {
         accounts.setEnabled(account.id(), true);
         access.forget(account.id());
         sessions.logoutAll(account.id());
-        log.warn("已按 RAG_ADMIN_RESET_PASSWORD 重置超级管理员 {} 的密码并解锁；请删掉这个环境变量后重启",
-                account.username());
+        // 重置后要删掉 RAG_ADMIN_RESET_PASSWORD 再重启，否则每次启动都会重置。
+        log.warn("event=admin_password_reset username={}", account.username());
     }
 }

@@ -17,6 +17,7 @@ import com.liming.rag.knowledge.domain.Document;
 import com.liming.rag.knowledge.domain.DocumentStatus;
 import com.liming.rag.knowledge.domain.UploadedFile;
 import com.liming.rag.knowledge.domain.Validity;
+import com.liming.rag.shared.BusinessException;
 import com.liming.rag.shared.UserId;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
@@ -245,9 +246,10 @@ class DocumentIngestionServiceTest {
         return text.getBytes(StandardCharsets.UTF_8);
     }
 
+    /** 按错误码断言：规则违规可能来自 application 的 KnowledgeException，也可能来自领域对象（D-067），错误码是同一套。 */
     private static void assertReason(ThrowingCallable call, KnowledgeException.Reason reason) {
-        assertThatThrownBy(call).isInstanceOfSatisfying(KnowledgeException.class,
-                e -> assertThat(e.reason()).isEqualTo(reason));
+        assertThatThrownBy(call).isInstanceOfSatisfying(BusinessException.class,
+                e -> assertThat(e.code()).isEqualTo("KNOWLEDGE_" + reason.name()));
     }
 
     /** 模拟事务提交：原始文件在提交后才删（见 DocumentRemover）。 */

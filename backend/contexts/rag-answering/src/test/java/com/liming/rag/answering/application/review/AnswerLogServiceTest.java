@@ -7,6 +7,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.liming.rag.answering.application.AnswerRecorded;
 import com.liming.rag.answering.application.AnsweringException;
 import com.liming.rag.answering.application.InMemoryAnswering;
+import com.liming.rag.shared.BusinessException;
 import com.liming.rag.shared.Paged;
 import com.liming.rag.answering.application.TestSettings;
 import com.liming.rag.answering.application.ask.AskResult;
@@ -99,7 +100,7 @@ class AnswerLogServiceTest {
     @DisplayName("管理端列表：范围、状态不区分大小写；最近几天按统计时区从当天零点算；关键词去掉空格；带上提问人的显示名")
     void pagesReviews() {
         fixture.reviews.rows = List.of(new AnswerReview(5, 7, null, "青柚在哪？", "x", true, "NO_EVIDENCE", null, null,
-                null, OffsetDateTime.now(), List.of(), null, "OPEN", null, null));
+                null, OffsetDateTime.now(), List.of(), null, AnswerRecord.ReviewStatus.OPEN, null, null));
 
         var page = service.review(TENANT, "refused", "Open", 7, "  青柚 ", 2, 10);
 
@@ -123,8 +124,9 @@ class AnswerLogServiceTest {
         return AskResult.refused(RefusalReason.NO_EVIDENCE, null, TestSettings.RETAIL_REFUSAL);
     }
 
+    /** 按错误码断言：规则违规可能来自 application 的 AnsweringException，也可能来自领域对象（D-067），错误码是同一套。 */
     private static void assertReason(ThrowingCallable call, AnsweringException.Reason reason) {
-        assertThatThrownBy(call).isInstanceOfSatisfying(AnsweringException.class,
-                e -> assertThat(e.reason()).isEqualTo(reason));
+        assertThatThrownBy(call).isInstanceOfSatisfying(BusinessException.class,
+                e -> assertThat(e.code()).isEqualTo("ANSWERING_" + reason.name()));
     }
 }

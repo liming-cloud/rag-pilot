@@ -17,6 +17,8 @@ import com.liming.rag.archfixture.application.ApplicationUsesRagAi;
 import com.liming.rag.archfixture.answering.UsesSpringAiDocument;
 import com.liming.rag.archfixture.application.ReadsConfigWithValue;
 import com.liming.rag.archfixture.application.UsesQueryWrapper;
+import com.liming.rag.archfixture.domain.DomainExtendsIllegalArgument;
+import com.liming.rag.archfixture.domain.DomainThrowsIllegalArgument;
 import com.liming.rag.archfixture.infrastructure.AnnotatedSqlMapper;
 import com.liming.rag.archfixture.infrastructure.RawSqlUpdate;
 import com.liming.rag.archfixture.infrastructure.RawSqlWrapper;
@@ -39,6 +41,7 @@ import org.springframework.web.bind.annotation.RestController;
 import com.liming.rag.archfixture.web.ModuleExceptionAdvice;
 import com.liming.rag.knowledge.infrastructure.persistence.BypassesSearchFilter;
 import com.tngtech.archunit.core.domain.JavaClasses;
+import com.tngtech.archunit.core.domain.JavaConstructorCall;
 import com.tngtech.archunit.core.domain.JavaMethodCall;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
 import com.tngtech.archunit.core.importer.ImportOption;
@@ -229,6 +232,17 @@ class ArchitectureRulesTest {
             .should().haveFullyQualifiedName("com.liming.rag.ApiExceptionHandler")
             .as("只有 rag-app 的 ApiExceptionHandler 一个异常出口；模块抛继承 BusinessException 的业务异常，不自己写处理器");
 
+    /**
+     * 领域异常直接带错误码（D-067）：用户输入或操作能触发的规则违规，domain 抛本模块 domain 包里继承 BusinessException 的异常，
+     * 不抛 IllegalArgumentException（或它的子类）再由 application 逐处翻译。IllegalStateException 只表示编程错误：调用方已先检查、
+     * 正常流程走不到的前置条件（状态机守卫、重复赋 id 等），出现就是代码有问题，按 500 处理。
+     */
+    static final ArchRule DOMAIN_RULES_CARRY_ERROR_CODES = noClasses()
+            .that().resideInAPackage("com.liming.rag.*.domain..")
+            .should().callConstructorWhere(describe("IllegalArgumentException 或其子类的构造方法",
+                    (JavaConstructorCall call) -> call.getTargetOwner().isAssignableTo(IllegalArgumentException.class)))
+            .as("domain 的规则违规抛本模块继承 BusinessException 的异常，不抛 IllegalArgumentException 让 application 翻译（D-067）");
+
     static final ArchRule NO_VALUE_INJECTION = noClasses()
             .should().dependOnClassesThat().haveFullyQualifiedName("org.springframework.beans.factory.annotation.Value")
             .as("配置只通过各模块的 @ConfigurationProperties record 读取（带取值校验），不用 @Value");
@@ -257,7 +271,8 @@ class ArchitectureRulesTest {
     static final List<ArchRule> RULES = List.of(MYBATIS_ONLY_IN_INFRASTRUCTURE, DO_ONLY_IN_INFRASTRUCTURE,
             SPRING_AI_ONLY_IN_RAG_AI, CACHE_CLIENTS_ONLY_IN_RAG_CACHE, CACHE_ONLY_IN_INFRASTRUCTURE, CONTEXT_LAYERS_ONLY_USE_ALLOWED_DEPENDENCIES,
             SEARCH_FILTER_IN_ONE_PLACE, LOGIN_AND_ROLE_ONLY_BY_ANNOTATION,
-            NO_SQL_ANNOTATIONS, NO_RAW_SQL_IN_WRAPPER, ONE_EXCEPTION_HANDLER, NO_VALUE_INJECTION,
+            NO_SQL_ANNOTATIONS, NO_RAW_SQL_IN_WRAPPER, ONE_EXCEPTION_HANDLER, DOMAIN_RULES_CARRY_ERROR_CODES,
+            NO_VALUE_INJECTION,
             ENDPOINTS_NEED_PERMISSION, PERMISSIONS_IN_CATALOG, WEB_NOT_USING_SERVICE_NESTED_TYPES);
 
     @Test
@@ -290,6 +305,8 @@ class ArchitectureRulesTest {
         assertViolates(NO_RAW_SQL_IN_WRAPPER, RawSqlWrapper.class);
         assertViolates(NO_RAW_SQL_IN_WRAPPER, RawSqlUpdate.class);
         assertViolates(ONE_EXCEPTION_HANDLER, ModuleExceptionAdvice.class);
+        assertViolates(DOMAIN_RULES_CARRY_ERROR_CODES, DomainThrowsIllegalArgument.class);
+        assertViolates(DOMAIN_RULES_CARRY_ERROR_CODES, DomainExtendsIllegalArgument.class);
         assertViolates(NO_VALUE_INJECTION, ReadsConfigWithValue.class);
         assertViolates(ENDPOINTS_NEED_PERMISSION, UnguardedEndpoint.class);
         assertViolates(ENDPOINTS_NEED_PERMISSION, UnguardedJwksLookalike.class);

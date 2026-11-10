@@ -53,7 +53,7 @@ class DocumentRemover {
                 storage.delete(tenantId, sha256);
             }
         } catch (UncheckedIOException e) {
-            log.warn("文档已删除，原始文件 {} 没删掉，留作孤立文件", sha256, e);
+            log.warn("event=document_file_orphaned sha256={}", sha256, e);
         }
     }
 }

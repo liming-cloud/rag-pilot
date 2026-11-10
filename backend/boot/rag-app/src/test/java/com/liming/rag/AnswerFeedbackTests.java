@@ -77,6 +77,11 @@ class AnswerFeedbackTests {
 
         String other = otherUserToken();
         assertThat(feedback(HttpMethod.PUT, id, Map.of("rating", "DOWN"), other)).isEqualTo(HttpStatus.NOT_FOUND);
+        var asOther = new HttpHeaders();
+        asOther.setBearerAuth(other);
+        assertThat(http.exchange("/api/answers/{id}/feedback", HttpMethod.PUT,
+                new HttpEntity<>(Map.of("rating", "DOWN"), asOther), String.class, id).getBody())
+                .contains("\"code\":\"ANSWERING_NOT_FOUND\"").contains("回答不存在");
         assertThat(feedback(HttpMethod.PUT, 999_999, Map.of("rating", "DOWN"), null)).isEqualTo(HttpStatus.NOT_FOUND);
 
         assertThat(feedback(HttpMethod.DELETE, id, null, null)).isEqualTo(HttpStatus.NO_CONTENT);

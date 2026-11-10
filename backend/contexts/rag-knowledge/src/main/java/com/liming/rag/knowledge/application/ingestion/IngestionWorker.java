@@ -73,7 +73,7 @@ public class IngestionWorker {
                 // 读出之后管理员刚改过（重新处理、改有效期）：这次不动它，下一分钟再看。
                 continue;
             }
-            log.info("文档 {} 第 {} 次处理（模型暂时不可用后自动重试）", document.id(), document.attempts());
+            log.info("event=document_retried document={} attempts={}", document.id(), document.attempts());
             submit(document.tenantId(), document.id());
         }
     }

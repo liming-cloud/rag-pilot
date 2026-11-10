@@ -1,5 +1,6 @@
 package com.liming.rag.answering.application.review;
 
+import com.liming.rag.answering.domain.AnswerRecord;
 import com.liming.rag.shared.Paged;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -12,14 +13,14 @@ import org.jspecify.annotations.Nullable;
  * @param rating UP、DOWN，没有评价时为 null
  * @param citedDocuments 引用的文档名（当时的名字），去重
  * @param rewrittenQuestion 低分时系统改写后的问题，没有改写时为 null
- * @param reviewStatus OPEN（待处理）或 RESOLVED（已处理）
+ * @param reviewStatus 待处理或已处理
  * @param resolutionNote 管理员的处理说明
  * @param resolvedAt 标记已处理的时间，未处理时为 null
  */
 public record AnswerReview(long id, long userId, @Nullable String askerName, String question, String answerText,
         boolean refused, @Nullable String refusalReason, @Nullable Double topRelevance, @Nullable String rating,
         @Nullable String comment, OffsetDateTime createdAt, List<String> citedDocuments, @Nullable String rewrittenQuestion,
-        String reviewStatus, @Nullable String resolutionNote, @Nullable OffsetDateTime resolvedAt) {
+        AnswerRecord.ReviewStatus reviewStatus, @Nullable String resolutionNote, @Nullable OffsetDateTime resolvedAt) {
 
     public AnswerReview withAskerName(String name) {
         return new AnswerReview(id, userId, name, question, answerText, refused, refusalReason, topRelevance, rating,

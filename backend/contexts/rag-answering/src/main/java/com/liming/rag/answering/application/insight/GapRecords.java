@@ -1,5 +1,6 @@
 package com.liming.rag.answering.application.insight;
 
+import com.liming.rag.answering.domain.AnswerRecord;
 import com.liming.rag.shared.TenantId;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -21,12 +22,12 @@ public interface GapRecords {
     /**
      * @param comment 差评时员工的留言
      * @param citedDocuments 当时引用的文档名（拒答没有引用）
-     * @param reviewStatus OPEN 或 RESOLVED
+     * @param reviewStatus 待处理或已处理
      * @param knowledgeBaseIds 当时实际检索的知识库；记下检索范围之前的旧记录为空
      * @param questionVector 记录回答后在后台算的问题向量；还没算（旧记录、后台没算成）时为 null
      */
     record GapRecord(long id, long userId, String question, OffsetDateTime createdAt, boolean refused,
-            String comment, List<String> citedDocuments, String reviewStatus, List<Long> knowledgeBaseIds,
-            float @Nullable [] questionVector) {
+            String comment, List<String> citedDocuments, AnswerRecord.ReviewStatus reviewStatus,
+            List<Long> knowledgeBaseIds, float @Nullable [] questionVector) {
     }
 }
