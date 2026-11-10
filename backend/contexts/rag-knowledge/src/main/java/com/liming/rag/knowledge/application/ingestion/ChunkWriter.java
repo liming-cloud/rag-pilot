@@ -38,7 +38,7 @@ final class ChunkWriter {
         transactions.executeWithoutResult(status -> {
             documents.saveChunks(target, domainChunks, vectors);
             target.markReady(domainChunks.size());
-            documents.save(target);
+            documents.saveOutcome(target);
             if (target.replacesDocumentId() != null) {
                 remover.remove(target.tenantId(), target.replacesDocumentId());
             }

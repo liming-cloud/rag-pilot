@@ -210,8 +210,11 @@ public class ConversationService {
     /** 后台生成标题时，会话被别的操作改过的话重新读一次再试，最多几次。 */
     static final int TITLE_ATTEMPTS = 3;
 
-    /** 模型在后台生成的标题；会话已被删除或员工改过标题时不动。和提问撞上时重新读一次会话再试。 */
-    @Transactional
+    /**
+     * 模型在后台生成的标题；会话已被删除或员工改过标题时不动。和提问撞上时重新读一次会话再试。
+     *
+     * <p>不开事务（#197）：保存是一条带版本号条件的更新，每次尝试各自提交，重试不和失败的那次共用一个事务。
+     */
     void applyGeneratedTitle(TenantId tenantId, long id, String title) {
         for (int attempt = 1; attempt <= TITLE_ATTEMPTS; attempt++) {
             var conversation = conversations.find(tenantId, id);

@@ -16,6 +16,9 @@ public class DocumentDO {
 
     @TableId(type = IdType.AUTO)
     private Long id;
+    /** 由数据库默认值生成，更新时在 SQL 里加一。 */
+    @TableField(insertStrategy = FieldStrategy.NEVER, updateStrategy = FieldStrategy.NEVER)
+    private Long version;
     private Long tenantId;
     private Long knowledgeBaseId;
     private String filename;
@@ -23,19 +26,12 @@ public class DocumentDO {
     private String sha256;
     private Long sizeBytes;
     private String status;
-    /** 处理成功时要能清空失败原因，所以 null 也要写入。 */
-    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String error;
     private Integer chunkCount;
     private Long replacesDocumentId;
-    /** 有效期可以改回不限，所以 null 也要写入。 */
-    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private LocalDate effectiveFrom;
-    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private LocalDate expiresOn;
     private Boolean reprocessable;
-    /** 重新处理后要清空，所以 null 也要写入。 */
-    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private OffsetDateTime retryAt;
     private Integer attempts;
     /** 由数据库默认值生成。 */
@@ -48,6 +44,14 @@ public class DocumentDO {
 
     public void setId(Long id) {
         this.id = id;
+    }
+
+    public Long getVersion() {
+        return version;
+    }
+
+    public void setVersion(Long version) {
+        this.version = version;
     }
 
     public Long getTenantId() {

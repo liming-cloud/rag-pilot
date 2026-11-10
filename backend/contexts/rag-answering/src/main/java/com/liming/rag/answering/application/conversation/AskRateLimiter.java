@@ -12,12 +12,14 @@ import java.util.Deque;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 /**
  * 每个账号的提问频率（#145 B5，OWASP LLM10“无限制消耗”）：最近 1 分钟、最近 24 小时各不超过上限，超过时拒绝（429），
- * 不调用模型。单实例部署，计数在内存里，应用重启后清零。
+ * 不调用模型。单实例部署，计数在内存里，应用重启后清零；24 小时内没再提问的账号定时清掉（#197）。
  * 管理员的“重新回答”不经这里。
  */
 @Component
@@ -61,5 +63,17 @@ class AskRateLimiter {
                     "今天的提问已达上限（" + limits.perDay() + " 个），请明天再问；确有需要请联系管理员");
         }
         times.addLast(now);
+    }
+
+    /** 清掉最近 24 小时没有提问的账号，内存不随账号数一直涨。每 10 分钟一次。 */
+    @Scheduled(fixedDelay = 10, timeUnit = TimeUnit.MINUTES)
+    synchronized void evictExpired() {
+        var expired = clock.instant().minus(DAY);
+        asks.values().removeIf(times -> times.isEmpty() || !times.peekLast().isAfter(expired));
+    }
+
+    /** 还在计数的账号数，测试用。 */
+    synchronized int trackedAccounts() {
+        return asks.size();
     }
 }

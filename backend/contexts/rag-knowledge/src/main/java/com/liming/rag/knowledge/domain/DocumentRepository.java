@@ -8,8 +8,19 @@ import java.util.Optional;
 /** 文档仓储。分块随文档一起写入，但不作为聚合的一部分加载，避免大文档拖慢读取。 */
 public interface DocumentRepository {
 
-    /** 新文档插入并回填标识，已有文档更新状态。 */
+    /**
+     * 新文档插入并回填标识；已有文档按版本号整份更新。
+     *
+     * @throws Document.ConcurrentChangeException 文档在读取之后被别的操作改过
+     */
     void save(Document document);
+
+    /**
+     * 后台写处理结果：只更新处理状态（状态、失败原因、分块数、重新处理），不动有效期等管理员可改的内容。
+     *
+     * @throws Document.ConcurrentChangeException 文档已被删除或不在解析中
+     */
+    void saveOutcome(Document document);
 
     /** 分块与向量一一对应，按顺序写入。 */
     void saveChunks(Document document, List<Chunk> chunks, List<float[]> embeddings);

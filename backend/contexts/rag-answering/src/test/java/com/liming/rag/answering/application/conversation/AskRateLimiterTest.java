@@ -72,6 +72,24 @@ class AskRateLimiterTest {
     }
 
     @Test
+    @DisplayName("24 小时内没再提问的账号被清掉，内部记录不会随账号数一直涨（#197）")
+    void evictsIdleAccounts() {
+        limiter.acquire(TENANT, STAFF);
+        now = now.plus(Duration.ofHours(12));
+        limiter.acquire(TENANT, OTHER);
+        limiter.evictExpired();
+        assertThat(limiter.trackedAccounts()).isEqualTo(2);
+
+        now = now.plus(Duration.ofHours(12));
+        limiter.evictExpired();
+        assertThat(limiter.trackedAccounts()).isEqualTo(1);
+
+        now = now.plus(Duration.ofHours(12));
+        limiter.evictExpired();
+        assertThat(limiter.trackedAccounts()).isZero();
+    }
+
+    @Test
     @DisplayName("上限必须是正数，非法配置启动失败")
     void rejectsInvalidLimits() {
         assertThatThrownBy(() -> new AnsweringProperties.Limits(0, 300)).isInstanceOf(IllegalArgumentException.class);
