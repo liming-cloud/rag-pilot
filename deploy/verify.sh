@@ -16,7 +16,7 @@ failures=0
 ok() { echo "  通过：$*"; }
 fail() { echo "  失败：$*" >&2; failures=$((failures + 1)); }
 
-# 请求接口：api <方法> <路径> [JSON 请求体] [令牌]。响应体放在 $RESPONSE，状态码放在 $STATUS
+# 请求接口：api <方法> <路径> [JSON 请求体] [令牌]。响应体放在 ${RESPONSE}，状态码放在 $STATUS
 # （不在子 shell 里执行，调用方才能读到这两个变量）。
 api() {
   local method="$1" path="$2" body="${3:-}" token="${4-${TOKEN:-}}" args=() output
@@ -29,7 +29,7 @@ api() {
 }
 
 # 会话提问（问答只有会话接口，#145）：新建会话（点名知识库 $1），流式问 $2，令牌 $3（可省略）。
-# 整个事件流放在 $RESPONSE；会话建不起来（一个可用的知识库都没有）时 STATUS 为 400、RESPONSE 是错误详情。
+# 整个事件流放在 ${RESPONSE}；会话建不起来（一个可用的知识库都没有）时 STATUS 为 400、RESPONSE 是错误详情。
 ask_in_conversation() {
   local kb="$1" question="$2" token="${3-${TOKEN:-}}" id args=() output
   api POST /api/conversations "{\"knowledgeBaseIds\":[$kb]}" "$token"
@@ -53,7 +53,7 @@ id_of() {
   { grep -o "$1" || true; } | head -n 1 | { grep -o '[0-9][0-9]*' || true; } | head -n 1
 }
 
-# 登录，令牌放在 $LOGIN_TOKEN（失败时为空）。
+# 登录，令牌放在 ${LOGIN_TOKEN}（失败时为空）。
 login() {
   api POST /api/auth/login "{\"username\":\"$1\",\"password\":\"$2\"}" ""
   LOGIN_TOKEN="$(field token <<<"$RESPONSE")"
@@ -83,16 +83,16 @@ api GET "/api/knowledge-bases/page?keyword=%E9%83%A8%E7%BD%B2%E9%AA%8C%E8%AF%81"
 kb="$(id_of "\"id\":[0-9]*,\"name\":\"$KB_NAME\"" <<<"$RESPONSE")"
 if [ -z "$kb" ]; then
   api POST /api/knowledge-bases "{\"name\":\"$KB_NAME\"}"
-  [ "$STATUS" = 201 ] || { fail "建知识库返回 $STATUS：$RESPONSE"; exit 1; }
+  [ "$STATUS" = 201 ] || { fail "建知识库返回 ${STATUS}：$RESPONSE"; exit 1; }
   kb="$(field id <<<"$RESPONSE")"
   file="$(mktemp)"
   printf '部署验证资料：冷柜每周一闭店后除霜，除霜时把物品移到备用冷柜。\n' > "$file"
   curl -sS --max-time 60 -H "Authorization: Bearer $TOKEN" -F "file=@$file;filename=deploy-verify.txt" \
     "$WEB_URL/api/knowledge-bases/$kb/documents" >/dev/null
   rm -f "$file"
-  ok "新建知识库“$KB_NAME”并上传文档"
+  ok "新建知识库“${KB_NAME}”并上传文档"
 else
-  ok "知识库“$KB_NAME”已存在（id $kb）"
+  ok "知识库“${KB_NAME}”已存在（id ${kb}）"
 fi
 for _ in $(seq 1 60); do
   api GET "/api/knowledge-bases/$kb/documents"
@@ -115,7 +115,7 @@ done
 api GET "/api/knowledge-bases/$kb/search?q=%E5%86%B7%E6%9F%9C%E9%99%A4%E9%9C%9C"
 grep -q 'deploy-verify.txt' <<<"$RESPONSE" && ok "检索能找到文档" || fail "检索没有找到文档：$RESPONSE"
 ask_in_conversation "$kb" "冷柜什么时候除霜"
-[ "$STATUS" = 200 ] && grep -q 'event:done' <<<"$RESPONSE" && ok "会话提问可用" || fail "会话提问返回 $STATUS：$RESPONSE"
+[ "$STATUS" = 200 ] && grep -q 'event:done' <<<"$RESPONSE" && ok "会话提问可用" || fail "会话提问返回 ${STATUS}：$RESPONSE"
 
 # 5. 没有授权的账号（员工角色）选不到这个库，点名它提问也不引用它。每次把测试账号的密码重置后改成新的随机密码。
 api GET /api/roles
@@ -135,11 +135,11 @@ login "$STAFF" "$staff_password"
 staff_token="$LOGIN_TOKEN"
 [ -n "$staff_token" ] || { fail "测试账号 $STAFF 登录失败"; exit 1; }
 api GET /api/knowledge-bases "" "$staff_token"
-grep -q "\"id\":$kb," <<<"$RESPONSE" && fail "未授权的账号能选到“$KB_NAME”" || ok "未授权的账号选不到“$KB_NAME”"
+grep -q "\"id\":$kb," <<<"$RESPONSE" && fail "未授权的账号能选到“${KB_NAME}”" || ok "未授权的账号选不到“${KB_NAME}”"
 # 一个可用的知识库都没有时会话建不起来（400），同样算问不到。
 ask_in_conversation "$kb" "冷柜什么时候除霜" "$staff_token"
-grep -q 'deploy-verify.txt' <<<"$RESPONSE" && fail "未授权的账号的回答引用了“$KB_NAME”的文档" \
-  || ok "未授权的账号的回答没有引用“$KB_NAME”"
+grep -q 'deploy-verify.txt' <<<"$RESPONSE" && fail "未授权的账号的回答引用了“${KB_NAME}”的文档" \
+  || ok "未授权的账号的回答没有引用“${KB_NAME}”"
 
 # 6. 登录限流（#145 B5）：同一来源短时间内连续登录被限流（放在最后，免得影响前面的登录）。
 limited=0
@@ -153,4 +153,4 @@ if [ "$failures" -gt 0 ]; then
   echo "部署验证没有通过：$failures 项失败" >&2
   exit 1
 fi
-echo "部署验证通过（版本 $version）"
+echo "部署验证通过（版本 ${version}）"

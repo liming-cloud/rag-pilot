@@ -15,7 +15,7 @@ done
 backup_version="$(cat "$source_dir/VERSION")"
 version="$(package_version)"
 if [ "$backup_version" != "$version" ]; then
-  die "这份备份是版本 $backup_version 的，本目录是版本 $version。请在版本 $backup_version 的部署目录里恢复"
+  die "这份备份是版本 $backup_version 的，本目录是版本 ${version}。请在版本 $backup_version 的部署目录里恢复"
 fi
 
 if [ "${2:-}" != "--yes" ]; then
@@ -45,4 +45,4 @@ compose run --rm --no-deps --user 0 -v "$source_dir:/backup:ro" --entrypoint sh 
 info "启动"
 compose up -d
 wait_healthy || die "app 没有在 5 分钟内启动，请查看 docker compose logs app"
-info "恢复完成：版本 $version，数据来自 $source_dir"
+info "恢复完成：版本 ${version}，数据来自 $source_dir"

@@ -21,7 +21,7 @@ free_kb="$(df -Pk "$root" | awk 'NR == 2 { print $4 }')"
 [ "$free_kb" -ge $((2 * 1024 * 1024)) ] || die "备份目录 $root 剩余空间不足 2 GB"
 
 if [ "${1:-}" != "--yes" ]; then
-  read -r -p "将从版本 $current 升级到 $version，期间停服务几分钟，确定吗？输入 yes 继续：" answer
+  read -r -p "将从版本 $current 升级到 ${version}，期间停服务几分钟，确定吗？输入 yes 继续：" answer
   [ "$answer" = "yes" ] || die "已取消"
 fi
 
@@ -29,14 +29,14 @@ backup="$root/$(date +%Y%m%d-%H%M%S)-before-$version"
 info "升级前备份到 $backup"
 "$DEPLOY_DIR/backup.sh" "$backup" >/dev/null
 
-info "启动版本 $version（数据库迁移在启动时自动执行）"
+info "启动版本 ${version}（数据库迁移在启动时自动执行）"
 compose up -d
 if ! wait_healthy 300; then
   compose stop app
   cat >&2 <<EOF
 
 升级失败：版本 $version 没有在 5 分钟内启动，已停止。原因见 docker compose logs app（常见是数据库迁移失败）。
-数据库可能已经部分迁移，请回退到版本 $current：
+数据库可能已经部分迁移，请回退到版本 ${current}：
   cd <版本 $current 的部署目录>
   ./restore.sh $backup
 EOF
@@ -44,6 +44,6 @@ EOF
 fi
 
 running="$(running_version)"
-[ "$running" = "$version" ] || die "启动后运行的版本是 $running，不是 $version：镜像可能不对，请在本目录重新运行 ./build.sh 后再升级"
-info "升级完成：$current → $version。升级前的备份在 $backup"
+[ "$running" = "$version" ] || die "启动后运行的版本是 ${running}，不是 ${version}：镜像可能不对，请在本目录重新运行 ./build.sh 后再升级"
+info "升级完成：$current → ${version}。升级前的备份在 $backup"
 "$DEPLOY_DIR/verify.sh"
