@@ -19,7 +19,6 @@ import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureTestRe
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
-import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -28,28 +27,19 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.util.LinkedMultiValueMap;
 import org.testcontainers.containers.GenericContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
-import org.testcontainers.postgresql.PostgreSQLContainer;
 
 /**
  * 缓存降级（D-053）：Redis 停掉后，问答用到的读取（权限和角色、系统设置、模型路由、问题向量）都直接读库，回答照常，
  * 停掉期间改的权限也立即生效。会话存在 Redis 里，停掉后接口登录不了（D-053 写明不降级），所以停掉之后直接调问答的用例服务。
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-        properties = {"rag.knowledge.storage.root=${java.io.tmpdir}/rag-cache-outage-test-files",
-                "rag.cache.retry-after=1h"})
+        properties = {"rag.cache.retry-after=1h"})
 @AutoConfigureTestRestTemplate
-@Testcontainers
 @ExtendWith(OutputCaptureExtension.class)
 @DirtiesContext
 class CacheOutageTests {
 
     private static final TenantId TENANT = new TenantId(1);
-
-    @Container
-    @ServiceConnection
-    static final PostgreSQLContainer POSTGRES = TestDatabase.container();
 
     @Autowired
     private TestRestTemplate http;

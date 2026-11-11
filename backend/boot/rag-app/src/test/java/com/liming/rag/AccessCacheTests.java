@@ -14,16 +14,12 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.resttestclient.TestRestTemplate;
 import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureTestRestTemplate;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
-import org.testcontainers.postgresql.PostgreSQLContainer;
 
 /**
  * 账号权限缓存（D-053，修订 D-041）：权限点和角色缓存在 Redis，改角色的权限点、分配角色、停用、重置密码后下一个请求
@@ -31,14 +27,9 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @AutoConfigureTestRestTemplate
-@Testcontainers
 class AccessCacheTests {
 
     private static final String PASSWORD = "member-password";
-
-    @Container
-    @ServiceConnection
-    static final PostgreSQLContainer POSTGRES = TestDatabase.container();
 
     @Autowired
     private TestRestTemplate http;

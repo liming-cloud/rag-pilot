@@ -17,15 +17,11 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.resttestclient.TestRestTemplate;
 import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureTestRestTemplate;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.util.LinkedMultiValueMap;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
-import org.testcontainers.postgresql.PostgreSQLContainer;
 
 /**
  * 缓存的耗时测量（#145 第 9 步，D-054），默认不跑（标签 benchmark），手动运行：
@@ -33,16 +29,10 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
  * -Dsurefire.failIfNoSpecifiedTests=false}。两个子类分别测有 Redis 和本地模式，结果打印在输出里（p50、p95，毫秒）。
  * 只用来比较改动前后，数字随机器变化，不作断言。
  */
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-        properties = "rag.knowledge.storage.root=${java.io.tmpdir}/rag-benchmark-test-files")
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @AutoConfigureTestRestTemplate
-@Testcontainers
 @Tag("benchmark")
 abstract class CachePerformanceBenchmark {
-
-    @Container
-    @ServiceConnection
-    static final PostgreSQLContainer POSTGRES = TestDatabase.container();
 
     @Autowired
     private TestRestTemplate http;

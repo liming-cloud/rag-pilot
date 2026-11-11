@@ -17,7 +17,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.resttestclient.TestRestTemplate;
 import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureTestRestTemplate;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -26,28 +25,19 @@ import org.springframework.http.MediaType;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.util.LinkedMultiValueMap;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
-import org.testcontainers.postgresql.PostgreSQLContainer;
 
 /**
  * 模型调用指标（#145 V4）：对话模型接到本地假的 OpenAI 兼容服务，问答之后 /actuator/metrics 里有 Spring AI 记下的调用耗时
  * （按操作类型和模型名，各用途在配置里各用一个模型）和 token 用量；指标名和标签里没有提示词、资料和回答的原文。
  */
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-        properties = "rag.knowledge.storage.root=${java.io.tmpdir}/rag-model-metrics-test-files")
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @AutoConfigureTestRestTemplate
-@Testcontainers
 class ModelMetricsTests {
 
     private static final String QUESTION = "收银员交班时备用金怎么处理";
     private static final String DOCUMENT = "收银员交班时要清点备用金，在交班表上签字后再离开收银台。";
     private static final String ANSWER = "交班时要清点备用金并在交班表上签字[1]。";
     private static final HttpServer FAKE = startFake();
-
-    @Container
-    @ServiceConnection
-    static final PostgreSQLContainer POSTGRES = TestDatabase.container();
 
     @Autowired
     private TestRestTemplate http;

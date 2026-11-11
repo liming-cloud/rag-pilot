@@ -23,7 +23,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.resttestclient.TestRestTemplate;
 import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureTestRestTemplate;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -32,9 +31,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.util.LinkedMultiValueMap;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
-import org.testcontainers.postgresql.PostgreSQLContainer;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -47,21 +43,15 @@ import tools.jackson.databind.json.JsonMapper;
  * 按提示改前端类型和假数据，三者一起提交。
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-        properties = {"rag.knowledge.storage.root=${java.io.tmpdir}/rag-contract-test-files",
-            // 保存服务商密钥要有主密钥（32 字节的 Base64）。
+        properties = {// 保存服务商密钥要有主密钥（32 字节的 Base64）。
             "rag.settings.master-key=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="})
 @AutoConfigureTestRestTemplate
-@Testcontainers
 class ApiContractTests {
 
     static final String SHAPES = "frontend/src/test/contract/api-shapes.json";
 
     /** 只让这个问题的向量化失败，流式提问才会发 {@code error} 事件。 */
     private static final String MODEL_DOWN = "模型不可用时怎么办";
-
-    @Container
-    @ServiceConnection
-    static final PostgreSQLContainer POSTGRES = TestDatabase.container();
 
     private static final JsonMapper JSON = JsonMapper.builder().build();
 

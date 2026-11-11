@@ -19,8 +19,8 @@ import org.testcontainers.utility.DockerImageName;
 
 /**
  * 集成测试的 Redis（D-053），镜像和 deploy/compose.yml 一致。每个 {@code @SpringBootTest} 的 Spring 上下文各起一个，
- * 上下文关闭时停掉：各测试类的数据库是各自的，缓存和会话也不能串。容器注册成 bean {@value #BEAN}，要模拟 Redis
- * 停掉的测试取出来停掉（并标 {@code @DirtiesContext}）。在 {@code META-INF/spring.factories} 里登记，测试类不用声明。
+ * 上下文关闭时停掉：各上下文的缓存和会话不能串，每个测试类结束时由 {@link TestDatabaseReset} 清空。容器注册成 bean
+ * {@value #BEAN}，要模拟 Redis 停掉的测试取出来停掉（并标 {@code @DirtiesContext}）。在 {@code META-INF/spring.factories} 里登记，测试类不用声明。
  */
 final class TestRedis {
 

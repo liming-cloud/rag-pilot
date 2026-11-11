@@ -29,7 +29,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.resttestclient.TestRestTemplate;
 import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureTestRestTemplate;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 import org.springframework.http.HttpEntity;
@@ -41,9 +40,6 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.util.LinkedMultiValueMap;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
-import org.testcontainers.postgresql.PostgreSQLContainer;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -63,7 +59,6 @@ import tools.jackson.databind.json.JsonMapper;
 @Tag("eval")
 @EnabledIfEnvironmentVariable(named = "MODEL_API_KEY", matches = ".+")
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {
-        "rag.knowledge.storage.root=${java.io.tmpdir}/rag-tool-eval-files",
         "rag.ai.embedding.provider=${EVAL_EMBEDDING_PROVIDER:openai}",
         "rag.ai.rerank.provider=${EVAL_RERANK_PROVIDER:openai}",
         "rag.ai.chat.provider=${EVAL_CHAT_PROVIDER:openai}",
@@ -71,7 +66,6 @@ import tools.jackson.databind.json.JsonMapper;
         "rag.data.tools[0].name=get_store_inventory", "rag.data.tools[0].title=库存查询",
         "rag.data.tools[1].name=get_store_sales", "rag.data.tools[1].title=销售查询"})
 @AutoConfigureTestRestTemplate
-@Testcontainers
 class ToolEvaluationRun {
 
     private static final String AUDIENCE = "https://erp.example.com/mcp";
@@ -81,10 +75,6 @@ class ToolEvaluationRun {
     private static final JsonMapper JSON = JsonMapper.builder().build();
     private static final List<Duration> RETRY_DELAYS = List.of(Duration.ofSeconds(10), Duration.ofSeconds(30));
     private static RetailMcpServer retail;
-
-    @Container
-    @ServiceConnection
-    static final PostgreSQLContainer POSTGRES = TestDatabase.container();
 
     @BeforeAll
     static void startRetail() throws Exception {

@@ -10,28 +10,18 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.resttestclient.TestRestTemplate;
 import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureTestRestTemplate;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
-import org.testcontainers.postgresql.PostgreSQLContainer;
 
 /** 提问频率上限（#145 B5）：超过时返回 429、不留下这一轮，也不调用模型。 */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {
-        "rag.answering.limits.per-minute=2", "rag.answering.limits.per-day=10",
-        "rag.knowledge.storage.root=${java.io.tmpdir}/rag-rate-limit-test-files"})
+        "rag.answering.limits.per-minute=2", "rag.answering.limits.per-day=10"})
 @AutoConfigureTestRestTemplate
-@Testcontainers
 class AskRateLimitTests {
-
-    @Container
-    @ServiceConnection
-    static final PostgreSQLContainer POSTGRES = TestDatabase.container();
 
     @Autowired
     private TestRestTemplate http;

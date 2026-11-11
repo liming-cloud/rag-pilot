@@ -36,7 +36,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.resttestclient.TestRestTemplate;
 import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureTestRestTemplate;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 import org.springframework.http.HttpEntity;
@@ -45,9 +44,6 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.util.LinkedMultiValueMap;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
-import org.testcontainers.postgresql.PostgreSQLContainer;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -65,7 +61,6 @@ import tools.jackson.databind.json.JsonMapper;
 @Tag("eval")
 @EnabledIfEnvironmentVariable(named = "MODEL_API_KEY", matches = ".+")
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {
-        "rag.knowledge.storage.root=${java.io.tmpdir}/rag-eval-files",
         "rag.ai.embedding.provider=${EVAL_EMBEDDING_PROVIDER:openai}",
         "rag.ai.rerank.provider=${EVAL_RERANK_PROVIDER:openai}",
         "rag.ai.chat.provider=${EVAL_CHAT_PROVIDER:openai}",
@@ -73,17 +68,12 @@ import tools.jackson.databind.json.JsonMapper;
         "rag.answering.rewrite-on-low-relevance=${EVAL_REWRITE:true}",
         "rag.knowledge.ingestion.concurrency=${EVAL_INGESTION_CONCURRENCY:4}"})
 @AutoConfigureTestRestTemplate
-@Testcontainers
 class EvaluationRun {
 
     /** 评判默认用硅基流动上的免费模型，与回答模型不同系列；换成自己部署的专用评判模型时改 EVAL_JUDGE_BASE_URL 和 EVAL_JUDGE_MODEL。 */
     private static final String DEFAULT_JUDGE_MODEL = "THUDM/GLM-4-9B-0414";
 
     private static final PathMatchingResourcePatternResolver RESOURCES = new PathMatchingResourcePatternResolver();
-
-    @Container
-    @ServiceConnection
-    static final PostgreSQLContainer POSTGRES = TestDatabase.container();
 
     @Autowired
     private TestRestTemplate http;

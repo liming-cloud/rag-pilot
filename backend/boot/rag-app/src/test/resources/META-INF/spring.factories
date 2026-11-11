@@ -1,2 +1,4 @@
-# 每个 @SpringBootTest 的上下文各起一个 Redis（D-053），见 TestRedis。
-org.springframework.test.context.ContextCustomizerFactory=com.liming.rag.TestRedis$Factory
+# 每个 @SpringBootTest 的上下文各起一个 Redis（D-053），见 TestRedis；数据库所有上下文共用一个，见 TestDatabase。
+org.springframework.test.context.ContextCustomizerFactory=com.liming.rag.TestRedis$Factory,com.liming.rag.TestDatabase$Factory
+# 每个测试类开始前恢复共用的数据库、清掉缓存（#167）。
+org.springframework.test.context.TestExecutionListener=com.liming.rag.TestDatabaseReset

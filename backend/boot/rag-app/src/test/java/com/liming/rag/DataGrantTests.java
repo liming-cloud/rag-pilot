@@ -14,30 +14,20 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.resttestclient.TestRestTemplate;
 import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureTestRestTemplate;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
-import org.testcontainers.postgresql.PostgreSQLContainer;
 
 /** 工具与数据范围授权（#181）：授权经接口落库并记审计，判定按用户 ∪ 角色，管理员不绕过，没权限的授权被拒且不写入。 */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {
-        "rag.knowledge.storage.root=${java.io.tmpdir}/rag-data-grant-test-files",
         "rag.data.tools[0].name=get_inventory", "rag.data.tools[0].title=库存查询"})
 @AutoConfigureTestRestTemplate
-@Testcontainers
 class DataGrantTests {
 
     private static final String TOOL = "get_inventory";
-
-    @Container
-    @ServiceConnection
-    static final PostgreSQLContainer POSTGRES = TestDatabase.container();
 
     @Autowired
     private TestRestTemplate http;

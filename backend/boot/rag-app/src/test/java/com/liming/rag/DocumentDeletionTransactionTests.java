@@ -15,23 +15,14 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.support.TransactionTemplate;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
-import org.testcontainers.postgresql.PostgreSQLContainer;
 
 /** 删除文档时的原始文件（#145 C5）：事务提交后才删文件；事务回滚时文件和记录都还在，不会留下指向已删文件的记录。 */
-@SpringBootTest(properties = "rag.knowledge.storage.root=${java.io.tmpdir}/rag-deletion-test-files")
-@Testcontainers
+@SpringBootTest
 class DocumentDeletionTransactionTests {
 
     private static final TenantId TENANT = new TenantId(1);
-
-    @Container
-    @ServiceConnection
-    static final PostgreSQLContainer POSTGRES = TestDatabase.container();
 
     @Autowired
     private KnowledgeBaseService knowledgeBases;

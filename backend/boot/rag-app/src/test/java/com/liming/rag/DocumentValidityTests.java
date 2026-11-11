@@ -15,7 +15,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.resttestclient.TestRestTemplate;
 import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureTestRestTemplate;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.HttpEntity;
@@ -25,29 +24,20 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.util.LinkedMultiValueMap;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
-import org.testcontainers.postgresql.PostgreSQLContainer;
 
 /**
  * 资料有效期（#124、D-046）：已失效和未生效的文档在检索、问答、追问、重新回答里都不被检索和引用，失效日期当天仍可检索；
  * 管理端按有效期筛选、提醒；上传新版本继承失效日期；现有文档（有效期为空）行为不变。
  * 日期按部署的统计时区（测试用默认的 Asia/Shanghai）解释；时区换算的边界见 rag-knowledge 的 DocumentCalendarTest。
  */
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-        properties = "rag.knowledge.storage.root=${java.io.tmpdir}/rag-validity-test-files")
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @AutoConfigureTestRestTemplate
-@Testcontainers
 class DocumentValidityTests {
 
     private static final ParameterizedTypeReference<List<Map<String, Object>>> HITS =
             new ParameterizedTypeReference<>() {
             };
     private static final LocalDate TODAY = LocalDate.now(ZoneId.of("Asia/Shanghai"));
-
-    @Container
-    @ServiceConnection
-    static final PostgreSQLContainer POSTGRES = TestDatabase.container();
 
     @Autowired
     private TestRestTemplate http;
