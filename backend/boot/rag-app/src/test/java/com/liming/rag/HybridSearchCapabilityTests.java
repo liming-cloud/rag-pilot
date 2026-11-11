@@ -8,11 +8,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
-import org.testcontainers.postgresql.PostgreSQLContainer;
 
 /**
  * 验证数据库镜像同时具备混合检索需要的两种能力（Issue #3）：
@@ -21,12 +17,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
  * <p>只用临时表验证能力本身，不涉及业务表结构；业务检索 SQL 在 rag-knowledge 中实现。
  */
 @SpringBootTest
-@Testcontainers
 class HybridSearchCapabilityTests {
-
-    @Container
-    @ServiceConnection
-    static final PostgreSQLContainer POSTGRES = TestDatabase.container();
 
     @Autowired
     private JdbcTemplate jdbc;

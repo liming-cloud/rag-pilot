@@ -27,27 +27,18 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
-import org.testcontainers.postgresql.PostgreSQLContainer;
 
 /**
  * 调用模型（连通测试、读模型列表、向量化）时不在数据库事务里（#135）：外部调用可能等到超时，不能一直占着连接池里的连接。
  * 在每次调用模型的那一刻记下当前线程是否在事务里。
  */
-@SpringBootTest(properties = "rag.knowledge.storage.root=${java.io.tmpdir}/rag-model-call-tx-test-files")
-@Testcontainers
+@SpringBootTest
 class ModelCallTransactionTests {
 
     private static final TenantId TENANT = new TenantId(1);
-
-    @Container
-    @ServiceConnection
-    static final PostgreSQLContainer POSTGRES = TestDatabase.container();
 
     @MockitoSpyBean
     private ModelProbe probe;

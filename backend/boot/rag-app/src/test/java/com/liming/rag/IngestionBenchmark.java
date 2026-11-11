@@ -11,16 +11,12 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.resttestclient.TestRestTemplate;
 import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureTestRestTemplate;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.util.LinkedMultiValueMap;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
-import org.testcontainers.postgresql.PostgreSQLContainer;
 
 /**
  * 大文档入库耗时（#200），默认不跑（标签 benchmark），手动运行：
@@ -28,19 +24,13 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
  * -Dsurefire.failIfNoSpecifiedTests=false}。上传 {@value #SECTIONS} 节的 Markdown（每节一块），从上传到处理完计时，
  * 先热身一次再测 {@value #TIMES} 次，结果打印在输出里（中位数，毫秒）。只用来比较改动前后，数字随机器变化，不作断言。
  */
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-        properties = "rag.knowledge.storage.root=${java.io.tmpdir}/rag-ingestion-benchmark-test-files")
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @AutoConfigureTestRestTemplate
-@Testcontainers
 @Tag("benchmark")
 class IngestionBenchmark {
 
     private static final int SECTIONS = 3000;
     private static final int TIMES = 3;
-
-    @Container
-    @ServiceConnection
-    static final PostgreSQLContainer POSTGRES = TestDatabase.container();
 
     @Autowired
     private TestRestTemplate http;

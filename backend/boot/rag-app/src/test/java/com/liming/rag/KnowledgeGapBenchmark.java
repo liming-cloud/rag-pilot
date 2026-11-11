@@ -17,11 +17,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.resttestclient.TestRestTemplate;
 import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureTestRestTemplate;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
-import org.testcontainers.postgresql.PostgreSQLContainer;
 
 /**
  * 知识缺口接口在 1,000 条记录时的耗时（#145 C6），默认不跑（标签 benchmark），手动运行：
@@ -29,19 +25,13 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
  * -Dsurefire.failIfNoSpecifiedTests=false}。200 种问题各问 5 次、都被拒答，等后台存好问题向量后连续打开缺口页，
  * 结果打印在输出里（p50、p95，毫秒）。只用来比较改动前后，数字随机器变化，不作断言。
  */
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-        properties = "rag.knowledge.storage.root=${java.io.tmpdir}/rag-gap-benchmark-test-files")
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @AutoConfigureTestRestTemplate
-@Testcontainers
 @Tag("benchmark")
 class KnowledgeGapBenchmark {
 
     private static final int RECORDS = 1000;
     private static final int TIMES = 50;
-
-    @Container
-    @ServiceConnection
-    static final PostgreSQLContainer POSTGRES = TestDatabase.container();
 
     @Autowired
     private TestRestTemplate http;

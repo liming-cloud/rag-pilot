@@ -25,12 +25,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.resttestclient.TestRestTemplate;
 import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureTestRestTemplate;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
-import org.testcontainers.postgresql.PostgreSQLContainer;
 
 /**
  * 工具调用通路（#180，D-058）：真实的 {@link ToolCaller} 带着提问人的令牌调用模拟新零售 MCP 服务，
@@ -38,17 +34,12 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @AutoConfigureTestRestTemplate
-@Testcontainers
 class ToolCallTests {
 
     private static final String AUDIENCE = "https://erp.example.com/mcp";
     private static final String SIGNING_KEY = ToolSigningKeys.generateJwk("test-key");
     private static final AtomicReference<ToolJwks> KEYS = new AtomicReference<>();
     private static RetailMcpServer retail;
-
-    @Container
-    @ServiceConnection
-    static final PostgreSQLContainer POSTGRES = TestDatabase.container();
 
     @BeforeAll
     static void startRetail() throws Exception {

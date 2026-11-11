@@ -13,11 +13,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
-import org.testcontainers.postgresql.PostgreSQLContainer;
 
 /**
  * 资料多了以后的向量召回（#145）。pgvector 的 HNSW 索引先按距离扫出一批（默认 {@code hnsw.ef_search = 40}）再按 WHERE 过滤，
@@ -27,8 +23,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
  * <p>数据库按代价决定走不走 HNSW 索引：数据量、统计信息、参数是字面量还是绑定参数都会影响，测试规模下不一定会选它。
  * 所以测试里关掉排序（{@code enable_sort = off}），召回只能按索引顺序取，固定在“选了 HNSW 索引”的情形（资料多了以后的常态）。
  */
-@SpringBootTest(properties = "rag.knowledge.storage.root=${java.io.tmpdir}/rag-large-retrieval-test-files")
-@Testcontainers
+@SpringBootTest
 class LargeScaleRetrievalTests {
 
     /** 分块总数，每 50 块里有 1 块在员工能访问的库里（2%）。 */
@@ -36,10 +31,6 @@ class LargeScaleRetrievalTests {
     private static final int LIMIT = 30;
     private static final long TENANT = 1;
     private static final long STAFF = 424_242;
-
-    @Container
-    @ServiceConnection
-    static final PostgreSQLContainer POSTGRES = TestDatabase.container();
 
     @Autowired
     private JdbcTemplate jdbc;

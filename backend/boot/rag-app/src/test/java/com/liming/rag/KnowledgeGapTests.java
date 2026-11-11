@@ -26,16 +26,12 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.resttestclient.TestRestTemplate;
 import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureTestRestTemplate;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
-import org.testcontainers.postgresql.PostgreSQLContainer;
 
 /**
  * 知识缺口（#125、D-047）：只统计范围内的拒答和差评，同义问法归一类，已处理的不计入待处理；整类标记已处理；
@@ -43,7 +39,6 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @AutoConfigureTestRestTemplate
-@Testcontainers
 class KnowledgeGapTests {
 
     private static final TenantId TENANT = new TenantId(1);
@@ -52,10 +47,6 @@ class KnowledgeGapTests {
     private static final Map<String, Integer> TOPICS = Map.of(
             "门店几点打烊", 0, "晚上几点关门", 0, "营业到几点", 0,
             "餐补怎么报销", 1, "餐补报销流程", 1);
-
-    @Container
-    @ServiceConnection
-    static final PostgreSQLContainer POSTGRES = TestDatabase.container();
 
     @MockitoBean
     private EmbeddingClient embeddings;

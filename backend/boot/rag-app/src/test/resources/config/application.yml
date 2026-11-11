@@ -2,7 +2,7 @@
 # 测试服务器只监听回环：监听通配地址时，本机进程占了同一端口的 127.0.0.1（如 IDE）也能绑定成功，请求会被它截走（#147）。
 server:
   address: 127.0.0.1
-# 每个测试类各起一个数据库容器，本机 Docker 负载高时第一个连接偶尔断开，迁移连不上就启动失败（#146）：
+# 本机 Docker 负载高时数据库容器的第一个连接偶尔断开，迁移连不上就启动失败（#146）：
 # 迁移前的连接失败时重试，间隔 1、2、4、8、16 秒，最多等约半分钟。
 spring:
   flyway:
@@ -15,6 +15,10 @@ rag:
       provider: lexical
     chat:
       provider: extractive
+  # 所有测试类共用一个目录，配置相同的测试类才能共用上下文（#167）；数据库也是共用的，文件和数据库里的记录一致。
+  knowledge:
+    storage:
+      root: ${java.io.tmpdir}/rag-test-files
   answering:
     min-relevance: 0.3
     # 集成测试共用一个应用上下文、用同一个管理员连续提问，放宽频率上限；限流本身在 AskRateLimitTests 里测（#145）。

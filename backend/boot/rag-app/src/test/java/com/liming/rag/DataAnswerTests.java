@@ -28,7 +28,6 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
-import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
 import org.springframework.http.HttpEntity;
@@ -38,9 +37,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
-import org.testcontainers.postgresql.PostgreSQLContainer;
 
 /**
  * 数据问答（#182）：员工经会话接口提问，按模型选的工具、按提问人的数据范围查询模拟新零售服务（真实的判定、令牌、MCP 调用、
@@ -48,12 +44,10 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
  * 断言回答里的数据出处、范围外不发请求、范围外的行被丢弃、各种失败都如实说查不到且没有数据。
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {
-        "rag.knowledge.storage.root=${java.io.tmpdir}/rag-data-answer-test-files",
         "rag.ai.tools.timeout=1s",
         "rag.data.tools[0].name=get_store_inventory", "rag.data.tools[0].title=库存查询",
         "rag.data.tools[1].name=get_store_sales", "rag.data.tools[1].title=销售查询"})
 @AutoConfigureTestRestTemplate
-@Testcontainers
 @ExtendWith(OutputCaptureExtension.class)
 class DataAnswerTests {
 
@@ -64,10 +58,6 @@ class DataAnswerTests {
     private static final AtomicReference<ToolChoice> CHOICE = new AtomicReference<>();
     private static final AtomicInteger USERS = new AtomicInteger();
     private static RetailMcpServer retail;
-
-    @Container
-    @ServiceConnection
-    static final PostgreSQLContainer POSTGRES = TestDatabase.container();
 
     /** 选工具的模型：给出测试设定的工具和参数。 */
     @TestConfiguration

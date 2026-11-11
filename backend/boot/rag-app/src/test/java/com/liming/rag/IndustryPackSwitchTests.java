@@ -12,27 +12,17 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.resttestclient.TestRestTemplate;
 import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureTestRestTemplate;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
-import org.testcontainers.postgresql.PostgreSQLContainer;
 
 /**
  * 换用测试资源里的另一个行业包（industry-packs/demo）：提示词角色、拒答话术、问答页文案、推荐问题、词表都跟着变，
  * 品牌用部署配置（#122、D-045）。
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {
-        "rag.knowledge.storage.root=${java.io.tmpdir}/rag-industry-pack-test-files",
         "rag.settings.industry-pack=demo",
         "rag.settings.branding.name=物业知识库",
         "rag.settings.stats-zone=Asia/Singapore"})
 @AutoConfigureTestRestTemplate
-@Testcontainers
 class IndustryPackSwitchTests {
-
-    @Container
-    @ServiceConnection
-    static final PostgreSQLContainer POSTGRES = TestDatabase.container();
 
     @Autowired
     private TestRestTemplate http;

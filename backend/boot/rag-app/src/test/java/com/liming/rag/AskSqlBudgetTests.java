@@ -21,7 +21,6 @@ import org.springframework.boot.resttestclient.TestRestTemplate;
 import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureTestRestTemplate;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
-import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.context.annotation.Bean;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.HttpEntity;
@@ -30,18 +29,13 @@ import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DelegatingDataSource;
 import org.springframework.util.LinkedMultiValueMap;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
-import org.testcontainers.postgresql.PostgreSQLContainer;
 
 /**
  * 一次问答的 SQL（#145 第 9 步，D-054）：缓存热了之后，权限、设置、模型路由和问题向量都不再查库，条数不超过上限，防止以后
  * 退化。数的是请求处理中经连接发出的语句（事务的开始和提交不算）；定时任务（入库轮询等）的线程不算。
  */
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-        properties = "rag.knowledge.storage.root=${java.io.tmpdir}/rag-sql-budget-test-files")
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @AutoConfigureTestRestTemplate
-@Testcontainers
 class AskSqlBudgetTests {
 
     /** 新建会话 2 条加一轮问答 14 条（检索、记下回答和引用、更新会话、补存问题向量），2026-11-05 实测。 */
@@ -49,10 +43,6 @@ class AskSqlBudgetTests {
     /** 权限、系统设置、模型路由的表：缓存热了之后不该出现。 */
     static final List<String> CACHED_TABLES = List.of("app_user", "app_role", "app_role_permission", "app_user_role",
             "system_setting", "model_purpose", "model_provider");
-
-    @Container
-    @ServiceConnection
-    static final PostgreSQLContainer POSTGRES = TestDatabase.container();
 
     @Autowired
     private TestRestTemplate http;
