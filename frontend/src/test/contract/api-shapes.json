@@ -14,8 +14,8 @@
         "rating" : "string",
         "refusalReason" : "string",
         "refused" : "boolean",
-        "resolutionNote" : "null",
-        "resolvedAt" : "null",
+        "resolutionNote" : "string",
+        "resolvedAt" : "string",
         "reviewStatus" : "string",
         "rewrittenQuestion" : "null",
         "topRelevance" : "number",
@@ -339,6 +339,397 @@
       "page" : "number",
       "size" : "number",
       "total" : "number"
+    }
+  },
+  "writes" : {
+    "DELETE /api/answers/:id/feedback" : {
+      "status" : 204
+    },
+    "DELETE /api/conversations/:id" : {
+      "status" : 204
+    },
+    "DELETE /api/knowledge-bases/:id/documents/:documentId" : {
+      "status" : 204
+    },
+    "DELETE /api/model-providers/:id" : {
+      "status" : 204
+    },
+    "DELETE /api/roles/:id" : {
+      "status" : 204
+    },
+    "DELETE /api/settings/:key" : {
+      "body" : {
+        "defaultSource" : "string",
+        "defaultValue" : "string",
+        "key" : "string",
+        "kind" : "string",
+        "source" : "string",
+        "updatedAt" : "null",
+        "updatedBy" : "null",
+        "value" : "string"
+      },
+      "status" : 200
+    },
+    "PATCH /api/answers/:id/review" : {
+      "status" : 204
+    },
+    "PATCH /api/conversations/:id" : {
+      "body" : {
+        "id" : "number",
+        "knowledgeBaseIds" : [ "number" ],
+        "lastAskedAt" : "string",
+        "title" : "string"
+      },
+      "status" : 200
+    },
+    "PATCH /api/model-providers/:id" : {
+      "body" : {
+        "apiKeyLast4" : "string",
+        "baseUrl" : "string",
+        "id" : "number",
+        "name" : "string",
+        "source" : "string",
+        "usedBy" : [ ]
+      },
+      "status" : 200
+    },
+    "PATCH /api/roles/:id" : {
+      "body" : {
+        "builtIn" : "null",
+        "id" : "number",
+        "name" : "string",
+        "permissions" : [ "string" ],
+        "userCount" : "number"
+      },
+      "status" : 200
+    },
+    "POST /api/answers/:id/citations/:index/opened" : {
+      "status" : 204
+    },
+    "POST /api/answers/:id/recheck" : {
+      "body" : {
+        "citations" : [ {
+          "chunkId" : "number",
+          "documentId" : "number",
+          "documentName" : "string",
+          "documentState" : "string",
+          "documentUpdatedAt" : "null",
+          "excerpt" : "string",
+          "headingPath" : "string",
+          "index" : "number"
+        } ],
+        "dataCitations" : [ ],
+        "id" : "null",
+        "refusalReason" : "null",
+        "refused" : "boolean",
+        "rewrite" : "null",
+        "text" : "string",
+        "timings" : {
+          "firstTokenMillis" : "number",
+          "generationMillis" : "number",
+          "rerankMillis" : "number",
+          "retrievalMillis" : "number",
+          "rewriteMillis" : "null"
+        },
+        "topRelevance" : "number"
+      },
+      "status" : 200
+    },
+    "POST /api/answers/gaps/resolve" : {
+      "body" : {
+        "resolved" : "number"
+      },
+      "status" : 200
+    },
+    "POST /api/auth/login" : {
+      "body" : {
+        "token" : "string",
+        "user" : {
+          "displayName" : "string",
+          "id" : "number",
+          "mustChangePassword" : "boolean",
+          "permissions" : [ "string" ],
+          "roles" : [ {
+            "id" : "number",
+            "name" : "string"
+          } ],
+          "superAdmin" : "boolean",
+          "username" : "string"
+        }
+      },
+      "status" : 200
+    },
+    "POST /api/conversations" : {
+      "body" : {
+        "id" : "number",
+        "knowledgeBaseIds" : [ "number" ],
+        "lastAskedAt" : "string",
+        "title" : "string"
+      },
+      "status" : 201
+    },
+    "POST /api/knowledge-bases" : {
+      "body" : {
+        "id" : "number",
+        "name" : "string"
+      },
+      "status" : 201
+    },
+    "POST /api/knowledge-bases/:id/documents" : {
+      "body" : {
+        "chunkCount" : "number",
+        "createdAt" : "null",
+        "effectiveFrom" : "null",
+        "error" : "null",
+        "expiresOn" : "null",
+        "filename" : "string",
+        "id" : "number",
+        "replacesDocumentId" : "null",
+        "replacesFilename" : "null",
+        "reprocessable" : "boolean",
+        "retryAt" : "null",
+        "sizeBytes" : "number",
+        "status" : "string",
+        "validity" : "string"
+      },
+      "status" : 201
+    },
+    "POST /api/knowledge-bases/:id/documents/:documentId/reprocess" : {
+      "body" : {
+        "chunkCount" : "number",
+        "createdAt" : "string",
+        "effectiveFrom" : "null",
+        "error" : "null",
+        "expiresOn" : "null",
+        "filename" : "string",
+        "id" : "number",
+        "replacesDocumentId" : "null",
+        "replacesFilename" : "null",
+        "reprocessable" : "boolean",
+        "retryAt" : "null",
+        "sizeBytes" : "number",
+        "status" : "string",
+        "validity" : "string"
+      },
+      "status" : 200
+    },
+    "POST /api/knowledge-bases/:id/documents/:documentId/versions" : {
+      "body" : {
+        "chunkCount" : "number",
+        "createdAt" : "null",
+        "effectiveFrom" : "null",
+        "error" : "null",
+        "expiresOn" : "null",
+        "filename" : "string",
+        "id" : "number",
+        "replacesDocumentId" : "number",
+        "replacesFilename" : "null",
+        "reprocessable" : "boolean",
+        "retryAt" : "null",
+        "sizeBytes" : "number",
+        "status" : "string",
+        "validity" : "string"
+      },
+      "status" : 201
+    },
+    "POST /api/model-providers" : {
+      "body" : {
+        "apiKeyLast4" : "string",
+        "baseUrl" : "string",
+        "id" : "number",
+        "name" : "string",
+        "source" : "string",
+        "usedBy" : [ ]
+      },
+      "status" : 201
+    },
+    "POST /api/roles" : {
+      "body" : {
+        "builtIn" : "null",
+        "id" : "number",
+        "name" : "string",
+        "permissions" : [ "string" ],
+        "userCount" : "number"
+      },
+      "status" : 201
+    },
+    "POST /api/users" : {
+      "body" : {
+        "displayName" : "string",
+        "enabled" : "boolean",
+        "id" : "number",
+        "lockedUntil" : "null",
+        "roles" : [ {
+          "id" : "number",
+          "name" : "string"
+        } ],
+        "superAdmin" : "boolean",
+        "username" : "string"
+      },
+      "status" : 201
+    },
+    "POST /api/users/:id/reset-password" : {
+      "status" : 204
+    },
+    "POST /api/users/:id/unlock" : {
+      "status" : 204
+    },
+    "POST /api/users/import" : {
+      "body" : {
+        "imported" : "number"
+      },
+      "status" : 200
+    },
+    "POST /api/users/import/check" : {
+      "body" : {
+        "problems" : [ {
+          "line" : "number",
+          "message" : "string"
+        } ]
+      },
+      "status" : 200
+    },
+    "PUT /api/answers/:id/feedback" : {
+      "status" : 204
+    },
+    "PUT /api/data-grants" : {
+      "body" : {
+        "regions" : [ ],
+        "tools" : [ ],
+        "units" : [ ]
+      },
+      "status" : 200
+    },
+    "PUT /api/knowledge-bases/:id/documents/:documentId/validity" : {
+      "body" : {
+        "chunkCount" : "number",
+        "createdAt" : "string",
+        "effectiveFrom" : "null",
+        "error" : "null",
+        "expiresOn" : "string",
+        "filename" : "string",
+        "id" : "number",
+        "replacesDocumentId" : "null",
+        "replacesFilename" : "null",
+        "reprocessable" : "boolean",
+        "retryAt" : "null",
+        "sizeBytes" : "number",
+        "status" : "string",
+        "validity" : "string"
+      },
+      "status" : 200
+    },
+    "PUT /api/knowledge-bases/:id/members/:userId" : {
+      "status" : 204
+    },
+    "PUT /api/knowledge-bases/:id/role-grants/:roleId" : {
+      "status" : 204
+    },
+    "PUT /api/models/prices" : {
+      "body" : {
+        "inputPerMillion" : "number",
+        "model" : "string",
+        "outputPerMillion" : "number"
+      },
+      "status" : 200
+    },
+    "PUT /api/settings/:key" : {
+      "body" : {
+        "defaultSource" : "string",
+        "defaultValue" : "string",
+        "key" : "string",
+        "kind" : "string",
+        "source" : "string",
+        "updatedAt" : "string",
+        "updatedBy" : "string",
+        "value" : "string"
+      },
+      "status" : 200
+    },
+    "PUT /api/users/:id/enabled" : {
+      "body" : {
+        "displayName" : "string",
+        "enabled" : "boolean",
+        "id" : "number",
+        "lockedUntil" : "null",
+        "roles" : [ {
+          "id" : "number",
+          "name" : "string"
+        } ],
+        "superAdmin" : "boolean",
+        "username" : "string"
+      },
+      "status" : 200
+    },
+    "PUT /api/users/:id/roles" : {
+      "body" : {
+        "displayName" : "string",
+        "enabled" : "boolean",
+        "id" : "number",
+        "lockedUntil" : "null",
+        "roles" : [ {
+          "id" : "number",
+          "name" : "string"
+        } ],
+        "superAdmin" : "boolean",
+        "username" : "string"
+      },
+      "status" : 200
+    }
+  },
+  "events" : {
+    "delta" : {
+      "text" : "string"
+    },
+    "done" : {
+      "answer" : {
+        "citations" : [ {
+          "chunkId" : "number",
+          "documentId" : "number",
+          "documentName" : "string",
+          "documentState" : "string",
+          "documentUpdatedAt" : "null",
+          "excerpt" : "string",
+          "headingPath" : "string",
+          "index" : "number"
+        } ],
+        "dataCitations" : [ ],
+        "id" : "number",
+        "refusalReason" : "string",
+        "refused" : "boolean",
+        "rewrite" : {
+          "modelMillis" : "null",
+          "outcome" : "string",
+          "outputChars" : "number",
+          "question" : "null",
+          "rerankMillis" : "null",
+          "retrievalMillis" : "null"
+        },
+        "text" : "string",
+        "timings" : {
+          "firstTokenMillis" : "number",
+          "generationMillis" : "number",
+          "rerankMillis" : "number",
+          "retrievalMillis" : "number",
+          "rewriteMillis" : "null"
+        },
+        "topRelevance" : "number"
+      },
+      "askedAt" : "string",
+      "id" : "number",
+      "knowledgeBaseIds" : [ "number" ],
+      "question" : "string",
+      "status" : "string"
+    },
+    "error" : {
+      "code" : "string",
+      "detail" : "string"
+    },
+    "status" : {
+      "text" : "string"
+    },
+    "turn" : {
+      "id" : "number"
     }
   }
 }

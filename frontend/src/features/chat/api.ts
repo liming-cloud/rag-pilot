@@ -1,5 +1,6 @@
 import { ApiError, json } from "@/lib/api";
 import { authFetch } from "@/lib/auth";
+import { sseParser } from "./sse";
 
 /** 与后端 answering 模块的 Citation 一致。 */
 export type Citation = {
@@ -74,19 +75,6 @@ export async function rateAnswer(id: number, rating: "UP" | "DOWN" | null, comme
   if (!response.ok) {
     throw new Error(`反馈失败（${response.status}）`);
   }
-}
-
-function parseEvent(block: string): { name: string; data: unknown } | null {
-  let name = "";
-  let data = "";
-  for (const line of block.split("\n")) {
-    if (line.startsWith("event:")) {
-      name = line.slice("event:".length).trim();
-    } else if (line.startsWith("data:")) {
-      data += line.slice("data:".length);
-    }
-  }
-  return name ? { name, data: JSON.parse(data) as unknown } : null;
 }
 
 /** 侧栏里的一个会话。只返回提问人自己的会话，按最后一次提问倒序（D-036）。 */
@@ -212,27 +200,22 @@ async function readEvents<T>(
   on: Record<string, (data: unknown) => void>,
 ): Promise<T> {
   const reader = body.pipeThrough(new TextDecoderStream()).getReader();
-  let buffer = "";
+  const push = sseParser();
   for (;;) {
     const { done, value } = await reader.read();
     if (done) {
       throw new Error("问答中断：没有收到最终结果");
     }
-    buffer += value;
-    // 事件之间以空行分隔；最后一段可能还没收完，留到下次。
-    const blocks = buffer.split("\n\n");
-    buffer = blocks.pop() ?? "";
-    for (const block of blocks) {
-      const event = parseEvent(block);
-      if (!event) continue;
+    for (const event of push(value)) {
+      const data = JSON.parse(event.data) as unknown;
       if (event.name === "done") {
-        return event.data as T;
+        return data as T;
       }
       if (event.name === "error") {
-        const problem = event.data as { code?: string; detail: string };
+        const problem = data as { code?: string; detail: string };
         throw new ApiError(200, problem.detail, problem.code);
       }
-      on[event.name]?.(event.data);
+      on[event.name]?.(data);
     }
   }
 }

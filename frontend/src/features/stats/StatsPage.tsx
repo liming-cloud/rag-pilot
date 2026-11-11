@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Link } from "react-router";
 import { Button } from "@/components/ui/button";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import { PageShell } from "@/components/ui/page-shell";
 import { ErrorMessage } from "@/lib/errors";
 import { Can, PERMISSIONS, useCan } from "@/lib/permissions";
 import { ExpirySection } from "./ExpirySection";
@@ -47,7 +48,7 @@ export function StatsPage() {
   });
 
   return (
-    <main className="mx-auto flex w-full max-w-[1600px] flex-col gap-6 p-6 md:p-8 xl:px-10 print:max-w-none print:p-0">
+    <PageShell className="gap-6 print:max-w-none print:p-0">
       <div className="flex flex-wrap items-center gap-2">
         <h1 className="mr-auto font-display text-2xl font-semibold tracking-tight">{week ? "运营周报" : "运营概览"}</h1>
         <div className="flex flex-wrap items-center gap-2 print:hidden">
@@ -98,7 +99,7 @@ export function StatsPage() {
       {stats.isPending && <p className="text-muted-foreground">正在统计…</p>}
       <ErrorMessage error={stats.error} className="text-base" />
       {stats.data && <StatsView stats={stats.data} />}
-    </main>
+    </PageShell>
   );
 }
 

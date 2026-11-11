@@ -10,6 +10,7 @@ import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 import { Pagination } from "@/components/ui/pagination";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ErrorMessage } from "@/lib/errors";
+import { usePagedFilter } from "@/lib/paging";
 import { Can, PERMISSIONS } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
 import { DocumentRow } from "./DocumentRow";
@@ -28,8 +29,6 @@ import {
 } from "./api";
 import { ACCEPT, type BatchItem, MAX_BATCH, prepare, run } from "./batchUpload";
 
-const PAGE_SIZE = 20;
-
 /** 一批上传：普通上传，或某份文档的新版本（带上有效期）。重试时沿用同样的参数。 */
 type Batch = { items: BatchItem[]; replacesDocumentId?: number; validity?: ValidityRange };
 
@@ -45,7 +44,7 @@ export function DocumentsPanel({ knowledgeBaseId }: { knowledgeBaseId: number })
   const queryClient = useQueryClient();
   const [params] = useSearchParams();
   const initialValidity = VALIDITY_FILTERS.find((value) => value === params.get("validity")) ?? null;
-  const [filter, setFilter] = useState<DocumentFilter>({ page: 1, size: PAGE_SIZE, validity: initialValidity });
+  const [filter, change] = usePagedFilter<DocumentFilter>({ validity: initialValidity });
   const [keyword, setKeyword] = useState("");
   const documents = useQuery({
     queryKey: knowledgeKeys.documents(knowledgeBaseId, filter),
@@ -108,7 +107,7 @@ export function DocumentsPanel({ knowledgeBaseId }: { knowledgeBaseId: number })
 
   function search(event: FormEvent) {
     event.preventDefault();
-    setFilter({ ...filter, keyword: keyword.trim(), page: 1 });
+    change({ keyword: keyword.trim() });
   }
 
   return (
@@ -124,7 +123,7 @@ export function DocumentsPanel({ knowledgeBaseId }: { knowledgeBaseId: number })
             <NativeSelect
               value={filter.status ?? ""}
               onChange={(event) =>
-                setFilter({ ...filter, status: (event.target.value || null) as DocumentFilter["status"], page: 1 })
+                change({ status: (event.target.value || null) as DocumentFilter["status"] })
               }
             >
               <NativeSelectOption value="">全部状态</NativeSelectOption>
@@ -138,7 +137,7 @@ export function DocumentsPanel({ knowledgeBaseId }: { knowledgeBaseId: number })
             <NativeSelect
               value={filter.validity ?? ""}
               onChange={(event) =>
-                setFilter({ ...filter, validity: (event.target.value || null) as Validity | null, page: 1 })
+                change({ validity: (event.target.value || null) as Validity | null })
               }
             >
               <NativeSelectOption value="">全部</NativeSelectOption>
@@ -258,7 +257,7 @@ export function DocumentsPanel({ knowledgeBaseId }: { knowledgeBaseId: number })
           page={documents.data.page}
           size={documents.data.size}
           total={documents.data.total}
-          onChange={(next) => setFilter({ ...filter, ...next })}
+          onChange={change}
         />
       )}
       <Dialog open={dialog !== null} onOpenChange={(open) => !open && setDialog(null)}>

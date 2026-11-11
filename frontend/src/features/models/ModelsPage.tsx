@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle } from "lucide-react";
 import { useSearchParams } from "react-router";
+import { PageShell } from "@/components/ui/page-shell";
 import { ErrorMessage } from "@/lib/errors";
 import { cn } from "@/lib/utils";
 import { ChangesTab } from "./ChangesTab";
@@ -29,7 +30,7 @@ export function ModelsPage() {
   const tab: Tab = TABS.some((item) => item.key === params.get("tab")) ? (params.get("tab") as Tab) : "providers";
 
   return (
-    <main className="mx-auto flex w-full max-w-[1600px] p-6 md:p-8 xl:px-10 flex-col gap-4">
+    <PageShell>
       <div>
         <h1 className="font-display text-2xl font-semibold tracking-tight">模型管理</h1>
         <p className="text-sm text-muted-foreground">
@@ -72,6 +73,6 @@ export function ModelsPage() {
           {tab === "changes" && <ChangesTab />}
         </>
       )}
-    </main>
+    </PageShell>
   );
 }

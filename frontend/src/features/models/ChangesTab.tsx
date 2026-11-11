@@ -13,11 +13,10 @@ import {
 import { Pagination } from "@/components/ui/pagination";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ErrorMessage } from "@/lib/errors";
+import { PAGE_SIZE } from "@/lib/paging";
 import { Can, PERMISSIONS } from "@/lib/permissions";
 import { ModelName } from "./ModelLabels";
 import { fetchModelChanges, type ModelChange, modelKeys, restoreChange, USAGE_LABELS } from "./api";
-
-export const PAGE_SIZE = 20;
 
 export function ChangesTab() {
   const [paging, setPaging] = useState({ page: 1, size: PAGE_SIZE });

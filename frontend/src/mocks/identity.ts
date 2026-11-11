@@ -1,8 +1,8 @@
 import { http, HttpResponse } from "msw";
-import type { PermissionGroup, Role } from "@/features/roles/api";
-import type { Account, ImportProblem, ImportRow } from "@/features/users/api";
+import type { Role } from "@/features/roles/api";
+import type { Account } from "@/features/users/api";
 import type { Me } from "@/lib/permissions";
-import { matches, paginate } from "./page";
+import { ADMIN_DEFAULT, ALL, permissionCatalog } from "./permission-catalog";
 
 /**
  * 账号、角色与权限的假接口（#115、D-038）。契约与后端一致：按钮级权限点；超级管理员内置且固定；
@@ -11,88 +11,11 @@ import { matches, paginate } from "./page";
  * 示例账号（密码填 wrong-password 模拟输错）：admin 超级管理员、staff01 店员小王（默认登录）、
  * staff02 店员小李（已锁定）、zhang 店长老张（自定义角色“店长”）、reset01 店员小陈（被重置过密码）。
  */
-export const permissionCatalog: PermissionGroup[] = [
-  { menu: "对话", view: { code: "chat:use", label: "使用问答" }, buttons: [] },
-  {
-    menu: "知识库管理",
-    view: { code: "kb:view", label: "进入页面" },
-    buttons: [
-      { code: "kb:create", label: "新建知识库" },
-      { code: "kb:update", label: "改名" },
-      { code: "kb:delete", label: "删除知识库" },
-      { code: "doc:upload", label: "上传文档" },
-      { code: "doc:replace", label: "上传新版本" },
-      { code: "doc:update", label: "修改资料信息" },
-      { code: "doc:delete", label: "删除文档" },
-      { code: "kb:grant", label: "授权" },
-    ],
-  },
-  {
-    menu: "用户管理",
-    view: { code: "user:view", label: "进入页面" },
-    buttons: [
-      { code: "user:create", label: "新建账号" },
-      { code: "user:update", label: "修改与解锁" },
-      { code: "user:disable", label: "停用与启用" },
-      { code: "user:reset-password", label: "重置密码" },
-      { code: "user:assign-role", label: "分配角色" },
-      { code: "user:import", label: "批量导入" },
-    ],
-  },
-  {
-    menu: "角色与权限",
-    view: { code: "role:view", label: "进入页面" },
-    buttons: [
-      { code: "role:create", label: "新建角色" },
-      { code: "role:update", label: "修改角色" },
-      { code: "role:delete", label: "删除角色" },
-    ],
-  },
-  {
-    menu: "审计记录",
-    view: { code: "audit:view", label: "查看审计记录" },
-    buttons: [],
-  },
-  {
-    menu: "模型管理",
-    view: { code: "model:view", label: "进入页面" },
-    buttons: [
-      { code: "model:update", label: "修改配置" },
-      { code: "model:test", label: "测试连通" },
-    ],
-  },
-  {
-    menu: "数据范围授权",
-    view: { code: "data:view", label: "进入页面" },
-    buttons: [{ code: "data:grant", label: "授权和收回" }],
-  },
-  {
-    menu: "回答记录",
-    view: { code: "answer:view", label: "进入页面" },
-    buttons: [
-      { code: "answer:review", label: "标记处理" },
-      { code: "answer:recheck", label: "重新回答" },
-      { code: "answer:export", label: "导出评测题" },
-    ],
-  },
-  {
-    menu: "运营概览",
-    view: { code: "stats:view", label: "进入页面" },
-    buttons: [{ code: "stats:export", label: "导出" }],
-  },
-  {
-    menu: "系统设置",
-    view: { code: "setting:view", label: "进入页面" },
-    buttons: [{ code: "setting:update", label: "修改设置" }],
-  },
-];
 
-const ALL = permissionCatalog.flatMap((group) => [group.view.code, ...group.buttons.map((button) => button.code)]);
-const ADMIN_DEFAULT = ALL.filter((code) => /^(chat|kb|doc|user|answer|stats|audit|data):/.test(code));
+export type StoredAccount = Omit<Account, "roles"> & { roleIds: number[]; mustChangePassword: boolean; failures: number };
 
-type StoredAccount = Omit<Account, "roles"> & { roleIds: number[]; mustChangePassword: boolean; failures: number };
-
-const state = {
+/** 账号和角色；users.ts 的用户管理接口也读写它。 */
+export const state = {
   roles: [] as Omit<Role, "userCount">[],
   accounts: [] as StoredAccount[],
   currentId: 2,
@@ -145,7 +68,7 @@ export function resetIdentity() {
   state.nextId = 200;
 }
 
-function permissionsOf(account: StoredAccount): string[] {
+export function permissionsOf(account: StoredAccount): string[] {
   if (account.superAdmin) return ALL;
   return [
     ...new Set(state.roles.filter((role) => account.roleIds.includes(role.id)).flatMap((role) => role.permissions)),
@@ -156,7 +79,7 @@ function rolesOf(account: StoredAccount) {
   return state.roles.filter((role) => account.roleIds.includes(role.id)).map(({ id, name }) => ({ id, name }));
 }
 
-function view(account: StoredAccount): Account {
+export function view(account: StoredAccount): Account {
   const { id, username, displayName, enabled, superAdmin, lockedUntil } = account;
   return { id, username, displayName, enabled, superAdmin, lockedUntil, roles: rolesOf(account) };
 }
@@ -182,7 +105,7 @@ function remember(id: number) {
   globalThis.sessionStorage?.setItem(SESSION_KEY, String(id));
 }
 
-function current() {
+export function current() {
   const remembered = Number(globalThis.sessionStorage?.getItem(SESSION_KEY));
   return state.accounts.find((account) => account.id === (remembered || state.currentId))!;
 }
@@ -204,45 +127,13 @@ export function currentIdentity(): { id: number; roleIds: number[] } {
   return { id: account.id, roleIds: account.roleIds };
 }
 
-const problem = (status: number, code: string, detail: string) =>
+export const problem = (status: number, code: string, detail: string) =>
   HttpResponse.json({ status, code, detail }, { status, headers: { "Content-Type": "application/problem+json" } });
 
 export function forbidden(permission: string) {
   return permissionsOf(current()).includes(permission) ? null : problem(403, "FORBIDDEN", "没有权限执行此操作");
 }
 
-/** 只能分配不超过自己权限的角色（D-038）。 */
-function escalation(roleIds: number[]) {
-  const mine = new Set(permissionsOf(current()));
-  const asked = state.roles.filter((role) => roleIds.includes(role.id));
-  if (asked.some((role) => role.builtIn === "SUPER_ADMIN" || role.permissions.some((code) => !mine.has(code)))) {
-    return problem(403, "IDENTITY_ESCALATION", "不能分配超出自己权限的角色");
-  }
-  return null;
-}
-
-/** 与后端一致的逐行检查：用户名格式、文件内重复、已存在，显示名，角色存在且不超出自己的权限。 */
-function importProblems(rows: ImportRow[]): ImportProblem[] {
-  const problems: ImportProblem[] = [];
-  const mine = new Set(permissionsOf(current()));
-  const seen = new Map<string, number>();
-  for (const row of rows) {
-    const add = (message: string) => problems.push({ line: row.line, message });
-    if (!/^[A-Za-z0-9_.-]{3,50}$/.test(row.username)) add("用户名必须是 3 到 50 个字母、数字或 _ . -");
-    else if (seen.has(row.username)) add(`与第 ${seen.get(row.username)} 行的用户名重复`);
-    else if (state.accounts.some((account) => account.username === row.username)) add("用户名已存在");
-    seen.set(row.username, seen.get(row.username) ?? row.line);
-    if (row.displayName.length === 0 || row.displayName.length > 50) add("显示名必须是 1 到 50 个字符");
-    if (row.roleNames.length === 0) add("至少要有一个角色");
-    for (const name of row.roleNames) {
-      const role = state.roles.find((candidate) => candidate.name === name);
-      if (!role) add(`没有叫“${name}”的角色`);
-      else if (role.builtIn === "SUPER_ADMIN") add("超级管理员角色不能分配");
-      else if (role.permissions.some((code) => !mine.has(code))) add(`不能分配超出自己权限的角色：${name}`);
-    }
-  }
-  return problems;
-}
 
 function roleView(role: Omit<Role, "userCount">): Role {
   return { ...role, userCount: state.accounts.filter((account) => account.roleIds.includes(role.id)).length };
@@ -312,131 +203,6 @@ export const identityHandlers = [
     if (role.builtIn) return problem(400, "IDENTITY_INVALID", "内置角色不能删除");
     if (roleView(role).userCount > 0) return problem(409, "IDENTITY_CONFLICT", "还有账号属于这个角色，先移走才能删除");
     state.roles = state.roles.filter((candidate) => candidate !== role);
-    return new HttpResponse(null, { status: 204 });
-  }),
-
-  http.get("/api/users", ({ request }) => {
-    const denied = forbidden("user:view");
-    if (denied) return denied;
-    const url = new URL(request.url);
-    const keyword = url.searchParams.get("keyword");
-    const roleId = Number(url.searchParams.get("roleId")) || null;
-    const status = url.searchParams.get("status");
-    const now = new Date();
-    const locked = (account: StoredAccount) => account.lockedUntil !== null && new Date(account.lockedUntil) > now;
-    const found = state.accounts
-      .filter((account) => matches(keyword, account.username, account.displayName))
-      .filter((account) => roleId === null || account.roleIds.includes(roleId))
-      .filter((account) =>
-        status === "locked"
-          ? locked(account)
-          : status === "enabled"
-            ? account.enabled
-            : status === "disabled"
-              ? !account.enabled
-              : true,
-      );
-    return HttpResponse.json(paginate(found.map(view), url));
-  }),
-  http.post("/api/users", async ({ request }) => {
-    const denied = forbidden("user:create");
-    if (denied) return denied;
-    const input = (await request.json()) as {
-      username: string;
-      displayName: string;
-      password: string;
-      roleIds: number[];
-    };
-    if (state.accounts.some((account) => account.username === input.username)) {
-      return problem(409, "IDENTITY_CONFLICT", `用户名已被使用：${input.username}`);
-    }
-    const escalated = escalation(input.roleIds);
-    if (escalated) return escalated;
-    const created: StoredAccount = {
-      id: state.nextId++,
-      username: input.username,
-      displayName: input.displayName,
-      enabled: true,
-      roleIds: input.roleIds,
-      superAdmin: false,
-      lockedUntil: null,
-      mustChangePassword: false,
-      failures: 0,
-    };
-    state.accounts.push(created);
-    return HttpResponse.json(view(created), { status: 201 });
-  }),
-  // 批量导入（#124）：预检逐行报错、不写入；导入时重新预检，有一行有问题就一条都不写。
-  http.post("/api/users/import/check", async ({ request }) => {
-    const denied = forbidden("user:import");
-    if (denied) return denied;
-    const { rows } = (await request.json()) as { rows: ImportRow[] };
-    return HttpResponse.json({ problems: importProblems(rows) });
-  }),
-  http.post("/api/users/import", async ({ request }) => {
-    const denied = forbidden("user:import");
-    if (denied) return denied;
-    const { rows, password } = (await request.json()) as { rows: ImportRow[]; password: string };
-    if (password.length < 8 || password.length > 64) {
-      return problem(400, "IDENTITY_INVALID", "初始密码必须是 8 到 64 个字符");
-    }
-    const lines = new Set(importProblems(rows).map((found) => found.line)).size;
-    if (lines > 0) return problem(400, "IDENTITY_INVALID", `导入文件有 ${lines} 行有问题，请重新检查后再导入`);
-    for (const row of rows) {
-      state.accounts.push({
-        id: state.nextId++,
-        username: row.username,
-        displayName: row.displayName,
-        enabled: true,
-        roleIds: state.roles.filter((role) => row.roleNames.includes(role.name)).map((role) => role.id),
-        superAdmin: false,
-        lockedUntil: null,
-        mustChangePassword: true,
-        failures: 0,
-      });
-    }
-    return HttpResponse.json({ imported: rows.length });
-  }),
-  http.put("/api/users/:id/enabled", async ({ params, request }) => {
-    const denied = forbidden("user:disable");
-    if (denied) return denied;
-    const account = state.accounts.find((candidate) => candidate.id === Number(params.id));
-    if (!account) return problem(404, "IDENTITY_NOT_FOUND", "账号不存在");
-    if (account.superAdmin) return problem(403, "IDENTITY_ESCALATION", "超级管理员不能被别人修改");
-    const { enabled } = (await request.json()) as { enabled: boolean };
-    if (!enabled && account.id === current().id) return problem(400, "IDENTITY_INVALID", "不能停用自己的账号");
-    account.enabled = enabled;
-    return HttpResponse.json(view(account));
-  }),
-  http.put("/api/users/:id/roles", async ({ params, request }) => {
-    const account = state.accounts.find((candidate) => candidate.id === Number(params.id));
-    if (!account) return problem(404, "IDENTITY_NOT_FOUND", "账号不存在");
-    if (account.superAdmin) return problem(403, "IDENTITY_ESCALATION", "超级管理员不能被别人修改");
-    const { roleIds } = (await request.json()) as { roleIds: number[] };
-    const denied = forbidden("user:assign-role") ?? escalation(roleIds);
-    if (denied) return denied;
-    if (roleIds.length === 0) return problem(400, "IDENTITY_INVALID", "至少要有一个角色");
-    account.roleIds = roleIds;
-    return HttpResponse.json(view(account));
-  }),
-  http.post("/api/users/:id/reset-password", async ({ params, request }) => {
-    const denied = forbidden("user:reset-password");
-    if (denied) return denied;
-    const account = state.accounts.find((candidate) => candidate.id === Number(params.id));
-    if (!account) return problem(404, "IDENTITY_NOT_FOUND", "账号不存在");
-    if (account.superAdmin) return problem(400, "IDENTITY_INVALID", "超级管理员的密码只能自己改");
-    const { password } = (await request.json()) as { password: string };
-    if (password.length < 8 || password.length > 64) return problem(400, "IDENTITY_INVALID", "密码必须是 8 到 64 位");
-    account.mustChangePassword = true;
-    return new HttpResponse(null, { status: 204 });
-  }),
-  http.post("/api/users/:id/unlock", ({ params }) => {
-    const denied = forbidden("user:update");
-    if (denied) return denied;
-    const account = state.accounts.find((candidate) => candidate.id === Number(params.id));
-    if (!account) return problem(404, "IDENTITY_NOT_FOUND", "账号不存在");
-    account.lockedUntil = null;
-    account.failures = 0;
     return new HttpResponse(null, { status: 204 });
   }),
 ];
