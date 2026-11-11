@@ -15,13 +15,13 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import { PageShell } from "@/components/ui/page-shell";
 import { Pagination } from "@/components/ui/pagination";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ErrorMessage } from "@/lib/errors";
+import { usePagedFilter } from "@/lib/paging";
 import { Can, PERMISSIONS } from "@/lib/permissions";
 import { createKnowledgeBase, fetchKnowledgeBasePage, knowledgeKeys } from "./api";
-
-const PAGE_SIZE = 20;
 
 /**
  * 知识库列表（D-039）：按名称筛选、分页；每个库显示文档数、失败数和授权情况，点进去是详情（文档、授权）。
@@ -29,12 +29,12 @@ const PAGE_SIZE = 20;
  * 有即将到期或已失效的文档时显示标签，点标签直接进详情并按该有效期筛选（#124）。
  */
 export function KnowledgePage() {
-  const [filter, setFilter] = useState<{
+  const [filter, change] = usePagedFilter<{
     keyword: string;
     validity: "EXPIRING" | "EXPIRED" | null;
     page: number;
     size: number;
-  }>({ keyword: "", validity: null, page: 1, size: PAGE_SIZE });
+  }>({ keyword: "", validity: null });
   const [keyword, setKeyword] = useState("");
   const [creating, setCreating] = useState(false);
   const knowledgeBases = useQuery({
@@ -45,11 +45,11 @@ export function KnowledgePage() {
 
   function search(event: FormEvent) {
     event.preventDefault();
-    setFilter({ ...filter, keyword: keyword.trim(), page: 1 });
+    change({ keyword: keyword.trim() });
   }
 
   return (
-    <main className="mx-auto flex w-full max-w-[1600px] p-6 md:p-8 xl:px-10 flex-col gap-4">
+    <PageShell>
       <div className="flex items-center justify-between">
         <h1 className="font-display text-2xl font-semibold tracking-tight">知识库</h1>
         <Can permission={PERMISSIONS.KB_CREATE}>
@@ -74,11 +74,7 @@ export function KnowledgePage() {
           <NativeSelect
             value={filter.validity ?? ""}
             onChange={(event) =>
-              setFilter({
-                ...filter,
-                validity: (event.target.value || null) as "EXPIRING" | "EXPIRED" | null,
-                page: 1,
-              })
+              change({ validity: (event.target.value || null) as "EXPIRING" | "EXPIRED" | null })
             }
           >
             <NativeSelectOption value="">全部</NativeSelectOption>
@@ -166,13 +162,13 @@ export function KnowledgePage() {
           page={knowledgeBases.data.page}
           size={knowledgeBases.data.size}
           total={knowledgeBases.data.total}
-          onChange={(next) => setFilter({ ...filter, ...next })}
+          onChange={change}
         />
       )}
       <Dialog open={creating} onOpenChange={setCreating}>
         {creating && <CreateDialog onDone={() => setCreating(false)} />}
       </Dialog>
-    </main>
+    </PageShell>
   );
 }
 

@@ -7,13 +7,13 @@ import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import { PageShell } from "@/components/ui/page-shell";
 import { Pagination } from "@/components/ui/pagination";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ErrorMessage } from "@/lib/errors";
+import { PAGE_SIZE } from "@/lib/paging";
 import { GapDialog } from "./GapDialog";
 import { fetchGaps, GAP_RANGES, type GapGroup, gapKeys, type GapRange, type GapReport } from "./api";
-
-const PAGE_SIZE = 20;
 
 /**
  * 知识缺口（#125、D-047）：把一段时间内答不上来和差评的问题按意思归类，按待处理次数排序，告诉总部该补哪些资料。
@@ -46,7 +46,7 @@ export function GapsPage() {
   }
 
   return (
-    <main className="mx-auto flex w-full max-w-[1600px] p-6 md:p-8 xl:px-10 flex-col gap-4">
+    <PageShell>
       <div className="flex flex-wrap items-center gap-2">
         <h1 className="mr-auto font-display text-2xl font-semibold tracking-tight">知识缺口</h1>
         {GAP_RANGES.map((range) => (
@@ -122,7 +122,7 @@ export function GapsPage() {
       <Dialog open={opened !== null} onOpenChange={(open) => !open && setOpened(null)}>
         {opened && <GapDialog group={opened} onDone={() => setOpened(null)} />}
       </Dialog>
-    </main>
+    </PageShell>
   );
 }
 

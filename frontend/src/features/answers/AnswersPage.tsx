@@ -8,9 +8,11 @@ import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import { PageShell } from "@/components/ui/page-shell";
 import { Pagination } from "@/components/ui/pagination";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ErrorMessage } from "@/lib/errors";
+import { usePagedFilter } from "@/lib/paging";
 import { Can, PERMISSIONS } from "@/lib/permissions";
 import { formatDateTime } from "@/lib/utils";
 import { OutcomeBadge, ReviewDialog } from "./ReviewDialog";
@@ -23,7 +25,6 @@ import {
   toEvalDrafts,
 } from "./api";
 
-const PAGE_SIZE = 20;
 const FILTERS: AnswerFilter["filter"][] = ["disliked", "refused", "all"];
 
 /**
@@ -33,12 +34,10 @@ const FILTERS: AnswerFilter["filter"][] = ["disliked", "refused", "all"];
  */
 export function AnswersPage() {
   const [params] = useSearchParams();
-  const [filter, setFilter] = useState<AnswerFilter>({
+  const [filter, change] = usePagedFilter<AnswerFilter>({
     filter: FILTERS.find((value) => value === params.get("filter")) ?? "disliked",
     status: "open",
     days: 30,
-    page: 1,
-    size: PAGE_SIZE,
   });
   const [keyword, setKeyword] = useState("");
   const [opened, setOpened] = useState<AnswerReview | null>(null);
@@ -48,8 +47,6 @@ export function AnswersPage() {
     queryFn: () => fetchAnswerReviews(filter),
     placeholderData: keepPreviousData,
   });
-
-  const change = (next: Partial<AnswerFilter>) => setFilter({ ...filter, ...next, page: next.page ?? 1 });
 
   function search(event: FormEvent) {
     event.preventDefault();
@@ -66,7 +63,7 @@ export function AnswersPage() {
   }
 
   return (
-    <main className="mx-auto flex w-full max-w-[1600px] p-6 md:p-8 xl:px-10 flex-col gap-4">
+    <PageShell>
       <div className="flex items-center justify-between">
         <h1 className="font-display text-2xl font-semibold tracking-tight">回答记录</h1>
         <Can permission={PERMISSIONS.ANSWER_EXPORT}>
@@ -196,7 +193,7 @@ export function AnswersPage() {
       <Dialog open={opened !== null} onOpenChange={(open) => !open && setOpened(null)}>
         {opened && <ReviewDialog review={opened} onDone={() => setOpened(null)} />}
       </Dialog>
-    </main>
+    </PageShell>
   );
 }
 

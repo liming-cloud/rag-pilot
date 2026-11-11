@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PageShell } from "@/components/ui/page-shell";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ErrorMessage } from "@/lib/errors";
 import { Can, PERMISSIONS, useCan } from "@/lib/permissions";
@@ -34,7 +35,7 @@ export function RolesPage() {
     selectedId === "new" ? "new" : (roles.data?.find((role) => role.id === selectedId) ?? roles.data?.[0] ?? null);
 
   return (
-    <main className="mx-auto grid w-full max-w-[1600px] p-6 md:p-8 xl:px-10 gap-6 md:grid-cols-[220px_1fr]">
+    <PageShell className="grid gap-6 md:grid-cols-[220px_1fr]">
       <aside className="flex flex-col gap-3">
         <h1 className="font-display text-2xl font-semibold tracking-tight">角色与权限</h1>
         {roles.isError && <ErrorMessage error="读取角色失败，请稍后重试。" className="text-base" />}
@@ -72,7 +73,7 @@ export function RolesPage() {
           onDeleted={() => setSelectedId(null)}
         />
       )}
-    </main>
+    </PageShell>
   );
 }
 

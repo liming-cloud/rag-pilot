@@ -7,6 +7,7 @@ import { Pagination } from "@/components/ui/pagination";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ErrorMessage } from "@/lib/errors";
+import { PAGE_SIZE } from "@/lib/paging";
 import { Can, PERMISSIONS } from "@/lib/permissions";
 import { PriceDialog } from "./PriceDialog";
 import {
@@ -18,8 +19,6 @@ import {
   type UsageGroupBy,
   type UsagePurpose,
 } from "./api";
-
-const PAGE_SIZE = 20;
 
 const GROUPS: { value: UsageGroupBy; label: string; column: string }[] = [
   { value: "DETAIL", label: "明细", column: "日期" },

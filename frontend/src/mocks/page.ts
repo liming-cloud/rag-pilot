@@ -1,4 +1,9 @@
+import { HttpResponse } from "msw";
 import type { Page } from "@/lib/api";
+
+/** 与后端一致的错误响应：RFC 9457 问题详情，带稳定的错误码 code（见规则卡 A-19、D-034）。 */
+export const problem = (status: number, code: string, detail: string) =>
+  HttpResponse.json({ status, code, detail }, { status, headers: { "Content-Type": "application/problem+json" } });
 
 /** 假接口的分页：按 page、size 参数切片，与后端一致（size 默认 20、最多 100）。 */
 export function paginate<T>(items: T[], url: URL): Page<T> {

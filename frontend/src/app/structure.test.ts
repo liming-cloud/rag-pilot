@@ -109,6 +109,19 @@ export function queryKeyLiteralProblems(file: string, source: string): string[] 
   return /queryKey:\s*\[/.test(source) ? [`${file} 现场写了查询键：改用 api.ts 里的 xxxKeys 常量`] : [];
 }
 
+/** 列表样板只写一处（#201）：每页条数用 lib/paging.ts 的 PAGE_SIZE，管理页外壳用 components/ui/page-shell.tsx。 */
+export function boilerplateProblems(file: string, source: string): string[] {
+  if (file.startsWith("mocks/") || /\.test\.tsx?$/.test(file)) return [];
+  const problems: string[] = [];
+  if (file !== "lib/paging.ts" && /\bPAGE_SIZE\s*=/.test(source)) {
+    problems.push(`${file} 自己定义了 PAGE_SIZE：改用 lib/paging.ts 的 PAGE_SIZE 或 usePagedFilter`);
+  }
+  if (file !== "components/ui/page-shell.tsx" && source.includes("max-w-[1600px]")) {
+    problems.push(`${file} 自己写了页面外壳：改用 PageShell`);
+  }
+  return problems;
+}
+
 describe("前端目录结构", () => {
   it("src 下只有约定的目录，components 下只放 shadcn 的 ui", () => {
     expect(readdirSync(src).filter((name) => !ALLOWED_TOP.includes(name))).toEqual([]);
@@ -145,9 +158,27 @@ describe("前端目录结构", () => {
     expect(permissionLiteralProblems("mocks/identity.ts", '"kb:view"', codes)).toEqual([]);
   });
 
-  it("组件文件不超过 300 行，超过时把对话框、分区拆到同目录的文件里（#145）", () => {
+  it("每页条数和页面外壳只定义一处", () => {
+    const problems = walk(src)
+      .filter((file) => /\.tsx?$/.test(file))
+      .flatMap((file) =>
+        boilerplateProblems(path.relative(src, file).split(path.sep).join("/"), readFileSync(file, "utf8")),
+      );
+    expect(problems).toEqual([]);
+    expect(boilerplateProblems("features/x/XPage.tsx", "const PAGE_SIZE = 20;")).toHaveLength(1);
+    expect(boilerplateProblems("features/x/XPage.tsx", '<main className="max-w-[1600px]">')).toHaveLength(1);
+    expect(boilerplateProblems("features/x/XPage.tsx", "const VOCABULARY_PAGE_SIZE = 10;")).toEqual([]);
+    expect(boilerplateProblems("lib/paging.ts", "export const PAGE_SIZE = 20;")).toEqual([]);
+  });
+
+  it("组件文件和假接口文件不超过 300 行，超过时按对话框、分区或 feature 拆开（#145、#201）", () => {
+    const mocks = `${path.sep}mocks${path.sep}`;
     const tooLong = walk(src)
-      .filter((file) => /\.tsx$/.test(file) && !/\.test\.tsx$/.test(file) && !file.includes(`${path.sep}components${path.sep}`))
+      .filter(
+        (file) =>
+          (/\.tsx$/.test(file) && !/\.test\.tsx$/.test(file) && !file.includes(`${path.sep}components${path.sep}`)) ||
+          (file.includes(mocks) && /\.ts$/.test(file)),
+      )
       .map((file) => [path.relative(src, file), readFileSync(file, "utf8").split("\n").length] as const)
       .filter(([, lines]) => lines > 300);
     expect(tooLong).toEqual([]);

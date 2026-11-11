@@ -6,17 +6,17 @@ import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import { PageShell } from "@/components/ui/page-shell";
 import { Pagination } from "@/components/ui/pagination";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { fetchRoles, roleKeys } from "@/features/roles/api";
 import { ErrorMessage } from "@/lib/errors";
+import { usePagedFilter } from "@/lib/paging";
 import { Can, PERMISSIONS } from "@/lib/permissions";
 import { CreateDialog, RolesDialog, PasswordDialog } from "./AccountDialogs";
 import { AccountRow } from "./AccountRow";
 import { ImportDialog } from "./ImportDialog";
 import { type Account, fetchUsers, setUserEnabled, unlockUser, type UserFilter, userKeys } from "./api";
-
-const PAGE_SIZE = 20;
 
 /**
  * 用户管理（D-038、D-039）：上方筛选（关键词、角色、状态），下方分页表格；新建、改角色、重置密码都在弹窗里做。
@@ -24,7 +24,7 @@ const PAGE_SIZE = 20;
  */
 export function UsersPage() {
   const queryClient = useQueryClient();
-  const [filter, setFilter] = useState<UserFilter>({ page: 1, size: PAGE_SIZE });
+  const [filter, change] = usePagedFilter<UserFilter>({});
   const [keyword, setKeyword] = useState("");
   const users = useQuery({
     queryKey: userKeys.list(filter),
@@ -43,15 +43,13 @@ export function UsersPage() {
   });
   const unlock = useMutation({ mutationFn: (account: Account) => unlockUser(account.id), onSuccess: refresh });
 
-  const change = (next: Partial<UserFilter>) => setFilter({ ...filter, ...next, page: next.page ?? 1 });
-
   function search(event: FormEvent) {
     event.preventDefault();
     change({ keyword: keyword.trim() });
   }
 
   return (
-    <main className="mx-auto flex w-full max-w-[1600px] p-6 md:p-8 xl:px-10 flex-col gap-4">
+    <PageShell>
       <div className="flex items-center justify-between">
         <h1 className="font-display text-2xl font-semibold tracking-tight">用户</h1>
         <div className="flex gap-2">
@@ -159,6 +157,6 @@ export function UsersPage() {
         )}
         {dialog?.kind === "password" && <PasswordDialog account={dialog.account} onDone={() => setDialog(null)} />}
       </Dialog>
-    </main>
+    </PageShell>
   );
 }

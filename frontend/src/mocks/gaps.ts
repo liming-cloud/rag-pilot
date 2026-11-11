@@ -171,9 +171,9 @@ export const gapHandlers = [
     const denied = forbidden("answer:review");
     if (denied) return denied;
     const { recordIds } = (await request.json()) as { recordIds: number[]; note?: string };
-    for (const record of records) {
-      if (recordIds.includes(record.id)) record.reviewStatus = "RESOLVED";
-    }
-    return new HttpResponse(null, { status: 204 });
+    // 与后端一致：只算原来还没处理的记录，返回这次标记了几条。
+    const resolving = records.filter((record) => recordIds.includes(record.id) && record.reviewStatus !== "RESOLVED");
+    for (const record of resolving) record.reviewStatus = "RESOLVED";
+    return HttpResponse.json({ resolved: resolving.length });
   }),
 ];

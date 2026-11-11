@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft } from "lucide-react";
 import { Link, useParams, useSearchParams } from "react-router";
 import { Button } from "@/components/ui/button";
+import { PageShell } from "@/components/ui/page-shell";
 import { ErrorMessage } from "@/lib/errors";
 import { PERMISSIONS, useCan } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
@@ -22,7 +23,7 @@ export function KnowledgeDetailPage() {
   const tabs = [{ key: "documents", label: "文档" }, ...(canGrant ? [{ key: "grants", label: "授权" }] : [])] as const;
 
   return (
-    <main className="mx-auto flex w-full max-w-[1600px] p-6 md:p-8 xl:px-10 flex-col gap-4">
+    <PageShell>
       <Button asChild variant="ghost" size="sm" className="self-start">
         <Link to="/admin/knowledge">
           <ArrowLeft aria-hidden="true" className="size-4" />
@@ -53,6 +54,6 @@ export function KnowledgeDetailPage() {
           {tab === "documents" ? <DocumentsPanel knowledgeBaseId={id} /> : <GrantsPanel knowledgeBaseId={id} />}
         </>
       )}
-    </main>
+    </PageShell>
   );
 }
