@@ -84,7 +84,7 @@ public class ModelUsageService {
      * 日期写 {@code yyyy-MM-dd}，最长一年。
      */
     @Transactional(readOnly = true)
-    public UsageReport usage(@Nullable String from, @Nullable String to, @Nullable String groupBy, int page, int size) {
+    public UsageReport usage(@Nullable String from, @Nullable String to, @Nullable String groupBy, Paged.Request paging) {
         var end = date(to, today());
         var start = date(from, end.minusDays(DEFAULT_RANGE_DAYS - 1));
         if (start.isAfter(end)) {
@@ -116,7 +116,6 @@ public class ModelUsageService {
             case DETAIL -> Comparator.comparing(UsageGroup::key).reversed().thenComparing(byTokens);
             case PURPOSE, MODEL -> byTokens;
         });
-        var paging = new Paged.Request(page, size);
         var from0 = (int) Math.min(paging.offset(), result.size());
         var pageItems = result.subList(from0, Math.min(result.size(), from0 + paging.size()));
         return new UsageReport(start, end, grouping,

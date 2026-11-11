@@ -141,8 +141,24 @@ class KnowledgeGapServiceTest {
     @Test
     @DisplayName("运营概览的前几类：只看还有待处理的，次数是待处理数")
     void topOpenGroups() {
+        fixture.gaps.rows = List.of(
+                gap(6, "冷柜温度要多少？", 0, true, "OPEN", List.of(1L), new float[] {1, 0, 0}),
+                gap(5, "青柚在哪？", 1, false, "RESOLVED", List.of(1L, 9L)),
+                gap(4, "冰柜温度设几度？", 2, true, "OPEN", List.of(), new float[] {1, 0, 0}),
+                gap(3, "冷柜温度要多少？", 3, false, "RESOLVED", List.of(1L)));
         assertThat(service.top(TENANT, LocalDate.of(2026, 10, 1), LocalDate.of(2026, 11, 4), ZONE, 5))
                 .containsExactly(new UsageStats.QuestionCount("冷柜温度要多少？", 2));
+    }
+
+    @Test
+    @DisplayName("运营概览只用已存的向量，不调嵌入模型、不写库；没有向量的按原文归类（#200、D-067）")
+    void topUsesStoredVectorsOnly() {
+        assertThat(service.top(TENANT, LocalDate.of(2026, 10, 1), LocalDate.of(2026, 11, 4), ZONE, 5))
+                .as("都没有向量：冷柜、冰柜按原文各算一类")
+                .containsExactlyInAnyOrder(new UsageStats.QuestionCount("冷柜温度要多少？", 1),
+                        new UsageStats.QuestionCount("冰柜温度设几度？", 1));
+        assertThat(fixture.embeddings.calls).isZero();
+        assertThat(fixture.gaps.savedVectors).isEmpty();
     }
 
     @Test

@@ -1,8 +1,6 @@
 package com.liming.rag.answering.infrastructure.ai;
 
 import com.liming.rag.ai.RerankClient;
-import com.liming.rag.ai.common.ModelCallException;
-import com.liming.rag.answering.application.ModelUnavailableException;
 import com.liming.rag.answering.application.ask.RelevanceScoring;
 import java.util.List;
 import org.springframework.stereotype.Component;
@@ -19,10 +17,6 @@ class AiRelevanceScoring implements RelevanceScoring {
 
     @Override
     public List<Double> score(String query, List<String> documents) {
-        try {
-            return rerank.score(query, documents);
-        } catch (ModelCallException e) {
-            throw new ModelUnavailableException(e.getMessage(), e);
-        }
+        return ModelCalls.call(() -> rerank.score(query, documents));
     }
 }

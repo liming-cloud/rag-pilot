@@ -54,11 +54,11 @@ public class AccountAdminService {
     /** @param status enabled、disabled、locked，为空不筛 */
     @Transactional(readOnly = true)
     public Paged<ManagedAccount> page(TenantId tenantId, @Nullable String keyword, @Nullable Long roleId,
-            @Nullable String status, int page, int size) {
+            @Nullable String status, Paged.Request page) {
         var parsed = Enums.parseOrNull(AccountQuery.Status.class, status,
                 () -> invalid("状态只能是 enabled、disabled 或 locked"));
         var found = accounts.page(tenantId, new AccountQuery(Texts.blankToNull(keyword), roleId, parsed,
-                OffsetDateTime.now(clock), new Paged.Request(page, size)));
+                OffsetDateTime.now(clock), page));
         var assigned = roles.rolesOf(found.items().stream().map(Account::id).toList());
         return found.map(account -> managed(account, assigned.getOrDefault(account.id(), List.of())));
     }

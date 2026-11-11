@@ -112,6 +112,16 @@ class DocumentIngestionServiceTest {
     }
 
     @Test
+    @DisplayName("上传、改有效期、删除只判断能不能管理，不加载知识库的成员和角色授权（#200）")
+    void checksManageabilityWithoutLoadingKnowledgeBase() {
+        var document = service.ingest(TENANT, ADMIN, Upload.of(kb, "收银规范.txt", TEXT));
+        service.changeValidity(TENANT, ADMIN, kb, document.id(), "", "");
+        committed(() -> service.delete(TENANT, ADMIN, kb, document.id()));
+
+        assertThat(fixture.knowledgeBases.finds).isZero();
+    }
+
+    @Test
     @DisplayName("不能管理这个库的人上传、替换、改有效期、删除都按不存在处理")
     void requiresManageableKnowledgeBase() {
         var document = service.ingest(TENANT, ADMIN, Upload.of(kb, "收银规范.txt", TEXT));

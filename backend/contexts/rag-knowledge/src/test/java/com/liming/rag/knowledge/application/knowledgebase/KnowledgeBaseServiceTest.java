@@ -124,20 +124,20 @@ class KnowledgeBaseServiceTest {
     @Test
     @DisplayName("管理端列表：超级管理员看全部（不带授权范围），其他人按本人和角色过滤；有效期只能按 EXPIRING、EXPIRED 筛")
     void pagesByVisibility() {
-        service.page(TENANT, SUPER, " 门店 ", "expiring", 2, 10);
+        service.page(TENANT, SUPER, " 门店 ", "expiring", new Paged.Request(2, 10));
         assertThat(fixture.queries.superAdminView).isTrue();
         assertThat(fixture.queries.keyword).isEqualTo("门店");
         assertThat(fixture.queries.validity).isEqualTo(Validity.State.EXPIRING);
         assertThat(fixture.queries.page).isEqualTo(new Paged.Request(2, 10));
 
-        service.page(TENANT, STAFF, "  ", null, 1, 20);
+        service.page(TENANT, STAFF, "  ", null, new Paged.Request(1, 20));
         assertThat(fixture.queries.grantee).isEqualTo(new Grantee(TENANT, STAFF, List.of(STORE_ROLE)));
         assertThat(fixture.queries.keyword).isNull();
         assertThat(fixture.queries.window).isEqualTo(new Window(InMemoryKnowledge.TODAY,
                 InMemoryKnowledge.TODAY.plusDays(30)));
 
-        assertReason(() -> service.page(TENANT, ADMIN, null, "ACTIVE", 1, 20), KnowledgeException.Reason.INVALID);
-        assertReason(() -> service.page(TENANT, ADMIN, null, "SOON", 1, 20), KnowledgeException.Reason.INVALID);
+        assertReason(() -> service.page(TENANT, ADMIN, null, "ACTIVE", new Paged.Request(1, 20)), KnowledgeException.Reason.INVALID);
+        assertReason(() -> service.page(TENANT, ADMIN, null, "SOON", new Paged.Request(1, 20)), KnowledgeException.Reason.INVALID);
     }
 
     @Test
@@ -145,13 +145,13 @@ class KnowledgeBaseServiceTest {
     void listsDocumentsOfManageableKnowledgeBase() {
         var kb = service.create(TENANT, ADMIN, "门店规范");
 
-        service.documents(TENANT, ADMIN, kb.id(), new KnowledgeBaseService.DocumentFilter(null, "ready", "pending", 1, 20));
+        service.documents(TENANT, ADMIN, kb.id(), new KnowledgeBaseService.DocumentFilter(null, "ready", "pending", new Paged.Request(1, 20)));
         assertThat(fixture.queries.status).isEqualTo(DocumentStatus.READY);
         assertThat(fixture.queries.validity).isEqualTo(Validity.State.PENDING);
 
-        assertReason(() -> service.documents(TENANT, OUTSIDER, kb.id(), new KnowledgeBaseService.DocumentFilter(null, null, null, 1, 20)),
+        assertReason(() -> service.documents(TENANT, OUTSIDER, kb.id(), new KnowledgeBaseService.DocumentFilter(null, null, null, new Paged.Request(1, 20))),
                 KnowledgeException.Reason.NOT_FOUND);
-        assertReason(() -> service.documents(TENANT, ADMIN, kb.id(), new KnowledgeBaseService.DocumentFilter(null, "DONE", null, 1, 20)),
+        assertReason(() -> service.documents(TENANT, ADMIN, kb.id(), new KnowledgeBaseService.DocumentFilter(null, "DONE", null, new Paged.Request(1, 20))),
                 KnowledgeException.Reason.INVALID);
     }
 

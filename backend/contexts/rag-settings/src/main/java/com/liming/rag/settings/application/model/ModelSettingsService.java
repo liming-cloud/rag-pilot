@@ -119,8 +119,8 @@ public class ModelSettingsService {
     }
 
     @Transactional(readOnly = true)
-    public Paged<ModelChange> changes(int page, int size) {
-        return store.changes(new Paged.Request(page, size));
+    public Paged<ModelChange> changes(Paged.Request page) {
+        return store.changes(page);
     }
 
     private PurposeView apply(TenantId tenantId, UserId actor, ModelPurpose usage, @Nullable Long providerId, String model,

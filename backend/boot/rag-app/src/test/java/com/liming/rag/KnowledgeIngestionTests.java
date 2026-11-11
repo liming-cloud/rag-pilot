@@ -89,6 +89,32 @@ class KnowledgeIngestionTests {
     }
 
     @Test
+    @DisplayName("大文档的分块按批多行写入：跨批时块数、顺序、内容和向量都不丢（#200）")
+    void writesChunksInBatches() {
+        long knowledgeBaseId = createKnowledgeBase("分批写入知识库");
+        int sections = 1201;
+        var text = new StringBuilder();
+        for (int i = 0; i < sections; i++) {
+            text.append("## 第 ").append(i).append(" 节\n\n门店第 ").append(i).append(" 条规范：交班清点备用金。\n\n");
+        }
+
+        var uploaded = upload(knowledgeBaseId, "分批.md", text.toString().getBytes(StandardCharsets.UTF_8));
+        var processed = TestDocuments.awaitProcessed(http, knowledgeBaseId, uploaded.getBody(), null);
+
+        assertThat(processed).containsEntry("status", "READY").containsEntry("chunkCount", sections);
+        long documentId = ((Number) processed.get("id")).longValue();
+        assertThat(jdbc.queryForList("select ordinal from chunk where document_id = ? order by ordinal", Integer.class,
+                documentId)).isEqualTo(java.util.stream.IntStream.range(0, sections).boxed().toList());
+        assertThat(jdbc.queryForObject("select count(*) from chunk where document_id = ? and embedding is not null"
+                + " and tenant_id = 1 and knowledge_base_id = ?", Integer.class, documentId, knowledgeBaseId))
+                .isEqualTo(sections);
+        for (int i : new int[] {0, 499, 500, 1000, sections - 1}) {
+            assertThat(jdbc.queryForObject("select content from chunk where document_id = ? and ordinal = ?",
+                    String.class, documentId, i)).contains("门店第 " + i + " 条规范");
+        }
+    }
+
+    @Test
     @DisplayName("不支持的格式拒绝；非 UTF-8 文本、损坏的 PDF 保存为失败文档并给出原因")
     void rejectsUnsupportedAndRecordsEncodingFailure() {
         long knowledgeBaseId = createKnowledgeBase("失败场景知识库");

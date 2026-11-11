@@ -15,12 +15,12 @@
         ORDER BY kb.id
     </select>
 
-    <select id="isAccessible" resultType="boolean">
-        SELECT EXISTS (
-            SELECT 1 FROM knowledge_base kb
-            WHERE kb.tenant_id = #{tenantId} AND kb.id = #{knowledgeBaseId}
-              AND kb.id IN (<include refid="com.liming.rag.knowledge.infrastructure.persistence.ChunkSearchMapper.accessibleKnowledgeBases"/>)
-        )
+    <select id="manageable" resultType="com.liming.rag.knowledge.infrastructure.persistence.KnowledgeBaseDO">
+        SELECT kb.id, kb.tenant_id, kb.name FROM knowledge_base kb
+        WHERE kb.tenant_id = #{tenantId} AND kb.id = #{knowledgeBaseId}
+        <if test="!all">
+            AND kb.id IN (<include refid="com.liming.rag.knowledge.infrastructure.persistence.ChunkSearchMapper.accessibleKnowledgeBases"/>)
+        </if>
     </select>
 
 </mapper>

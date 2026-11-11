@@ -24,6 +24,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.stream.IntStream;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -98,6 +99,11 @@ public class KnowledgeGapService {
 
     /** {@code from} 到 {@code to}（都含）的知识缺口，按待处理次数、总次数从多到少。 */
     public GapReport report(TenantId tenantId, LocalDate from, LocalDate to, ZoneId zone) {
+        return report(tenantId, from, to, zone, true);
+    }
+
+    /** @param embedMissing 没有向量的原文是否现算（并写回）；运营概览不算（D-067）。 */
+    private GapReport report(TenantId tenantId, LocalDate from, LocalDate to, ZoneId zone, boolean embedMissing) {
         var start = from.atStartOfDay(zone).toOffsetDateTime();
         var end = to.plusDays(1).atStartOfDay(zone).toOffsetDateTime();
         var found = gapRecords.list(tenantId, start, end, MAX_RECORDS);
@@ -111,12 +117,17 @@ public class KnowledgeGapService {
                 .toList();
         var grouping = GapGrouping.SEMANTIC;
         List<List<Integer>> clusters;
-        try {
-            clusters = QuestionClusters.bySimilarity(vectors(tenantId, texts, byText), properties.gaps().similarity());
-        } catch (ModelUnavailableException e) {
-            log.warn("event=gap_grouping_degraded fallback=text error={}", e.code());
-            grouping = GapGrouping.TEXT;
-            clusters = QuestionClusters.byText(texts);
+        if (!embedMissing) {
+            clusters = storedClusters(texts, byText);
+        } else {
+            try {
+                clusters = QuestionClusters.bySimilarity(vectors(tenantId, texts, byText),
+                        properties.gaps().similarity());
+            } catch (ModelUnavailableException e) {
+                log.warn("event=gap_grouping_degraded fallback=text error={}", e.code());
+                grouping = GapGrouping.TEXT;
+                clusters = QuestionClusters.byText(texts);
+            }
         }
 
         var names = users.summaries(tenantId, found.stream().map(GapRecord::userId).distinct().toList());
@@ -133,9 +144,7 @@ public class KnowledgeGapService {
 
     /** 每段原文的问题向量：用记录里存好的，没有的一次算完并写回这段原文的每条记录。 */
     private List<float[]> vectors(TenantId tenantId, List<String> texts, Map<String, List<GapRecord>> byText) {
-        var known = new HashMap<String, float[]>();
-        texts.forEach(text -> byText.get(text).stream().map(GapRecord::questionVector).filter(Objects::nonNull)
-                .findFirst().ifPresent(vector -> known.put(text, vector)));
+        var known = stored(texts, byText);
         var missing = texts.stream().filter(text -> !known.containsKey(text)).toList();
         if (!missing.isEmpty()) {
             var computed = embeddings.embed(missing);
@@ -152,10 +161,31 @@ public class KnowledgeGapService {
         return texts.stream().map(known::get).toList();
     }
 
-    /** 待处理次数最多的几类，供运营概览；只看还有待处理记录的类。 */
+    /** 每段原文记录里存好的向量（任一条有即可）；都没有的不在结果里。 */
+    private static Map<String, float[]> stored(List<String> texts, Map<String, List<GapRecord>> byText) {
+        var known = new HashMap<String, float[]>();
+        texts.forEach(text -> byText.get(text).stream().map(GapRecord::questionVector).filter(Objects::nonNull)
+                .findFirst().ifPresent(vector -> known.put(text, vector)));
+        return known;
+    }
+
+    /** 不调模型的归类（D-067）：有存好向量的按意思归类，没有的按原文归类。 */
+    private List<List<Integer>> storedClusters(List<String> texts, Map<String, List<GapRecord>> byText) {
+        var known = stored(texts, byText);
+        var withVector = IntStream.range(0, texts.size()).filter(i -> known.containsKey(texts.get(i))).boxed().toList();
+        var without = IntStream.range(0, texts.size()).filter(i -> !known.containsKey(texts.get(i))).boxed().toList();
+        var clusters = new ArrayList<List<Integer>>();
+        QuestionClusters.bySimilarity(withVector.stream().map(i -> known.get(texts.get(i))).toList(),
+                properties.gaps().similarity()).forEach(c -> clusters.add(c.stream().map(withVector::get).toList()));
+        QuestionClusters.byText(without.stream().map(texts::get).toList())
+                .forEach(c -> clusters.add(c.stream().map(without::get).toList()));
+        return clusters;
+    }
+
+    /** 待处理次数最多的几类，供运营概览；只看还有待处理记录的类。只用已存的向量，不调模型、不写库（D-067）。 */
     public List<UsageStats.QuestionCount> top(TenantId tenantId, LocalDate from, LocalDate to, ZoneId zone,
             int limit) {
-        return report(tenantId, from, to, zone).groups().stream()
+        return report(tenantId, from, to, zone, false).groups().stream()
                 .filter(group -> group.openCount() > 0)
                 .limit(limit)
                 .map(group -> new UsageStats.QuestionCount(group.question(), group.openCount()))

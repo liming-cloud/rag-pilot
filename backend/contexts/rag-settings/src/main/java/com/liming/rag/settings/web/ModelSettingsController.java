@@ -10,6 +10,7 @@ import com.liming.rag.settings.application.model.ModelProviderService;
 import com.liming.rag.settings.application.model.ModelSettingsService;
 import com.liming.rag.settings.application.model.ProviderView;
 import com.liming.rag.settings.application.model.PurposeView;
+import com.liming.rag.shared.Paged;
 import java.time.OffsetDateTime;
 import java.util.List;
 import org.jspecify.annotations.Nullable;
@@ -79,10 +80,6 @@ class ModelSettingsController {
         }
     }
 
-    /** 分页响应（D-039）：{@code {items, total, page, size}}。 */
-    record PageView<T>(List<T> items, long total, int page, int size) {
-    }
-
     private final ModelSettingsService settings;
     private final ModelProviderService providers;
     private final CurrentUser currentUser;
@@ -118,11 +115,8 @@ class ModelSettingsController {
 
     @SaCheckPermission(SettingsPermissions.MODEL_VIEW)
     @GetMapping("/api/models/changes")
-    PageView<ChangeView> changes(@RequestParam(name = "page", defaultValue = "1") int page,
-            @RequestParam(name = "size", defaultValue = "20") int size) {
-        var found = settings.changes(page, size);
-        return new PageView<>(found.items().stream().map(ChangeView::of).toList(), found.total(), found.page(),
-                found.size());
+    Paged<ChangeView> changes(Paged.Request page) {
+        return settings.changes(page).map(ChangeView::of);
     }
 
     @SaCheckPermission(SettingsPermissions.MODEL_UPDATE)

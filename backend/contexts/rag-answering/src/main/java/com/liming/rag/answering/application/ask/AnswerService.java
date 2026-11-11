@@ -15,6 +15,7 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.CompletionStage;
 import java.util.function.Consumer;
 import org.jspecify.annotations.Nullable;
@@ -75,6 +76,7 @@ public class AnswerService {
     private final int evidenceLimit;
     private final double minRelevance;
     private final boolean rewriteOnLowRelevance;
+    private final AsyncTaskExecutor executor;
 
     /**
      * @param executor Spring 管理的虚拟线程执行器（{@code applicationTaskExecutor}），停机时等正在跑的任务做完（#135）
@@ -96,6 +98,7 @@ public class AnswerService {
         this.evidenceLimit = properties.evidenceLimit();
         this.minRelevance = properties.minRelevance();
         this.rewriteOnLowRelevance = properties.rewriteOnLowRelevance();
+        this.executor = executor;
     }
 
     /**
@@ -144,7 +147,7 @@ public class AnswerService {
         var original = new SearchRequest(searchTexts.getFirst(), request.tenantId(), request.userId(),
                 request.knowledgeBaseIds());
         var queries = searchTexts.stream().map(searchText -> original.withText(expansion.expand(searchText))).toList();
-        var candidates = union(queries.stream().map(retriever::retrieve).toList());
+        var candidates = union(retrieveAll(queries));
         clock.retrieved();
         // 低分改写针对没扩展的问题：改写本身会补类别，扩展词混在问题里反而干扰改写。
         var ranking = candidates.isEmpty() ? null : rank(queries, candidates, original, clock, onStatus);
@@ -194,6 +197,28 @@ public class AnswerService {
     /** 员工的问题，规则见 {@link Question}。 */
     public static String question(String text) {
         return new Question(text).text();
+    }
+
+    /** 多个检索词并行检索（#200）：第一个在当前线程，其余交给执行器；结果与检索词同序，失败照原样抛出。 */
+    private List<List<Evidence>> retrieveAll(List<SearchRequest> queries) {
+        var others = queries.stream().skip(1)
+                .map(query -> executor.submitCompletable(() -> retriever.retrieve(query))).toList();
+        var results = new ArrayList<List<Evidence>>();
+        results.add(retriever.retrieve(queries.getFirst()));
+        others.forEach(other -> results.add(join(other)));
+        return results;
+    }
+
+    /** 等并行的检索做完；它抛出的运行时异常原样抛出。 */
+    private static <T> T join(CompletableFuture<T> future) {
+        try {
+            return future.join();
+        } catch (CompletionException e) {
+            if (e.getCause() instanceof RuntimeException cause) {
+                throw cause;
+            }
+            throw e;
+        }
     }
 
     /** 合并几个检索词的候选，同一分块只留第一次出现的。 */

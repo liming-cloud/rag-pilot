@@ -13,6 +13,7 @@ import com.liming.rag.answering.application.insight.KnowledgeGapService;
 import com.liming.rag.answering.application.insight.UsageReportService;
 import com.liming.rag.answering.application.insight.UsageStats;
 import com.liming.rag.identity.api.CurrentUser;
+import com.liming.rag.shared.Paged;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import org.springframework.http.ContentDisposition;
@@ -60,21 +61,15 @@ class AnswerReviewController {
         this.currentUser = currentUser;
     }
 
-    /** 分页响应（D-039）：{@code {items, total, page, size}}。 */
-    record PageView<T>(List<T> items, long total, int page, int size) {
-    }
-
     /** 按类型、处理状态、最近几天、问题关键词筛选，分页（D-039）。 */
     @SaCheckPermission(AnsweringPermissions.ANSWER_VIEW)
     @GetMapping
-    PageView<AnswerReview> list(@RequestParam(name = "filter", defaultValue = "disliked") String filter,
+    Paged<AnswerReview> list(@RequestParam(name = "filter", defaultValue = "disliked") String filter,
             @RequestParam(name = "status", defaultValue = "open") String status,
             @RequestParam(name = "days", required = false) Integer days,
             @RequestParam(name = "keyword", required = false) String keyword,
-            @RequestParam(name = "page", defaultValue = "1") int page,
-            @RequestParam(name = "size", defaultValue = "20") int size) {
-        var found = log.review(currentUser.tenantId(), filter, status, days, keyword, page, size);
-        return new PageView<>(found.items(), found.total(), found.page(), found.size());
+            Paged.Request page) {
+        return log.review(currentUser.tenantId(), filter, status, days, keyword, page);
     }
 
     /** 最近几天（含今天）或某个自然周的使用统计，按周时与上一周对比（#125）。 */

@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.liming.rag.identity.api.AuditTrail;
 import com.liming.rag.settings.application.SettingsException;
+import com.liming.rag.shared.Paged;
 import com.liming.rag.shared.TenantId;
 import com.liming.rag.shared.UserId;
 import java.math.BigDecimal;
@@ -55,7 +56,7 @@ class ModelUsageServiceTest {
         store.rows.put("2026-11-09 RERANK api.example.com free", new long[] {1, 100, 0});
         service.savePrice(TENANT, ADMIN, "m1", new BigDecimal("2"), new BigDecimal("8"));
 
-        var report = service.usage("2026-11-09", "2026-11-10", "purpose", 1, 20);
+        var report = service.usage("2026-11-09", "2026-11-10", "purpose", new Paged.Request(1, 20));
 
         assertThat(report.groupBy()).isEqualTo(UsageGroupBy.PURPOSE);
         assertThat(report.groups().items()).extracting(UsageGroup::key).containsExactly("ANSWER", "RERANK");
@@ -76,10 +77,10 @@ class ModelUsageServiceTest {
         store.rows.put("2026-11-09 ANSWER h m", new long[] {4, 40, 4});
         store.rows.put("2026-09-01 ANSWER h m", new long[] {8, 80, 8});
 
-        assertThat(service.usage("2026-10-01", "2026-11-30", "MONTH", 1, 20).groups().items()).extracting(UsageGroup::key,
+        assertThat(service.usage("2026-10-01", "2026-11-30", "MONTH", new Paged.Request(1, 20)).groups().items()).extracting(UsageGroup::key,
                 UsageGroup::calls).containsExactly(org.assertj.core.groups.Tuple.tuple("2026-11", 6L),
                         org.assertj.core.groups.Tuple.tuple("2026-10", 1L));
-        var defaults = service.usage(null, null, null, 1, 20);
+        var defaults = service.usage(null, null, null, new Paged.Request(1, 20));
         assertThat(defaults.groupBy()).isEqualTo(UsageGroupBy.DETAIL);
         assertThat(defaults.to()).isEqualTo(LocalDate.parse("2026-11-10"));
         assertThat(defaults.from()).isEqualTo(LocalDate.parse("2026-10-12"));
@@ -96,7 +97,7 @@ class ModelUsageServiceTest {
             store.rows.put("2026-11-0" + day + " ANSWER api.example.com m", new long[] {1, 10, 1});
         }
 
-        var second = service.usage("2026-11-01", "2026-11-09", "DETAIL", 2, 2);
+        var second = service.usage("2026-11-01", "2026-11-09", "DETAIL", new Paged.Request(2, 2));
 
         assertThat(second.groups().total()).isEqualTo(5);
         assertThat(second.groups().page()).isEqualTo(2);
@@ -104,18 +105,18 @@ class ModelUsageServiceTest {
         assertThat(second.groups().items().getFirst()).extracting(UsageGroup::purpose, UsageGroup::provider,
                 UsageGroup::model).containsExactly("ANSWER", "api.example.com", "m");
         assertThat(second.total().calls()).isEqualTo(5);
-        assertThat(service.usage("2026-11-01", "2026-11-09", "DETAIL", 9, 2).groups().items()).isEmpty();
+        assertThat(service.usage("2026-11-01", "2026-11-09", "DETAIL", new Paged.Request(9, 2)).groups().items()).isEmpty();
     }
 
     @Test
     @DisplayName("日期格式、范围、分组不合规时拒绝，说明原因")
     void rejectsBadQueries() {
-        assertThatThrownBy(() -> service.usage("11/01", null, null, 1, 20)).isInstanceOf(SettingsException.class)
+        assertThatThrownBy(() -> service.usage("11/01", null, null, new Paged.Request(1, 20))).isInstanceOf(SettingsException.class)
                 .hasMessageContaining("yyyy-MM-dd");
-        assertThatThrownBy(() -> service.usage("2026-11-09", "2026-11-01", null, 1, 20))
+        assertThatThrownBy(() -> service.usage("2026-11-09", "2026-11-01", null, new Paged.Request(1, 20)))
                 .hasMessageContaining("不能晚于");
-        assertThatThrownBy(() -> service.usage("2025-01-01", "2026-11-01", null, 1, 20)).hasMessageContaining("一年");
-        assertThatThrownBy(() -> service.usage(null, null, "USER", 1, 20)).hasMessageContaining("分组");
+        assertThatThrownBy(() -> service.usage("2025-01-01", "2026-11-01", null, new Paged.Request(1, 20))).hasMessageContaining("一年");
+        assertThatThrownBy(() -> service.usage(null, null, "USER", new Paged.Request(1, 20))).hasMessageContaining("分组");
     }
 
     @Test

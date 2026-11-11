@@ -1,8 +1,6 @@
 package com.liming.rag.answering.infrastructure.ai;
 
 import com.liming.rag.ai.QueryRewriting;
-import com.liming.rag.ai.common.ModelCallException;
-import com.liming.rag.answering.application.ModelUnavailableException;
 import com.liming.rag.answering.application.ask.QuestionRewriting;
 import org.springframework.stereotype.Component;
 
@@ -18,10 +16,6 @@ class AiQuestionRewriting implements QuestionRewriting {
 
     @Override
     public String rewrite(String instructions, String question) {
-        try {
-            return rewriting.rewrite(instructions, question);
-        } catch (ModelCallException e) {
-            throw new ModelUnavailableException(e.getMessage(), e);
-        }
+        return ModelCalls.call(() -> rewriting.rewrite(instructions, question));
     }
 }

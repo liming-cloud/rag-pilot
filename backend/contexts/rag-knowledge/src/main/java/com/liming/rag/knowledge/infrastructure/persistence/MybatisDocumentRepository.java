@@ -9,12 +9,16 @@ import com.liming.rag.knowledge.domain.DocumentStatus;
 import com.liming.rag.knowledge.domain.Validity;
 import com.liming.rag.shared.TenantId;
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.stereotype.Repository;
 
 @Repository
 class MybatisDocumentRepository implements DocumentRepository {
+
+    /** 分块每批写入的条数。 */
+    static final int CHUNK_BATCH = 500;
 
     private final DocumentMapper documents;
     private final ChunkMapper chunks;
@@ -86,6 +90,7 @@ class MybatisDocumentRepository implements DocumentRepository {
         if (values.size() != embeddings.size()) {
             throw new IllegalArgumentException("分块数和向量数不一致");
         }
+        var rows = new ArrayList<ChunkDO>(values.size());
         for (int i = 0; i < values.size(); i++) {
             var chunk = values.get(i);
             var row = new ChunkDO();
@@ -97,7 +102,11 @@ class MybatisDocumentRepository implements DocumentRepository {
             row.setContent(chunk.content());
             row.setTokenCount(chunk.tokenCount());
             row.setEmbedding(embeddings.get(i));
-            chunks.insert(row);
+            rows.add(row);
+        }
+        // 多行 INSERT，按批写，免得一条语句的参数太多（PostgreSQL 一条最多 65535 个）。
+        for (int from = 0; from < rows.size(); from += CHUNK_BATCH) {
+            chunks.insertAll(rows.subList(from, Math.min(rows.size(), from + CHUNK_BATCH)));
         }
     }
 
