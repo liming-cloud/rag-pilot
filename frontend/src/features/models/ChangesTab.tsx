@@ -15,6 +15,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { ErrorMessage } from "@/lib/errors";
 import { PAGE_SIZE } from "@/lib/paging";
 import { Can, PERMISSIONS } from "@/lib/permissions";
+import { formatDateTime } from "@/lib/utils";
 import { ModelName } from "./ModelLabels";
 import { fetchModelChanges, type ModelChange, modelKeys, restoreChange, USAGE_LABELS } from "./api";
 
@@ -56,7 +57,7 @@ export function ChangesTab() {
             {changes.data?.items.map((change) => (
               <TableRow key={change.id}>
                 <TableCell className="text-muted-foreground">
-                  {new Date(change.changedAt).toLocaleString("zh-CN", { dateStyle: "short", timeStyle: "short" })}
+                  {formatDateTime(change.changedAt)}
                 </TableCell>
                 <TableCell className="truncate">{change.changedBy}</TableCell>
                 <TableCell>
