@@ -79,6 +79,8 @@ public final class InMemoryKnowledge {
         /** 模拟并发时唯一约束冲突：下一次保存时抛出。 */
         public RuntimeException failNextSave;
         int saves;
+        /** 加载整个聚合（含成员、角色授权）的次数。 */
+        public int finds;
 
         @Override
         public KnowledgeBase save(KnowledgeBase knowledgeBase) {
@@ -100,6 +102,7 @@ public final class InMemoryKnowledge {
 
         @Override
         public Optional<KnowledgeBase> find(TenantId tenantId, long id) {
+            finds++;
             return Optional.ofNullable(rows.get(id)).filter(row -> row.tenantId().equals(tenantId))
                     .map(row -> restore(id, row));
         }
@@ -256,8 +259,13 @@ public final class InMemoryKnowledge {
         }
 
         @Override
-        public boolean isAccessible(Grantee grantee, long knowledgeBaseId) {
-            return knowledgeBases.accessible(knowledgeBaseId, grantee);
+        public Optional<KnowledgeBaseRef> manageable(TenantId tenantId, Grantee grantee, long knowledgeBaseId) {
+            var row = knowledgeBases.rows.get(knowledgeBaseId);
+            if (row == null || !row.tenantId().equals(tenantId)
+                    || grantee != null && !knowledgeBases.accessible(knowledgeBaseId, grantee)) {
+                return Optional.empty();
+            }
+            return Optional.of(new KnowledgeBaseRef(knowledgeBaseId, row.name()));
         }
 
         @Override
@@ -328,6 +336,8 @@ public final class InMemoryKnowledge {
         public LocalDate today;
         public int limit;
         public final List<String> keywordTexts = new ArrayList<>();
+        /** 关键词召回开始时计数，用来验证两路并行。 */
+        public final java.util.concurrent.CountDownLatch keywordStarted = new java.util.concurrent.CountDownLatch(1);
 
         @Override
         public List<Long> nearest(Grantee grantee, List<Long> knowledgeBaseIds, LocalDate today, float[] vector,
@@ -342,6 +352,7 @@ public final class InMemoryKnowledge {
         public List<Long> keyword(Grantee grantee, List<Long> knowledgeBaseIds, LocalDate today, String text,
                 int limit) {
             keywordTexts.add(text);
+            keywordStarted.countDown();
             return keyword;
         }
 

@@ -54,14 +54,6 @@ class KnowledgeBaseController {
     record ValidityRequest(String effectiveFrom, String expiresOn) {
     }
 
-    /** 分页响应（D-039）：{@code {items, total, page, size}}。 */
-    record PageView<T>(List<T> items, long total, int page, int size) {
-        static <S, T> PageView<T> of(Paged<S> paged, java.util.function.Function<S, T> mapper) {
-            return new PageView<>(paged.items().stream().map(mapper).toList(), paged.total(), paged.page(),
-                    paged.size());
-        }
-    }
-
     private final KnowledgeBaseService knowledgeBases;
     private final KnowledgeGrantService grants;
     private final DocumentIngestionService ingestion;
@@ -87,12 +79,10 @@ class KnowledgeBaseController {
     /** 管理端列表（D-039）：按名称、资料有效期（EXPIRING、EXPIRED）筛选，分页。 */
     @SaCheckPermission(KnowledgePermissions.KB_VIEW)
     @GetMapping("/page")
-    PageView<KnowledgeBaseSummary> page(@RequestParam(name = "keyword", required = false) String keyword,
+    Paged<KnowledgeBaseSummary> page(@RequestParam(name = "keyword", required = false) String keyword,
             @RequestParam(name = "validity", required = false) String validity,
-            @RequestParam(name = "page", defaultValue = "1") int page,
-            @RequestParam(name = "size", defaultValue = "20") int size) {
-        return PageView.of(knowledgeBases.page(currentUser.tenantId(), currentUser.userId(), keyword, validity, page,
-                size), summary -> summary);
+            Paged.Request page) {
+        return knowledgeBases.page(currentUser.tenantId(), currentUser.userId(), keyword, validity, page);
     }
 
     /** 运营概览的到期提醒（#124）：自己能管理的库里即将到期和已失效的文档数，以及提前提醒的天数。 */
@@ -124,14 +114,13 @@ class KnowledgeBaseController {
     /** 按文件名、状态、有效期（ACTIVE、EXPIRING、EXPIRED、PENDING）筛选，分页（D-039）。 */
     @SaCheckPermission(KnowledgePermissions.KB_VIEW)
     @GetMapping("/{knowledgeBaseId}/documents")
-    PageView<DocumentRow> documents(@PathVariable long knowledgeBaseId,
+    Paged<DocumentRow> documents(@PathVariable long knowledgeBaseId,
             @RequestParam(name = "keyword", required = false) String keyword,
             @RequestParam(name = "status", required = false) String status,
             @RequestParam(name = "validity", required = false) String validity,
-            @RequestParam(name = "page", defaultValue = "1") int page,
-            @RequestParam(name = "size", defaultValue = "20") int size) {
-        return PageView.of(knowledgeBases.documents(currentUser.tenantId(), currentUser.userId(), knowledgeBaseId,
-                new KnowledgeBaseService.DocumentFilter(keyword, status, validity, page, size)), row -> row);
+            Paged.Request page) {
+        return knowledgeBases.documents(currentUser.tenantId(), currentUser.userId(), knowledgeBaseId,
+                new KnowledgeBaseService.DocumentFilter(keyword, status, validity, page));
     }
 
     /** 上传时可以顺带设有效期（D-046），不传表示长期有效。 */

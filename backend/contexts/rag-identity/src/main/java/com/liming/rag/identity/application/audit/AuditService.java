@@ -56,7 +56,7 @@ public class AuditService implements AuditTrail {
      * @throws IdentityException 天数不在 1 到 365 之间、操作类型格式不对时为 INVALID
      */
     @Transactional(readOnly = true)
-    public Paged<AuditRecord> page(TenantId tenantId, int days, @Nullable String action, int page, int size) {
+    public Paged<AuditRecord> page(TenantId tenantId, int days, @Nullable String action, Paged.Request page) {
         if (days < 1 || days > MAX_DAYS) {
             throw new IdentityException(IdentityException.Reason.INVALID, "天数只能是 1 到 " + MAX_DAYS + " 天");
         }
@@ -64,8 +64,7 @@ public class AuditService implements AuditTrail {
         if (filter != null && !ACTION.matcher(filter).matches()) {
             throw new IdentityException(IdentityException.Reason.INVALID, "操作类型不认识");
         }
-        return logs.page(tenantId.value(), OffsetDateTime.now(clock).minusDays(days), filter,
-                new Paged.Request(page, size));
+        return logs.page(tenantId.value(), OffsetDateTime.now(clock).minusDays(days), filter, page);
     }
 
     /** 每天凌晨 3 点 10 分（服务器时区）清理超过保留期的记录，返回删除的条数。 */

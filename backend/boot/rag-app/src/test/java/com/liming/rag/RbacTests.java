@@ -337,6 +337,10 @@ class RbacTests {
         assertThat(call(root, HttpMethod.GET, "/api/users?keyword=pager&status=disabled", null).getBody())
                 .containsEntry("total", 1);
         assertThat(call(root, HttpMethod.GET, "/api/users?size=1000", null).getBody()).containsEntry("size", 100);
+        assertThat(call(root, HttpMethod.GET, "/api/users?page=0", null).getBody()).as("页码小于 1 按 1，条数默认 20")
+                .containsEntry("page", 1).containsEntry("size", 20);
+        assertThat(call(root, HttpMethod.GET, "/api/users?page=abc", null).getStatusCode())
+                .isEqualTo(HttpStatus.BAD_REQUEST);
         assertThat(call(root, HttpMethod.GET, "/api/users?status=gone", null).getStatusCode())
                 .isEqualTo(HttpStatus.BAD_REQUEST);
     }

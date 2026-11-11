@@ -325,7 +325,7 @@ class AnswerServiceTest {
     @Test
     @DisplayName("追问：每个检索词各检索一次，合并后按对各自检索词的重排分数取高；提示词带历史和员工原来的问题")
     void answersFollowUpWithPlannedQueries() {
-        var retrieved = new ArrayList<String>();
+        var retrieved = java.util.Collections.synchronizedList(new ArrayList<String>());
         var request = new AnswerService.AskRequest(TENANT, USER, List.of(1L), "那冷冻柜呢？跟冷柜比呢",
                 List.of("冷冻柜温度要求", "冷柜货架位置"), "员工：冷柜在哪？\n助手：03 号货架。");
 
@@ -333,11 +333,46 @@ class AnswerServiceTest {
         }, status -> {
         }, new java.util.concurrent.CompletableFuture<Void>());
 
-        assertThat(retrieved).containsExactly("冷冻柜温度要求", "冷柜货架位置");
+        assertThat(retrieved).as("并行检索，先后不定").containsExactlyInAnyOrder("冷冻柜温度要求", "冷柜货架位置");
         assertThat(answer.refused()).isFalse();
         assertThat(answer.citations()).extracting(citation -> citation.documentName())
                 .containsExactly("冷链规范.txt", "商品陈列.txt");
         assertThat(prompts.getFirst()).contains("前面的对话", "员工：冷柜在哪？").endsWith("问题：那冷冻柜呢？跟冷柜比呢");
+    }
+
+    @Test
+    @DisplayName("多个检索词并行检索（#200）：两个检索同时在进行；任一检索失败照原样抛出")
+    void retrievesPlannedQueriesInParallel() {
+        var bothStarted = new java.util.concurrent.CountDownLatch(2);
+        var request = new AnswerService.AskRequest(TENANT, USER, List.of(1L), "那冷冻柜呢？跟冷柜比呢",
+                List.of("冷冻柜温度要求", "冷柜货架位置"), "");
+        var service = new AnswerService(query -> {
+            bothStarted.countDown();
+            try {
+                assertThat(bothStarted.await(5, java.util.concurrent.TimeUnit.SECONDS)).as("另一个检索同时在进行").isTrue();
+            } catch (InterruptedException e) {
+                throw new IllegalStateException(e);
+            }
+            return List.of(SHELF);
+        }, (query, documents) -> List.of(0.9), replying((system, user) -> "在 03 号货架[1]。"), (instructions, question) -> "",
+                new AnsweringProperties(30, 8, 0.3, false, 0.03, Duration.ofSeconds(3)), TestSettings.RETAIL,
+                TestExecutor.VIRTUAL, TestData.none());
+
+        assertThat(service.ask(request, delta -> {
+        }, status -> {
+        }, new java.util.concurrent.CompletableFuture<Void>()).refused()).isFalse();
+
+        var failing = new AnswerService(query -> {
+            if (query.text().contains("冷柜货架")) {
+                throw new EmbeddingUnavailableException("向量化失败", new IllegalStateException());
+            }
+            return List.of(SHELF);
+        }, (query, documents) -> List.of(0.9), replying((system, user) -> "在 03 号货架[1]。"), (instructions, question) -> "",
+                new AnsweringProperties(30, 8, 0.3, false, 0.03, Duration.ofSeconds(3)), TestSettings.RETAIL,
+                TestExecutor.VIRTUAL, TestData.none());
+        assertThatThrownBy(() -> failing.ask(request, delta -> {
+        }, status -> {
+        }, new java.util.concurrent.CompletableFuture<Void>())).isInstanceOf(ModelUnavailableException.class);
     }
 
     @Test

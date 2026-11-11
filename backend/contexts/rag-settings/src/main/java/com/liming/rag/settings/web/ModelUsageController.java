@@ -50,9 +50,8 @@ class ModelUsageController {
     UsageResponse usage(@RequestParam(name = "from", required = false) String from,
             @RequestParam(name = "to", required = false) String to,
             @RequestParam(name = "groupBy", required = false) String groupBy,
-            @RequestParam(name = "page", defaultValue = "1") int page,
-            @RequestParam(name = "size", defaultValue = "20") int size) {
-        return UsageResponse.of(usage.usage(from, to, groupBy, page, size), usage.prices());
+            Paged.Request page) {
+        return UsageResponse.of(usage.usage(from, to, groupBy, page), usage.prices());
     }
 
     @SaCheckPermission(SettingsPermissions.MODEL_UPDATE)

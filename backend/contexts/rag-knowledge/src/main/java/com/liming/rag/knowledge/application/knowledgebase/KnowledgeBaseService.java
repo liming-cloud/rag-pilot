@@ -114,13 +114,13 @@ public class KnowledgeBaseService implements KnowledgeAccess {
      */
     @Transactional(readOnly = true)
     public Paged<KnowledgeBaseSummary> page(TenantId tenantId, UserId actor, @Nullable String keyword,
-            @Nullable String validity, int page, int size) {
+            @Nullable String validity, Paged.Request page) {
         var state = parseValidity(validity);
         if (state == Validity.State.ACTIVE || state == Validity.State.PENDING) {
             throw new KnowledgeException(KnowledgeException.Reason.INVALID, "资料有效期只能按 EXPIRING 或 EXPIRED 筛选");
         }
         return queries.knowledgeBases(tenantId, visibleTo(tenantId, actor), Texts.blankToNull(keyword), state,
-                calendar.window(), new Paged.Request(page, size));
+                calendar.window(), page);
     }
 
     /** 运营概览列出的到期资料份数上限。 */
@@ -148,18 +148,26 @@ public class KnowledgeBaseService implements KnowledgeAccess {
     /** 管理端的知识库详情：库不存在、或操作人不能管理它时一律“不存在”。 */
     @Transactional(readOnly = true)
     public KnowledgeBaseRef manageable(TenantId tenantId, UserId actor, long id) {
-        return ref(getManageable(tenantId, actor, id));
+        return checkManageable(tenantId, actor, id);
     }
 
     /**
      * 管理操作的入口：库不存在、或操作人不能访问它时一律“不存在”，不暴露知识库是否存在。超级管理员能管理本租户全部的库，
-     * 其他人按检索同一个口径判断能不能访问，只查这一个库。
+     * 其他人按检索同一个口径判断能不能访问；只查这一个库本身，不加载成员和角色授权（#200）。
      */
+    public KnowledgeBaseRef checkManageable(TenantId tenantId, UserId actor, long id) {
+        var grantee = visibleTo(tenantId, actor);
+        return queries.manageable(tenantId, grantee, id).orElseThrow(() -> {
+            if (grantee != null) {
+                log.warn("event=access_denied user={} knowledgeBase={}", actor.value(), id);
+            }
+            return notFound();
+        });
+    }
+
+    /** 同 {@link #checkManageable}，并加载整个聚合（含成员和角色授权），给要改授权的操作用。 */
     public KnowledgeBase getManageable(TenantId tenantId, UserId actor, long id) {
-        if (!users.isSuperAdmin(tenantId, actor) && !queries.isAccessible(grantee(tenantId, actor), id)) {
-            log.warn("event=access_denied user={} knowledgeBase={}", actor.value(), id);
-            throw notFound();
-        }
+        checkManageable(tenantId, actor, id);
         return knowledgeBases.find(tenantId, id).orElseThrow(KnowledgeBaseService::notFound);
     }
 
@@ -170,15 +178,15 @@ public class KnowledgeBaseService implements KnowledgeAccess {
      * @param status PARSING、READY、FAILED（不区分大小写），为空不筛
      * @param validity ACTIVE、EXPIRING、EXPIRED、PENDING（不区分大小写），为空不筛
      */
-    public record DocumentFilter(@Nullable String keyword, @Nullable String status, @Nullable String validity, int page,
-            int size) {
+    public record DocumentFilter(@Nullable String keyword, @Nullable String status, @Nullable String validity,
+            Paged.Request page) {
     }
 
     @Transactional(readOnly = true)
     public Paged<DocumentRow> documents(TenantId tenantId, UserId actor, long knowledgeBaseId, DocumentFilter filter) {
-        getManageable(tenantId, actor, knowledgeBaseId);
+        checkManageable(tenantId, actor, knowledgeBaseId);
         return queries.documents(tenantId, knowledgeBaseId, Texts.blankToNull(filter.keyword()), parseStatus(filter.status()),
-                parseValidity(filter.validity()), calendar.window(), new Paged.Request(filter.page(), filter.size()));
+                parseValidity(filter.validity()), calendar.window(), filter.page());
     }
 
     /**
@@ -187,7 +195,7 @@ public class KnowledgeBaseService implements KnowledgeAccess {
      */
     public List<SearchHit> searchIn(TenantId tenantId, UserId actor, long knowledgeBaseId, String question,
             int limit) {
-        getManageable(tenantId, actor, knowledgeBaseId);
+        checkManageable(tenantId, actor, knowledgeBaseId);
         return search.search(new SearchQuery(tenantId, actor, List.of(knowledgeBaseId), question, limit));
     }
 

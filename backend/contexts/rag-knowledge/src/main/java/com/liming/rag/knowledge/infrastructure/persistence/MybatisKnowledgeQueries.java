@@ -20,6 +20,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Repository;
@@ -47,9 +48,11 @@ class MybatisKnowledgeQueries implements KnowledgeQueries {
     }
 
     @Override
-    public boolean isAccessible(Grantee grantee, long knowledgeBaseId) {
-        return members.isAccessible(grantee.tenantId().value(), grantee.userId().value(), grantee.roleIds(),
-                knowledgeBaseId);
+    public Optional<KnowledgeBaseRef> manageable(TenantId tenantId, @Nullable Grantee grantee, long knowledgeBaseId) {
+        boolean all = grantee == null;
+        var row = members.manageable(tenantId.value(), all, all ? null : grantee.userId().value(),
+                all ? List.of() : grantee.roleIds(), knowledgeBaseId);
+        return Optional.ofNullable(row).map(found -> new KnowledgeBaseRef(found.getId(), found.getName()));
     }
 
     @Override

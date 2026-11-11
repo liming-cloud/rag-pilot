@@ -6,15 +6,20 @@ import com.liming.rag.knowledge.application.Grantee;
 
 import static com.liming.rag.knowledge.application.InMemoryKnowledge.TENANT;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.liming.rag.knowledge.api.EmbeddingUnavailableException;
 import com.liming.rag.knowledge.api.SearchHit;
 import com.liming.rag.knowledge.api.SearchQuery;
 import com.liming.rag.shared.UserId;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.core.task.AsyncTaskExecutor;
+import org.springframework.core.task.SimpleAsyncTaskExecutor;
 
 /** 混合检索：向量和关键词两路召回、RRF 融合；授权范围由检索服务自己向 identity 查（D-038），只查当天有效的文档（D-046）。 */
 class HybridSearchServiceTest {
@@ -26,7 +31,7 @@ class HybridSearchServiceTest {
     private final HybridSearchService service = new HybridSearchService(fixture.index, texts -> {
         embedded.add(texts);
         return texts.stream().map(text -> new float[] {1}).toList();
-    }, fixture.users, fixture.calendar);
+    }, fixture.users, fixture.calendar, virtualThreads());
 
     {
         fixture.users.user(2, "店员", 40L, 41L);
@@ -68,6 +73,30 @@ class HybridSearchServiceTest {
     }
 
     @Test
+    @DisplayName("关键词召回不等向量化：与向量化、语义召回并行（#200）；向量化失败照原样抛出")
+    void runsKeywordRouteInParallel() {
+        var parallel = new HybridSearchService(fixture.index, texts -> {
+            try {
+                assertThat(fixture.index.keywordStarted.await(5, TimeUnit.SECONDS)).as("关键词召回已经开始").isTrue();
+            } catch (InterruptedException e) {
+                throw new IllegalStateException(e);
+            }
+            return texts.stream().map(text -> new float[] {1}).toList();
+        }, fixture.users, fixture.calendar, virtualThreads());
+        fixture.index.semantic = List.of(1L);
+        fixture.index.keyword = List.of(2L);
+
+        assertThat(parallel.search(new SearchQuery(TENANT, STAFF, List.of(), "交班", 10)))
+                .extracting(SearchHit::chunkId).containsOnly(1L, 2L);
+
+        var failing = new HybridSearchService(fixture.index, texts -> {
+            throw new EmbeddingUnavailableException("向量化失败", new IllegalStateException());
+        }, fixture.users, fixture.calendar, virtualThreads());
+        assertThatThrownBy(() -> failing.search(new SearchQuery(TENANT, STAFF, List.of(), "交班", 10)))
+                .isInstanceOf(EmbeddingUnavailableException.class);
+    }
+
+    @Test
     @DisplayName("返回条数限制在 1 到 50 之间")
     void clampsLimit() {
         fixture.index.semantic = List.of(1L, 2L, 3L);
@@ -85,5 +114,11 @@ class HybridSearchServiceTest {
         fixture.index.contents.put(1L, "原文一");
         assertThat(service.excerpts(TENANT, STAFF, Set.of(1L, 2L))).containsOnlyKeys(1L).containsValue("原文一");
         assertThat(fixture.index.grantee).isEqualTo(new Grantee(TENANT, STAFF, List.of(40L, 41L)));
+    }
+
+    private static AsyncTaskExecutor virtualThreads() {
+        var executor = new SimpleAsyncTaskExecutor("test-");
+        executor.setVirtualThreads(true);
+        return executor;
     }
 }

@@ -209,6 +209,27 @@ class KnowledgeGapTests {
     }
 
     @Test
+    @DisplayName("运营概览的缺口 Top 只用已存的向量：不调嵌入模型、不写库，没有向量的按原文归类（#200、D-067）")
+    @SuppressWarnings("unchecked")
+    void overviewUsesStoredVectorsOnly() throws InterruptedException {
+        long stored = refuse("门店几点打烊");
+        waitForVector(stored);
+        long legacy = refuse("晚上几点关门");
+        waitForVector(legacy);
+        jdbc.update("UPDATE answer_record SET question_embedding = NULL WHERE id = ?", legacy);
+        var before = jdbc.queryForList("SELECT id, question_embedding::text AS v FROM answer_record ORDER BY id");
+        clearInvocations(embeddings);
+
+        var stats = http.getForObject("/api/answers/stats?days=7", Map.class);
+
+        verifyNoInteractions(embeddings);
+        assertThat(jdbc.queryForList("SELECT id, question_embedding::text AS v FROM answer_record ORDER BY id"))
+                .isEqualTo(before);
+        assertThat((List<Map<String, Object>>) stats.get("topGaps")).extracting(gap -> gap.get("question"))
+                .containsExactlyInAnyOrder("门店几点打烊", "晚上几点关门");
+    }
+
+    @Test
     @DisplayName("嵌入模型不可用时退回按原文分组（去掉标点空格后相同的才合并），并标出来")
     @SuppressWarnings("unchecked")
     void fallsBackToText() {

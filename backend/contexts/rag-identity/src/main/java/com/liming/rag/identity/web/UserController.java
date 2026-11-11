@@ -9,6 +9,7 @@ import com.liming.rag.identity.api.CurrentUser;
 import com.liming.rag.identity.api.IdentityPermissions;
 import com.liming.rag.identity.application.account.AccountAdminService;
 import com.liming.rag.identity.application.account.AccountImportService;
+import com.liming.rag.shared.Paged;
 import com.liming.rag.shared.UserId;
 import java.util.List;
 import org.springframework.http.HttpStatus;
@@ -65,12 +66,11 @@ class UserController {
     /** 按关键词、角色、状态（enabled、disabled、locked）筛选，分页（D-039）。 */
     @SaCheckPermission(IdentityPermissions.USER_VIEW)
     @GetMapping
-    PageView<UserView> list(@RequestParam(name = "keyword", required = false) String keyword,
+    Paged<UserView> list(@RequestParam(name = "keyword", required = false) String keyword,
             @RequestParam(name = "roleId", required = false) Long roleId,
             @RequestParam(name = "status", required = false) String status,
-            @RequestParam(name = "page", defaultValue = "1") int page,
-            @RequestParam(name = "size", defaultValue = "20") int size) {
-        return PageView.of(accounts.page(currentUser.tenantId(), keyword, roleId, status, page, size), UserView::of);
+            Paged.Request page) {
+        return accounts.page(currentUser.tenantId(), keyword, roleId, status, page).map(UserView::of);
     }
 
     @SaCheckPermission(IdentityPermissions.USER_CREATE)

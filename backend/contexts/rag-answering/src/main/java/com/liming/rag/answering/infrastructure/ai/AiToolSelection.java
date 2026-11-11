@@ -1,8 +1,6 @@
 package com.liming.rag.answering.infrastructure.ai;
 
 import com.liming.rag.ai.TextGeneration;
-import com.liming.rag.ai.common.ModelCallException;
-import com.liming.rag.answering.application.ModelUnavailableException;
 import com.liming.rag.answering.application.ask.ToolChoice;
 import com.liming.rag.answering.application.ask.ToolSelection;
 import java.util.LinkedHashMap;
@@ -35,13 +33,8 @@ class AiToolSelection implements ToolSelection {
 
     @Override
     public Optional<ToolChoice> select(String systemPrompt, String userMessage) {
-        String raw;
-        try {
-            raw = generation.complete(systemPrompt, userMessage, new TextGeneration.Limits(MAX_TOKENS, List.of()));
-        } catch (ModelCallException e) {
-            throw new ModelUnavailableException(e.getMessage(), e);
-        }
-        return parse(raw);
+        return parse(ModelCalls.call(() -> generation.complete(systemPrompt, userMessage,
+                new TextGeneration.Limits(MAX_TOKENS, List.of()))));
     }
 
     static Optional<ToolChoice> parse(String raw) {

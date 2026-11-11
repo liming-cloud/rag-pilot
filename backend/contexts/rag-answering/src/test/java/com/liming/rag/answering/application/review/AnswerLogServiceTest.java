@@ -102,7 +102,7 @@ class AnswerLogServiceTest {
         fixture.reviews.rows = List.of(new AnswerReview(5, 7, null, "青柚在哪？", "x", true, "NO_EVIDENCE", null, null,
                 null, OffsetDateTime.now(), List.of(), null, AnswerRecord.ReviewStatus.OPEN, null, null));
 
-        var page = service.review(TENANT, "refused", "Open", 7, "  青柚 ", 2, 10);
+        var page = service.review(TENANT, "refused", "Open", 7, "  青柚 ", new Paged.Request(2, 10));
 
         assertThat(page.items()).extracting(AnswerReview::askerName).containsExactly("店员小王");
         var query = fixture.reviews.query;
@@ -112,12 +112,12 @@ class AnswerLogServiceTest {
         assertThat(query.since()).isEqualTo(LocalDate.now(ZONE).minusDays(6).atStartOfDay(ZONE).toOffsetDateTime());
         assertThat(query.page()).isEqualTo(new Paged.Request(2, 10));
 
-        service.review(TENANT, "all", "all", null, null, 1, 20);
+        service.review(TENANT, "all", "all", null, null, new Paged.Request(1, 20));
         assertThat(fixture.reviews.query.since()).isNull();
-        assertReason(() -> service.review(TENANT, "liked", "all", null, null, 1, 20), AnsweringException.Reason.INVALID);
-        assertReason(() -> service.review(TENANT, "all", "done", null, null, 1, 20), AnsweringException.Reason.INVALID);
-        assertReason(() -> service.review(TENANT, "all", "all", 0, null, 1, 20), AnsweringException.Reason.INVALID);
-        assertReason(() -> service.review(TENANT, "all", "all", 91, null, 1, 20), AnsweringException.Reason.INVALID);
+        assertReason(() -> service.review(TENANT, "liked", "all", null, null, new Paged.Request(1, 20)), AnsweringException.Reason.INVALID);
+        assertReason(() -> service.review(TENANT, "all", "done", null, null, new Paged.Request(1, 20)), AnsweringException.Reason.INVALID);
+        assertReason(() -> service.review(TENANT, "all", "all", 0, null, new Paged.Request(1, 20)), AnsweringException.Reason.INVALID);
+        assertReason(() -> service.review(TENANT, "all", "all", 91, null, new Paged.Request(1, 20)), AnsweringException.Reason.INVALID);
     }
 
     private static AskResult refused() {

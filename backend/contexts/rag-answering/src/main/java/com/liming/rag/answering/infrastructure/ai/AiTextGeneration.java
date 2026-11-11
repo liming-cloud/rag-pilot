@@ -2,7 +2,6 @@ package com.liming.rag.answering.infrastructure.ai;
 
 import com.liming.rag.ai.TextGeneration;
 import com.liming.rag.ai.common.ModelCallException;
-import com.liming.rag.answering.application.ModelUnavailableException;
 import com.liming.rag.answering.application.ask.AnswerGeneration;
 import com.liming.rag.answering.application.conversation.FollowUpPlanning;
 import com.liming.rag.answering.application.conversation.LightReplies;
@@ -25,11 +24,7 @@ class AiTextGeneration implements AnswerGeneration, FollowUpPlanning, LightRepli
 
     @Override
     public String stream(String systemPrompt, String userMessage, Consumer<String> onDelta, CompletionStage<?> stop) {
-        try {
-            return generation.stream(systemPrompt, userMessage, onDelta, stop);
-        } catch (ModelCallException e) {
-            throw new ModelUnavailableException(e.getMessage(), e);
-        }
+        return ModelCalls.call(() -> generation.stream(systemPrompt, userMessage, onDelta, stop));
     }
 
     @Override
@@ -44,10 +39,6 @@ class AiTextGeneration implements AnswerGeneration, FollowUpPlanning, LightRepli
     }
 
     private String complete(String systemPrompt, String userMessage, TextGeneration.Limits limits) {
-        try {
-            return generation.complete(systemPrompt, userMessage, limits);
-        } catch (ModelCallException e) {
-            throw new ModelUnavailableException(e.getMessage(), e);
-        }
+        return ModelCalls.call(() -> generation.complete(systemPrompt, userMessage, limits));
     }
 }

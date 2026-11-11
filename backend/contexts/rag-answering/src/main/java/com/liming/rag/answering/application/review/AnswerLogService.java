@@ -64,7 +64,7 @@ public class AnswerLogService {
      */
     @Transactional(readOnly = true)
     public Paged<AnswerReview> review(TenantId tenantId, String filter, String status, @Nullable Integer days,
-            @Nullable String keyword, int page, int size) {
+            @Nullable String keyword, Paged.Request page) {
         var parsedFilter = parse(AnswerReview.Filter.class, filter, "查看范围只能是 disliked、refused 或 all");
         var parsedStatus = parse(AnswerReview.Status.class, status, "处理状态只能是 open、resolved 或 all");
         if (days != null && (days < 1 || days > MAX_STATS_DAYS)) {
@@ -74,8 +74,7 @@ public class AnswerLogService {
         var since = days == null ? null
                 : LocalDate.now(clock.withZone(zone)).minusDays(days - 1L).atStartOfDay(zone).toOffsetDateTime();
         var trimmed = Texts.blankToNull(keyword);
-        var found = reviews.page(tenantId, new AnswerReview.Query(parsedFilter, parsedStatus, since, trimmed,
-                new Paged.Request(page, size)));
+        var found = reviews.page(tenantId, new AnswerReview.Query(parsedFilter, parsedStatus, since, trimmed, page));
         var names = users.summaries(tenantId, found.items().stream().map(AnswerReview::userId).distinct().toList());
         return found.map(review -> {
             var asker = names.get(review.userId());

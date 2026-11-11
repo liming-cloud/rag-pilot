@@ -81,7 +81,7 @@ public class DocumentIngestionService {
         long knowledgeBaseId = upload.knowledgeBaseId();
         var filename = upload.filename();
         var replacesDocumentId = upload.replacesDocumentId();
-        var knowledgeBase = knowledgeBases.getManageable(tenantId, actor, knowledgeBaseId);
+        var knowledgeBase = knowledgeBases.checkManageable(tenantId, actor, knowledgeBaseId);
         var previous = replacesDocumentId == null ? null : inKnowledgeBase(tenantId, knowledgeBaseId,
                 replacesDocumentId, "要替换的文档不存在");
         var inheritedExpiry = previous == null ? null : previous.validity().expiresOn();
@@ -123,7 +123,7 @@ public class DocumentIngestionService {
      */
     @Transactional
     public DocumentRow reprocess(TenantId tenantId, UserId actor, long knowledgeBaseId, long documentId) {
-        knowledgeBases.getManageable(tenantId, actor, knowledgeBaseId);
+        knowledgeBases.checkManageable(tenantId, actor, knowledgeBaseId);
         var document = inKnowledgeBase(tenantId, knowledgeBaseId, documentId, "文档不存在");
         if (!document.reprocessable()) {
             throw new KnowledgeException(KnowledgeException.Reason.CONFLICT,
@@ -142,7 +142,7 @@ public class DocumentIngestionService {
      */
     @Transactional
     public void delete(TenantId tenantId, UserId actor, long knowledgeBaseId, long documentId) {
-        var knowledgeBase = knowledgeBases.getManageable(tenantId, actor, knowledgeBaseId);
+        var knowledgeBase = knowledgeBases.checkManageable(tenantId, actor, knowledgeBaseId);
         var document = inKnowledgeBase(tenantId, knowledgeBaseId, documentId, "文档不存在");
         if (!remover.remove(tenantId, documentId)) {
             throw new KnowledgeException(KnowledgeException.Reason.NOT_FOUND, "文档不存在");
@@ -159,7 +159,7 @@ public class DocumentIngestionService {
     @Transactional
     public DocumentRow changeValidity(TenantId tenantId, UserId actor, long knowledgeBaseId, long documentId,
             String effectiveFrom, String expiresOn) {
-        knowledgeBases.getManageable(tenantId, actor, knowledgeBaseId);
+        knowledgeBases.checkManageable(tenantId, actor, knowledgeBaseId);
         var document = inKnowledgeBase(tenantId, knowledgeBaseId, documentId, "文档不存在");
         document.changeValidity(new Validity(date(effectiveFrom, null), date(expiresOn, null)));
         save(document);

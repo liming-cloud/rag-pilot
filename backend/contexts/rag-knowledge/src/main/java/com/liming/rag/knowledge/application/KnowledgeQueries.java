@@ -12,6 +12,7 @@ import java.time.OffsetDateTime;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import org.jspecify.annotations.Nullable;
 
 /** 只读查询端口（D-039）：管理端列表的分页、筛选和统计，以及可访问的库、库名，都不加载聚合。 */
@@ -22,8 +23,11 @@ public interface KnowledgeQueries {
      */
     List<KnowledgeBaseRef> accessible(Grantee grantee);
 
-    /** 这个库是否授权给了他本人或其角色，口径同 {@link #accessible}。 */
-    boolean isAccessible(Grantee grantee, long knowledgeBaseId);
+    /**
+     * 能管理的这个库，只查库本身（不含成员和角色授权）。grantee 为 null（超级管理员）时本租户的库都算，否则口径同
+     * {@link #accessible}；库不存在或没授权时为空。
+     */
+    Optional<KnowledgeBaseRef> manageable(TenantId tenantId, @Nullable Grantee grantee, long knowledgeBaseId);
 
     /** 本租户里这些文档的上传时间和失效日期是否早于 {@code today}，不检查授权；不存在的 id 不返回。 */
     Map<Long, DocumentFreshness> freshness(TenantId tenantId, Collection<Long> documentIds, LocalDate today);
