@@ -402,7 +402,8 @@ class EvaluationRun {
         }
         files.forEach((filename, bytes) -> upload(knowledgeBaseId, filename, bytes));
         if (!files.isEmpty()) {
-            var failed = awaitAllProcessed(knowledgeBaseId, files.size());
+            long bytes = files.values().stream().mapToLong(content -> content.length).sum();
+            var failed = awaitAllProcessed(knowledgeBaseId, files.size(), bytes);
             if (!failed.isEmpty()) {
                 // 嵌入模型偶尔整段不可用，入库内部的重试也躲不过；隔一会儿删掉重传一次。
                 System.out.println("::warning title=入库失败::" + failed.size() + " 篇，30 秒后重传：" + failed.values());
@@ -411,7 +412,7 @@ class EvaluationRun {
                     http.delete("/api/knowledge-bases/{id}/documents/{documentId}", knowledgeBaseId, id);
                     upload(knowledgeBaseId, failure.filename(), files.get(failure.filename()));
                 });
-                failed = awaitAllProcessed(knowledgeBaseId, files.size());
+                failed = awaitAllProcessed(knowledgeBaseId, files.size(), bytes);
             }
             var messages = failed.values().stream().map(FailedDocument::toString).toList();
             assertThat((double) failed.size() / files.size()).as("重传后仍入库失败的文档超过 1%：" + messages)
@@ -443,12 +444,12 @@ class EvaluationRun {
     }
 
     /**
-     * 每篇给 3 秒、至少 90 秒，等全部文档离开“解析中”。
+     * 每篇给 3 秒、每 MB 再给 60 秒（客户的大表格一份就有几千块），至少 90 秒，等全部文档离开“解析中”。
      *
      * @return 入库失败的文档：文档 id → 文件名和原因
      */
-    private Map<Long, FailedDocument> awaitAllProcessed(long knowledgeBaseId, int count) {
-        var timeout = Duration.ofSeconds(Math.max(90, 3L * count));
+    private Map<Long, FailedDocument> awaitAllProcessed(long knowledgeBaseId, int count, long bytes) {
+        var timeout = Duration.ofSeconds(Math.max(90, 3L * count + 60L * bytes / (1024 * 1024)));
         long deadline = System.nanoTime() + timeout.toNanos();
         long started = System.nanoTime();
         while (System.nanoTime() < deadline) {

@@ -21,4 +21,4 @@ done
 
 info "构建版本 $version 的 app、web 镜像（第一次会拉 JRE、Nginx 基础镜像）"
 compose build app web
-info "镜像已就绪：rag-pilot-app:$version、rag-pilot-web:$version"
+info "镜像已就绪：rag-pilot-app:${version}、rag-pilot-web:$version"

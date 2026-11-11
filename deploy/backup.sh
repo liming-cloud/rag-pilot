@@ -39,6 +39,6 @@ chmod 600 "$target"/*
 
 trap - EXIT
 restart_app
-info "备份完成：$target（版本 $version）"
+info "备份完成：${target}（版本 ${version}）"
 # 最后一行只输出备份目录，供 upgrade.sh 等调用方取用。
 echo "$target"
