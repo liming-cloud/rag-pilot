@@ -2,6 +2,7 @@ import { SearchX, X } from "lucide-react";
 import { lazy, Suspense, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { formatDateTime } from "@/lib/utils";
 import { DataSourceDetail, DataSourceItem } from "./DataSource";
 import { FeedbackBar } from "./FeedbackBar";
 import { type Answer, type Citation, type DataCitation, reportCitationOpened } from "./api";
@@ -16,7 +17,7 @@ export type RefusalHelp = { tips: string[]; contact: string };
 function DocumentFreshness({ citation }: { citation: Citation }) {
   return (
     <span className="inline-flex items-center gap-1">
-      {citation.documentUpdatedAt && <span>更新于 {citation.documentUpdatedAt.slice(0, 10)}</span>}
+      {citation.documentUpdatedAt && <span>更新于 {formatDateTime(citation.documentUpdatedAt)}</span>}
       {citation.documentState === "EXPIRED" && <Badge variant="destructive">已过失效日期</Badge>}
       {citation.documentState === "REPLACED" && <Badge variant="outline">已有新版本</Badge>}
     </span>

@@ -84,6 +84,15 @@ services:
       RAG_EMBEDDING_PROVIDER: ${RAG_EMBEDDING_PROVIDER:-openai}
       RAG_RERANK_PROVIDER: ${RAG_RERANK_PROVIDER:-openai}
       RAG_CHAT_PROVIDER: ${RAG_CHAT_PROVIDER:-openai}
+      # 各用途的默认模型名（与 application.yml 的默认值一致）：嵌入模型只能在这里改（管理端不可改，D-043），
+      # 对话、重排模型在管理端“模型管理”里改过的以管理端为准。
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-BAAI/bge-m3}
+      RERANK_MODEL: ${RERANK_MODEL:-BAAI/bge-reranker-v2-m3}
+      CHAT_MODEL: ${CHAT_MODEL:-deepseek-ai/DeepSeek-V3}
+      CHAT_HEDGE_MODEL: ${CHAT_HEDGE_MODEL:-deepseek-ai/DeepSeek-V4.1-Flash}
+      CHAT_LIGHT_MODEL: ${CHAT_LIGHT_MODEL:-Qwen/Qwen2.5-7B-Instruct}
+      # 后台同时向量化的文档数；嵌入服务限流时调小。
+      RAG_INGESTION_CONCURRENCY: ${RAG_INGESTION_CONCURRENCY:-2}
       RAG_ADMIN_USERNAME: ${RAG_ADMIN_USERNAME:-admin}
       RAG_ADMIN_PASSWORD: ${RAG_ADMIN_PASSWORD:-}
       RAG_ADMIN_RESET_PASSWORD: ${RAG_ADMIN_RESET_PASSWORD:-}

@@ -6,6 +6,7 @@ import { Pagination } from "@/components/ui/pagination";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ErrorMessage } from "@/lib/errors";
 import { usePagedFilter } from "@/lib/paging";
+import { formatDateTime } from "@/lib/utils";
 import { AUDIT_ACTIONS, AUDIT_RANGES, AUDIT_TARGETS, type AuditFilter, auditKeys, type AuditRange, fetchAuditLogs } from "./api";
 
 /**
@@ -73,7 +74,7 @@ export function AuditPage() {
               {logs.data.items.map((record) => (
                 <TableRow key={record.id}>
                   <TableCell className="whitespace-nowrap text-muted-foreground">
-                    {new Date(record.occurredAt).toLocaleString("zh-CN", { hour12: false })}
+                    {formatDateTime(record.occurredAt)}
                   </TableCell>
                   <TableCell>{record.actorName ?? `已删除的账号 #${record.actorId}`}</TableCell>
                   <TableCell className="whitespace-nowrap">{AUDIT_ACTIONS[record.action] ?? record.action}</TableCell>
