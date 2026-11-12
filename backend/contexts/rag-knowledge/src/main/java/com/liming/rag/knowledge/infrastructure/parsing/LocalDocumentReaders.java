@@ -9,6 +9,8 @@ import java.nio.charset.CharacterCodingException;
 import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
@@ -19,11 +21,19 @@ import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.encryption.InvalidPasswordException;
 import org.apache.pdfbox.text.PDFTextStripper;
 import org.apache.poi.EncryptedDocumentException;
+import org.apache.poi.sl.usermodel.Placeholder;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.DataFormatter;
 import org.apache.poi.ss.usermodel.FormulaEvaluator;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.WorkbookFactory;
+import org.apache.poi.xslf.usermodel.XMLSlideShow;
+import org.apache.poi.xslf.usermodel.XSLFGroupShape;
+import org.apache.poi.xslf.usermodel.XSLFNotes;
+import org.apache.poi.xslf.usermodel.XSLFShape;
+import org.apache.poi.xslf.usermodel.XSLFSlide;
+import org.apache.poi.xslf.usermodel.XSLFTable;
+import org.apache.poi.xslf.usermodel.XSLFTextShape;
 import org.apache.poi.xwpf.usermodel.XWPFDocument;
 import org.apache.poi.xwpf.usermodel.XWPFParagraph;
 import org.apache.poi.xwpf.usermodel.XWPFTable;
@@ -31,10 +41,11 @@ import org.apache.poi.xwpf.usermodel.XWPFTableCell;
 import org.springframework.stereotype.Component;
 
 /**
- * 本地读取 TXT / Markdown（UTF-8）、PDF（PDFBox）、Word .docx 和 Excel .xlsx / .xls（POI），不调用外部服务。
+ * 本地读取 TXT / Markdown（UTF-8）、PDF（PDFBox）、Word .docx、Excel .xlsx / .xls 和 PowerPoint .pptx（POI），不调用外部服务。
  *
  * <p>Word 的标题样式转成 Markdown 标题；表格第一行当表头，其余每行转成“表头：值；表头：值”，
  * 一行一条，检索时每条都带着列名。Excel 每个可见工作表一节，规则同 Word 表格，单元格按 Excel 里显示的样子输出。
+ * PowerPoint 每页一节，页标题当章节标题（没有标题用页码），正文、表格和备注跟在后面；只有图片的页不输出。
  * PDF 没有可靠的标题信息，只按阅读顺序提取文字。
  */
 @Component
@@ -45,7 +56,10 @@ final class LocalDocumentReaders implements DocumentReaders {
     /** 少于这么多可见字符，基本可以判断是扫描件或图片。 */
     private static final int MIN_PDF_CHARS = 20;
 
-    private static final Set<String> EXTENSIONS = Set.of("txt", "md", "markdown", "pdf", "docx", "xlsx", "xls");
+    private static final Set<String> EXTENSIONS = Set.of("txt", "md", "markdown", "pdf", "docx", "xlsx", "xls", "pptx");
+    /** 幻灯片上不当正文的占位符：标题单独作章节标题，页码、日期、页脚每页重复。 */
+    private static final Set<Placeholder> NOT_BODY = EnumSet.of(Placeholder.TITLE, Placeholder.CENTERED_TITLE,
+            Placeholder.SLIDE_NUMBER, Placeholder.DATETIME, Placeholder.FOOTER);
 
     @Override
     public boolean supports(String extension) {
@@ -63,6 +77,7 @@ final class LocalDocumentReaders implements DocumentReaders {
             case "pdf" -> pdf(content);
             case "docx" -> word(content);
             case "xlsx", "xls" -> excel(content);
+            case "pptx" -> powerPoint(content);
             default -> utf8(content);
         };
         if (text.isBlank()) {
@@ -138,6 +153,77 @@ final class LocalDocumentReaders implements DocumentReaders {
         } catch (IOException | RuntimeException e) {
             throw new DocumentParseException("文件已损坏或不是有效的 Excel 文件（.xlsx / .xls）", e);
         }
+    }
+
+    private static String powerPoint(byte[] content) {
+        try (var show = new XMLSlideShow(new ByteArrayInputStream(content))) {
+            var text = new StringBuilder();
+            var slides = show.getSlides();
+            for (int i = 0; i < slides.size(); i++) {
+                slide(slides.get(i), i + 1, text);
+            }
+            return text.toString();
+        } catch (IOException | RuntimeException e) {
+            throw new DocumentParseException("文件已损坏或不是有效的 PowerPoint 文件（.pptx）；旧版 .ppt 请先另存为 .pptx", e);
+        }
+    }
+
+    /** 一页一节：标题当章节标题，没有标题用页码；没有文字的页（只有图片）不输出，免得产生空分块。 */
+    private static void slide(XSLFSlide slide, int number, StringBuilder text) {
+        var body = new StringBuilder();
+        shapes(slide.getShapes(), body);
+        notes(slide.getNotes(), body);
+        var title = title(slide);
+        if (body.isEmpty() && title.isEmpty()) {
+            return;
+        }
+        text.append("\n## ").append(title.isEmpty() ? "第 " + number + " 页" : title).append('\n').append(body);
+    }
+
+    /** 页标题；POI 的 {@code getTitle()} 不认封面页常用的居中标题，这里两种都认。 */
+    private static String title(XSLFSlide slide) {
+        return Arrays.stream(slide.getPlaceholders())
+                .filter(shape -> shape.getTextType() == Placeholder.TITLE
+                        || shape.getTextType() == Placeholder.CENTERED_TITLE)
+                .map(shape -> singleLine(shape.getText()))
+                .filter(line -> !line.isEmpty())
+                .findFirst()
+                .orElse("");
+    }
+
+    private static void shapes(List<XSLFShape> shapes, StringBuilder text) {
+        for (var shape : shapes) {
+            if (shape instanceof XSLFTable table) {
+                rows(table.getRows().stream()
+                        .map(row -> row.getCells().stream().map(cell -> singleLine(cell.getText())).toList())
+                        .toList(), text);
+            } else if (shape instanceof XSLFGroupShape group) {
+                shapes(group.getShapes(), text);
+            } else if (shape instanceof XSLFTextShape textShape && !NOT_BODY.contains(textShape.getTextType())) {
+                lines(textShape.getText(), text);
+            }
+        }
+    }
+
+    private static void notes(XSLFNotes notes, StringBuilder text) {
+        if (notes == null) {
+            return;
+        }
+        for (var shape : notes.getPlaceholders()) {
+            var line = shape.getText().strip();
+            if (shape.getTextType() == Placeholder.BODY && !line.isEmpty()) {
+                text.append("备注：").append(line).append('\n');
+            }
+        }
+    }
+
+    private static void lines(String content, StringBuilder text) {
+        content.lines().map(String::strip).filter(line -> !line.isEmpty())
+                .forEach(line -> text.append(line).append('\n'));
+    }
+
+    private static String singleLine(String content) {
+        return content.replaceAll("\\s+", " ").strip();
     }
 
     /** 工作表里有内容的行，每格换成单行文字。 */

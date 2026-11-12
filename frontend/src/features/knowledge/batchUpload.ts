@@ -1,8 +1,10 @@
 import { ApiError } from "@/lib/api";
 
 /** 支持的格式，与后端一致；选文件夹时不支持的文件在前端直接归为“不支持”，不发请求。 */
-export const ACCEPT = ".pdf,.docx,.xlsx,.xls,.txt,.md,.markdown";
-const SUPPORTED = /\.(pdf|docx|xlsx|xls|txt|md|markdown)$/i;
+export const ACCEPT = ".pdf,.docx,.xlsx,.xls,.pptx,.txt,.md,.markdown";
+const SUPPORTED = /\.(pdf|docx|xlsx|xls|pptx|txt|md|markdown)$/i;
+/** 单个文件上限，与后端一致；超限的请求会先被 Nginx 或 multipart 拦下，后端的提示到不了页面，所以在前端先判断。 */
+const MAX_FILE_BYTES = 50 * 1024 * 1024;
 
 /** 同时上传的文件数：后端每个文件都要调嵌入模型，并发太多容易被服务商限流（#124）。 */
 export const CONCURRENCY = 3;
@@ -23,15 +25,18 @@ function isSystemFile(file: File) {
 }
 
 function unsupportedReason(file: File) {
-  return /\.doc$/i.test(file.name) ? "旧版 .doc 请先另存为 .docx" : "格式不支持";
+  if (/\.doc$/i.test(file.name)) return "旧版 .doc 请先另存为 .docx";
+  if (/\.ppt$/i.test(file.name)) return "旧版 .ppt 请先另存为 .pptx";
+  if (isSupported(file)) return "单个文件不能超过 50 MB；课件可先压缩图片或另存为 PDF";
+  return "格式不支持";
 }
 
-/** 新的一批：跳过系统文件，不支持的格式直接标出来，其余等待上传。 */
+/** 新的一批：跳过系统文件，不支持的格式和超过上限的文件直接标出来，其余等待上传。 */
 export function prepare(files: File[], seed = Date.now()): BatchItem[] {
   return files
     .filter((file) => !isSystemFile(file))
     .map((file, index) =>
-      isSupported(file)
+      isSupported(file) && file.size <= MAX_FILE_BYTES
         ? { key: `${seed}-${index}`, file, outcome: "pending", message: null }
         : { key: `${seed}-${index}`, file, outcome: "unsupported", message: unsupportedReason(file) },
     );

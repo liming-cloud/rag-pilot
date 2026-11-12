@@ -20,7 +20,7 @@
 
 ## 私有评测集（客户真实资料）
 
-客户的资料和问题不进本仓库。把它们放在仓库外的目录里，结构与这里相同（`corpus/restricted/` 可以没有；语料可以是 PDF、Word、Excel、TXT、Markdown），运行评测时用 `EVAL_DATA_DIR` 指过去：
+客户的资料和问题不进本仓库。把它们放在仓库外的目录里，结构与这里相同（`corpus/restricted/` 可以没有；语料可以是 PDF、Word、Excel、PowerPoint（.pptx）、TXT、Markdown），运行评测时用 `EVAL_DATA_DIR` 指过去：
 
 ```sh
 MODEL_API_KEY=... EVAL_DATA_DIR=/path/to/private-eval ./mvnw verify -pl backend/boot/rag-app -am \

@@ -17,7 +17,11 @@ import org.apache.pdfbox.pdmodel.encryption.StandardProtectionPolicy;
 import org.apache.pdfbox.pdmodel.font.PDType1Font;
 import org.apache.pdfbox.pdmodel.font.Standard14Fonts;
 import org.apache.poi.hssf.usermodel.HSSFWorkbook;
+import org.apache.poi.sl.usermodel.PictureData;
+import org.apache.poi.sl.usermodel.Placeholder;
 import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.xslf.usermodel.SlideLayout;
+import org.apache.poi.xslf.usermodel.XMLSlideShow;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.apache.poi.xwpf.usermodel.XWPFDocument;
 import org.junit.jupiter.api.DisplayName;
@@ -83,10 +87,29 @@ class LocalDocumentReadersTest {
     }
 
     @Test
+    @DisplayName("PowerPoint：每页标题成为章节，正文、表格（“表头：值”）和备注按页输出；只有图片的页不输出（#217）")
+    void readsPowerPoint() throws IOException {
+        var text = text("新员工培训.pptx", slides());
+
+        assertThat(text).contains("## 新员工培训\n门店运营部\n")
+                .contains("## 收银交班\n交班时清点备用金。\n两人核对后签字。\n备注：讲到这里演示一次点钞。\n")
+                .contains("## 冷柜陈列\n商品：青柚气泡水；货架：A-03\n")
+                .contains("## 第 5 页\n没有标题的页按页码命名。\n")
+                .doesNotContain("第 4 页");
+        assertThat(text.indexOf("## 收银交班")).isLessThan(text.indexOf("## 冷柜陈列"));
+        assertThatThrownBy(() -> text("损坏.pptx", "not a pptx".getBytes(StandardCharsets.UTF_8)))
+                .isInstanceOf(DocumentParseException.class).hasMessageContaining("损坏").hasMessageContaining(".ppt");
+        assertThatThrownBy(() -> text("全是图片.pptx", pictureOnlySlides()))
+                .isInstanceOf(DocumentParseException.class).hasMessageContaining("没有可检索的文字");
+    }
+
+    @Test
     @DisplayName("不支持的类型、没有扩展名直接拒绝；扩展名不分大小写（#145 C8）")
     void rejectsUnsupportedTypes() {
         assertThat(readers.supports("docx")).isTrue();
+        assertThat(readers.supports("pptx")).isTrue();
         assertThat(readers.supports("doc")).isFalse();
+        assertThat(readers.supports("ppt")).isFalse();
         assertThatThrownBy(() -> text("旧版.doc", new byte[] {1})).isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> text("没有扩展名", new byte[] {1})).isInstanceOf(IllegalArgumentException.class);
         assertThat(text("规范.MD", "# 收银".getBytes(StandardCharsets.UTF_8))).isEqualTo("# 收银");
@@ -188,6 +211,48 @@ class LocalDocumentReadersTest {
             workbook.write(out);
             return out.toByteArray();
         }
+    }
+
+    /** 合成课件：标题页、正文页（带备注）、表格页、只有图片的页、没有标题的页。 */
+    private static byte[] slides() throws IOException {
+        try (var show = new XMLSlideShow(); var out = new ByteArrayOutputStream()) {
+            var master = show.getSlideMasters().getFirst();
+            var cover = show.createSlide(master.getLayout(SlideLayout.TITLE));
+            cover.getPlaceholder(0).setText("新员工培训");
+            cover.getPlaceholder(1).setText("门店运营部");
+            var body = show.createSlide(master.getLayout(SlideLayout.TITLE_AND_CONTENT));
+            body.getPlaceholder(0).setText("收银交班");
+            body.getPlaceholder(1).setText("交班时清点备用金。\n两人核对后签字。");
+            java.util.Arrays.stream(show.getNotesSlide(body).getPlaceholders())
+                    .filter(shape -> shape.getTextType() == Placeholder.BODY)
+                    .forEach(shape -> shape.setText("讲到这里演示一次点钞。"));
+            var tablePage = show.createSlide(master.getLayout(SlideLayout.TITLE_ONLY));
+            tablePage.getPlaceholder(0).setText("冷柜陈列");
+            var table = tablePage.createTable(2, 2);
+            table.getCell(0, 0).setText("商品");
+            table.getCell(0, 1).setText("货架");
+            table.getCell(1, 0).setText("青柚气泡水");
+            table.getCell(1, 1).setText("A-03");
+            show.createSlide().createPicture(show.addPicture(png(), PictureData.PictureType.PNG));
+            show.createSlide().createTextBox().setText("没有标题的页按页码命名。");
+            show.write(out);
+            return out.toByteArray();
+        }
+    }
+
+    private static byte[] pictureOnlySlides() throws IOException {
+        try (var show = new XMLSlideShow(); var out = new ByteArrayOutputStream()) {
+            show.createSlide().createPicture(show.addPicture(png(), PictureData.PictureType.PNG));
+            show.write(out);
+            return out.toByteArray();
+        }
+    }
+
+    private static byte[] png() throws IOException {
+        var out = new ByteArrayOutputStream();
+        javax.imageio.ImageIO.write(new java.awt.image.BufferedImage(1, 1, java.awt.image.BufferedImage.TYPE_INT_RGB),
+                "png", out);
+        return out.toByteArray();
     }
 
     private String text(String filename, byte[] content) {

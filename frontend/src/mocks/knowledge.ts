@@ -71,11 +71,11 @@ export const accessibleKnowledgeBaseIds = () =>
 
 async function upload(knowledgeBaseId: number, request: Request, replacesDocumentId: number | null) {
   const file = await uploadedFile(request);
-  if (!/\.(txt|md|markdown|pdf|docx|xlsx|xls)$/i.test(file.name)) {
+  if (!/\.(txt|md|markdown|pdf|docx|xlsx|xls|pptx)$/i.test(file.name)) {
     return problem(
       415,
       "KNOWLEDGE_UNSUPPORTED_TYPE",
-      "目前支持 PDF、Word（.docx）、Excel（.xlsx / .xls）、TXT 和 Markdown；旧版 .doc 请先另存为 .docx",
+      "目前支持 PDF、Word（.docx）、Excel（.xlsx / .xls）、PowerPoint（.pptx）、TXT 和 Markdown；旧版 .doc、.ppt 请先另存为 .docx、.pptx",
     );
   }
   const list = (documents[knowledgeBaseId] ??= []);
