@@ -6,7 +6,12 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-/** 表格里的时间：年月日加时分，如“2026/11/5 14:30”。 */
+/** 界面上的时间统一显示为“yyyy-MM-dd HH:mm:ss”（浏览器时区），如“2026-11-05 14:30:00”。 */
 export function formatDateTime(value: string) {
-  return new Date(value).toLocaleString("zh-CN", { dateStyle: "short", timeStyle: "short" });
+  const date = new Date(value);
+  const two = (part: number) => String(part).padStart(2, "0");
+  return (
+    `${date.getFullYear()}-${two(date.getMonth() + 1)}-${two(date.getDate())} ` +
+    `${two(date.getHours())}:${two(date.getMinutes())}:${two(date.getSeconds())}`
+  );
 }

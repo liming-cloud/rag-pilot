@@ -164,9 +164,7 @@ function FailureHint({ document }: { document: KnowledgeDocument }) {
   if (!document.reprocessable) {
     return <span className="text-xs text-muted-foreground">改好文件后重新上传，会替换这条失败记录。</span>;
   }
-  const at = document.retryAt
-    ? new Date(document.retryAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })
-    : null;
+  const at = document.retryAt ? formatDateTime(document.retryAt) : null;
   return (
     <span className="text-xs text-muted-foreground">
       {at ? `模型服务恢复后就能入库，${at} 会自动重试一次，也可以现在重新处理。` : "模型服务恢复后点“重新处理”。"}

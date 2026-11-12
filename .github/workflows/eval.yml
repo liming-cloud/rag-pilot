@@ -1,12 +1,12 @@
 name: eval
 
-# 用真实模型跑评测集，结果写在运行摘要里。会产生少量模型调用费用（每次约 32 题），
+# 用真实模型跑评测集，结果写在运行摘要里。会产生模型调用费用（每轮合成集 201 题加工具问答 57 题），
 # 所以只在改动检索、问答、模型适配或评测集时运行，也可以在 Actions 页面手动运行。
 on:
   workflow_dispatch:
     inputs:
       rounds:
-        description: 连续跑几轮（看指标波动；每轮约 47 题的模型费用）
+        description: 连续跑几轮（看指标波动；每轮约 260 题的模型费用）
         default: "1"
       min_relevance:
         description: 拒答门槛（重排相关度）

@@ -25,16 +25,33 @@
     </sql>
 
     <select id="knowledgeBases" resultType="com.liming.rag.knowledge.infrastructure.persistence.KnowledgeBaseSummaryDO">
+        <!-- 文档、角色授权、成员各聚合一次再 JOIN，不按行做相关子查询。 -->
         SELECT kb.id, kb.name,
-               (SELECT count(*) FROM document d WHERE d.knowledge_base_id = kb.id) AS document_count,
-               (SELECT count(*) FROM document d WHERE d.knowledge_base_id = kb.id AND d.status = 'FAILED') AS failed_count,
-               (SELECT count(*) FROM document d WHERE d.knowledge_base_id = kb.id AND <include refid="expiring"/>)
-                   AS expiring_count,
-               (SELECT count(*) FROM document d WHERE d.knowledge_base_id = kb.id AND <include refid="expired"/>)
-                   AS expired_count,
-               (SELECT count(*) FROM knowledge_base_role_grant g WHERE g.knowledge_base_id = kb.id) AS role_grant_count,
-               (SELECT count(*) FROM knowledge_base_member m WHERE m.knowledge_base_id = kb.id) AS member_count
+               coalesce(docs.document_count, 0) AS document_count,
+               coalesce(docs.failed_count, 0) AS failed_count,
+               coalesce(docs.expiring_count, 0) AS expiring_count,
+               coalesce(docs.expired_count, 0) AS expired_count,
+               coalesce(grants.role_grant_count, 0) AS role_grant_count,
+               coalesce(members.member_count, 0) AS member_count
         FROM knowledge_base kb
+        LEFT JOIN (
+            SELECT d.knowledge_base_id,
+                   count(*) AS document_count,
+                   count(*) FILTER (WHERE d.status = 'FAILED') AS failed_count,
+                   count(*) FILTER (WHERE <include refid="expiring"/>) AS expiring_count,
+                   count(*) FILTER (WHERE <include refid="expired"/>) AS expired_count
+            FROM document d
+            WHERE d.tenant_id = #{tenantId}
+            GROUP BY d.knowledge_base_id
+        ) docs ON docs.knowledge_base_id = kb.id
+        LEFT JOIN (
+            SELECT knowledge_base_id, count(*) AS role_grant_count
+            FROM knowledge_base_role_grant WHERE tenant_id = #{tenantId} GROUP BY knowledge_base_id
+        ) grants ON grants.knowledge_base_id = kb.id
+        LEFT JOIN (
+            SELECT knowledge_base_id, count(*) AS member_count
+            FROM knowledge_base_member WHERE tenant_id = #{tenantId} GROUP BY knowledge_base_id
+        ) members ON members.knowledge_base_id = kb.id
         <include refid="knowledgeBaseFilter"/>
         ORDER BY kb.id
         LIMIT #{size} OFFSET #{offset}

@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/dialog";
 import { ErrorMessage } from "@/lib/errors";
 import { Can, PERMISSIONS } from "@/lib/permissions";
+import { formatDateTime } from "@/lib/utils";
 import { useRefreshAfterChange, EditDialog } from "./EditSettingDialog";
 import {
   restoreSetting,
@@ -24,10 +25,6 @@ import {
 
 export function SourceBadge({ source }: { source: SettingSource }) {
   return <Badge variant={source === "DATABASE" ? "default" : "outline"}>{SOURCE_LABELS[source]}</Badge>;
-}
-
-export function formatTime(value: string) {
-  return new Date(value).toLocaleString("zh-CN", { dateStyle: "short", timeStyle: "short" });
 }
 
 export function ItemsTab({ settings, group }: { settings: SystemSettings; group: "brand" | "chat" }) {
@@ -58,7 +55,7 @@ export function ItemsTab({ settings, group }: { settings: SystemSettings; group:
                   <SourceBadge source={item.source} />
                   {item.source === "DATABASE" && item.updatedAt && (
                     <span>
-                      {item.updatedBy} 于 {formatTime(item.updatedAt)} 修改
+                      {item.updatedBy} 于 {formatDateTime(item.updatedAt)} 修改
                     </span>
                   )}
                 </div>

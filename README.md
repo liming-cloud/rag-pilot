@@ -2,9 +2,9 @@
 
 面向连锁多网点企业的通用运营助手，第一版面向新零售门店。它把总部的规则（制度、操作规范、商品知识）和业务数据，变成一线员工能直接用的答案、预警和待办；每个答案都能追溯到出处。最终形态是 RAG + AI 大脑，通过 tools / MCP 对接客户已有的系统；路线见 [ROADMAP.md](ROADMAP.md)。
 
-## 当前阶段：1.0 研发，完成后进入客户试点
+## 当前阶段：1.0 已发布（v1.0.0.1，2026-11-07），客户试点摸底与 1.x 并行
 
-1.0 是可信知识问答（通用内核 + 新零售行业包）：上传文档 → 解析与分块 → 混合检索与重排 → 带引用的流式回答，员工端支持会话和持续对话，按知识库授权，管理端按钮级权限。里程碑见 [ROADMAP.md](ROADMAP.md)。研发阶段用合成数据和开源数据评测，客户真实资料在试点时提供。
+1.0 是可信知识问答（通用内核 + 新零售行业包）：上传文档 → 解析与分块 → 混合检索与重排 → 带引用的流式回答，员工端支持会话和持续对话，按知识库授权，管理端按钮级权限。1.x 加数据问答（只读工具，#180～#183）和模型用量统计（#169）。里程碑见 [ROADMAP.md](ROADMAP.md)。研发阶段用合成数据和开源数据评测，客户真实资料只在客户环境里用（D-055、D-068）。
 
 | 验收指标 | 目标 |
 | --- | --- |
@@ -50,14 +50,15 @@ JDK 25、Spring Boot 4.1、Spring AI 2.0、Spring Modulith 2.1、MyBatis-Plus、
 | 模块 | 层 | 职责 |
 | --- | --- | --- |
 | `rag-shared` | 平台 | 共享内核与通用工具：租户和用户标识、错误分类、聚合根标记、分页和输入解析，只依赖 JDK |
-| `rag-ai` | 平台 | Spring AI 防腐层：按能力提供文字生成、问题改写、向量化、重排、连通测试，上下文不接触 Spring AI |
+| `rag-ai` | 平台 | Spring AI 防腐层：按能力提供文字生成、问题改写、向量化、重排、连通测试、工具调用（MCP），上下文不接触 Spring AI |
 | `rag-persistence` | 平台 | MyBatis-Plus 组件：依赖、全局配置（Mapper XML 位置、分页插件）和分页转换 |
 | `rag-cache` | 平台 | 缓存组件（Redis，经 Redisson）：读不到时加载、提交后清除、Redis 出错时降级读库，上下文看不到 Redis |
 | `rag-identity` | 上下文 | 账号、登录、角色与权限点（按钮级 RBAC） |
 | `rag-knowledge` | 上下文 | 核心：知识库、文档解析与分块、授权、混合检索 |
 | `rag-answering` | 上下文 | 核心：会话、回答、引用校验、拒答、反馈、知识缺口与运营统计 |
 | `rag-evaluation` | 上下文 | 评测集、指标、报告，答案评判的规则 |
-| `rag-settings` | 上下文 | 系统设置：模型管理（服务商、各用途的模型、变更记录）、行业包与界面文案 |
+| `rag-settings` | 上下文 | 系统设置：模型管理（服务商、各用途的模型、变更记录、用量与费用）、行业包与界面文案 |
+| `rag-data` | 上下文 | 数据问答：数据范围授权（站点、区域、工具）、按授权经客户只读工具查数据（D-061、D-062） |
 | `rag-app` | 启动 | 唯一的启动模块，只负责组装和配置 |
 
 ## 本地运行
@@ -68,7 +69,7 @@ JDK 25、Spring Boot 4.1、Spring AI 2.0、Spring Modulith 2.1、MyBatis-Plus、
 deploy/package.sh 0.0.0.1 /tmp/rag-pilot          # 编译 jar 和 dist，打成发布包
 tar -xzf /tmp/rag-pilot/rag-pilot-0.0.0.1.tar.gz -C /tmp/rag-pilot
 cd /tmp/rag-pilot/rag-pilot-0.0.0.1
-cp .env.example .env                              # 填写 DB_PASSWORD、MODEL_API_KEY 和 RAG_ADMIN_PASSWORD
+cp .env.example .env                              # 填写 DB_PASSWORD、REDIS_PASSWORD、MODEL_API_KEY、RAG_ADMIN_PASSWORD、RAG_MASTER_KEY
 ./install.sh                                      # 在本机构建镜像、启动、跑部署验证
 curl http://localhost:8080/actuator/health        # 后端健康检查，只在本机可访问
 ```

@@ -53,6 +53,7 @@ vi .env                                           # 至少填 DB_PASSWORD、REDI
 - `.env` 里有密码和密钥，不要发给别人，不要放进备份。构建镜像时只用到 jar、dist 和 `nginx.conf`，`.env` 不会进镜像（见包里的 `.dockerignore`）。
 - `REDIS_PASSWORD`：Redis 的密码，用 `openssl rand -hex 24` 生成。Redis 存二级缓存和登录会话，只在 Compose 内部网络里，不对外开放端口。`compose.yml` 已给 app 设好 `RAG_CACHE_REDIS_ENABLED=true`；不经 Compose 直接运行 jar 时默认不连 Redis，缓存只在进程内、重启后要重新登录（D-054）。
 - `RAG_DB_IMAGE`、`RAG_REDIS_IMAGE`、`RAG_JRE_IMAGE`、`RAG_NGINX_IMAGE`：服务器不能直接访问 Docker Hub 时，改成镜像源或内网仓库里的地址，`@sha256:` 后面的摘要保持与 `compose.yml` 里的一致。不填时从 Docker Hub 拉。
+- `EMBEDDING_MODEL`、`RERANK_MODEL`、`CHAT_MODEL`、`CHAT_HEDGE_MODEL`、`CHAT_LIGHT_MODEL`：不用硅基流动时（自建 vLLM、专有云）改成那边的模型名，不填用默认值。嵌入模型只能在这里设，装好后不要再改（换了要全部重新入库）；对话、重排模型装好后也可以在管理端“模型管理”里改。`RAG_INGESTION_CONCURRENCY` 是后台同时向量化的文档数（默认 2），嵌入服务限流时调小。
 
 `verify.sh` 会建一个叫“部署验证”的知识库和一个测试账号 `deploy-verify`，用来检查检索、问答和权限；以后每次运行都复用它们。不想留可以在管理端删掉，下次运行会重新建。
 

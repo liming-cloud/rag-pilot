@@ -10,6 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { answerKeys } from "@/features/answers/api";
 import { ErrorMessage } from "@/lib/errors";
 import { Can, PERMISSIONS } from "@/lib/permissions";
+import { formatDateTime } from "@/lib/utils";
 import { type GapGroup, gapKeys, recheckGap, resolveGap } from "./api";
 
 /**
@@ -76,7 +77,7 @@ export function GapDialog({ group, onDone }: { group: GapGroup; onDone: () => vo
             {group.records.map((record) => (
               <TableRow key={record.id}>
                 <TableCell className="whitespace-nowrap text-muted-foreground">
-                  {new Date(record.createdAt).toLocaleString("zh-CN", { dateStyle: "short", timeStyle: "short" })}
+                  {formatDateTime(record.createdAt)}
                 </TableCell>
                 <TableCell>{record.askerName}</TableCell>
                 <TableCell>

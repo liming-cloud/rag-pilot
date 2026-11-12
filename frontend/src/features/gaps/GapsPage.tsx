@@ -12,6 +12,7 @@ import { Pagination } from "@/components/ui/pagination";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ErrorMessage } from "@/lib/errors";
 import { PAGE_SIZE } from "@/lib/paging";
+import { formatDateTime } from "@/lib/utils";
 import { GapDialog } from "./GapDialog";
 import { fetchGaps, GAP_RANGES, type GapGroup, gapKeys, type GapRange, type GapReport } from "./api";
 
@@ -182,7 +183,7 @@ function GapRow({ group, onOpen }: { group: GapGroup; onOpen: () => void }) {
         {documentLabel(group.citedDocuments)}
       </TableCell>
       <TableCell className="whitespace-nowrap text-muted-foreground">
-        {new Date(group.lastAskedAt).toLocaleDateString("zh-CN", { month: "numeric", day: "numeric" })}
+        {formatDateTime(group.lastAskedAt)}
       </TableCell>
     </TableRow>
   );

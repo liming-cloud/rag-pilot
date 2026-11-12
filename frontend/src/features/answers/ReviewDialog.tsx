@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ErrorMessage } from "@/lib/errors";
 import { Can, PERMISSIONS } from "@/lib/permissions";
+import { formatDateTime } from "@/lib/utils";
 import { answerKeys, type AnswerReview, markReview, recheckAnswer } from "./api";
 
 export function OutcomeBadge({ review }: { review: AnswerReview }) {
@@ -37,7 +38,7 @@ export function ReviewDialog({ review, onDone }: { review: AnswerReview; onDone:
       <DialogHeader>
         <DialogTitle>{review.question}</DialogTitle>
         <DialogDescription>
-          {review.askerName} · {new Date(review.createdAt).toLocaleString("zh-CN")}
+          {review.askerName} · {formatDateTime(review.createdAt)}
         </DialogDescription>
       </DialogHeader>
       <div className="flex items-center gap-2">
