@@ -22,7 +22,7 @@ public record UploadedFile(String filename, String mediaType, String sha256, lon
     /** 文件名长度上限，与数据库列宽一致。 */
     public static final int MAX_FILENAME_LENGTH = 255;
 
-    /** 支持的扩展名（小写）和对应的类型：UTF-8 的 TXT、Markdown，PDF、Word（.docx）、Excel（.xlsx / .xls）。 */
+    /** 支持的扩展名（小写）和对应的类型：UTF-8 的 TXT、Markdown，PDF、Word（.docx）、Excel（.xlsx / .xls）、PowerPoint（.pptx）。 */
     private static final Map<String, String> SUPPORTED_TYPES = Map.of(
             "txt", "text/plain",
             "md", "text/markdown",
@@ -30,7 +30,8 @@ public record UploadedFile(String filename, String mediaType, String sha256, lon
             "pdf", "application/pdf",
             "docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
             "xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            "xls", "application/vnd.ms-excel");
+            "xls", "application/vnd.ms-excel",
+            "pptx", "application/vnd.openxmlformats-officedocument.presentationml.presentation");
 
     /** 文件类型不支持。和其他不合格的情况分开，接口按“不支持的类型”报错（{@code KNOWLEDGE_UNSUPPORTED_TYPE}）。 */
     public static final class UnsupportedTypeException extends KnowledgeRuleException {
@@ -40,7 +41,8 @@ public record UploadedFile(String filename, String mediaType, String sha256, lon
 
         UnsupportedTypeException() {
             super(ErrorKind.UNSUPPORTED, "UNSUPPORTED_TYPE",
-                    "目前支持 PDF、Word（.docx）、Excel（.xlsx / .xls）、TXT 和 Markdown；旧版 .doc 请先另存为 .docx");
+                    "目前支持 PDF、Word（.docx）、Excel（.xlsx / .xls）、PowerPoint（.pptx）、TXT 和 Markdown；"
+                            + "旧版 .doc、.ppt 请先另存为 .docx、.pptx");
         }
     }
 
@@ -63,7 +65,7 @@ public record UploadedFile(String filename, String mediaType, String sha256, lon
             throw KnowledgeRuleException.invalid("文件是空的");
         }
         if (content.length > MAX_SIZE_BYTES) {
-            throw KnowledgeRuleException.invalid("单个文件不能超过 50 MB");
+            throw KnowledgeRuleException.invalid("单个文件不能超过 50 MB；课件可先压缩图片或另存为 PDF");
         }
         return new UploadedFile(filename, mediaType, sha256(content), content.length);
     }

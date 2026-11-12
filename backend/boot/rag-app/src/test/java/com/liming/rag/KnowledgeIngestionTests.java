@@ -109,9 +109,9 @@ class KnowledgeIngestionTests {
     void rejectsUnsupportedAndRecordsEncodingFailure() {
         long knowledgeBaseId = createKnowledgeBase("失败场景知识库");
 
-        var pptx = upload(knowledgeBaseId, "门店培训.pptx", "PK".getBytes(StandardCharsets.US_ASCII));
-        assertThat(pptx.getStatusCode()).isEqualTo(HttpStatus.UNSUPPORTED_MEDIA_TYPE);
-        assertThat(pptx.getBody()).containsEntry("code", "KNOWLEDGE_UNSUPPORTED_TYPE");
+        var ppt = upload(knowledgeBaseId, "门店培训.ppt", "PK".getBytes(StandardCharsets.US_ASCII));
+        assertThat(ppt.getStatusCode()).isEqualTo(HttpStatus.UNSUPPORTED_MEDIA_TYPE);
+        assertThat(ppt.getBody()).containsEntry("code", "KNOWLEDGE_UNSUPPORTED_TYPE");
         var empty = upload(knowledgeBaseId, "空白.txt", new byte[0]);
         assertThat(empty.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
         assertThat(empty.getBody()).containsEntry("code", "KNOWLEDGE_INVALID").containsEntry("detail", "文件是空的");

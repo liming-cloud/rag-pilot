@@ -83,7 +83,7 @@ describe("知识库的文档", () => {
     await table();
 
     await choose(
-      new File(["PK"], "培训课件.pptx", { type: "application/vnd.ms-powerpoint" }),
+      new File(["PK"], "培训课件.ppt", { type: "application/vnd.ms-powerpoint" }),
       new File(["退货凭小票办理。"], "退换货.txt", { type: "text/plain" }),
     );
 
@@ -92,7 +92,7 @@ describe("知识库的文档", () => {
     expect(await within(summary).findByText("本批 2 个文件已处理完")).toBeInTheDocument();
     expect(within(summary).getByText("成功 1")).toBeInTheDocument();
     expect(within(summary).getByText("不支持 1")).toBeInTheDocument();
-    expect(within(summary).getByText("培训课件.pptx")).toBeInTheDocument();
+    expect(within(summary).getByText("培训课件.ppt")).toBeInTheDocument();
   });
 
   it("选文件夹：汇总成功、重复、不支持、失败；只重试失败的", async () => {

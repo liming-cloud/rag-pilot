@@ -192,7 +192,7 @@ export function DocumentsPanel({ knowledgeBaseId }: { knowledgeBaseId: number })
         </Can>
       </div>
       <p className="text-xs text-muted-foreground">
-        支持 PDF、Word（.docx）、Excel、TXT 和 Markdown，单个文件不超过 50 MB，一次最多 {MAX_BATCH}{" "}
+        支持 PDF、Word（.docx）、Excel、PowerPoint（.pptx）、TXT 和 Markdown，单个文件不超过 50 MB（课件过大可先压缩图片或另存为 PDF），一次最多 {MAX_BATCH}{" "}
         个文件，也可以把文件拖到下面的表格上；选文件夹时会跳过不支持的格式。扫描件 PDF 暂不支持。
       </p>
       {tooMany !== null && (

@@ -29,6 +29,8 @@ describe("批量上传", () => {
       new File(["x"], "a.jpg"),
       new File(["x"], "b.PDF"),
       new File(["x"], "c.doc"),
+      new File(["x"], "d.ppt"),
+      new File(["x"], "e.pptx"),
       new File(["x"], ".DS_Store"),
       new File(["x"], "~$草稿.docx"),
       new File(["x"], "Thumbs.db"),
@@ -37,6 +39,8 @@ describe("批量上传", () => {
       ["a.jpg", "unsupported", "格式不支持"],
       ["b.PDF", "pending", null],
       ["c.doc", "unsupported", "旧版 .doc 请先另存为 .docx"],
+      ["d.ppt", "unsupported", "旧版 .ppt 请先另存为 .pptx"],
+      ["e.pptx", "pending", null],
     ]);
     const uploaded: string[] = [];
     await run(
@@ -47,7 +51,18 @@ describe("批量上传", () => {
       },
       () => {},
     );
-    expect(uploaded).toEqual(["b.PDF"]);
+    expect(uploaded).toEqual(["b.PDF", "e.pptx"]);
+  });
+
+  it("超过 50 MB 的文件在前端直接标出，不上传（Nginx 和 multipart 会先拦下，后端的提示到不了页面）", () => {
+    const large = new File(["x"], "课件.pptx");
+    Object.defineProperty(large, "size", { value: 50 * 1024 * 1024 + 1 });
+    const limit = new File(["x"], "刚好.pdf");
+    Object.defineProperty(limit, "size", { value: 50 * 1024 * 1024 });
+    expect(prepare([large, limit]).map((item) => [item.outcome, item.message])).toEqual([
+      ["unsupported", "单个文件不能超过 50 MB；课件可先压缩图片或另存为 PDF"],
+      ["pending", null],
+    ]);
   });
 
   it("按后端错误码归类：已在库里算重复，格式不对算不支持，其余算失败", () => {
