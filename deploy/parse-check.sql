@@ -1,40 +1,50 @@
--- 解析核对（#134）：按文档列出入库后的解析结果，方便人工抽查；只读，由 parse-check.sh 运行。
--- 标题层级：heading_path 为“文档名 > 章节 > 小节”，取各分块里最深的一级（0 表示没有识别出标题）。
--- 表格行（估计）：一行里至少有两组“表头：值；”的行，Word / Excel 表格每行转成这个形式；只有一列的表格不计入。
--- 乱码字符：U+FFFD、私有区字符（PDF 字体映射失败时常见）和控制字符，占全部字符的百分比。
--- 空白占比：空白字符占全部字符的百分比，过高说明版面被打散。
--- 结论：失败 / 无分块 / 疑似乱码（乱码占比 ≥ 1%）/ 疑似版面散乱（空白占比 ≥ 40%）/ 未识别标题（长文档的标题层级为 0）/ 正常；
--- 结论只是提示，最终以人工看分块为准。
-SELECT d.id                                                              AS 文档号,
-       kb.name                                                           AS 知识库,
-       d.filename                                                        AS 文档,
-       d.status                                                          AS 状态,
-       d.chunk_count                                                     AS 分块数,
-       coalesce(s.max_level, 0)                                          AS 标题层级,
-       coalesce(s.table_rows, 0)                                         AS "表格行(估计)",
-       round(100.0 * coalesce(s.garbled, 0) / nullif(s.total_chars, 0), 2) AS "乱码占比(%)",
-       round(100.0 * coalesce(s.blanks, 0) / nullif(s.total_chars, 0), 2)  AS "空白占比(%)",
+-- 解析核对（#134）与资料体检（#218）：按文档列出入库时记下的信号和体检结论，方便人工抽查；只读，由 parse-check.sh 运行。
+-- 信号由入库时写进 document（图片数、最大表格行由读取时得到；字数、空白、乱码、标题层级从分块算出），管理端文档列表读同一份。
+-- 结论的规则和阈值与 KnowledgeQueryMapper.xml 的 findings 一致（D-071），改一处要一起改，ParseCheckSqlTests 校验两边一致；
+-- 这里按本租户全部的库找重复。多个问题用“、”连起来；结论只是提示，最终以人工看分块为准。
+-- 图片数、最大表格行为空：升级前入库、还没重新上传的文档，相应规则不判断。
+WITH checked AS (
+    SELECT d.*,
+           lower(substring(d.filename from '\.([^.]+)$')) AS extension,
+           EXISTS (SELECT 1 FROM document o
+                   WHERE o.tenant_id = d.tenant_id AND o.sha256 = d.sha256 AND o.id <> d.id AND o.status = 'READY') AS duplicate,
+           EXISTS (SELECT 1 FROM document_overlap ov JOIN document o ON o.id = ov.other_document_id
+                   WHERE ov.document_id = d.id AND o.sha256 <> d.sha256 AND o.status = 'READY')               AS near_duplicate
+    FROM document d
+)
+SELECT d.id                                                             AS 文档号,
+       kb.name                                                          AS 知识库,
+       d.filename                                                       AS 文档,
+       d.status                                                         AS 状态,
+       d.chunk_count                                                    AS 分块数,
+       d.image_count                                                    AS 图片数,
+       d.largest_table_rows                                             AS 最大表格行,
+       d.heading_depth                                                  AS 标题层级,
+       round(100.0 * d.garbled_chars / nullif(d.total_chars, 0), 2)     AS "乱码占比(%)",
+       round(100.0 * d.blank_chars / nullif(d.total_chars, 0), 2)       AS "空白占比(%)",
        CASE
            WHEN d.status = 'FAILED' THEN '失败：' || coalesce(d.error, '')
            WHEN d.status = 'PARSING' THEN '解析中'
-           WHEN coalesce(s.chunks, 0) = 0 THEN '无分块'
-           WHEN 100.0 * s.garbled / nullif(s.total_chars, 0) >= 1 THEN '疑似乱码'
-           WHEN 100.0 * s.blanks / nullif(s.total_chars, 0) >= 40 THEN '疑似版面散乱'
-           WHEN s.max_level = 0 AND s.chunks >= 5 THEN '未识别标题'
-           ELSE '正常'
-           END                                                           AS 结论
-FROM document d
+           ELSE coalesce(nullif(concat_ws('、',
+               CASE WHEN d.chunk_count = 0 THEN '没有可检索的内容' END,
+               CASE WHEN d.extension IN ('docx', 'pdf', 'pptx') AND d.image_count >= 2
+                         AND d.total_chars - d.blank_chars < 200 * d.image_count THEN '疑似内容在图片里' END,
+               CASE WHEN d.extension = 'docx' AND d.heading_depth = 0 AND d.chunk_count >= 5 THEN 'Word 没用标题样式' END,
+               CASE WHEN d.extension = 'pdf' AND d.heading_depth = 0 AND d.chunk_count >= 5 THEN 'PDF 读不出章节' END,
+               CASE WHEN d.extension IN ('txt', 'md', 'markdown') AND d.heading_depth = 0 AND d.chunk_count >= 5
+                    THEN '文档没有标题' END,
+               CASE WHEN d.largest_table_rows >= 500 THEN '表格过大' END,
+               CASE WHEN 100.0 * d.garbled_chars / nullif(d.total_chars, 0) >= 1 THEN '疑似乱码' END,
+               CASE WHEN 100.0 * d.blank_chars / nullif(d.total_chars, 0) >= 40 THEN '疑似版面散乱' END,
+               CASE WHEN d.duplicate THEN '与其他文档重复' END,
+               CASE WHEN d.near_duplicate THEN '疑似重复' END), ''), '正常')
+           END                                                          AS 结论,
+       (SELECT string_agg(okb.name || '/' || o.filename, '；' ORDER BY o.id)
+        FROM document o JOIN knowledge_base okb ON okb.id = o.knowledge_base_id
+        WHERE o.status = 'READY' AND o.id <> d.id AND o.tenant_id = d.tenant_id
+          AND (o.sha256 = d.sha256
+               OR o.id IN (SELECT ov.other_document_id FROM document_overlap ov WHERE ov.document_id = d.id)))
+                                                                        AS 重复的文档
+FROM checked d
          JOIN knowledge_base kb ON kb.id = d.knowledge_base_id
-         LEFT JOIN LATERAL (
-    SELECT count(*)                                                                       AS chunks,
-           max(length(c.heading_path) - length(replace(c.heading_path, ' > ', ''))) / 3   AS max_level,
-           sum((SELECT count(*) FROM regexp_matches(c.content, '(^|\n)[^：；\n]{1,30}：[^\n]*；[^：；\n]{1,30}：', 'g')))
-                                                                                          AS table_rows,
-           sum(length(c.content))                                                         AS total_chars,
-           sum(length(c.content) - length(regexp_replace(c.content, '[\uFFFD\uE000-\uF8FF\u0001-\u0008\u000B\u000C\u000E-\u001F]', '', 'g')))
-                                                                                          AS garbled,
-           sum(length(c.content) - length(regexp_replace(c.content, '\s', '', 'g')))      AS blanks
-    FROM chunk c
-    WHERE c.document_id = d.id
-    ) s ON true
 ORDER BY kb.name, d.filename;

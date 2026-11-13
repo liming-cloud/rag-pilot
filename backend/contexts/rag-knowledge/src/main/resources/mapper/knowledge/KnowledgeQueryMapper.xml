@@ -23,8 +23,8 @@
     <sql id="findings">
         CASE WHEN d.status = 'READY' THEN array_remove(ARRAY[
             CASE WHEN d.chunk_count = 0 THEN 'NO_CHUNKS' END,
-            CASE WHEN <include refid="extension"/> IN ('docx', 'pdf', 'pptx') AND d.image_count &gt;= 3
-                      AND d.total_chars - d.blank_chars &lt; 150 * d.image_count THEN 'IMAGE_HEAVY' END,
+            CASE WHEN <include refid="extension"/> IN ('docx', 'pdf', 'pptx') AND d.image_count &gt;= 2
+                      AND d.total_chars - d.blank_chars &lt; 200 * d.image_count THEN 'IMAGE_HEAVY' END,
             CASE WHEN <include refid="extension"/> = 'docx' AND d.heading_depth = 0 AND d.chunk_count &gt;= 5
                  THEN 'WORD_NO_HEADINGS' END,
             CASE WHEN <include refid="extension"/> = 'pdf' AND d.heading_depth = 0 AND d.chunk_count &gt;= 5
