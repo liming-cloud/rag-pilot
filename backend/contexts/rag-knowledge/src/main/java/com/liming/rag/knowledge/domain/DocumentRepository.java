@@ -25,6 +25,12 @@ public interface DocumentRepository {
     /** 分块与向量一一对应，按顺序写入。 */
     void saveChunks(Document document, List<Chunk> chunks, List<float[]> embeddings);
 
+    /**
+     * 资料体检的信号（#218）：记下读取时得到的图片数和最大表格行数，从已写入的分块算出字数、空白、乱码和标题层级，
+     * 并重新比较这份文档和租户里其他文档的分块正文（疑似重复）。在写分块的同一个事务里调用。
+     */
+    void saveHealthSignals(Document document, int images, int largestTableRows);
+
     /** 同一个库里同一份文件的文档（库内按内容唯一）。 */
     Optional<Document> findInKnowledgeBase(long knowledgeBaseId, String sha256);
 

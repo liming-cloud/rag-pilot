@@ -111,16 +111,17 @@ class KnowledgeBaseController {
         return knowledgeBases.create(currentUser.tenantId(), currentUser.userId(), request.name());
     }
 
-    /** 按文件名、状态、有效期（ACTIVE、EXPIRING、EXPIRED、PENDING）筛选，分页（D-039）。 */
+    /** 按文件名、状态、有效期（ACTIVE、EXPIRING、EXPIRED、PENDING）、体检结论（NEEDS_WORK、OK）筛选，分页（D-039）。 */
     @SaCheckPermission(KnowledgePermissions.KB_VIEW)
     @GetMapping("/{knowledgeBaseId}/documents")
     Paged<DocumentRow> documents(@PathVariable long knowledgeBaseId,
             @RequestParam(name = "keyword", required = false) String keyword,
             @RequestParam(name = "status", required = false) String status,
             @RequestParam(name = "validity", required = false) String validity,
+            @RequestParam(name = "health", required = false) String health,
             Paged.Request page) {
         return knowledgeBases.documents(currentUser.tenantId(), currentUser.userId(), knowledgeBaseId,
-                new KnowledgeBaseService.DocumentFilter(keyword, status, validity, page));
+                new KnowledgeBaseService.DocumentFilter(keyword, status, validity, health, page));
     }
 
     /** 上传时可以顺带设有效期（D-046），不传表示长期有效。 */

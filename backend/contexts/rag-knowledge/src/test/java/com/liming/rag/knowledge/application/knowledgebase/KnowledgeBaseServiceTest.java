@@ -1,5 +1,6 @@
 package com.liming.rag.knowledge.application.knowledgebase;
 
+import com.liming.rag.knowledge.application.DocumentFinding;
 import com.liming.rag.knowledge.application.Window;
 
 import com.liming.rag.knowledge.application.InMemoryKnowledge;
@@ -141,17 +142,20 @@ class KnowledgeBaseServiceTest {
     }
 
     @Test
-    @DisplayName("文档列表：要能管理这个库；状态、有效期不区分大小写，不认识的是 INVALID")
+    @DisplayName("文档列表：要能管理这个库；状态、有效期、体检结论不区分大小写，不认识的是 INVALID")
     void listsDocumentsOfManageableKnowledgeBase() {
         var kb = service.create(TENANT, ADMIN, "门店规范");
 
-        service.documents(TENANT, ADMIN, kb.id(), new KnowledgeBaseService.DocumentFilter(null, "ready", "pending", new Paged.Request(1, 20)));
+        service.documents(TENANT, ADMIN, kb.id(), new KnowledgeBaseService.DocumentFilter(null, "ready", "pending", "needs_work", new Paged.Request(1, 20)));
         assertThat(fixture.queries.status).isEqualTo(DocumentStatus.READY);
         assertThat(fixture.queries.validity).isEqualTo(Validity.State.PENDING);
+        assertThat(fixture.queries.health).isEqualTo(DocumentFinding.Filter.NEEDS_WORK);
 
-        assertReason(() -> service.documents(TENANT, OUTSIDER, kb.id(), new KnowledgeBaseService.DocumentFilter(null, null, null, new Paged.Request(1, 20))),
+        assertReason(() -> service.documents(TENANT, OUTSIDER, kb.id(), new KnowledgeBaseService.DocumentFilter(null, null, null, null, new Paged.Request(1, 20))),
                 KnowledgeException.Reason.NOT_FOUND);
-        assertReason(() -> service.documents(TENANT, ADMIN, kb.id(), new KnowledgeBaseService.DocumentFilter(null, "DONE", null, new Paged.Request(1, 20))),
+        assertReason(() -> service.documents(TENANT, ADMIN, kb.id(), new KnowledgeBaseService.DocumentFilter(null, "DONE", null, null, new Paged.Request(1, 20))),
+                KnowledgeException.Reason.INVALID);
+        assertReason(() -> service.documents(TENANT, ADMIN, kb.id(), new KnowledgeBaseService.DocumentFilter(null, null, null, "BAD", new Paged.Request(1, 20))),
                 KnowledgeException.Reason.INVALID);
     }
 

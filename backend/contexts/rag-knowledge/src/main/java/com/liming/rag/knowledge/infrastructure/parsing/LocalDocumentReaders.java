@@ -18,6 +18,7 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import org.apache.pdfbox.Loader;
+import org.apache.pdfbox.pdmodel.PDResources;
 import org.apache.pdfbox.pdmodel.encryption.InvalidPasswordException;
 import org.apache.pdfbox.text.PDFTextStripper;
 import org.apache.poi.EncryptedDocumentException;
@@ -30,6 +31,7 @@ import org.apache.poi.ss.usermodel.WorkbookFactory;
 import org.apache.poi.xslf.usermodel.XMLSlideShow;
 import org.apache.poi.xslf.usermodel.XSLFGroupShape;
 import org.apache.poi.xslf.usermodel.XSLFNotes;
+import org.apache.poi.xslf.usermodel.XSLFPictureShape;
 import org.apache.poi.xslf.usermodel.XSLFShape;
 import org.apache.poi.xslf.usermodel.XSLFSlide;
 import org.apache.poi.xslf.usermodel.XSLFTable;
@@ -47,6 +49,8 @@ import org.springframework.stereotype.Component;
  * 一行一条，检索时每条都带着列名。Excel 每个可见工作表一节，规则同 Word 表格，单元格按 Excel 里显示的样子输出。
  * PowerPoint 每页一节，页标题当章节标题（没有标题用页码），正文、表格和备注跟在后面；只有图片的页不输出。
  * PDF 没有可靠的标题信息，只按阅读顺序提取文字。
+ *
+ * <p>同时记下资料体检用的信号（#218）：图片数和最大一张表格的行数。
  */
 @Component
 final class LocalDocumentReaders implements DocumentReaders {
@@ -67,23 +71,31 @@ final class LocalDocumentReaders implements DocumentReaders {
     }
 
     @Override
-    public String read(String filename, byte[] content) {
+    public Text read(String filename, byte[] content) {
         var dot = filename.lastIndexOf('.');
         var extension = dot < 0 ? "" : filename.substring(dot + 1).toLowerCase(Locale.ROOT);
         if (!supports(extension)) {
             throw new IllegalArgumentException("不支持的文件类型：" + filename);
         }
-        var text = switch (extension) {
-            case "pdf" -> pdf(content);
-            case "docx" -> word(content);
-            case "xlsx", "xls" -> excel(content);
-            case "pptx" -> powerPoint(content);
-            default -> utf8(content);
-        };
-        if (text.isBlank()) {
+        var out = new Sink();
+        switch (extension) {
+            case "pdf" -> pdf(content, out);
+            case "docx" -> word(content, out);
+            case "xlsx", "xls" -> excel(content, out);
+            case "pptx" -> powerPoint(content, out);
+            default -> out.text.append(utf8(content));
+        }
+        if (out.text.toString().isBlank()) {
             throw new DocumentParseException("文件里没有可检索的文字", null);
         }
-        return text;
+        return new Text(out.text.toString(), out.images, out.largestTableRows);
+    }
+
+    /** 一次读取的输出：正文，以及边读边记的图片数和最大表格行数。 */
+    private static final class Sink {
+        private final StringBuilder text = new StringBuilder();
+        private int images;
+        private int largestTableRows;
     }
 
     private static String utf8(byte[] content) {
@@ -98,7 +110,7 @@ final class LocalDocumentReaders implements DocumentReaders {
         }
     }
 
-    private static String pdf(byte[] content) {
+    private static void pdf(byte[] content, Sink out) {
         try (var document = Loader.loadPDF(content)) {
             var stripper = new PDFTextStripper();
             stripper.setSortByPosition(true);
@@ -106,7 +118,10 @@ final class LocalDocumentReaders implements DocumentReaders {
             if (text.replaceAll("\\s", "").length() < MIN_PDF_CHARS) {
                 throw new DocumentParseException("PDF 里提取不到文字，可能是扫描件或图片；目前还不支持扫描件，请上传可以复制文字的 PDF", null);
             }
-            return text;
+            out.text.append(text);
+            for (var page : document.getPages()) {
+                out.images += pdfImages(page.getResources());
+            }
         } catch (InvalidPasswordException e) {
             throw new DocumentParseException("PDF 有密码保护，请去掉密码后重新上传", e);
         } catch (IOException e) {
@@ -114,28 +129,40 @@ final class LocalDocumentReaders implements DocumentReaders {
         }
     }
 
-    private static String word(byte[] content) {
+    /** 一页上的图片：页面资源里的图片对象（同一张图在页上画几次只算一张）。 */
+    private static int pdfImages(PDResources resources) throws IOException {
+        if (resources == null) {
+            return 0;
+        }
+        int images = 0;
+        for (var name : resources.getXObjectNames()) {
+            if (resources.isImageXObject(name)) {
+                images++;
+            }
+        }
+        return images;
+    }
+
+    private static void word(byte[] content, Sink out) {
         try (var document = new XWPFDocument(new ByteArrayInputStream(content))) {
-            var text = new StringBuilder();
             for (var element : document.getBodyElements()) {
                 if (element instanceof XWPFParagraph paragraph) {
-                    paragraph(document, paragraph, text);
+                    paragraph(document, paragraph, out.text);
                 } else if (element instanceof XWPFTable table) {
-                    table(table, text);
+                    table(table, out);
                 }
             }
-            return text.toString();
+            out.images = document.getAllPictures().size();
         } catch (IOException | RuntimeException e) {
             // POI 对非 OOXML 文件会抛各种运行时异常（NotOfficeXmlFileException 等），统一当作文件损坏。
             throw new DocumentParseException("文件已损坏或不是有效的 Word 文档（.docx）；旧版 .doc 请先另存为 .docx", e);
         }
     }
 
-    private static String excel(byte[] content) {
+    private static void excel(byte[] content, Sink out) {
         try (var workbook = WorkbookFactory.create(new ByteArrayInputStream(content))) {
             var formatter = new DataFormatter(Locale.SIMPLIFIED_CHINESE);
             var evaluator = workbook.getCreationHelper().createFormulaEvaluator();
-            var text = new StringBuilder();
             for (int i = 0; i < workbook.getNumberOfSheets(); i++) {
                 if (workbook.isSheetHidden(i) || workbook.isSheetVeryHidden(i)) {
                     continue;
@@ -143,11 +170,10 @@ final class LocalDocumentReaders implements DocumentReaders {
                 var sheet = workbook.getSheetAt(i);
                 var rows = rows(sheet, formatter, evaluator);
                 if (rows.size() > 1) {
-                    text.append("\n## ").append(sheet.getSheetName()).append('\n');
-                    rows(rows, text);
+                    out.text.append("\n## ").append(sheet.getSheetName()).append('\n');
+                    rows(rows, out);
                 }
             }
-            return text.toString();
         } catch (EncryptedDocumentException e) {
             throw new DocumentParseException("Excel 有密码保护，请去掉密码后重新上传", e);
         } catch (IOException | RuntimeException e) {
@@ -155,29 +181,30 @@ final class LocalDocumentReaders implements DocumentReaders {
         }
     }
 
-    private static String powerPoint(byte[] content) {
+    private static void powerPoint(byte[] content, Sink out) {
         try (var show = new XMLSlideShow(new ByteArrayInputStream(content))) {
-            var text = new StringBuilder();
             var slides = show.getSlides();
             for (int i = 0; i < slides.size(); i++) {
-                slide(slides.get(i), i + 1, text);
+                slide(slides.get(i), i + 1, out);
             }
-            return text.toString();
         } catch (IOException | RuntimeException e) {
             throw new DocumentParseException("文件已损坏或不是有效的 PowerPoint 文件（.pptx）；旧版 .ppt 请先另存为 .pptx", e);
         }
     }
 
     /** 一页一节：标题当章节标题，没有标题用页码；没有文字的页（只有图片）不输出，免得产生空分块。 */
-    private static void slide(XSLFSlide slide, int number, StringBuilder text) {
-        var body = new StringBuilder();
+    private static void slide(XSLFSlide slide, int number, Sink out) {
+        var body = new Sink();
         shapes(slide.getShapes(), body);
-        notes(slide.getNotes(), body);
+        notes(slide.getNotes(), body.text);
+        out.images += body.images;
+        out.largestTableRows = Math.max(out.largestTableRows, body.largestTableRows);
         var title = title(slide);
-        if (body.isEmpty() && title.isEmpty()) {
+        if (body.text.isEmpty() && title.isEmpty()) {
             return;
         }
-        text.append("\n## ").append(title.isEmpty() ? "第 " + number + " 页" : title).append('\n').append(body);
+        out.text.append("\n## ").append(title.isEmpty() ? "第 " + number + " 页" : title).append('\n')
+                .append(body.text);
     }
 
     /** 页标题；POI 的 {@code getTitle()} 不认封面页常用的居中标题，这里两种都认。 */
@@ -191,16 +218,18 @@ final class LocalDocumentReaders implements DocumentReaders {
                 .orElse("");
     }
 
-    private static void shapes(List<XSLFShape> shapes, StringBuilder text) {
+    private static void shapes(List<XSLFShape> shapes, Sink out) {
         for (var shape : shapes) {
             if (shape instanceof XSLFTable table) {
                 rows(table.getRows().stream()
                         .map(row -> row.getCells().stream().map(cell -> singleLine(cell.getText())).toList())
-                        .toList(), text);
+                        .toList(), out);
             } else if (shape instanceof XSLFGroupShape group) {
-                shapes(group.getShapes(), text);
+                shapes(group.getShapes(), out);
+            } else if (shape instanceof XSLFPictureShape) {
+                out.images++;
             } else if (shape instanceof XSLFTextShape textShape && !NOT_BODY.contains(textShape.getTextType())) {
-                lines(textShape.getText(), text);
+                lines(textShape.getText(), out.text);
             }
         }
     }
@@ -272,17 +301,19 @@ final class LocalDocumentReaders implements DocumentReaders {
         return 0;
     }
 
-    private static void table(XWPFTable table, StringBuilder text) {
+    private static void table(XWPFTable table, Sink out) {
         rows(table.getRows().stream()
                 .map(row -> row.getTableCells().stream().map(LocalDocumentReaders::cell).toList())
-                .toList(), text);
+                .toList(), out);
     }
 
-    /** 第一行当表头，其余每行转成“表头：值；表头：值”，空单元格跳过。 */
-    private static void rows(List<List<String>> rows, StringBuilder text) {
+    /** 第一行当表头，其余每行转成“表头：值；表头：值”，空单元格跳过；记下最大一张表的数据行数。 */
+    private static void rows(List<List<String>> rows, Sink out) {
         if (rows.isEmpty()) {
             return;
         }
+        out.largestTableRows = Math.max(out.largestTableRows, rows.size() - 1);
+        var text = out.text;
         var header = rows.getFirst();
         for (var cells : rows.subList(1, rows.size())) {
             var line = IntStream.range(0, cells.size())

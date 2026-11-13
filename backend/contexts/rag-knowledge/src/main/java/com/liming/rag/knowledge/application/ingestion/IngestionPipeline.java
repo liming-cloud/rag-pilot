@@ -43,11 +43,13 @@ class IngestionPipeline {
     /** 在后台线程运行，不在数据库事务里；只有最后写入时开一个短事务。 */
     void run(Document document, byte[] content) {
         try {
-            var chunks = chunker.chunk(document.filename(), readers.read(document.filename(), content));
+            var text = readers.read(document.filename(), content);
+            var chunks = chunker.chunk(document.filename(), text.content());
             if (chunks.isEmpty()) {
                 failed(document, "文件里没有可检索的文字");
             } else {
-                new ChunkWriter(documents, embeddings, transactions, remover, document).write(chunks);
+                new ChunkWriter(documents, embeddings, transactions, remover, document).write(chunks, text.images(),
+                        text.largestTableRows());
             }
         } catch (DocumentParseException e) {
             failed(document, e.getMessage());

@@ -104,6 +104,28 @@ class LocalDocumentReadersTest {
     }
 
     @Test
+    @DisplayName("资料体检的信号（#218）：Word、PDF、PowerPoint 记下图片数，表格记下最大一张的数据行数；纯文本都是 0")
+    void recordsHealthSignals() throws Exception {
+        var word = readers.read("截图手册.docx", wordWithPictures(3));
+        assertThat(word.images()).isEqualTo(3);
+        assertThat(word.largestTableRows()).isEqualTo(1);
+        assertThat(readers.read("收银规范.docx", word()).images()).isZero();
+
+        var pdf = readers.read("截图手册.pdf", pdfWithPictures(2));
+        assertThat(pdf.images()).isEqualTo(2);
+        assertThat(readers.read("handover.pdf", pdf("Count the cash float before handover.", false)).images()).isZero();
+
+        var slides = readers.read("新员工培训.pptx", slides());
+        assertThat(slides.images()).isEqualTo(1);
+        assertThat(slides.largestTableRows()).isEqualTo(1);
+
+        assertThat(readers.read("价目表.xlsx", excel(new XSSFWorkbook())).largestTableRows()).isEqualTo(2);
+        var plain = readers.read("收银.md", "# 收银\n\n交班清点备用金。".getBytes(StandardCharsets.UTF_8));
+        assertThat(plain.images()).isZero();
+        assertThat(plain.largestTableRows()).isZero();
+    }
+
+    @Test
     @DisplayName("不支持的类型、没有扩展名直接拒绝；扩展名不分大小写（#145 C8）")
     void rejectsUnsupportedTypes() {
         assertThat(readers.supports("docx")).isTrue();
@@ -249,14 +271,58 @@ class LocalDocumentReadersTest {
     }
 
     private static byte[] png() throws IOException {
+        return png(1);
+    }
+
+    /** size 像素见方的 PNG；尺寸不同，内容就不同。 */
+    private static byte[] png(int size) throws IOException {
         var out = new ByteArrayOutputStream();
-        javax.imageio.ImageIO.write(new java.awt.image.BufferedImage(1, 1, java.awt.image.BufferedImage.TYPE_INT_RGB),
-                "png", out);
+        javax.imageio.ImageIO.write(
+                new java.awt.image.BufferedImage(size, size, java.awt.image.BufferedImage.TYPE_INT_RGB), "png", out);
         return out.toByteArray();
     }
 
     private String text(String filename, byte[] content) {
-        return readers.read(filename, content);
+        return readers.read(filename, content).content();
+    }
+
+    /** 截图为主的 Word：一句话、一个小表格和若干张图片。 */
+    private static byte[] wordWithPictures(int pictures) throws Exception {
+        try (var document = new XWPFDocument(); var out = new ByteArrayOutputStream()) {
+            document.createParagraph().createRun().setText("按下图操作。");
+            var table = document.createTable(2, 2);
+            table.getRow(0).getCell(0).setText("步骤");
+            table.getRow(1).getCell(0).setText("登录");
+            for (int i = 0; i < pictures; i++) {
+                // 每张图内容不同，免得被 Word 包当成同一张图合并。
+                document.createParagraph().createRun().addPicture(new java.io.ByteArrayInputStream(png(i + 1)),
+                        org.apache.poi.common.usermodel.PictureType.PNG, "step" + i + ".png", 9525, 9525);
+            }
+            document.write(out);
+            return out.toByteArray();
+        }
+    }
+
+    /** 一页 PDF：一行英文和若干张图片。 */
+    private static byte[] pdfWithPictures(int pictures) throws IOException {
+        try (var document = new PDDocument(); var out = new ByteArrayOutputStream()) {
+            var page = new PDPage();
+            document.addPage(page);
+            try (var content = new PDPageContentStream(document, page)) {
+                content.beginText();
+                content.setFont(new PDType1Font(Standard14Fonts.FontName.HELVETICA), 12);
+                content.newLineAtOffset(72, 700);
+                content.showText("Follow the screenshots below.");
+                content.endText();
+                for (int i = 0; i < pictures; i++) {
+                    var image = org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject.createFromByteArray(document,
+                            png(i + 1), "step" + i);
+                    content.drawImage(image, 72, 600 - i * 50, 40, 40);
+                }
+            }
+            document.save(out);
+            return out.toByteArray();
+        }
     }
 
     static byte[] word() throws IOException {

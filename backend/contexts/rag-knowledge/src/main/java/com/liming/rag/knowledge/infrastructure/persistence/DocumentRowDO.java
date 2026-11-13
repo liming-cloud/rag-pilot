@@ -2,9 +2,11 @@ package com.liming.rag.knowledge.infrastructure.persistence;
 
 import org.jspecify.annotations.NullUnmarked;
 
-/** 文档列表的一行（#136）：document 表的列，另带被替换文档的文件名，只在 infrastructure 包内读取。 */
+/** 文档列表的一行（#136）：document 表的列，另带被替换文档的文件名和体检结论（#218），只在 infrastructure 包内读取。 */
 @NullUnmarked
 final class DocumentRowDO extends DocumentDO {
 
     String replacesFilename;
+    /** 体检发现的问题代码；解析中、失败的文档为 null。 */
+    String[] findings;
 }

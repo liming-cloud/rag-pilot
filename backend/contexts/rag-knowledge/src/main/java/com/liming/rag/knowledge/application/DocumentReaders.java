@@ -12,9 +12,19 @@ public interface DocumentReaders {
     boolean supports(String extension);
 
     /**
-     * @return 整篇正文
+     * 读出的结果。
+     *
+     * @param content 整篇正文
+     * @param images 图片数（Word、PDF、PowerPoint），资料体检用来判断内容是否主要在图片里（#218）；其他格式为 0
+     * @param largestTableRows 最大一张表格（Excel 的一个工作表）的数据行数，不含表头；没有表格为 0
+     */
+    record Text(String content, int images, int largestTableRows) {
+    }
+
+    /**
+     * @return 整篇正文和资料体检用的信号
      * @throws IllegalArgumentException 不支持的文件类型
      * @throws DocumentParseException 文件损坏、加密、不是 UTF-8、没有文字时；message 是给管理员看的中文原因
      */
-    String read(String filename, byte[] content);
+    Text read(String filename, byte[] content);
 }
