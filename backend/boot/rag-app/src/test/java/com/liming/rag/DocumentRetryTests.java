@@ -65,7 +65,7 @@ class DocumentRetryTests {
         modelDown.set(false);
         embeddingStarted = null;
         embeddingReleased = null;
-        when(embeddings.embed(anyList())).thenAnswer(invocation -> {
+        when(embeddings.embedForIngestion(anyList())).thenAnswer(invocation -> {
             if (embeddingStarted != null) {
                 embeddingStarted.countDown();
                 assertThat(embeddingReleased.await(30, TimeUnit.SECONDS)).isTrue();

@@ -37,6 +37,11 @@ final class CachedQuestionEmbeddings implements EmbeddingClient {
     }
 
     @Override
+    public List<float[]> embedForIngestion(List<String> texts) {
+        return delegate.embedForIngestion(texts);
+    }
+
+    @Override
     public float[] embedQuestion(String question) {
         var cached = cache.get(key(question), () -> new QuestionVector(delegate.embedQuestion(question)));
         return cached == null ? delegate.embedQuestion(question) : cached.vector();
