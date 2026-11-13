@@ -102,6 +102,8 @@ export type KnowledgeBaseSummary = {
   expiringCount: number;
   /** 已失效的文档数。 */
   expiredCount: number;
+  /** 体检有问题、需要整理的文档数（#218）。 */
+  needsWorkCount: number;
 };
 
 /** 直接授权的账号，带上名字，不用为了显示名字再读全部账号。 */

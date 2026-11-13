@@ -138,6 +138,7 @@ export const knowledgeHandlers = [
             memberCount: (members[knowledgeBase.id] ?? []).length,
             expiringCount: count(knowledgeBase.id, "EXPIRING"),
             expiredCount: count(knowledgeBase.id, "EXPIRED"),
+            needsWorkCount: (documents[knowledgeBase.id] ?? []).filter((document) => !!document.findings?.length).length,
           }))
           .filter(
             (summary) => !validity || (validity === "EXPIRING" ? summary.expiringCount > 0 : summary.expiredCount > 0),

@@ -34,18 +34,20 @@ import { ACCEPT, type BatchItem, MAX_BATCH, prepare, run } from "./batchUpload";
 type Batch = { items: BatchItem[]; replacesDocumentId?: number; validity?: ValidityRange };
 
 const VALIDITY_FILTERS = ["EXPIRING", "EXPIRED", "PENDING"] as const;
+const HEALTH_FILTERS = ["NEEDS_WORK", "OK"] as const;
 
 /**
  * 知识库的文档（D-039）：顶部上传（选文件、选文件夹或拖到表格上），按文件名、状态、有效期、体检结论筛选，分页表格。
  * 一批最多 200 个文件、同时传 3 个，结束后汇总成功、重复、不支持、失败，失败的可以只重试这些（#124）。
  * 入库在后台进行：当前页有解析中的文档时每秒刷新一次，全部处理完就停。
- * 地址里的 validity 参数（如从知识库列表的“即将到期”点进来）作为初始筛选。
+ * 地址里的 validity、health 参数（如从知识库列表的“即将到期”“需整理”点进来）作为初始筛选。
  */
 export function DocumentsPanel({ knowledgeBaseId }: { knowledgeBaseId: number }) {
   const queryClient = useQueryClient();
   const [params] = useSearchParams();
   const initialValidity = VALIDITY_FILTERS.find((value) => value === params.get("validity")) ?? null;
-  const [filter, change] = usePagedFilter<DocumentFilter>({ validity: initialValidity });
+  const initialHealth = HEALTH_FILTERS.find((value) => value === params.get("health")) ?? null;
+  const [filter, change] = usePagedFilter<DocumentFilter>({ validity: initialValidity, health: initialHealth });
   const [keyword, setKeyword] = useState("");
   const documents = useQuery({
     queryKey: knowledgeKeys.documents(knowledgeBaseId, filter),

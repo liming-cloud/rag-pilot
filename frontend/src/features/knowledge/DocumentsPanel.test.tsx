@@ -49,22 +49,37 @@ describe("知识库的文档", () => {
     expect(await screen.findByText("共 2 条")).toBeInTheDocument();
   });
 
-  it("资料体检（#218）：每篇文档给出结论和整改建议，重复的列出另一份在哪个库；按体检结论筛选", async () => {
+  it("资料体检（#218）：每篇文档显示体检标签，点开看整改建议和重复的文档在哪个库；按体检结论筛选", async () => {
     renderPanel();
 
     expect(within(await row("临期与报损管理（旧版）.md")).getByText("正常")).toBeInTheDocument();
-    const manual = await row("收银系统操作指南.docx");
-    expect(within(manual).getByText("疑似内容在图片里")).toBeInTheDocument();
-    expect(within(manual).getByText(/截图里的操作步骤问不到/)).toBeInTheDocument();
-    expect(within(manual).getByText("Word 没用标题样式")).toBeInTheDocument();
-    const copy = await row("临期与报损管理.md");
-    expect(within(copy).getByText("与其他文档重复")).toBeInTheDocument();
-    expect(within(copy).getByText("《临期与报损管理.md》（商品知识库）")).toBeInTheDocument();
     expect(within(await row("旧版陈列手册.txt")).queryByText("正常")).not.toBeInTheDocument();
+    const manual = await row("收银系统操作指南.docx");
+    expect(within(manual).getByRole("button", { name: /Word 没用标题样式/ })).toBeInTheDocument();
+    expect(within(manual).queryByText(/截图里的操作步骤问不到/)).not.toBeInTheDocument();
+
+    fireEvent.click(within(manual).getByRole("button", { name: /疑似内容在图片里/ }));
+    const detail = await screen.findByRole("dialog", { name: "体检结论" });
+    expect(within(detail).getByText("收银系统操作指南.docx")).toBeInTheDocument();
+    expect(within(detail).getByText(/截图里的操作步骤问不到/)).toBeInTheDocument();
+    expect(within(detail).getByText(/标题 1\/2\/3/)).toBeInTheDocument();
+    fireEvent.click(within(detail).getByRole("button", { name: "关闭" }));
+
+    fireEvent.click(within(await row("临期与报损管理.md")).getByRole("button", { name: /与其他文档重复/ }));
+    const duplicate = await screen.findByRole("dialog", { name: "体检结论" });
+    expect(within(duplicate).getByText("《临期与报损管理.md》（商品知识库）")).toBeInTheDocument();
+    fireEvent.click(within(duplicate).getByRole("button", { name: "关闭" }));
 
     fireEvent.change(screen.getByLabelText("体检"), { target: { value: "NEEDS_WORK" } });
     expect(await screen.findByText("共 10 条")).toBeInTheDocument();
     expect(screen.queryByText("临期与报损管理（旧版）.md")).not.toBeInTheDocument();
+  });
+
+  it("从知识库列表的“需整理”点进来，地址里的 health 作为初始筛选", async () => {
+    renderPanel("/admin/knowledge/1?health=NEEDS_WORK");
+
+    expect(await screen.findByText("共 10 条")).toBeInTheDocument();
+    expect(screen.getByLabelText("体检")).toHaveValue("NEEDS_WORK");
   });
 
   it("处理失败的文档（#145 A9）：模型暂时不可用的可以重新处理、说明何时自动重试；文件本身有问题的提示改好后重传", async () => {

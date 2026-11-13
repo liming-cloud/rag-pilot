@@ -28,7 +28,7 @@ describe("知识库列表", () => {
   // 管理页按权限显示按钮，以有全部管理权限的超级管理员测试页面本身的行为。
   beforeEach(() => signInAs("admin"));
 
-  it("分页列出知识库，显示文档数、失败数和授权情况", async () => {
+  it("分页列出知识库，显示文档数、失败数、需整理数（#218）和授权情况", async () => {
     renderAt();
 
     const table = await screen.findByRole("table", { name: "知识库" });
@@ -37,6 +37,10 @@ describe("知识库列表", () => {
     expect(within(row).getByText("2 份即将到期")).toBeInTheDocument();
     expect(within(row).getByText("1 份已失效")).toBeInTheDocument();
     expect(within(row).getByText("2 份失败")).toBeInTheDocument();
+    expect(within(row).getByRole("link", { name: "10 份需整理" })).toHaveAttribute(
+      "href",
+      "/admin/knowledge/1?health=NEEDS_WORK",
+    );
     expect(within(row).getByText("1 个角色")).toBeInTheDocument();
     expect(within(row).getByText("2 个账号")).toBeInTheDocument();
     expect(screen.getByText("共 24 条")).toBeInTheDocument();
