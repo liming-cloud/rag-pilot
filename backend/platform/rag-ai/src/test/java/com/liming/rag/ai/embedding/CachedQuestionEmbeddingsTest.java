@@ -45,4 +45,25 @@ class CachedQuestionEmbeddingsTest {
 
         assertThat(calls).hasSize(2);
     }
+
+    @Test
+    void ingestionKeepsRateLimitBackoffOfDelegate() {
+        var ingestion = new ArrayList<List<String>>();
+        var delegate = new EmbeddingClient() {
+            @Override
+            public List<float[]> embed(List<String> texts) {
+                throw new AssertionError("入库要走带退避的 embedForIngestion（#226）");
+            }
+
+            @Override
+            public List<float[]> embedForIngestion(List<String> texts) {
+                ingestion.add(texts);
+                return new HashingEmbeddingClient().embed(texts);
+            }
+        };
+
+        new CachedQuestionEmbeddings(delegate, "BAAI/bge-m3", caches).embedForIngestion(List.of("a"));
+
+        assertThat(ingestion).containsExactly(List.of("a"));
+    }
 }

@@ -176,10 +176,10 @@ class ApiContractTests {
                 Map.of("effectiveFrom", "", "expiresOn", LocalDate.now().plusDays(3).toString()));
         TestDocuments.awaitProcessed(http, kb, upload(null, kb + "/documents", "空白.txt", " \n\n  \n"), null);
         // 只有模型不可用导致失败的文档能重新处理：入库时让向量化失败一次。
-        doThrow(new ModelCallException("向量模型暂时不可用")).when(embeddings).embed(anyList());
+        doThrow(new ModelCallException("向量模型暂时不可用")).when(embeddings).embedForIngestion(anyList());
         var failed = TestDocuments.awaitProcessed(http, kb, upload(null, kb + "/documents", "盘点规范.txt",
                 "月末盘点要两人一组，一人点数一人记录。"), null);
-        doCallRealMethod().when(embeddings).embed(anyList());
+        doCallRealMethod().when(embeddings).embedForIngestion(anyList());
         assertThat(failed).containsEntry("status", "FAILED");
         write("POST /api/knowledge-bases/:id/documents/:documentId/reprocess", HttpMethod.POST,
                 "/api/knowledge-bases/" + kb + "/documents/" + failed.get("id") + "/reprocess", null);

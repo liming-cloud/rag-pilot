@@ -20,7 +20,7 @@ class AiTextEmbedding implements TextEmbedding {
 
     @Override
     public List<float[]> embed(List<String> texts) {
-        return call(() -> embeddings.embed(texts));
+        return call(() -> embeddings.embedForIngestion(texts));
     }
 
     /** 经 rag-ai 的问题向量缓存（D-053）。 */

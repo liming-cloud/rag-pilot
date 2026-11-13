@@ -85,6 +85,7 @@ docker compose --env-file .env --env-file release.env logs --tail 200 app   # �
 | `event=answer_refused` | 答不上来：`reason` 是原因（`NO_EVIDENCE` 没检索到、`LOW_RELEVANCE` 相关度太低、`MODEL_DECLINED` 模型判断依据不足、`UNCITED` 回答没有有效引用、`DATA_DENIED` 要查的数据无权查看、`DATA_UNAVAILABLE` 数据暂时查不到），`top` 是最高相关度 |
 | `event=query_rewritten` | 相关度偏低时换个说法再找一次：`outcome` 是结果（`REWRITTEN` 改写了、`NO_CHANGE` 没改、`TIMED_OUT` 改写超时、`SKIPPED_BELOW_FLOOR` 分数太低不改写直接拒答） |
 | `event=document_failed` | 文档入库失败：`kind=content` 是文件本身的问题，`kind=model` 是模型暂时不可用（10 分钟后自动重试一次），`kind=error` 是意外错误（带堆栈） |
+| `event=embedding_rate_limited` | 入库向量化被嵌入服务限流，SDK 重试后仍不行，等 `wait` 后只重做这一批（`round` 是第几轮，最多 6 轮约 3 分钟），已算好的批次不重做；仍被限流时文档按 `kind=model` 失败。经常出现说明调小 `RAG_INGESTION_CONCURRENCY` 或提高服务商额度 |
 | `event=document_retried` | 模型暂时不可用而失败的文档自动重新处理：`attempts` 是第几次处理 |
 | `event=document_deferred`、`event=document_discarded` | 正在停机，文档留在“解析中”，下次启动时重新处理；处理期间文档被删除，结果不写回 |
 | `event=document_file_orphaned` | 文档已删除，但原始文件（`sha256`）没删掉，留在存储目录里，不影响使用，可以手工清理 |

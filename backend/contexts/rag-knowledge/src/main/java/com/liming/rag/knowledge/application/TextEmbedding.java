@@ -7,8 +7,10 @@ import java.util.List;
 public interface TextEmbedding {
 
     /**
+     * 入库时批量向量化，在后台线程调用：被限流时按批退避续传，可能等几分钟（#226）。
+     *
      * @return 与输入同序的向量，维度与 chunk.embedding 列一致
-     * @throws EmbeddingUnavailableException 嵌入模型不可用
+     * @throws EmbeddingUnavailableException 嵌入模型不可用，或退避用完仍被限流
      */
     List<float[]> embed(List<String> texts);
 
