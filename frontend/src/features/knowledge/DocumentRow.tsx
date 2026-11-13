@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { TableCell, TableRow } from "@/components/ui/table";
 import { Can, PERMISSIONS, useCan } from "@/lib/permissions";
 import { formatDateTime } from "@/lib/utils";
+import { DocumentHealth } from "./DocumentHealth";
 import { rangeParts } from "./ValidityDialog";
 import { type KnowledgeDocument, VALIDITY } from "./api";
 
@@ -16,7 +17,7 @@ const STATUS = {
 } as const;
 
 /**
- * 一份文档：状态、分块数、大小、上传时间、失败原因、有效期，以及“上传新版本”和“删除”（行内二次确认）。
+ * 一份文档：状态、体检结论、分块数、大小、上传时间、失败原因、有效期，以及“上传新版本”和“删除”（行内二次确认）。
  * 有修改权限时点有效期本身就能改，不再单占一个操作按钮，窄屏下操作列放得下。
  */
 export function DocumentRow({
@@ -79,6 +80,9 @@ export function DocumentRow({
       </TableCell>
       <TableCell>
         <Badge variant={status.variant}>{status.label}</Badge>
+      </TableCell>
+      <TableCell>
+        <DocumentHealth document={document} />
       </TableCell>
       <TableCell className="text-right tabular-nums">{document.status === "READY" ? document.chunkCount : "—"}</TableCell>
       <TableCell className="text-right whitespace-nowrap tabular-nums">{formatSize(document.sizeBytes)}</TableCell>

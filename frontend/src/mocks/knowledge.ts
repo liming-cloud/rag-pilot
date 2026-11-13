@@ -103,6 +103,7 @@ async function upload(knowledgeBaseId: number, request: Request, replacesDocumen
     replacesFilename: null,
     reprocessable: false,
     retryAt: null,
+    findings: null,
     ...range,
   };
   list.unshift(created);
@@ -227,11 +228,13 @@ export const knowledgeHandlers = [
     const keyword = url.searchParams.get("keyword");
     const status = url.searchParams.get("status");
     const validity = url.searchParams.get("validity");
+    const health = url.searchParams.get("health");
     const snapshot = paginate(
       list
         .filter((document) => matches(keyword, document.filename))
         .filter((document) => !status || document.status === status)
         .filter((document) => !validity || validityOf(document) === validity)
+        .filter((document) => !health || (health === "OK" ? document.findings?.length === 0 : !!document.findings?.length))
         .map((document) => ({
           ...withValidity(document),
           replacesFilename: list.find((other) => other.id === document.replacesDocumentId)?.filename ?? null,
@@ -239,7 +242,7 @@ export const knowledgeHandlers = [
       url,
     );
     for (const document of list.filter((candidate) => candidate.status === "PARSING")) {
-      Object.assign(document, { status: "READY", chunkCount: pendingChunks.get(document.id) ?? 1 });
+      Object.assign(document, { status: "READY", chunkCount: pendingChunks.get(document.id) ?? 1, findings: [] });
       if (document.replacesDocumentId) {
         documents[id] = (documents[id] ?? []).filter((candidate) => candidate.id !== document.replacesDocumentId);
         document.replacesDocumentId = null;
@@ -260,7 +263,7 @@ export const knowledgeHandlers = [
         { status: 409 },
       );
     }
-    Object.assign(document, { status: "PARSING", error: null, reprocessable: false, retryAt: null });
+    Object.assign(document, { status: "PARSING", error: null, reprocessable: false, retryAt: null, findings: null });
     pendingChunks.set(document.id, 6);
     return HttpResponse.json(withValidity(document));
   }),

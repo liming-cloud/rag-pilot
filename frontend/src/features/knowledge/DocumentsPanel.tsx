@@ -20,6 +20,7 @@ import {
   deleteDocument,
   type DocumentFilter,
   fetchDocuments,
+  type HealthFilter,
   type KnowledgeDocument,
   knowledgeKeys,
   reprocessDocument,
@@ -35,7 +36,7 @@ type Batch = { items: BatchItem[]; replacesDocumentId?: number; validity?: Valid
 const VALIDITY_FILTERS = ["EXPIRING", "EXPIRED", "PENDING"] as const;
 
 /**
- * 知识库的文档（D-039）：顶部上传（选文件、选文件夹或拖到表格上），按文件名、状态、有效期筛选，分页表格。
+ * 知识库的文档（D-039）：顶部上传（选文件、选文件夹或拖到表格上），按文件名、状态、有效期、体检结论筛选，分页表格。
  * 一批最多 200 个文件、同时传 3 个，结束后汇总成功、重复、不支持、失败，失败的可以只重试这些（#124）。
  * 入库在后台进行：当前页有解析中的文档时每秒刷新一次，全部处理完就停。
  * 地址里的 validity 参数（如从知识库列表的“即将到期”点进来）作为初始筛选。
@@ -146,6 +147,17 @@ export function DocumentsPanel({ knowledgeBaseId }: { knowledgeBaseId: number })
               <NativeSelectOption value="PENDING">未生效</NativeSelectOption>
             </NativeSelect>
           </Label>
+          <Label className="flex flex-col gap-1 text-sm">
+            体检
+            <NativeSelect
+              value={filter.health ?? ""}
+              onChange={(event) => change({ health: (event.target.value || null) as HealthFilter | null })}
+            >
+              <NativeSelectOption value="">全部</NativeSelectOption>
+              <NativeSelectOption value="NEEDS_WORK">需整理</NativeSelectOption>
+              <NativeSelectOption value="OK">正常</NativeSelectOption>
+            </NativeSelect>
+          </Label>
           <Button type="submit" size="sm" variant="outline">
             <Search aria-hidden="true" className="size-4" />
             查询
@@ -216,6 +228,7 @@ export function DocumentsPanel({ knowledgeBaseId }: { knowledgeBaseId: number })
             <TableRow>
               <TableHead>文件</TableHead>
               <TableHead>状态</TableHead>
+              <TableHead>体检</TableHead>
               <TableHead className="text-right">分块</TableHead>
               <TableHead className="text-right">大小</TableHead>
               <TableHead>上传时间</TableHead>
@@ -226,8 +239,8 @@ export function DocumentsPanel({ knowledgeBaseId }: { knowledgeBaseId: number })
           <TableBody>
             {documents.data?.items.length === 0 && (
               <TableRow>
-                <TableCell colSpan={7} className="py-10 text-center text-muted-foreground">
-                  {filter.keyword || filter.status || filter.validity
+                <TableCell colSpan={8} className="py-10 text-center text-muted-foreground">
+                  {filter.keyword || filter.status || filter.validity || filter.health
                     ? "没有符合条件的文档"
                     : "还没有文档，先上传一份吧。"}
                 </TableCell>

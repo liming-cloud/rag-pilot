@@ -26,7 +26,56 @@ export type KnowledgeDocument = {
   reprocessable: boolean;
   /** 自动重试的时间（第一次失败 10 分钟后，只重试一次）；不自动重试时为 null。 */
   retryAt: string | null;
+  /** 资料体检的结论（#218），空数组表示正常；解析中、失败的文档还没有结论，为 null。 */
+  findings: DocumentFinding[] | null;
 };
+
+/** 体检发现的一个问题；只提示，不影响入库和检索（D-070）。 */
+export type DocumentFinding = {
+  code: FindingCode;
+  /** 重复、疑似重复时的另一份文档，只列查看人能访问的库；其他问题为空数组。 */
+  similar: SimilarDocument[];
+};
+
+export type SimilarDocument = { knowledgeBaseId: number; knowledgeBaseName: string; documentId: number; filename: string };
+
+export type FindingCode =
+  | "IMAGE_HEAVY"
+  | "WORD_NO_HEADINGS"
+  | "PDF_NO_STRUCTURE"
+  | "NO_HEADINGS"
+  | "LARGE_TABLE"
+  | "GARBLED"
+  | "SCATTERED"
+  | "NO_CHUNKS"
+  | "DUPLICATE"
+  | "NEAR_DUPLICATE";
+
+/** 体检结论的名称和整改建议；parse-check.sql 的结论用同样的名称。 */
+export const FINDINGS: Record<FindingCode, { label: string; advice: string }> = {
+  IMAGE_HEAVY: {
+    label: "疑似内容在图片里",
+    advice: "图片多、抽出的文字少，截图里的操作步骤问不到；把关键步骤补写成文字后上传新版本。",
+  },
+  WORD_NO_HEADINGS: {
+    label: "Word 没用标题样式",
+    advice: "章节标题是手动加粗的，回答定位不到章节；把标题设成“标题 1/2/3”样式后上传新版本。",
+  },
+  PDF_NO_STRUCTURE: {
+    label: "PDF 读不出章节",
+    advice: "PDF 里没有章节信息，只能按页切分；有原始 Word 文件的话改传 Word。",
+  },
+  NO_HEADINGS: { label: "文档没有标题", advice: "长文档没有章节标题，回答定位不到章节；按主题加上标题后上传新版本。" },
+  LARGE_TABLE: { label: "表格过大", advice: "单张表格行数很多，按行检索容易漏；按主题拆成几个工作表或几份文件。" },
+  GARBLED: { label: "疑似乱码", advice: "部分文字没有正确读出（常见于字体没嵌入的 PDF）；另存为 Word 或重新导出 PDF 后上传。" },
+  SCATTERED: { label: "疑似版面散乱", advice: "空白过多，文字被版面打散；改传 Word 或纯文本版本。" },
+  NO_CHUNKS: { label: "没有可检索的内容", advice: "没有切出任何分块；检查文件是否只有图片或空白页。" },
+  DUPLICATE: { label: "与其他文档重复", advice: "和下面的文档内容完全相同，会占掉回答的引用；删掉多余的副本。" },
+  NEAR_DUPLICATE: { label: "疑似重复", advice: "大部分内容和下面的文档重合；确认后只保留有效的一份。" },
+};
+
+/** 体检筛选：需整理（至少一个问题）或正常。 */
+export type HealthFilter = "NEEDS_WORK" | "OK";
 
 /** 有效期状态：有效、即将到期（提醒天数内）、已失效、未生效；后两种不参与检索和回答。 */
 export type Validity = "ACTIVE" | "EXPIRING" | "EXPIRED" | "PENDING";
@@ -77,6 +126,7 @@ export type DocumentFilter = {
   keyword?: string;
   status?: KnowledgeDocument["status"] | null;
   validity?: Validity | null;
+  health?: HealthFilter | null;
   page?: number;
   size?: number;
 };
@@ -94,7 +144,7 @@ export async function createKnowledgeBase(name: string): Promise<KnowledgeBase> 
   return json(response, "新建知识库失败");
 }
 
-/** 按文件名、状态筛选，分页列出文档（D-039）。 */
+/** 按文件名、状态、有效期、体检结论筛选，分页列出文档（D-039）。 */
 export async function fetchDocuments(
   knowledgeBaseId: number,
   filter: DocumentFilter = {},
