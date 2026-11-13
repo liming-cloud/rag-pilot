@@ -30,7 +30,7 @@ class DocLinksTest {
 
     private static final int MAX_DECISION_LINES = 40;
     private static final int MAX_AGENTS_LINES = 80;
-    private static final int DECISION_COUNT = 68;
+    private static final int DECISION_COUNT = 69;
 
     private static final Set<String> SKIPPED_DIRS = Set.of(".git", "node_modules", "target", ".claude", "dist", ".idea");
     private static final Set<String> TEXT_SUFFIXES = Set.of(".md", ".java", ".ts", ".tsx", ".xml", ".yml", ".yaml",
