@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.liming.rag.knowledge.infrastructure.persistence.DocumentMapper">
+
+    <!--
+      资料体检的信号（#218）：图片数、最大表格行由读取时得到；字数、空白、乱码、标题层级从刚写入的分块算出，
+      口径与迁移 V202611130101 的回填一致（乱码是 U+FFFD、私有区和控制字符；标题层级取 heading_path 最深的一级）。
+    -->
+    <update id="refreshSignals">
+        UPDATE document d
+        SET image_count        = #{images},
+            largest_table_rows = #{largestTableRows},
+            total_chars        = s.total_chars,
+            blank_chars        = s.blank_chars,
+            garbled_chars      = s.garbled_chars,
+            heading_depth      = s.heading_depth
+        FROM (SELECT sum(length(c.content)) AS total_chars,
+                     sum(length(c.content) - length(regexp_replace(c.content, '\s', '', 'g'))) AS blank_chars,
+                     sum(length(c.content) - length(regexp_replace(c.content,
+                         '[\uFFFD\uE000-\uF8FF\u0001-\u0008\u000B\u000C\u000E-\u001F]', '', 'g'))) AS garbled_chars,
+                     max(length(c.heading_path) - length(replace(c.heading_path, ' &gt; ', ''))) / 3 AS heading_depth
+              FROM chunk c
+              WHERE c.tenant_id = #{tenantId} AND c.document_id = #{documentId}) s
+        WHERE d.tenant_id = #{tenantId} AND d.id = #{documentId}
+    </update>
+
+    <delete id="deleteOverlaps">
+        DELETE FROM document_overlap
+        WHERE tenant_id = #{tenantId} AND (document_id = #{documentId} OR other_document_id = #{documentId})
+    </delete>
+
+    <!--
+      疑似重复：一份文档去重后的分块正文有 ≥ 80% 在另一份里也有，两个方向各算一次（小文档整篇在大文档里，只标小的那份）。
+      按正文摘要比较，走 chunk_content_md5_idx；口径与迁移 V202611130101 的回填一致。
+    -->
+    <insert id="insertOverlaps">
+        WITH mine AS (SELECT DISTINCT md5(content) AS hash FROM chunk
+                      WHERE tenant_id = #{tenantId} AND document_id = #{documentId}),
+             shared AS (SELECT c.document_id AS other_document_id, count(DISTINCT md5(c.content)) AS n
+                        FROM chunk c JOIN mine ON md5(c.content) = mine.hash
+                        WHERE c.tenant_id = #{tenantId} AND c.document_id &lt;&gt; #{documentId}
+                        GROUP BY c.document_id),
+             totals AS (SELECT document_id, count(DISTINCT md5(content)) AS total FROM chunk
+                        WHERE tenant_id = #{tenantId}
+                          AND (document_id = #{documentId} OR document_id IN (SELECT other_document_id FROM shared))
+                        GROUP BY document_id)
+        INSERT INTO document_overlap (tenant_id, document_id, other_document_id)
+        SELECT #{tenantId}, #{documentId}, s.other_document_id
+        FROM shared s JOIN totals t ON t.document_id = #{documentId}
+        WHERE s.n &gt;= 0.8 * t.total
+        UNION ALL
+        SELECT #{tenantId}, s.other_document_id, #{documentId}
+        FROM shared s JOIN totals t ON t.document_id = s.other_document_id
+        WHERE s.n &gt;= 0.8 * t.total
+    </insert>
+</mapper>

@@ -167,6 +167,11 @@ public final class InMemoryKnowledge {
         }
 
         @Override
+        public void saveHealthSignals(Document document, int images, int largestTableRows) {
+            // 体检信号只在数据库里算，内存版不记。
+        }
+
+        @Override
         public Optional<Document> findInKnowledgeBase(long knowledgeBaseId, String sha256) {
             return rows.values().stream()
                     .filter(doc -> doc.knowledgeBaseId() == knowledgeBaseId && doc.sha256().equals(sha256))
@@ -288,6 +293,7 @@ public final class InMemoryKnowledge {
         public String keyword;
         public DocumentStatus status;
         public Validity.State validity;
+        public DocumentFinding.Filter health;
         public Window window;
         public Paged.Request page;
         public int limit;
@@ -300,9 +306,10 @@ public final class InMemoryKnowledge {
         }
 
         @Override
-        public Paged<DocumentRow> documents(TenantId tenantId, long knowledgeBaseId, String keyword,
-                DocumentStatus status, Validity.State validity, Window window, Paged.Request page) {
-            record(null, keyword, status, validity, window, page);
+        public Paged<DocumentRow> documents(TenantId tenantId, Grantee viewer, long knowledgeBaseId,
+                DocumentQuery query, Window window, Paged.Request page) {
+            record(viewer, query.keyword(), query.status(), query.validity(), window, page);
+            this.health = query.health();
             return new Paged<>(List.of(), 0, page.page(), page.size());
         }
 

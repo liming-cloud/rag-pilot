@@ -95,6 +95,7 @@ export function KnowledgePage() {
               <TableHead>名称</TableHead>
               <TableHead className="text-right">文档</TableHead>
               <TableHead>解析失败</TableHead>
+              <TableHead>体检</TableHead>
               <TableHead>有效期提醒</TableHead>
               <TableHead className="text-right">授权角色</TableHead>
               <TableHead className="text-right">可访问账号</TableHead>
@@ -104,7 +105,7 @@ export function KnowledgePage() {
           <TableBody>
             {knowledgeBases.data?.items.length === 0 && (
               <TableRow>
-                <TableCell colSpan={7} className="py-10 text-center text-muted-foreground">
+                <TableCell colSpan={8} className="py-10 text-center text-muted-foreground">
                   没有符合条件的知识库
                 </TableCell>
               </TableRow>
@@ -120,6 +121,15 @@ export function KnowledgePage() {
                 <TableCell>
                   {knowledgeBase.failedCount > 0 ? (
                     <Badge variant="destructive">{knowledgeBase.failedCount} 份失败</Badge>
+                  ) : (
+                    <span className="text-muted-foreground">—</span>
+                  )}
+                </TableCell>
+                <TableCell>
+                  {knowledgeBase.needsWorkCount > 0 ? (
+                    <Link to={`/admin/knowledge/${knowledgeBase.id}?health=NEEDS_WORK`}>
+                      <Badge className="hover:underline">{knowledgeBase.needsWorkCount} 份需整理</Badge>
+                    </Link>
                   ) : (
                     <span className="text-muted-foreground">—</span>
                   )}

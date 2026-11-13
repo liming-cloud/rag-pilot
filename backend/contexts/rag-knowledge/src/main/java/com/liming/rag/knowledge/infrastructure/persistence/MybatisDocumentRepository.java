@@ -111,6 +111,14 @@ class MybatisDocumentRepository implements DocumentRepository {
     }
 
     @Override
+    public void saveHealthSignals(Document document, int images, int largestTableRows) {
+        long tenantId = document.tenantId().value();
+        documents.refreshSignals(tenantId, document.id(), images, largestTableRows);
+        documents.deleteOverlaps(tenantId, document.id());
+        documents.insertOverlaps(tenantId, document.id());
+    }
+
+    @Override
     public Optional<Document> findInKnowledgeBase(long knowledgeBaseId, String sha256) {
         return Optional.ofNullable(documents.selectOne(new LambdaQueryWrapper<DocumentDO>()
                         .eq(DocumentDO::getKnowledgeBaseId, knowledgeBaseId)

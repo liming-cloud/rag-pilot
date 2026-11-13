@@ -10,6 +10,39 @@
         AND d.expires_on BETWEEN #{today} AND #{warnUntil}
     </sql>
 
+    <!--
+      资料体检（#218、D-070、D-071）：读入库时记下的信号（DocumentMapper.xml），只对可用的文档下结论，其他状态为 NULL；
+      空数组表示正常。deploy/parse-check.sql 用同样的规则和阈值，改这里要一起改，ParseCheckSqlTests 校验两边一致。
+      信号为空（升级前入库、还没重新处理的文档没有图片数和表格行）时相应规则不判断。
+      重复只在查看人能访问的库里找（all 为 false 时），不提示无权访问的库里有没有副本。
+    -->
+    <sql id="extension">lower(substring(d.filename from '\.([^.]+)$'))</sql>
+    <sql id="visibleOther">
+        <if test="!all">AND o.knowledge_base_id IN (<include refid="com.liming.rag.knowledge.infrastructure.persistence.ChunkSearchMapper.accessibleKnowledgeBases"/>)</if>
+    </sql>
+    <sql id="findings">
+        CASE WHEN d.status = 'READY' THEN array_remove(ARRAY[
+            CASE WHEN d.chunk_count = 0 THEN 'NO_CHUNKS' END,
+            CASE WHEN <include refid="extension"/> IN ('docx', 'pdf', 'pptx') AND d.image_count &gt;= 2
+                      AND d.total_chars - d.blank_chars &lt; 200 * d.image_count THEN 'IMAGE_HEAVY' END,
+            CASE WHEN <include refid="extension"/> = 'docx' AND d.heading_depth = 0 AND d.chunk_count &gt;= 5
+                 THEN 'WORD_NO_HEADINGS' END,
+            CASE WHEN <include refid="extension"/> = 'pdf' AND d.heading_depth = 0 AND d.chunk_count &gt;= 5
+                 THEN 'PDF_NO_STRUCTURE' END,
+            CASE WHEN <include refid="extension"/> IN ('txt', 'md', 'markdown') AND d.heading_depth = 0
+                      AND d.chunk_count &gt;= 5 THEN 'NO_HEADINGS' END,
+            CASE WHEN d.largest_table_rows &gt;= 500 THEN 'LARGE_TABLE' END,
+            CASE WHEN 100.0 * d.garbled_chars / nullif(d.total_chars, 0) &gt;= 1 THEN 'GARBLED' END,
+            CASE WHEN 100.0 * d.blank_chars / nullif(d.total_chars, 0) &gt;= 40 THEN 'SCATTERED' END,
+            CASE WHEN EXISTS (SELECT 1 FROM document o
+                              WHERE o.tenant_id = d.tenant_id AND o.sha256 = d.sha256 AND o.id &lt;&gt; d.id
+                                AND o.status = 'READY' <include refid="visibleOther"/>) THEN 'DUPLICATE' END,
+            CASE WHEN EXISTS (SELECT 1 FROM document_overlap ov JOIN document o ON o.id = ov.other_document_id
+                              WHERE ov.document_id = d.id AND o.sha256 &lt;&gt; d.sha256 AND o.status = 'READY'
+                                <include refid="visibleOther"/>) THEN 'NEAR_DUPLICATE' END
+        ], NULL) END
+    </sql>
+
     <sql id="knowledgeBaseFilter">
         WHERE kb.tenant_id = #{tenantId}
         <if test="!all">
@@ -32,14 +65,16 @@
                coalesce(docs.expiring_count, 0) AS expiring_count,
                coalesce(docs.expired_count, 0) AS expired_count,
                coalesce(grants.role_grant_count, 0) AS role_grant_count,
-               coalesce(members.member_count, 0) AS member_count
+               coalesce(members.member_count, 0) AS member_count,
+               coalesce(docs.needs_work_count, 0) AS needs_work_count
         FROM knowledge_base kb
         LEFT JOIN (
             SELECT d.knowledge_base_id,
                    count(*) AS document_count,
                    count(*) FILTER (WHERE d.status = 'FAILED') AS failed_count,
                    count(*) FILTER (WHERE <include refid="expiring"/>) AS expiring_count,
-                   count(*) FILTER (WHERE <include refid="expired"/>) AS expired_count
+                   count(*) FILTER (WHERE <include refid="expired"/>) AS expired_count,
+                   count(*) FILTER (WHERE cardinality(<include refid="findings"/>) &gt; 0) AS needs_work_count
             FROM document d
             WHERE d.tenant_id = #{tenantId}
             GROUP BY d.knowledge_base_id
@@ -73,12 +108,20 @@
             AND (d.effective_from IS NULL OR d.effective_from &lt;= #{today})
             AND (d.expires_on IS NULL OR d.expires_on &gt; #{warnUntil})
         </if>
+        <if test="health == 'NEEDS_WORK'">AND cardinality(<include refid="findings"/>) &gt; 0</if>
+        <if test="health == 'OK'">AND cardinality(<include refid="findings"/>) = 0</if>
     </sql>
 
-    <select id="documents" resultType="com.liming.rag.knowledge.infrastructure.persistence.DocumentRowDO">
+    <resultMap id="documentRow" type="com.liming.rag.knowledge.infrastructure.persistence.DocumentRowDO"
+               autoMapping="true">
+        <result column="findings" property="findings" typeHandler="org.apache.ibatis.type.ArrayTypeHandler"/>
+    </resultMap>
+
+    <select id="documents" resultMap="documentRow">
         SELECT d.id, d.version, d.tenant_id, d.knowledge_base_id, d.filename, d.media_type, d.sha256, d.size_bytes, d.status,
                d.error, d.chunk_count, d.created_at, d.replaces_document_id, d.effective_from, d.expires_on,
-               d.reprocessable, d.retry_at, d.attempts, old.filename AS replaces_filename
+               d.reprocessable, d.retry_at, d.attempts, old.filename AS replaces_filename,
+               <include refid="findings"/> AS findings
         FROM document d
         LEFT JOIN document old ON old.id = d.replaces_document_id
         <include refid="documentFilter"/>
@@ -89,6 +132,28 @@
     <select id="countDocuments" resultType="long">
         SELECT count(*) FROM document d
         <include refid="documentFilter"/>
+    </select>
+
+    <!-- 文档列表里各文档的重复、疑似重复的另一份文档，口径同 findings，只列查看人能访问的库。 -->
+    <select id="similarDocuments" resultType="com.liming.rag.knowledge.infrastructure.persistence.SimilarDocumentDO">
+        SELECT d.id AS document_id, 'DUPLICATE' AS code, o.knowledge_base_id, kb.name AS knowledge_base_name,
+               o.id AS other_document_id, o.filename
+        FROM document d
+        JOIN document o ON o.tenant_id = d.tenant_id AND o.sha256 = d.sha256 AND o.id &lt;&gt; d.id AND o.status = 'READY'
+        JOIN knowledge_base kb ON kb.id = o.knowledge_base_id
+        WHERE d.tenant_id = #{tenantId}
+          AND d.id IN <foreach collection="documentIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+          <include refid="visibleOther"/>
+        UNION ALL
+        SELECT d.id, 'NEAR_DUPLICATE', o.knowledge_base_id, kb.name, o.id, o.filename
+        FROM document d
+        JOIN document_overlap ov ON ov.document_id = d.id
+        JOIN document o ON o.id = ov.other_document_id AND o.sha256 &lt;&gt; d.sha256 AND o.status = 'READY'
+        JOIN knowledge_base kb ON kb.id = o.knowledge_base_id
+        WHERE d.tenant_id = #{tenantId}
+          AND d.id IN <foreach collection="documentIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+          <include refid="visibleOther"/>
+        ORDER BY 1, 5
     </select>
 
     <!-- 运营概览的到期提醒：与知识库列表同样的可见范围。 -->

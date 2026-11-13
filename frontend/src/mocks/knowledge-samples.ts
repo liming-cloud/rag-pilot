@@ -1,4 +1,11 @@
-import type { KnowledgeBase, KnowledgeDocument, Validity } from "@/features/knowledge/api";
+import type {
+  DocumentFinding,
+  FindingCode,
+  KnowledgeBase,
+  KnowledgeDocument,
+  SimilarDocument,
+  Validity,
+} from "@/features/knowledge/api";
 
 /** 假接口与后端契约保持一致；示例数据只用于原型和测试。 */
 export const sampleKnowledgeBases: KnowledgeBase[] = [
@@ -38,6 +45,15 @@ export const withValidity = (document: StoredDocument): KnowledgeDocument => ({ 
 
 const longTerm = { effectiveFrom: null, expiresOn: null };
 
+/** 体检（#218）：一个问题；重复时带上另一份文档。 */
+const finding = (code: FindingCode, ...similar: SimilarDocument[]): DocumentFinding => ({ code, similar });
+const inStoreBase = (documentId: number, filename: string): SimilarDocument => ({
+  knowledgeBaseId: 1,
+  knowledgeBaseName: "门店运营知识库",
+  documentId,
+  filename,
+});
+
 export const sampleDocuments: Record<number, StoredDocument[]> = {
   1: [
     {
@@ -52,6 +68,7 @@ export const sampleDocuments: Record<number, StoredDocument[]> = {
       replacesFilename: null,
       reprocessable: false,
       retryAt: null,
+      findings: [finding("DUPLICATE", { knowledgeBaseId: 2, knowledgeBaseName: "商品知识库", documentId: 201, filename: "临期与报损管理.md" })],
       ...longTerm,
     },
     // 有效期的几种情况（日期相对今天，原型里随时都能看到）：旧版制度已失效、今天到期（当天仍有效）、
@@ -68,6 +85,7 @@ export const sampleDocuments: Record<number, StoredDocument[]> = {
       replacesFilename: null,
       reprocessable: false,
       retryAt: null,
+      findings: [],
       effectiveFrom: "2026-03-01",
       expiresOn: addDays(today(), -10),
     },
@@ -83,6 +101,7 @@ export const sampleDocuments: Record<number, StoredDocument[]> = {
       replacesFilename: null,
       reprocessable: false,
       retryAt: null,
+      findings: [finding("GARBLED")],
       effectiveFrom: null,
       expiresOn: today(),
     },
@@ -98,6 +117,7 @@ export const sampleDocuments: Record<number, StoredDocument[]> = {
       replacesFilename: null,
       reprocessable: false,
       retryAt: null,
+      findings: [],
       effectiveFrom: null,
       expiresOn: addDays(today(), 18),
     },
@@ -113,6 +133,7 @@ export const sampleDocuments: Record<number, StoredDocument[]> = {
       replacesFilename: null,
       reprocessable: false,
       retryAt: null,
+      findings: [finding("NEAR_DUPLICATE", inStoreBase(21, "收银交接班制度（草稿）.md"))],
       effectiveFrom: addDays(today(), 5),
       expiresOn: null,
     },
@@ -128,6 +149,7 @@ export const sampleDocuments: Record<number, StoredDocument[]> = {
       replacesFilename: null,
       reprocessable: false,
       retryAt: null,
+      findings: null,
       ...longTerm,
     },
     // 原型（#145 A9）：模型暂时不可用而失败的文档，可以重新处理，10 分钟后自动重试一次。
@@ -143,10 +165,72 @@ export const sampleDocuments: Record<number, StoredDocument[]> = {
       replacesFilename: null,
       reprocessable: true,
       retryAt: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+      findings: null,
+      ...longTerm,
+    },
+    // 资料体检（#218）的几种结论：截图为主的手册、图片为主的课件、过大的表格、内容与另一份重合的草稿。
+    {
+      id: 18,
+      filename: "收银系统操作指南.docx",
+      status: "READY",
+      error: null,
+      chunkCount: 3,
+      sizeBytes: 4_800_000,
+      createdAt: "2026-11-02T09:00:00+08:00",
+      replacesDocumentId: null,
+      replacesFilename: null,
+      reprocessable: false,
+      retryAt: null,
+      findings: [finding("IMAGE_HEAVY"), finding("WORD_NO_HEADINGS")],
+      ...longTerm,
+    },
+    {
+      id: 19,
+      filename: "新员工培训课件.pptx",
+      status: "READY",
+      error: null,
+      chunkCount: 14,
+      sizeBytes: 22_000_000,
+      createdAt: "2026-11-02T09:10:00+08:00",
+      replacesDocumentId: null,
+      replacesFilename: null,
+      reprocessable: false,
+      retryAt: null,
+      findings: [finding("IMAGE_HEAVY")],
+      ...longTerm,
+    },
+    {
+      id: 20,
+      filename: "全年促销排期表.xlsx",
+      status: "READY",
+      error: null,
+      chunkCount: 86,
+      sizeBytes: 380_000,
+      createdAt: "2026-11-02T09:20:00+08:00",
+      replacesDocumentId: null,
+      replacesFilename: null,
+      reprocessable: false,
+      retryAt: null,
+      findings: [finding("LARGE_TABLE")],
+      ...longTerm,
+    },
+    {
+      id: 21,
+      filename: "收银交接班制度（草稿）.md",
+      status: "READY",
+      error: null,
+      chunkCount: 5,
+      sizeBytes: 11_500,
+      createdAt: "2026-10-28T09:00:00+08:00",
+      replacesDocumentId: null,
+      replacesFilename: null,
+      reprocessable: false,
+      retryAt: null,
+      findings: [finding("NEAR_DUPLICATE", inStoreBase(16, "收银交接班制度（下周起执行）.md"))],
       ...longTerm,
     },
     // 多生成一些文档，原型里能看到分页。
-    ...Array.from({ length: 30 }, (_, index): StoredDocument => ({
+    ...Array.from({ length: 26 }, (_, index): StoredDocument => ({
       id: 300 + index,
       filename: `门店操作手册-第${index + 1}章.pdf`,
       status: "READY",
@@ -158,7 +242,27 @@ export const sampleDocuments: Record<number, StoredDocument[]> = {
       replacesFilename: null,
       reprocessable: false,
       retryAt: null,
+      // 长 PDF 常读不出章节。
+      findings: index % 10 === 0 ? [finding("PDF_NO_STRUCTURE")] : [],
       ...longTerm,
     })),
+  ],
+  // 和门店运营知识库里的同名文档内容相同（#218 跨库重复）。
+  2: [
+    {
+      id: 201,
+      filename: "临期与报损管理.md",
+      status: "READY",
+      error: null,
+      chunkCount: 12,
+      sizeBytes: 18_432,
+      createdAt: "2026-10-29T09:00:00+08:00",
+      replacesDocumentId: null,
+      replacesFilename: null,
+      reprocessable: false,
+      retryAt: null,
+      findings: [finding("DUPLICATE", inStoreBase(11, "临期与报损管理.md"))],
+      ...longTerm,
+    },
   ],
 };

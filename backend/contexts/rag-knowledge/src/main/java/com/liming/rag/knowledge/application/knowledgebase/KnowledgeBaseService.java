@@ -14,6 +14,7 @@ import com.liming.rag.knowledge.api.KnowledgeBaseRef;
 import com.liming.rag.knowledge.api.KnowledgeSearch;
 import com.liming.rag.knowledge.api.SearchHit;
 import com.liming.rag.knowledge.api.SearchQuery;
+import com.liming.rag.knowledge.application.DocumentFinding;
 import com.liming.rag.knowledge.application.DocumentRow;
 import com.liming.rag.knowledge.application.ExpirySummary;
 import com.liming.rag.knowledge.application.KnowledgeBaseSummary;
@@ -177,16 +178,19 @@ public class KnowledgeBaseService implements KnowledgeAccess {
      * @param keyword 匹配文件名，为空不筛
      * @param status PARSING、READY、FAILED（不区分大小写），为空不筛
      * @param validity ACTIVE、EXPIRING、EXPIRED、PENDING（不区分大小写），为空不筛
+     * @param health 体检结论 NEEDS_WORK、OK（不区分大小写，#218），为空不筛
      */
     public record DocumentFilter(@Nullable String keyword, @Nullable String status, @Nullable String validity,
-            Paged.Request page) {
+            @Nullable String health, Paged.Request page) {
     }
 
     @Transactional(readOnly = true)
     public Paged<DocumentRow> documents(TenantId tenantId, UserId actor, long knowledgeBaseId, DocumentFilter filter) {
         checkManageable(tenantId, actor, knowledgeBaseId);
-        return queries.documents(tenantId, knowledgeBaseId, Texts.blankToNull(filter.keyword()), parseStatus(filter.status()),
-                parseValidity(filter.validity()), calendar.window(), filter.page());
+        var query = new KnowledgeQueries.DocumentQuery(Texts.blankToNull(filter.keyword()), parseStatus(filter.status()),
+                parseValidity(filter.validity()), parseHealth(filter.health()));
+        return queries.documents(tenantId, visibleTo(tenantId, actor), knowledgeBaseId, query, calendar.window(),
+                filter.page());
     }
 
     /**
@@ -202,6 +206,11 @@ public class KnowledgeBaseService implements KnowledgeAccess {
     private static Validity.State parseValidity(String validity) {
         return Enums.parseOrNull(Validity.State.class, validity, () -> new KnowledgeException(
                 KnowledgeException.Reason.INVALID, "有效期只能是 ACTIVE、EXPIRING、EXPIRED 或 PENDING"));
+    }
+
+    private static DocumentFinding.Filter parseHealth(String health) {
+        return Enums.parseOrNull(DocumentFinding.Filter.class, health, () -> new KnowledgeException(
+                KnowledgeException.Reason.INVALID, "体检结论只能是 NEEDS_WORK 或 OK"));
     }
 
     private static DocumentStatus parseStatus(String status) {

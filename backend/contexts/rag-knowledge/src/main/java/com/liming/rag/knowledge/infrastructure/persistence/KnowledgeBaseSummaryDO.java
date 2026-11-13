@@ -14,4 +14,5 @@ final class KnowledgeBaseSummaryDO {
     Long expiredCount;
     Long roleGrantCount;
     Long memberCount;
+    Long needsWorkCount;
 }

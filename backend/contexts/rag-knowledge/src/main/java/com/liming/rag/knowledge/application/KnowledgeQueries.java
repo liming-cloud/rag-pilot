@@ -46,14 +46,22 @@ public interface KnowledgeQueries {
             @Nullable String keyword, Validity.@Nullable State validity, Window window, Paged.Request page);
 
     /**
-     * 知识库里的文档，最新上传的在前。
+     * 知识库里的文档，最新上传的在前，带资料体检的结论（#218）。
      *
-     * @param keyword 匹配文件名，为 null 不筛
-     * @param status 为 null 不筛
-     * @param validity 有效期状态，为 null 不筛
+     * @param viewer 体检的重复只在他本人或其角色能访问的库里找；为 null 时在本租户全部的库里找（超级管理员）
      */
-    Paged<DocumentRow> documents(TenantId tenantId, long knowledgeBaseId, @Nullable String keyword,
-            @Nullable DocumentStatus status, Validity.@Nullable State validity, Window window, Paged.Request page);
+    Paged<DocumentRow> documents(TenantId tenantId, @Nullable Grantee viewer, long knowledgeBaseId,
+            DocumentQuery query, Window window, Paged.Request page);
+
+    /**
+     * 文档列表的筛选条件，都可以为 null（不筛）。
+     *
+     * @param keyword 匹配文件名
+     * @param health 体检结论（#218）
+     */
+    record DocumentQuery(@Nullable String keyword, @Nullable DocumentStatus status, Validity.@Nullable State validity,
+            DocumentFinding.@Nullable Filter health) {
+    }
 
     /**
      * 即将到期和已失效的文档数，以及最早到期的 {@code limit} 份。

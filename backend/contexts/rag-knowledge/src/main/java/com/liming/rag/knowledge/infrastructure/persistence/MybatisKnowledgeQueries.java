@@ -5,6 +5,7 @@ import com.liming.rag.knowledge.application.KnowledgeBaseSummary;
 import com.liming.rag.knowledge.application.ExpirySummary;
 import com.liming.rag.knowledge.application.ExpiringDocument;
 import com.liming.rag.knowledge.application.DocumentRow;
+import com.liming.rag.knowledge.application.DocumentFinding;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.liming.rag.knowledge.api.DocumentFreshness;
@@ -12,11 +13,11 @@ import com.liming.rag.knowledge.api.KnowledgeBaseRef;
 import com.liming.rag.knowledge.application.Grantee;
 import com.liming.rag.knowledge.application.KnowledgeQueries;
 import com.liming.rag.shared.Paged;
-import com.liming.rag.knowledge.domain.DocumentStatus;
 import com.liming.rag.knowledge.domain.Validity;
 import com.liming.rag.shared.TenantId;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -91,25 +92,54 @@ class MybatisKnowledgeQueries implements KnowledgeQueries {
         long total = mapper.countKnowledgeBases(tenantId.value(), all, userId, roleIds, keyword, state,
                 window.today(), window.warnUntil());
         return new Paged<>(rows.stream().map(row -> new KnowledgeBaseSummary(row.id, row.name, row.documentCount,
-                row.failedCount, row.expiringCount, row.expiredCount, row.roleGrantCount, row.memberCount)).toList(),
+                row.failedCount, row.expiringCount, row.expiredCount, row.roleGrantCount, row.memberCount,
+                row.needsWorkCount)).toList(),
                 total, page.page(), page.size());
     }
 
     @Override
-    public Paged<DocumentRow> documents(TenantId tenantId, long knowledgeBaseId, String keyword,
-            DocumentStatus status, Validity.State validity, Window window, Paged.Request page) {
-        var statusName = status == null ? null : status.name();
-        var state = validity == null ? null : validity.name();
-        var rows = mapper.documents(tenantId.value(), knowledgeBaseId, keyword, statusName, state, window.today(),
-                window.warnUntil(), page.offset(), page.size());
-        long total = mapper.countDocuments(tenantId.value(), knowledgeBaseId, keyword, statusName, state,
-                window.today(), window.warnUntil());
+    public Paged<DocumentRow> documents(TenantId tenantId, @Nullable Grantee viewer, long knowledgeBaseId,
+            DocumentQuery query, Window window, Paged.Request page) {
+        boolean all = viewer == null;
+        Long userId = all ? null : viewer.userId().value();
+        List<Long> roleIds = all ? List.of() : viewer.roleIds();
+        var status = query.status() == null ? null : query.status().name();
+        var validity = query.validity() == null ? null : query.validity().name();
+        var health = query.health() == null ? null : query.health().name();
+        var rows = mapper.documents(tenantId.value(), all, userId, roleIds, knowledgeBaseId, query.keyword(), status,
+                validity, health, window.today(), window.warnUntil(), page.offset(), page.size());
+        long total = mapper.countDocuments(tenantId.value(), all, userId, roleIds, knowledgeBaseId, query.keyword(),
+                status, validity, health, window.today(), window.warnUntil());
+        var similar = similar(tenantId, all, userId, roleIds, rows);
         int warningDays = (int) ChronoUnit.DAYS.between(window.today(), window.warnUntil());
         return new Paged<>(rows.stream().map(row -> {
             var document = MybatisDocumentRepository.toDomain(row);
-            return DocumentRow.of(document, row.replacesFilename,
-                    document.validity().state(window.today(), warningDays));
+            return DocumentRow.of(document, row.replacesFilename, document.validity().state(window.today(), warningDays),
+                    findings(row, similar));
         }).toList(), total, page.page(), page.size());
+    }
+
+    /** 本页文档的重复、疑似重复：（文档 id, 问题代码）→ 另一份文档。 */
+    private Map<String, List<DocumentFinding.SimilarDocument>> similar(TenantId tenantId, boolean all, Long userId,
+            List<Long> roleIds, List<DocumentRowDO> rows) {
+        var ids = rows.stream().filter(row -> row.findings != null && row.findings.length > 0)
+                .map(DocumentRowDO::getId).toList();
+        if (ids.isEmpty()) {
+            return Map.of();
+        }
+        return mapper.similarDocuments(tenantId.value(), all, userId, roleIds, ids).stream()
+                .collect(Collectors.groupingBy(row -> row.documentId + ":" + row.code, Collectors.mapping(
+                        row -> new DocumentFinding.SimilarDocument(row.knowledgeBaseId, row.knowledgeBaseName,
+                                row.otherDocumentId, row.filename), Collectors.toList())));
+    }
+
+    private static @Nullable List<DocumentFinding> findings(DocumentRowDO row,
+            Map<String, List<DocumentFinding.SimilarDocument>> similar) {
+        if (row.findings == null) {
+            return null;
+        }
+        return Arrays.stream(row.findings).map(code -> new DocumentFinding(DocumentFinding.Code.valueOf(code),
+                similar.getOrDefault(row.getId() + ":" + code, List.of()))).toList();
     }
 
     @Override
