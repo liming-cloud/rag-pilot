@@ -1,5 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
+import { Link } from "react-router";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -77,6 +78,11 @@ export function ReviewDialog({ review, onDone }: { review: AnswerReview; onDone:
         </Label>
       )}
       <DialogFooter>
+        <Can permission={PERMISSIONS.EVAL_RUN}>
+          <Button asChild size="sm" variant="ghost">
+            <Link to={`/admin/evaluation?${new URLSearchParams({ tab: "trial", question: review.question })}`}>转成标准题</Link>
+          </Button>
+        </Can>
         <Can permission={PERMISSIONS.ANSWER_RECHECK}>
           <Button size="sm" variant="ghost" disabled={recheck.isPending} onClick={() => recheck.mutate()}>
             重新回答

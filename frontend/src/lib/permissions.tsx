@@ -45,6 +45,9 @@ export const PERMISSIONS = {
   SETTING_UPDATE: "setting:update",
   DATA_VIEW: "data:view",
   DATA_GRANT: "data:grant",
+  EVAL_VIEW: "eval:view",
+  EVAL_MANAGE: "eval:manage",
+  EVAL_RUN: "eval:run",
 } as const;
 
 export type Permission = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];

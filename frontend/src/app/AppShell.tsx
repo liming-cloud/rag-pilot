@@ -1,6 +1,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import {
   ChartColumn,
+  ClipboardCheck,
   Cpu,
   KeyRound,
   LayoutDashboard,
@@ -31,6 +32,7 @@ export const ADMIN_MENUS = [
   { to: "/admin/knowledge", label: "知识库", permission: PERMISSIONS.KB_VIEW, group: "知识运营", icon: LibraryBig },
   { to: "/admin/gaps", label: "知识缺口", permission: PERMISSIONS.ANSWER_VIEW, group: "知识运营", icon: SearchX },
   { to: "/admin/answers", label: "回答记录", permission: PERMISSIONS.ANSWER_VIEW, group: "知识运营", icon: MessagesSquare },
+  { to: "/admin/evaluation", label: "知识质量", permission: PERMISSIONS.EVAL_VIEW, group: "知识运营", icon: ClipboardCheck },
   { to: "/admin/users", label: "用户", permission: PERMISSIONS.USER_VIEW, group: "账号与权限", icon: Users },
   { to: "/admin/roles", label: "角色与权限", permission: PERMISSIONS.ROLE_VIEW, group: "账号与权限", icon: ShieldCheck },
   { to: "/admin/audit", label: "审计记录", permission: PERMISSIONS.AUDIT_VIEW, group: "账号与权限", icon: ScrollText },

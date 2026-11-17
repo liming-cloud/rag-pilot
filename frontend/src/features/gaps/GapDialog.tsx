@@ -137,6 +137,11 @@ export function GapDialog({ group, onDone }: { group: GapGroup; onDone: () => vo
         </Label>
       )}
       <DialogFooter>
+        <Can permission={PERMISSIONS.EVAL_RUN}>
+          <Button asChild size="sm" variant="ghost">
+            <Link to={`/admin/evaluation?${new URLSearchParams({ tab: "trial", question: group.question })}`}>转成标准题</Link>
+          </Button>
+        </Can>
         <Can permission={PERMISSIONS.ANSWER_RECHECK}>
           <Button size="sm" variant="ghost" disabled={recheck.isPending} onClick={() => recheck.mutate()}>
             {recheck.isPending ? "正在回答…" : "用代表问题重新回答"}

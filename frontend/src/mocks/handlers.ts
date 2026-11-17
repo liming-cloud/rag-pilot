@@ -2,6 +2,7 @@ import { answerHandlers, resetAnswers } from "./answers";
 import { auditHandlers } from "./audit";
 import { conversationHandlers, resetConversations } from "./conversations";
 import { dataHandlers, resetData } from "./data";
+import { evaluationHandlers, resetEvaluation } from "./evaluation";
 import { gapHandlers, resetGaps } from "./gaps";
 import { currentIdentity, identityHandlers, resetIdentity } from "./identity";
 import { accessibleKnowledgeBaseIds, canAccess, knowledgeBaseName, knowledgeHandlers, resetKnowledge } from "./knowledge";
@@ -20,6 +21,7 @@ export function resetMockData() {
   resetData();
   resetSettings();
   resetConversations();
+  resetEvaluation();
 }
 resetMockData();
 
@@ -34,6 +36,7 @@ export const handlers = [
   ...answerHandlers,
   ...statsHandlers,
   ...knowledgeHandlers,
+  ...evaluationHandlers,
   ...conversationHandlers({
     currentUserId: () => currentIdentity().id,
     knowledgeBaseName,
