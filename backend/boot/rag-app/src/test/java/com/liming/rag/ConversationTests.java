@@ -7,6 +7,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.liming.rag.answering.application.conversation.ConversationAskService;
 import com.liming.rag.answering.application.conversation.ConversationRetention;
 import com.liming.rag.answering.domain.ConversationTurn;
+import com.liming.rag.knowledge.application.ingestion.Rechunker;
 import com.liming.rag.shared.BusinessException;
 import com.liming.rag.shared.TenantId;
 import com.liming.rag.shared.UserId;
@@ -63,6 +64,9 @@ class ConversationTests {
 
     @Autowired
     private ConversationAskService asking;
+
+    @Autowired
+    private Rechunker rechunker;
 
     @BeforeEach
     void signIn() {
@@ -275,6 +279,28 @@ class ConversationTests {
         var done = json(events.getLast().data());
         assertThat(done.get("answer").toString()).contains("refused=true").contains("NO_EVIDENCE")
                 .doesNotContain("A 区 03 号货架");
+    }
+
+    @Test
+    @DisplayName("升级后重新分块（#225）：历史回答的引用原文取自留档的旧分块，仍可查看；授权收回后同样不再返回")
+    void keepsExcerptsAfterRechunk() {
+        var setup = staffWithStore("conv19", "会话测试重新分块库");
+        long id = id(exchange(HttpMethod.POST, "/api/conversations", Map.of(), setup.token()));
+        String path = "/api/conversations/" + id;
+        SseEvents.post(http, path + "/turns/stream", Map.of("question", "青柚气泡水在哪个货架？"), setup.token());
+        var oldChunks = jdbc.queryForList("SELECT id FROM chunk WHERE knowledge_base_id = ?", Long.class,
+                setup.knowledgeBaseId());
+        jdbc.update("UPDATE document SET chunking_version = 1 WHERE knowledge_base_id = ?", setup.knowledgeBaseId());
+
+        rechunker.rechunkAll();
+
+        assertThat(jdbc.queryForList("SELECT id FROM chunk WHERE knowledge_base_id = ?", Long.class,
+                setup.knowledgeBaseId())).isNotEmpty().doesNotContainAnyElementsOf(oldChunks);
+        assertThat(exchange(HttpMethod.GET, path, null, setup.token()).getBody().toString())
+                .contains("excerpt=青柚气泡水陈列在一层 A 区 03 号货架");
+        revoke(setup.knowledgeBaseId(), setup.userId());
+        assertThat(exchange(HttpMethod.GET, path, null, setup.token()).getBody().toString()).contains("excerpt=null")
+                .doesNotContain("excerpt=青柚气泡水");
     }
 
     @Test

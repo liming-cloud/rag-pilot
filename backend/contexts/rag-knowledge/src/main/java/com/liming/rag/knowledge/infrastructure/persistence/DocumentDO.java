@@ -34,6 +34,8 @@ public class DocumentDO {
     private Boolean reprocessable;
     private OffsetDateTime retryAt;
     private Integer attempts;
+    /** 分块规则的版本（#225）；插入时不写，取库里的默认值，写分块时更新。 */
+    private Integer chunkingVersion;
     /** 由数据库默认值生成。 */
     @TableField(insertStrategy = FieldStrategy.NEVER, updateStrategy = FieldStrategy.NEVER)
     private OffsetDateTime createdAt;
@@ -180,5 +182,13 @@ public class DocumentDO {
 
     public void setAttempts(Integer attempts) {
         this.attempts = attempts;
+    }
+
+    public Integer getChunkingVersion() {
+        return chunkingVersion;
+    }
+
+    public void setChunkingVersion(Integer chunkingVersion) {
+        this.chunkingVersion = chunkingVersion;
     }
 }

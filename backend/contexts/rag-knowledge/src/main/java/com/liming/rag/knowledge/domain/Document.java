@@ -125,6 +125,18 @@ public final class Document implements AggregateRoot {
     }
 
     /**
+     * 按新的分块规则重新分块完成（#225）：文档一直可检索，只换分块。
+     *
+     * @throws IllegalStateException 当文档不是可用状态，或分块数不是正数时
+     */
+    public void rechunked(int chunks) {
+        if (status != DocumentStatus.READY || chunks <= 0) {
+            throw new IllegalStateException("只有可用的文档才能重新分块，且至少要有一个分块");
+        }
+        this.chunkCount = chunks;
+    }
+
+    /**
      * 处理失败。
      *
      * @throws IllegalStateException 当文档不在解析状态，或没有给出失败原因时

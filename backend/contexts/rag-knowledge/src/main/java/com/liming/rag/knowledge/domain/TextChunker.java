@@ -15,6 +15,8 @@ import java.util.regex.Pattern;
  */
 public final class TextChunker {
 
+    /** 分块规则的版本：规则改了就加一，升级后按旧版本切的文档由后台自动重新分块（#225）。 */
+    public static final int VERSION = 2;
     public static final int MAX_TOKENS = 500;
     public static final int OVERLAP_TOKENS = 80;
     /** 表格的第一行以它开头，后面是列名；读取器写出，分块时据此认出表格。 */

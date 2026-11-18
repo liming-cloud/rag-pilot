@@ -22,8 +22,19 @@ public interface DocumentRepository {
      */
     void saveOutcome(Document document);
 
-    /** 分块与向量一一对应，按顺序写入。 */
+    /** 分块与向量一一对应，按顺序写入；文档记下当前的分块规则版本（{@link TextChunker#VERSION}）。 */
     void saveChunks(Document document, List<Chunk> chunks, List<float[]> embeddings);
+
+    /**
+     * 重新分块（#225）：旧分块的正文留档后删除，写入新分块，更新分块数和分块规则版本。在一个事务里调用，
+     * 之前旧分块照常参与检索。
+     *
+     * @throws Document.ConcurrentChangeException 文档在读取之后被删除、修改过，或已不是可用状态
+     */
+    void replaceChunks(Document document, List<Chunk> chunks, List<float[]> embeddings);
+
+    /** 所有租户里分块规则版本比当前旧的可用文档，按标识顺序（#225）。 */
+    List<Document> listStaleChunking();
 
     /**
      * 资料体检的信号（#218）：记下读取时得到的图片数和最大表格行数，从已写入的分块算出字数、空白、乱码和标题层级，

@@ -168,6 +168,17 @@ public final class InMemoryKnowledge {
         }
 
         @Override
+        public void replaceChunks(Document document, List<Chunk> values, List<float[]> embeddings) {
+            chunks.put(document.id(), List.copyOf(values));
+        }
+
+        /** 分块规则版本只在数据库里记，内存版的文档都按当前版本。 */
+        @Override
+        public List<Document> listStaleChunking() {
+            return List.of();
+        }
+
+        @Override
         public void saveHealthSignals(Document document, int images, int largestTableRows) {
             // 体检信号只在数据库里算，内存版不记。
         }

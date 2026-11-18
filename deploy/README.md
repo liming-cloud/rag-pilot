@@ -88,6 +88,8 @@ docker compose --env-file .env --env-file release.env logs --tail 200 app   # �
 | `event=embedding_rate_limited` | 入库向量化被嵌入服务限流，SDK 重试后仍不行，等 `wait` 后只重做这一批（`round` 是第几轮，最多 6 轮约 3 分钟），已算好的批次不重做；仍被限流时文档按 `kind=model` 失败。经常出现说明调小 `RAG_INGESTION_CONCURRENCY` 或提高服务商额度 |
 | `event=document_retried` | 模型暂时不可用而失败的文档自动重新处理：`attempts` 是第几次处理 |
 | `event=document_deferred`、`event=document_discarded` | 正在停机，文档留在“解析中”，下次启动时重新处理；处理期间文档被删除，结果不写回 |
+| `event=rechunk_started`、`event=document_rechunked`、`event=rechunk_finished` | 升级后自动重新分块（#225）：开始时 `documents` 是要重做的文档数、`version` 是新的分块规则版本；每做完一份记一条（`chunks` 新分块数）；这一轮结束。做完一份替换一份，期间检索照常 |
+| `event=rechunk_paused`、`event=rechunk_skipped`、`event=rechunk_failed` | 重新分块停下或跳过：模型暂时不可用，`done` 已做、`remaining` 剩下，10 分钟后接着做；文档在处理期间被删除、修改或替换，下一轮再看；读不出原文件（`kind=content`）或意外错误（`kind=error`，带堆栈），这份保留旧分块，重启后再试 |
 | `event=document_file_orphaned` | 文档已删除，但原始文件（`sha256`）没删掉，留在存储目录里，不影响使用，可以手工清理 |
 | `event=login_failed`、`event=account_locked` | 登录失败（`reason`：`unknown_user`、`locked`、`disabled`、`bad_password`，密码错误时 `attempts` 是连续输错次数）、连续输错被锁 |
 | `event=admin_created`、`event=admin_password_reset` | 启动时按 `RAG_ADMIN_USERNAME` 创建了超级管理员；按 `RAG_ADMIN_RESET_PASSWORD` 重置了超级管理员的密码并解锁（重置后请删掉这个环境变量再重启） |
@@ -163,6 +165,16 @@ cd rag-pilot-1.1.0.1
 ```
 
 `upgrade.sh` 依次：构建新版本的镜像（构建时旧版本照常服务）→ 检查备份目录的剩余空间（至少 2 GB）→ **自动备份**（备份目录名带 `before-<新版本>`）→ 用新版本启动（数据库结构在启动时自动升级）→ 等健康检查通过 → 运行 `verify.sh`。停服务的时间只有备份和启动这几分钟。
+
+分块规则更新后（如 1.1 的表格按行组分块，#225），升级完成后后台自动把已入库的资料逐份重新分块、重新向量化：做完一份替换一份，期间检索和问答照常，历史回答的引用原文不受影响；停机或模型暂时不可用时停下，之后接着做。进度看日志里的 `event=document_rechunked`，或在数据库里数还没做完的文档（`SELECT count(*) FROM document WHERE status = 'READY' AND chunking_version < 2`）。升级前可以这样估算耗时和费用：
+
+```bash
+docker compose --env-file .env --env-file release.env exec -T db psql -U rag -d rag -X \
+  -c "SELECT count(*) AS chunks, sum(token_count) AS tokens FROM chunk"
+```
+
+- **向量化费用** ≈ `tokens` × 1.1（重新分块后块数、章节位置略有变化）÷ 100 万 × 嵌入模型每百万 token 的单价。
+- **耗时** ≈ `chunks` ÷ 16（每批向量化的条数）× 单批耗时（通常 1～3 秒）；一次只做一份文档，被限流时自动退避（`event=embedding_rate_limited`），会更慢。
 
 从没有 Redis 的版本升级时，先在复制过来的 `.env` 里加上 `REDIS_PASSWORD`（见“三、安装”），否则 `upgrade.sh` 会提示后退出。升级、重启 app 后员工不用重新登录（会话在 Redis 里）。
 

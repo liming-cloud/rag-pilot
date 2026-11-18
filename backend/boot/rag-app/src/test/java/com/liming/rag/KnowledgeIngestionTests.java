@@ -3,6 +3,8 @@ package com.liming.rag;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.liming.rag.knowledge.application.ingestion.IngestionWorker;
+import com.liming.rag.knowledge.application.ingestion.Rechunker;
+import com.liming.rag.knowledge.domain.TextChunker;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -47,6 +49,9 @@ class KnowledgeIngestionTests {
 
     @Autowired
     private IngestionWorker ingestionWorker;
+
+    @Autowired
+    private Rechunker rechunker;
 
     @Test
     @DisplayName("上传门店样例文本后分块入库，可在文档列表看到")
@@ -102,6 +107,42 @@ class KnowledgeIngestionTests {
             assertThat(jdbc.queryForObject("select content from chunk where document_id = ? and ordinal = ?",
                     String.class, documentId, i)).contains("门店第 " + i + " 条规范");
         }
+    }
+
+    @Test
+    @DisplayName("升级后自动重新分块（#225）：旧版本切的文档按新规则重做，文档 id 不变，旧分块正文留档，块数随之更新")
+    void rechunksDocumentsOfOlderVersion() {
+        long knowledgeBaseId = createKnowledgeBase("重新分块知识库");
+        var rows = java.util.stream.IntStream.range(0, 80).mapToObj(i -> "门店：S" + i + "；状态：营业；店长：张" + i)
+                .collect(java.util.stream.Collectors.joining("\n"));
+        var text = "## 门店状态\n\n" + TextChunker.TABLE_HEADER + "门店 | 状态 | 店长\n" + rows + "\n";
+        var uploaded = upload(knowledgeBaseId, "门店状态.md", text.getBytes(StandardCharsets.UTF_8));
+        long documentId = ((Number) TestDocuments.awaitProcessed(http, knowledgeBaseId, uploaded.getBody(), null)
+                .get("id")).longValue();
+        assertThat(jdbc.queryForObject("SELECT chunking_version FROM document WHERE id = ?", Integer.class, documentId))
+                .as("新入库的文档记下当前的分块版本").isEqualTo(TextChunker.VERSION);
+        var oldChunks = contents("SELECT id, content FROM chunk WHERE document_id = ?", documentId);
+        jdbc.update("UPDATE document SET chunking_version = 1 WHERE id = ?", documentId);
+
+        rechunker.rechunkAll();
+
+        assertThat(jdbc.queryForObject("SELECT chunking_version FROM document WHERE id = ?", Integer.class, documentId))
+                .isEqualTo(TextChunker.VERSION);
+        var newChunks = contents("SELECT id, content FROM chunk WHERE document_id = ?", documentId);
+        assertThat(newChunks.keySet()).doesNotContainAnyElementsOf(oldChunks.keySet());
+        assertThat(newChunks.values()).allSatisfy(content -> assertThat(content).startsWith(TextChunker.TABLE_HEADER));
+        assertThat(contents("SELECT id, content FROM chunk_archive WHERE document_id = ?", documentId))
+                .as("旧分块的正文按原来的 id 留档").isEqualTo(oldChunks);
+        assertThat(jdbc.queryForObject("SELECT chunk_count FROM document WHERE id = ?", Integer.class, documentId))
+                .isEqualTo(newChunks.size());
+    }
+
+    private Map<Long, String> contents(String sql, long documentId) {
+        var result = new java.util.HashMap<Long, String>();
+        jdbc.query(sql, row -> {
+            result.put(row.getLong("id"), row.getString("content"));
+        }, documentId);
+        return result;
     }
 
     @Test
