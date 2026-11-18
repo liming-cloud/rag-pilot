@@ -88,8 +88,8 @@ docker compose --env-file .env --env-file release.env logs --tail 200 app   # �
 | `event=embedding_rate_limited` | 入库向量化被嵌入服务限流，SDK 重试后仍不行，等 `wait` 后只重做这一批（`round` 是第几轮，最多 6 轮约 3 分钟），已算好的批次不重做；仍被限流时文档按 `kind=model` 失败。经常出现说明调小 `RAG_INGESTION_CONCURRENCY` 或提高服务商额度 |
 | `event=document_retried` | 模型暂时不可用而失败的文档自动重新处理：`attempts` 是第几次处理 |
 | `event=document_deferred`、`event=document_discarded` | 正在停机，文档留在“解析中”，下次启动时重新处理；处理期间文档被删除，结果不写回 |
-| `event=rechunk_started`、`event=document_rechunked`、`event=rechunk_finished` | 升级后自动重新分块（#225）：开始时 `documents` 是要重做的文档数、`version` 是新的分块规则版本；每做完一份记一条（`chunks` 新分块数）；这一轮结束。做完一份替换一份，期间检索照常 |
-| `event=rechunk_paused`、`event=rechunk_skipped`、`event=rechunk_failed` | 重新分块停下或跳过：模型暂时不可用，`done` 已做、`remaining` 剩下，10 分钟后接着做；文档在处理期间被删除、修改或替换，下一轮再看；读不出原文件（`kind=content`）或意外错误（`kind=error`，带堆栈），这份保留旧分块，重启后再试 |
+| `event=rechunk_started`、`event=document_rechunked`、`event=rechunk_finished` | 升级后自动重新分块（#225）：开始时 `documents` 是要重做的文档数、`version` 是新的分块规则版本；每做完一份记一条（`chunks` 新分块数），和新上传的资料轮流处理；这一轮结束。做完一份替换一份，期间检索照常 |
+| `event=rechunk_paused`、`event=rechunk_skipped`、`event=rechunk_failed` | 重新分块停下或跳过：模型暂时不可用（`document` 是正在做的那份），10 分钟后接着做；文档在处理期间被删除、修改或替换，下一轮再看；读不出原文件（`kind=content`）或意外错误（`kind=error`，带堆栈），这份保留旧分块，重启后再试 |
 | `event=document_file_orphaned` | 文档已删除，但原始文件（`sha256`）没删掉，留在存储目录里，不影响使用，可以手工清理 |
 | `event=login_failed`、`event=account_locked` | 登录失败（`reason`：`unknown_user`、`locked`、`disabled`、`bad_password`，密码错误时 `attempts` 是连续输错次数）、连续输错被锁 |
 | `event=admin_created`、`event=admin_password_reset` | 启动时按 `RAG_ADMIN_USERNAME` 创建了超级管理员；按 `RAG_ADMIN_RESET_PASSWORD` 重置了超级管理员的密码并解锁（重置后请删掉这个环境变量再重启） |
