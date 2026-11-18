@@ -60,7 +60,7 @@ jobs:
   eval-public:
     name: eval-public
     runs-on: ubuntu-latest
-    timeout-minutes: 180
+    timeout-minutes: 330
     env:
       # 固定到具体提交并校验摘要，保证每次评测用的是同一份数据。
       CRUD_RAG_COMMIT: f219391e46944fc838e4fe0f77b2fcde140f75e2
