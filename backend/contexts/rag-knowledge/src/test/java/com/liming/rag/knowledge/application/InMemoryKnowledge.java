@@ -64,7 +64,7 @@ public final class InMemoryKnowledge {
     private static DocumentCalendar calendar() {
         StatsZone settings = () -> ZoneId.of("Asia/Shanghai");
         var properties = new KnowledgeProperties(new KnowledgeProperties.Ingestion(2),
-                new KnowledgeProperties.Storage("./data"), 30);
+                new KnowledgeProperties.Storage("./data"), 30, new KnowledgeProperties.Chunking(500, 80));
         return new DocumentCalendar(settings, properties,
                 Clock.fixed(Instant.parse("2026-11-04T02:00:00Z"), ZoneOffset.UTC));
     }

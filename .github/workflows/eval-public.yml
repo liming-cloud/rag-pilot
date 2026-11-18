@@ -45,6 +45,9 @@ on:
       rewrite_min_relevance:
         description: 低分改写下限
         default: "0.03"
+      chunk_max_tokens:
+        description: 分块 token 上限（重叠按 16% 换算，#225），不填用 application.yml 的默认值
+        default: ""
 
 permissions:
   contents: read
@@ -137,10 +140,13 @@ jobs:
           EVAL_ROUNDS: ${{ inputs.rounds }}
           EVAL_MIN_RELEVANCE: ${{ inputs.min_relevance }}
           RAG_REWRITE_MIN_RELEVANCE: ${{ inputs.rewrite_min_relevance }}
-        run: >
-          ./mvnw -B -ntp verify -pl backend/boot/rag-app -am
-          -Dtest.groups=eval -Dtest.excludedGroups=none
-          -Dtest=EvaluationRun -Dsurefire.failIfNoSpecifiedTests=false
+          CHUNK_MAX_TOKENS: ${{ inputs.chunk_max_tokens }}
+        # 空环境变量会覆盖 application.yml 的默认值，所以只在填了输入时才设置。
+        run: |
+          if [ -n "$CHUNK_MAX_TOKENS" ]; then export RAG_CHUNK_MAX_TOKENS="$CHUNK_MAX_TOKENS" RAG_CHUNK_OVERLAP_TOKENS=$((CHUNK_MAX_TOKENS * 16 / 100)); fi
+          ./mvnw -B -ntp verify -pl backend/boot/rag-app -am \
+            -Dtest.groups=eval -Dtest.excludedGroups=none \
+            -Dtest=EvaluationRun -Dsurefire.failIfNoSpecifiedTests=false
       - name: 保存报告
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
