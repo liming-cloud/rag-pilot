@@ -139,6 +139,13 @@ public class AnswerService {
      * 生成中停止时返回已生成部分的校验结果。
      */
     public AskResult ask(AskRequest request, Consumer<String> onDelta, Consumer<String> onStatus, CompletionStage<?> stop) {
+        return ask(request, onDelta, onStatus, stop, ranked -> {
+        });
+    }
+
+    /** 同上，另外把重排后的前几条资料（最多送给模型的条数，不论是否达到门槛）交给 {@code onRanked}（#224 试问）。 */
+    AskResult ask(AskRequest request, Consumer<String> onDelta, Consumer<String> onStatus, CompletionStage<?> stop,
+            Consumer<List<Evidence>> onRanked) {
         var text = question(request.question());
         var clock = new StageClock();
         var looked = data.lookup(request.tenantId(), request.userId(), text, request.history(), onStatus);
@@ -154,6 +161,7 @@ public class AnswerService {
         var rewrite = ranking == null ? null : ranking.rewrite();
         var topRelevance = ranking == null ? null : ranking.ranked().getFirst().score();
         var evidence = ranking == null ? List.<Evidence>of() : evidence(ranking.ranked());
+        onRanked.accept(ranking == null ? List.of() : ranking.ranked().stream().limit(evidenceLimit).toList());
         var found = found(looked);
         if (evidence.isEmpty() && found == null) {
             return finish(noEvidence(looked, candidates.isEmpty(), topRelevance), clock, rewrite);

@@ -17,6 +17,7 @@ import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
@@ -111,12 +112,14 @@ final class SpringAiTextGeneration implements TextGeneration {
     @Override
     public String stream(String systemPrompt, String userMessage, Consumer<String> onDelta, CompletionStage<?> stop) {
         var answer = routes.resolve(ModelUsage.ANSWER);
-        var main = deltas(answer, ModelUsage.ANSWER, prompt(systemPrompt, userMessage, options(answer)));
+        // 用量在流结束的线程上报，归属要在这里取定（#224）。
+        var attributed = UsageReports.attribution();
+        var main = deltas(answer, ModelUsage.ANSWER, attributed, prompt(systemPrompt, userMessage, options(answer)));
         var deltas = hedgeAfter == null ? main
                 : Flux.firstWithValue(main, Mono.delay(hedgeAfter)
                         .map(tick -> routes.resolve(ModelUsage.HEDGE))
                         .doOnNext(hedge -> log.info("event=model_hedge_sent after={} model={}", hedgeAfter, hedge.model()))
-                        .flatMapMany(hedge -> deltas(hedge, ModelUsage.HEDGE, prompt(systemPrompt, userMessage, options(hedge)))));
+                        .flatMapMany(hedge -> deltas(hedge, ModelUsage.HEDGE, attributed, prompt(systemPrompt, userMessage, options(hedge)))));
         var text = new StringBuilder();
         try {
             // suppressCancel：流正常结束时 takeUntilOther 会取消这个 Mono，不能连带把停止信号也取消掉，
@@ -135,7 +138,7 @@ final class SpringAiTextGeneration implements TextGeneration {
      * 只保留有文字的片段，这样“先出字”指的是真正的首字，而不是只带角色的空片段。服务商在最后一段带上 token 用量，
      * 流正常结束时记一次；中途被停止或因备用请求取消的流收不到用量，不记（#169，统计会略少）。
      */
-    private Flux<String> deltas(ModelRoute route, ModelUsage purpose, Prompt prompt) {
+    private Flux<String> deltas(ModelRoute route, ModelUsage purpose, @Nullable String attributed, Prompt prompt) {
         var tokens = new AtomicReference<Usage>();
         return client(route).prompt(prompt).stream().chatResponse()
                 .doOnNext(response -> {
@@ -144,14 +147,7 @@ final class SpringAiTextGeneration implements TextGeneration {
                         tokens.set(seen);
                     }
                 })
-                .doOnComplete(() -> {
-                    var seen = tokens.get();
-                    if (seen == null) {
-                        usage.report(purpose.name(), route, 0, 0);
-                    } else {
-                        usage.report(purpose, route, seen);
-                    }
-                })
+                .doOnComplete(() -> usage.report(attributed, purpose, route, tokens.get()))
                 .mapNotNull(response -> response.getResult() == null ? null : response.getResult().getOutput().getText())
                 .filter(delta -> !delta.isEmpty());
     }

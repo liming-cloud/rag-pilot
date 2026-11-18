@@ -1,12 +1,13 @@
 package com.liming.rag.knowledge.application.ingestion;
 
+import com.liming.rag.knowledge.api.DocumentReplaced;
 import com.liming.rag.knowledge.application.FileStorage;
-
 import com.liming.rag.knowledge.domain.DocumentRepository;
 import com.liming.rag.shared.TenantId;
 import java.io.UncheckedIOException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
@@ -25,10 +26,19 @@ class DocumentRemover {
 
     private final DocumentRepository documents;
     private final FileStorage storage;
+    private final ApplicationEventPublisher events;
 
-    DocumentRemover(DocumentRepository documents, FileStorage storage) {
+    DocumentRemover(DocumentRepository documents, FileStorage storage, ApplicationEventPublisher events) {
         this.documents = documents;
         this.storage = storage;
+        this.events = events;
+    }
+
+    /** 新版本就绪后删除旧版本，并发出 {@link DocumentReplaced}，引用旧版本的模块据此接到新版本（#224）。 */
+    void replace(TenantId tenantId, long replacedDocumentId, long documentId) {
+        if (remove(tenantId, replacedDocumentId)) {
+            events.publishEvent(new DocumentReplaced(tenantId, replacedDocumentId, documentId));
+        }
     }
 
     /** 返回是否真的删了；文档已经不在时返回 false。 */

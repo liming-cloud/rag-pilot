@@ -5,13 +5,13 @@ import { DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTit
 import { Label } from "@/components/ui/label";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Textarea } from "@/components/ui/textarea";
-import { fetchKnowledgeBases, knowledgeKeys } from "@/features/knowledge/api";
 import { ErrorMessage } from "@/lib/errors";
 import { DocumentPicker } from "./DocumentPicker";
 import {
   evaluationKeys,
   EXPECTATION_LABELS,
   type Expectation,
+  fetchKnowledgeBaseOptions,
   fetchSets,
   MATCH_LABELS,
   type MatchMode,
@@ -39,7 +39,7 @@ export function QuestionDialog({ setId, questionId, initial, initialNames = {}, 
   const [edited, setDraft] = useState(initial);
   const [targetSet, setTargetSet] = useState<number | null>(setId);
   const sets = useQuery({ queryKey: evaluationKeys.sets, queryFn: fetchSets, enabled: setId === null });
-  const knowledgeBases = useQuery({ queryKey: knowledgeKeys.all, queryFn: fetchKnowledgeBases });
+  const knowledgeBases = useQuery({ queryKey: evaluationKeys.knowledgeBases, queryFn: fetchKnowledgeBaseOptions });
   const chosenSet = targetSet ?? sets.data?.[0]?.id ?? null;
   // 新建时还没选知识库，默认第一个。
   const draft = { ...edited, knowledgeBaseId: edited.knowledgeBaseId || (knowledgeBases.data?.[0]?.id ?? 0) };

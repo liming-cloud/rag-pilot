@@ -11,6 +11,7 @@ import com.liming.rag.ai.common.ModelCallException;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.time.Duration;
 import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -66,7 +67,7 @@ class ApiContractTests {
 
     @Test
     @DisplayName("查询、写接口和 SSE 事件的形状以及权限码清单与 " + SHAPES + " 一致")
-    void responseShapesMatchCommittedFile() throws IOException {
+    void responseShapesMatchCommittedFile() throws IOException, InterruptedException {
         TestLogin.asAdmin(http);
         var data = seed();
 
@@ -95,6 +96,15 @@ class ApiContractTests {
         paths.put("GET /api/settings/chat", "/api/settings/chat");
         paths.put("GET /api/audit-logs", "/api/audit-logs");
         paths.put("GET /api/data-grants", "/api/data-grants?granteeType=USER&granteeId=" + get("/api/auth/me").get("id").asLong());
+        paths.put("GET /api/evaluation/sets", "/api/evaluation/sets");
+        paths.put("GET /api/evaluation/sets/:id", "/api/evaluation/sets/" + data.evaluationSet);
+        paths.put("GET /api/evaluation/sets/:id/questions", "/api/evaluation/sets/" + data.evaluationSet + "/questions");
+        paths.put("GET /api/evaluation/sets/:id/runs", "/api/evaluation/sets/" + data.evaluationSet + "/runs");
+        paths.put("GET /api/evaluation/sets/:id/estimate", "/api/evaluation/sets/" + data.evaluationSet + "/estimate");
+        paths.put("GET /api/evaluation/runs/:id", "/api/evaluation/runs/" + data.evaluationRun);
+        paths.put("GET /api/evaluation/knowledge-bases", "/api/evaluation/knowledge-bases");
+        paths.put("GET /api/evaluation/knowledge-bases/:id/documents",
+                "/api/evaluation/knowledge-bases/" + data.kb + "/documents");
         paths.forEach((name, path) -> endpoints.put(name, shape(get(path))));
 
         var permissions = new TreeSet<String>();
@@ -120,11 +130,11 @@ class ApiContractTests {
         }
     }
 
-    private record Seeded(long kb, long conversation) {
+    private record Seeded(long kb, long conversation, long evaluationSet, long evaluationRun) {
     }
 
     /** 造一套数据，让各接口的列表都不为空、可选字段尽量有值；用到的写接口顺手记下形状。 */
-    private Seeded seed() {
+    private Seeded seed() throws InterruptedException {
         long roleId = id(write("POST /api/roles", HttpMethod.POST, "/api/roles",
                 Map.of("name", "契约店长", "permissions", List.of("kb:view"))));
         write("PATCH /api/roles/:id", HttpMethod.PATCH, "/api/roles/" + roleId,
@@ -141,7 +151,8 @@ class ApiContractTests {
         seedDocuments(kb);
         long conversation = seedConversation(kb);
         seedSettings();
-        return new Seeded(kb, conversation);
+        long set = seedEvaluationSet(kb);
+        return new Seeded(kb, conversation, set, seedEvaluationRun(kb, set));
     }
 
     private long seedUsers(long roleId) {
@@ -233,6 +244,52 @@ class ApiContractTests {
         long me = get("/api/auth/me").get("id").asLong();
         write("PUT /api/data-grants", HttpMethod.PUT, "/api/data-grants?granteeType=USER&granteeId=" + me,
                 Map.of("tools", List.of(), "units", List.of(), "regions", List.of()));
+    }
+
+    /** 知识质量（#224）：题集、标准题（含导入）；空的题集和多出的题删掉。 */
+    private long seedEvaluationSet(long kb) {
+        long document = get("/api/evaluation/knowledge-bases/" + kb + "/documents").get(0).get("id").asLong();
+        long set = id(write("POST /api/evaluation/sets", HttpMethod.POST, "/api/evaluation/sets",
+                Map.of("name", "契约题集", "description", "")));
+        write("PUT /api/evaluation/sets/:id", HttpMethod.PUT, "/api/evaluation/sets/" + set,
+                Map.of("name", "契约题集", "description", "换模型后跑一遍"));
+        long spareSet = id(post("/api/evaluation/sets", Map.of("name", "契约临时题集", "description", "")));
+        write("DELETE /api/evaluation/sets/:id", HttpMethod.DELETE, "/api/evaluation/sets/" + spareSet, null);
+        var question = Map.<String, Object>of("question", "交班时备用金怎么处理", "knowledgeBaseId", kb,
+                "expectation", "DOCUMENTS", "match", "ALL", "expectedDocumentIds", List.of(document));
+        long questionId = id(write("POST /api/evaluation/sets/:id/questions", HttpMethod.POST,
+                "/api/evaluation/sets/" + set + "/questions", question));
+        write("PUT /api/evaluation/sets/:id/questions/:questionId", HttpMethod.PUT,
+                "/api/evaluation/sets/" + set + "/questions/" + questionId, question);
+        var rows = List.of(Map.of("line", 2, "question", "保险柜密码是多少", "knowledgeBase", "契约知识库",
+                        "documents", List.of(), "match", "ALL"),
+                Map.of("line", 3, "question", "没有的库", "knowledgeBase", "不存在的库", "documents", List.of(),
+                        "match", "ALL"));
+        write("POST /api/evaluation/sets/:id/questions/import", HttpMethod.POST,
+                "/api/evaluation/sets/" + set + "/questions/import", Map.of("rows", rows));
+        long spare = id(post("/api/evaluation/sets/" + set + "/questions", Map.of("question", "临时题",
+                "knowledgeBaseId", kb, "expectation", "REFUSAL", "match", "ALL", "expectedDocumentIds", List.of())));
+        write("DELETE /api/evaluation/sets/:id/questions/:questionId", HttpMethod.DELETE,
+                "/api/evaluation/sets/" + set + "/questions/" + spare, null);
+        return set;
+    }
+
+    /** 试问，再运行两次题集（第二次有对比），等运行跑完。 */
+    private long seedEvaluationRun(long kb, long set) throws InterruptedException {
+        write("POST /api/evaluation/trial", HttpMethod.POST, "/api/evaluation/trial",
+                Map.of("knowledgeBaseId", kb, "question", "交班时备用金怎么处理"));
+        awaitRun(id(post("/api/evaluation/sets/" + set + "/runs", null)));
+        return awaitRun(id(write("POST /api/evaluation/sets/:id/runs", HttpMethod.POST,
+                "/api/evaluation/sets/" + set + "/runs", null)));
+    }
+
+    private long awaitRun(long run) throws InterruptedException {
+        long deadline = System.nanoTime() + Duration.ofSeconds(60).toNanos();
+        while (System.nanoTime() < deadline && "RUNNING".equals(get("/api/evaluation/runs/" + run).get("status").asString())) {
+            Thread.sleep(100);
+        }
+        assertThat(get("/api/evaluation/runs/" + run).get("status").asString()).isEqualTo("DONE");
+        return run;
     }
 
     /** 流式提问，把每种事件的数据形状合并记进 {@code events}。 */

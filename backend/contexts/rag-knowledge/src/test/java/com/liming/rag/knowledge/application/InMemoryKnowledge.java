@@ -4,6 +4,7 @@ import com.liming.rag.knowledge.application.ingestion.DocumentCalendar;
 
 import com.liming.rag.identity.api.UserDirectory;
 import com.liming.rag.knowledge.api.DocumentFreshness;
+import com.liming.rag.knowledge.api.DocumentRef;
 import com.liming.rag.knowledge.api.KnowledgeBaseRef;
 import com.liming.rag.knowledge.api.SearchHit;
 import com.liming.rag.knowledge.domain.Chunk;
@@ -277,6 +278,17 @@ public final class InMemoryKnowledge {
         public Map<Long, DocumentFreshness> freshness(TenantId tenantId, Collection<Long> documentIds,
                 LocalDate today) {
             return Map.of();
+        }
+
+        @Override
+        public List<DocumentRef> documentRefs(TenantId tenantId, Collection<Long> documentIds) {
+            return List.of();
+        }
+
+        @Override
+        public List<DocumentRef> readyDocuments(TenantId tenantId, long knowledgeBaseId, String keyword,
+                Collection<String> filenames, int limit) {
+            return List.of();
         }
 
         @Override

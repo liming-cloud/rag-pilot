@@ -1,6 +1,7 @@
 package com.liming.rag.settings.application.model;
 
 import com.liming.rag.identity.api.AuditTrail;
+import com.liming.rag.settings.api.ModelCosts;
 import com.liming.rag.settings.api.StatsZone;
 import com.liming.rag.settings.application.SettingsException;
 import com.liming.rag.shared.Enums;
@@ -19,6 +20,8 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Optional;
+import java.util.Set;
 import java.util.TreeSet;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -35,7 +38,7 @@ import org.springframework.transaction.annotation.Transactional;
  * “一天”按部署的统计时区划分（{@link StatsZone}）。
  */
 @Service
-public class ModelUsageService {
+public class ModelUsageService implements ModelCosts {
 
     private static final Logger log = LoggerFactory.getLogger(ModelUsageService.class);
 
@@ -44,6 +47,8 @@ public class ModelUsageService {
     private static final int MAX_NAME_LENGTH = 200;
     private static final BigDecimal MILLION = BigDecimal.valueOf(1_000_000);
     private static final BigDecimal MAX_PRICE = BigDecimal.valueOf(1_000_000);
+    /** 一次员工问答会用到的用途，估算每次回答的费用时计入。 */
+    private static final Set<String> ANSWER_PURPOSES = Set.of("ANSWER", "HEDGE", "RERANK");
 
     private final ModelUsageStore store;
     private final StatsZone zones;
@@ -120,6 +125,24 @@ public class ModelUsageService {
         var pageItems = result.subList(from0, Math.min(result.size(), from0 + paging.size()));
         return new UsageReport(start, end, grouping,
                 new Paged<>(List.copyOf(pageItems), result.size(), paging.page(), paging.size()), total.group("合计"));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<BigDecimal> averageAnswerCost() {
+        var end = today();
+        var rows = store.usage(end.minusDays(DEFAULT_RANGE_DAYS - 1), end);
+        long answers = rows.stream().filter(row -> "ANSWER".equals(row.purpose())).mapToLong(UsageRow::calls).sum();
+        var prices = new LinkedHashMap<String, ModelPrice>();
+        store.prices().forEach(price -> prices.put(price.model(), price));
+        var total = new Tally(null);
+        rows.stream().filter(row -> ANSWER_PURPOSES.contains(row.purpose()))
+                .forEach(row -> total.add(row, prices.get(row.model())));
+        var cost = total.group("");
+        if (answers == 0 || cost.unpriced()) {
+            return Optional.empty();
+        }
+        return Optional.of(cost.cost().divide(BigDecimal.valueOf(answers), 6, RoundingMode.HALF_UP));
     }
 
     /** 有用量或填过单价的模型，没填过单价的两个价格为 null。 */

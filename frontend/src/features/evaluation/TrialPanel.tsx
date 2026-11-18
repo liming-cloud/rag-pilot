@@ -8,11 +8,10 @@ import { Label } from "@/components/ui/label";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
-import { fetchKnowledgeBases, knowledgeKeys } from "@/features/knowledge/api";
 import { ErrorMessage } from "@/lib/errors";
 import { Can, PERMISSIONS } from "@/lib/permissions";
 import { QuestionDialog } from "./QuestionDialog";
-import { type QuestionDraft, type TrialResult, trialAsk } from "./api";
+import { evaluationKeys, fetchKnowledgeBaseOptions, type QuestionDraft, type TrialResult, trialAsk } from "./api";
 
 /**
  * 试问（#224）：在一个知识库里按自己的权限检索和回答，列出召回的原文、相关度和是否被引用；不写回答记录。
@@ -22,7 +21,7 @@ export function TrialPanel({ initialQuestion }: { initialQuestion: string }) {
   const [question, setQuestion] = useState(initialQuestion);
   const [knowledgeBaseId, setKnowledgeBaseId] = useState<number | null>(null);
   const [saving, setSaving] = useState<{ draft: QuestionDraft; names: Record<number, string> } | null>(null);
-  const knowledgeBases = useQuery({ queryKey: knowledgeKeys.all, queryFn: fetchKnowledgeBases });
+  const knowledgeBases = useQuery({ queryKey: evaluationKeys.knowledgeBases, queryFn: fetchKnowledgeBaseOptions });
   const selected = knowledgeBaseId ?? knowledgeBases.data?.[0]?.id ?? null;
   const ask = useMutation({
     mutationFn: (input: { knowledgeBaseId: number; question: string }) =>
@@ -78,7 +77,7 @@ export function TrialPanel({ initialQuestion }: { initialQuestion: string }) {
           onSave={() =>
             setSaving({
               draft: draftFrom(ask.variables, ask.data),
-              names: Object.fromEntries(ask.data.answer.citations.map((c) => [c.documentId, c.documentName])),
+              names: Object.fromEntries(ask.data.citedDocuments.map((d) => [d.documentId, d.documentName])),
             })
           }
         />
@@ -99,24 +98,23 @@ export function TrialPanel({ initialQuestion }: { initialQuestion: string }) {
 }
 
 function draftFrom(input: { knowledgeBaseId: number; question: string }, result: TrialResult): QuestionDraft {
-  const cited = [...new Set(result.answer.citations.map((citation) => citation.documentId))];
   return {
     question: input.question,
     knowledgeBaseId: input.knowledgeBaseId,
-    expectation: result.answer.refused ? "REFUSAL" : "DOCUMENTS",
+    expectation: result.refused ? "REFUSAL" : "DOCUMENTS",
     match: "ALL",
-    expectedDocumentIds: result.answer.refused ? [] : cited,
+    expectedDocumentIds: result.refused ? [] : result.citedDocuments.map((document) => document.documentId),
   };
 }
 
 function TrialOutcome({ result, onSave }: { result: TrialResult; onSave: () => void }) {
-  const { answer, passages } = result;
+  const { passages } = result;
   return (
     <section aria-label="试问结果" className="flex flex-col gap-3">
       <div className="flex flex-col gap-2 rounded-xl border bg-card p-4 shadow-sm">
         <div className="flex items-center gap-2">
           <h2 className="mr-auto font-medium">回答</h2>
-          {answer.refused && <Badge variant="destructive">拒答</Badge>}
+          {result.refused && <Badge variant="destructive">拒答</Badge>}
           <Can permission={PERMISSIONS.EVAL_MANAGE}>
             <Button size="sm" variant="outline" onClick={onSave}>
               <Save aria-hidden="true" className="size-4" />
@@ -124,10 +122,10 @@ function TrialOutcome({ result, onSave }: { result: TrialResult; onSave: () => v
             </Button>
           </Can>
         </div>
-        <p className="text-sm whitespace-pre-wrap">{answer.text}</p>
-        {answer.citations.length > 0 && (
+        <p className="text-sm whitespace-pre-wrap">{result.text}</p>
+        {result.citedDocuments.length > 0 && (
           <p className="text-sm text-muted-foreground">
-            引用：{[...new Set(answer.citations.map((citation) => citation.documentName))].join("、")}
+            引用：{result.citedDocuments.map((document) => document.documentName).join("、")}
           </p>
         )}
       </div>

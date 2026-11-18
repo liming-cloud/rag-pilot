@@ -8,7 +8,10 @@ import com.liming.rag.knowledge.application.DocumentRow;
 import com.liming.rag.knowledge.application.DocumentFinding;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.liming.rag.knowledge.api.DocumentFreshness;
+import com.liming.rag.knowledge.api.DocumentRef;
+import com.liming.rag.knowledge.domain.DocumentStatus;
 import com.liming.rag.knowledge.api.KnowledgeBaseRef;
 import com.liming.rag.knowledge.application.Grantee;
 import com.liming.rag.knowledge.application.KnowledgeQueries;
@@ -67,6 +70,37 @@ class MybatisKnowledgeQueries implements KnowledgeQueries {
                         .in(DocumentDO::getId, documentIds))
                 .stream().collect(Collectors.toMap(DocumentDO::getId, row -> new DocumentFreshness(
                         row.getCreatedAt(), row.getExpiresOn() != null && row.getExpiresOn().isBefore(today))));
+    }
+
+    @Override
+    public List<DocumentRef> documentRefs(TenantId tenantId, Collection<Long> documentIds) {
+        if (documentIds.isEmpty()) {
+            return List.of();
+        }
+        return documents.selectList(new LambdaQueryWrapper<DocumentDO>()
+                        .select(DocumentDO::getId, DocumentDO::getKnowledgeBaseId, DocumentDO::getFilename)
+                        .eq(DocumentDO::getTenantId, tenantId.value())
+                        .in(DocumentDO::getId, documentIds))
+                .stream().map(MybatisKnowledgeQueries::toRef).toList();
+    }
+
+    @Override
+    public List<DocumentRef> readyDocuments(TenantId tenantId, long knowledgeBaseId, @Nullable String keyword,
+            Collection<String> filenames, int limit) {
+        var query = new LambdaQueryWrapper<DocumentDO>()
+                .select(DocumentDO::getId, DocumentDO::getKnowledgeBaseId, DocumentDO::getFilename)
+                .eq(DocumentDO::getTenantId, tenantId.value())
+                .eq(DocumentDO::getKnowledgeBaseId, knowledgeBaseId)
+                .eq(DocumentDO::getStatus, DocumentStatus.READY.name())
+                .in(!filenames.isEmpty(), DocumentDO::getFilename, filenames)
+                .like(filenames.isEmpty() && keyword != null, DocumentDO::getFilename, keyword)
+                .orderByAsc(DocumentDO::getFilename, DocumentDO::getId);
+        return documents.selectPage(new Page<DocumentDO>(1, limit, false),
+                query).getRecords().stream().map(MybatisKnowledgeQueries::toRef).toList();
+    }
+
+    private static DocumentRef toRef(DocumentDO row) {
+        return new DocumentRef(row.getId(), row.getKnowledgeBaseId(), row.getFilename());
     }
 
     @Override

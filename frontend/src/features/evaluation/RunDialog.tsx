@@ -35,8 +35,14 @@ export function RunDialog({ setId, onStarted }: { setId: number; onStarted: (run
           )}
           <dt className="text-muted-foreground">预估费用</dt>
           <dd className="tabular-nums">
-            约 {data.cost.toFixed(2)} {data.currency === "CNY" ? "元" : data.currency}
-            <span className="text-muted-foreground">（按单价表和近期每题平均用量估算）</span>
+            {data.cost === null ? (
+              <span className="text-muted-foreground">暂无法估算（没填单价或近 30 天没有回答用量）</span>
+            ) : (
+              <>
+                约 {data.cost.toFixed(2)} {data.currency === "CNY" ? "元" : data.currency}
+                <span className="text-muted-foreground">（按近 30 天每次回答的平均费用估算）</span>
+              </>
+            )}
           </dd>
         </dl>
       )}

@@ -1,7 +1,6 @@
 import { http, HttpResponse } from "msw";
 import type { ImportResult, ImportRow, QuestionDraft, TrialResult } from "@/features/evaluation/api";
 import {
-  ago,
   COST_PER_QUESTION,
   db,
   detail,
@@ -32,26 +31,13 @@ function trial(knowledgeBaseId: number, question: string): TrialResult {
     relevance: offTopic ? 0.12 - index * 0.03 : 0.86 - index * 0.21,
     cited: !offTopic && index < 2,
   }));
-  const cited = passages.filter((passage) => passage.cited);
   return {
-    answer: {
-      id: null,
-      text: offTopic ? "资料里没有找到相关内容。" : "门店应按规定执行，发现问题当班登记并上报店长[1]。具体折扣以当月通知为准[2]。",
-      refused: offTopic,
-      refusalReason: offTopic ? "LOW_RELEVANCE" : null,
-      citations: cited.map((passage, index) => ({
-        index: index + 1,
-        chunkId: passage.documentId * 10,
-        documentId: passage.documentId,
-        documentName: passage.documentName,
-        headingPath: passage.headingPath,
-        excerpt: passage.excerpt,
-        documentUpdatedAt: ago(5),
-        documentState: "CURRENT",
-      })),
-      dataCitations: [],
-      topRelevance: passages[0]?.relevance ?? null,
-    },
+    text: offTopic ? "资料里没有找到相关内容。" : "门店应按规定执行，发现问题当班登记并上报店长[1]。具体折扣以当月通知为准[2]。",
+    refused: offTopic,
+    refusalReason: offTopic ? "LOW_RELEVANCE" : null,
+    citedDocuments: passages
+      .filter((passage) => passage.cited)
+      .map((passage) => ({ documentId: passage.documentId, documentName: passage.documentName })),
     passages,
   };
 }
@@ -91,6 +77,18 @@ export const evaluationHandlers = [
     const { knowledgeBaseId, question } = (await request.json()) as { knowledgeBaseId: number; question: string };
     if (!canAccess(knowledgeBaseId)) return problem(404, "NOT_FOUND", "知识库不存在或无权访问");
     return HttpResponse.json(trial(knowledgeBaseId, question));
+  }),
+  http.get("/api/evaluation/knowledge-bases", () =>
+    forbidden("eval:view") ??
+    HttpResponse.json(accessibleKnowledgeBaseIds().map((id) => ({ id, name: knowledgeBaseName(id) }))),
+  ),
+  http.get("/api/evaluation/knowledge-bases/:id/documents", ({ params, request }) => {
+    const denied = forbidden("eval:manage");
+    if (denied) return denied;
+    const id = Number(params.id);
+    const keyword = new URL(request.url).searchParams.get("keyword") ?? "";
+    const found = canAccess(id) ? documentsIn(id).filter((document) => document.filename.includes(keyword)) : [];
+    return HttpResponse.json(found.slice(0, 20).map(({ id: documentId, filename }) => ({ id: documentId, filename })));
   }),
   http.get("/api/evaluation/sets", () => forbidden("eval:view") ?? HttpResponse.json(db.sets.map(setView))),
   http.get("/api/evaluation/sets/:id", ({ params }) => {

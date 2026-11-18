@@ -10,4 +10,6 @@ import org.springframework.modulith.NamedInterface;
 public record ModelCallUsage(String purpose, String baseUrl, String model, long inputTokens, long outputTokens) {
 
     public static final String EMBEDDING = "EMBEDDING";
+    /** 知识质量的试问和运行（#224）：期间的回答、重排、向量化都记在这里（{@link com.liming.rag.ai.UsageAttribution}）。 */
+    public static final String EVALUATION = "EVALUATION";
 }

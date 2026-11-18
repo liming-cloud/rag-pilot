@@ -59,6 +59,7 @@ export const PURPOSE_NAMES: Record<UsagePurpose, string> = {
   LIGHT: "轻量任务",
   RERANK: "重排",
   EMBEDDING: "入库向量化",
+  EVALUATION: "评测",
 };
 
 export const USAGE_LABELS: Record<Usage, { name: string; description: string }> = {
@@ -136,7 +137,8 @@ export async function restoreChange(id: number): Promise<UsageConfig> {
 }
 
 /** 用量统计里的用途：四个可配用途加入库向量化（嵌入不能在界面配置）。 */
-export type UsagePurpose = Usage | "EMBEDDING";
+/** EVALUATION：知识质量的试问和运行（#224），期间的回答、重排、向量化都记在这里。 */
+export type UsagePurpose = Usage | "EMBEDDING" | "EVALUATION";
 
 /** DETAIL 不合并：每天、每个用途、服务商、模型各一行。 */
 export type UsageGroupBy = "DETAIL" | "DAY" | "MONTH" | "PURPOSE" | "MODEL";

@@ -1,6 +1,7 @@
 package com.liming.rag.knowledge.application;
 
 import com.liming.rag.knowledge.api.DocumentFreshness;
+import com.liming.rag.knowledge.api.DocumentRef;
 import com.liming.rag.knowledge.api.KnowledgeBaseRef;
 import com.liming.rag.knowledge.domain.Document;
 import com.liming.rag.knowledge.domain.DocumentStatus;
@@ -34,6 +35,16 @@ public interface KnowledgeQueries {
 
     /** 本租户里这些库的名称，不检查授权；不存在的 id 不返回。 */
     Map<Long, String> names(TenantId tenantId, Collection<Long> knowledgeBaseIds);
+
+    /** 还在的文档，不检查成员关系（#224）。 */
+    List<DocumentRef> documentRefs(TenantId tenantId, Collection<Long> documentIds);
+
+    /**
+     * 库里已入库的文档，按文件名排序，最多 {@code limit} 份：{@code filenames} 不为空时按文件名精确匹配，
+     * 否则文件名包含 {@code keyword}（为空不筛）。不检查成员关系，调用方先确认能访问（#224）。
+     */
+    List<DocumentRef> readyDocuments(TenantId tenantId, long knowledgeBaseId, @Nullable String keyword,
+            Collection<String> filenames, int limit);
 
     /**
      * 知识库列表，按创建顺序。

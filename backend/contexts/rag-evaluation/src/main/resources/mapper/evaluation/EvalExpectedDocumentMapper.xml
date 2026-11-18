@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.liming.rag.evaluation.infrastructure.persistence.EvalExpectedDocumentMapper">
+
+    <!-- 期望文档接到新版本（#224）：已同时期望新版本的题不改，避免主键冲突，旧的一行由调用方删除。 -->
+    <update id="follow">
+        UPDATE eval_expected_document e
+        SET document_id = #{documentId}
+        WHERE e.tenant_id = #{tenantId}
+          AND e.document_id = #{replacedDocumentId}
+          AND NOT EXISTS (SELECT 1 FROM eval_expected_document o
+                          WHERE o.question_id = e.question_id AND o.document_id = #{documentId})
+    </update>
+</mapper>

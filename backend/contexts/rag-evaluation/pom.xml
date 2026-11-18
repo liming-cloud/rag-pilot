@@ -12,7 +12,7 @@
     </parent>
 
     <artifactId>rag-evaluation</artifactId>
-    <!-- 限界上下文：评测集、评测运行、指标。 -->
+    <!-- 限界上下文：评测集、评测运行、指标；知识质量的题集、标准题和运行（#224）。 -->
 
     <dependencies>
         <dependency>
@@ -23,6 +23,40 @@
         <dependency>
             <groupId>${project.groupId}</groupId>
             <artifactId>rag-ai</artifactId>
+        </dependency>
+        <!-- 知识质量（#224、D-070）：只用这些上下文的 api。 -->
+        <dependency>
+            <groupId>${project.groupId}</groupId>
+            <artifactId>rag-identity</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>${project.groupId}</groupId>
+            <artifactId>rag-knowledge</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>${project.groupId}</groupId>
+            <artifactId>rag-answering</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>${project.groupId}</groupId>
+            <artifactId>rag-settings</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.modulith</groupId>
+            <artifactId>spring-modulith-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-webmvc</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-tx</artifactId>
+        </dependency>
+        <!-- MyBatis-Plus 经平台组件 rag-persistence 引入（D-053）。 -->
+        <dependency>
+            <groupId>${project.groupId}</groupId>
+            <artifactId>rag-persistence</artifactId>
         </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>

@@ -1,5 +1,4 @@
-import type { Answer } from "@/features/chat/api";
-import { ApiError, json } from "@/lib/api";
+import { ApiError, json, query } from "@/lib/api";
 import { authFetch } from "@/lib/auth";
 
 /**
@@ -95,10 +94,21 @@ export type RetrievedPassage = {
   cited: boolean;
 };
 
-export type TrialResult = { answer: Answer; passages: RetrievedPassage[] };
+/** 试问的结果：回答、引用的文档和召回的原文（重排后的前几条，不论是否达到门槛）。 */
+export type TrialResult = {
+  text: string;
+  refused: boolean;
+  refusalReason: string | null;
+  citedDocuments: { documentId: number; documentName: string }[];
+  passages: RetrievedPassage[];
+};
 
-/** 运行前的预估：按单价表（D-065）和近期每道题的平均用量估算。 */
-export type RunEstimate = { questions: number; skippedStale: number; cost: number; currency: string };
+/** 运行前的预估：每题按近 30 天每次回答的平均费用（单价表 D-065）估；没有单价或近期用量时 cost 为 null。 */
+export type RunEstimate = { questions: number; skippedStale: number; cost: number | null; currency: string };
+
+/** 试问和标准题可选的知识库：当前账号能访问的库。 */
+export type KnowledgeBaseOption = { id: number; name: string };
+export type DocumentOption = { id: number; filename: string };
 
 export type QuestionDraft = {
   question: string;
@@ -124,6 +134,18 @@ export async function trialAsk(knowledgeBaseId: number, question: string): Promi
     body: JSON.stringify({ knowledgeBaseId, question }),
   });
   return json(response, "试问失败");
+}
+
+export async function fetchKnowledgeBaseOptions(): Promise<KnowledgeBaseOption[]> {
+  return json(await authFetch("/api/evaluation/knowledge-bases"), "读取知识库失败");
+}
+
+/** 选期望文档：能访问的库里已入库的文档，按文件名搜，最多 20 份。 */
+export async function fetchDocumentOptions(knowledgeBaseId: number, keyword: string): Promise<DocumentOption[]> {
+  return json(
+    await authFetch(`/api/evaluation/knowledge-bases/${knowledgeBaseId}/documents${query({ keyword })}`),
+    "读取文档失败",
+  );
 }
 
 export async function fetchSets(): Promise<EvalSet[]> {
@@ -208,6 +230,9 @@ export const MATCH_LABELS: Record<MatchMode, string> = { ALL: "全部命中", AN
 
 export const evaluationKeys = {
   all: ["evaluation"],
+  knowledgeBases: ["evaluation", "knowledge-bases"],
+  documents: (knowledgeBaseId: number, keyword: string) =>
+    ["evaluation", "knowledge-bases", knowledgeBaseId, "documents", keyword] as const,
   sets: ["evaluation", "sets"],
   set: (id: number) => ["evaluation", "sets", id] as const,
   questions: (setId: number) => ["evaluation", "sets", setId, "questions"] as const,
