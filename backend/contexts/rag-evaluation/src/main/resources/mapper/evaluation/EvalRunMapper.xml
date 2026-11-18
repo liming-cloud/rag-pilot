@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.liming.rag.evaluation.infrastructure.persistence.EvalRunMapper">
+
+    <!-- 每个题集最近的一次运行。 -->
+    <select id="latest" resultType="com.liming.rag.evaluation.infrastructure.persistence.EvalRunDO">
+        SELECT DISTINCT ON (set_id) id, tenant_id, set_id, runner_id, status, started_at, finished_at
+        FROM eval_run
+        WHERE tenant_id = #{tenantId}
+        ORDER BY set_id, id DESC
+    </select>
+</mapper>

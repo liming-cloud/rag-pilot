@@ -1,6 +1,7 @@
 package com.liming.rag.ai.common;
 
 import com.liming.rag.ai.ModelRouting;
+import com.liming.rag.ai.UsageAttribution;
 import com.liming.rag.ai.UsageRecording;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.observation.ObservationRegistry;
@@ -10,6 +11,7 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Lazy;
+import org.springframework.core.task.TaskDecorator;
 
 /** 各能力共用的装配：模型路由、对话模型、Spring AI 的指标处理器。 */
 @Configuration(proxyBeanMethods = false)
@@ -23,6 +25,26 @@ class AiConfiguration {
     @Bean
     UsageReports usageReports(ObjectProvider<UsageRecording> recording) {
         return new UsageReports(recording);
+    }
+
+    @Bean
+    UsageAttribution usageAttribution() {
+        return UsageReports::attributed;
+    }
+
+    /**
+     * 让 {@code applicationTaskExecutor} 派出的任务继承派发线程的用量归属（#224）：问答的检索、低分改写在这个执行器上并行。
+     * Spring Boot 把唯一的 {@link TaskDecorator} 用到这个执行器上。
+     */
+    @Bean
+    TaskDecorator usageAttributionPropagation() {
+        return task -> {
+            var attribution = UsageReports.attribution();
+            return () -> UsageReports.attributed(attribution, () -> {
+                task.run();
+                return null;
+            });
+        };
     }
 
     /** 文字生成和问题改写共用的对话模型；只在用真实模型时创建（本地确定性实现不需要密钥）。 */

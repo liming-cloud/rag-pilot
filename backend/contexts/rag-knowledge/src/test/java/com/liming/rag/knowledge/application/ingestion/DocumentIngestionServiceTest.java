@@ -42,7 +42,7 @@ class DocumentIngestionServiceTest {
     private final KnowledgeBaseService knowledgeBases = new KnowledgeBaseService(fixture.knowledgeBases,
             fixture.queries, fixture.users, fixture.calendar, query -> List.of());
     private final DocumentIngestionService service = new DocumentIngestionService(knowledgeBases,
-            fixture.documents, fixture.files, events::add, new DocumentRemover(fixture.documents, fixture.files),
+            fixture.documents, fixture.files, events::add, new DocumentRemover(fixture.documents, fixture.files, events::add),
             fixture.calendar, fixture.audit);
     private final long kb;
 

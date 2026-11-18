@@ -97,6 +97,22 @@ export const routes: RouteObject[] = [
         ),
       },
       {
+        path: "evaluation",
+        ...adminPage(PERMISSIONS.EVAL_VIEW, () =>
+          import("@/features/evaluation/EvaluationPage").then((m) => m.EvaluationPage),
+        ),
+      },
+      {
+        path: "evaluation/sets/:setId",
+        ...adminPage(PERMISSIONS.EVAL_VIEW, () =>
+          import("@/features/evaluation/SetDetailPage").then((m) => m.SetDetailPage),
+        ),
+      },
+      {
+        path: "evaluation/runs/:runId",
+        ...adminPage(PERMISSIONS.EVAL_VIEW, () => import("@/features/evaluation/RunPage").then((m) => m.RunPage)),
+      },
+      {
         path: "stats",
         ...adminPage(PERMISSIONS.STATS_VIEW, () => import("@/features/stats/StatsPage").then((m) => m.StatsPage)),
       },

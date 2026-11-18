@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.liming.rag.answering.api.AnsweringPermissions;
 import com.liming.rag.data.api.DataPermissions;
+import com.liming.rag.evaluation.api.EvaluationPermissions;
 import com.liming.rag.identity.api.IdentityPermissions;
 import com.liming.rag.knowledge.api.KnowledgePermissions;
 import com.liming.rag.settings.api.SettingsPermissions;
@@ -55,13 +56,14 @@ class RbacTests {
                 List.class).getBody();
 
         assertThat(catalog).extracting(group -> ((Map<String, Object>) group).get("menu")).containsExactly(
-                "对话", "知识库管理", "用户管理", "角色与权限", "审计记录", "模型管理", "数据范围授权", "回答记录", "运营概览", "系统设置");
+                "对话", "知识库管理", "用户管理", "角色与权限", "审计记录", "模型管理", "数据范围授权", "回答记录", "知识质量", "运营概览",
+                "系统设置");
         var codes = new ArrayList<String>();
         for (var group : (List<Map<String, Object>>) catalog) {
             codes.add((String) ((Map<String, Object>) group.get("view")).get("code"));
             ((List<Map<String, Object>>) group.get("buttons")).forEach(button -> codes.add((String) button.get("code")));
         }
-        assertThat(codes).containsExactlyElementsOf(AllPermissions.ALL).hasSize(35);
+        assertThat(codes).containsExactlyElementsOf(AllPermissions.ALL).hasSize(38);
     }
 
     @Test
@@ -147,6 +149,14 @@ class RbacTests {
                         null),
                 new Endpoint(DataPermissions.DATA_GRANT, HttpMethod.PUT, "/api/data-grants?granteeType=USER&granteeId={user}",
                         Map.of("tools", List.of(), "units", List.of(), "regions", List.of())),
+                new Endpoint(EvaluationPermissions.EVAL_VIEW, HttpMethod.GET, "/api/evaluation/sets", null),
+                new Endpoint(EvaluationPermissions.EVAL_VIEW, HttpMethod.GET, "/api/evaluation/runs/999999", null),
+                new Endpoint(EvaluationPermissions.EVAL_MANAGE, HttpMethod.POST, "/api/evaluation/sets",
+                        Map.of("name", "权限测试题集", "description", "")),
+                new Endpoint(EvaluationPermissions.EVAL_MANAGE, HttpMethod.DELETE, "/api/evaluation/sets/999999", null),
+                new Endpoint(EvaluationPermissions.EVAL_RUN, HttpMethod.POST, "/api/evaluation/sets/999999/runs", null),
+                new Endpoint(EvaluationPermissions.EVAL_RUN, HttpMethod.POST, "/api/evaluation/trial",
+                        Map.of("knowledgeBaseId", 999999, "question", "货架在哪")),
                 new Endpoint(IdentityPermissions.ROLE_DELETE, HttpMethod.DELETE, "/api/roles/{role}", null));
 
         var allowed = new HashMap<String, String>();

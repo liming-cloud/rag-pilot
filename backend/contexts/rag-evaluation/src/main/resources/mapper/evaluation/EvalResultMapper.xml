@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.liming.rag.evaluation.infrastructure.persistence.EvalResultMapper">
+
+    <resultMap id="result" type="com.liming.rag.evaluation.infrastructure.persistence.EvalResultDO" autoMapping="true">
+        <result column="expected_document_ids" property="expectedDocumentIds" typeHandler="org.apache.ibatis.type.ArrayTypeHandler"/>
+        <result column="expected_documents" property="expectedDocuments" typeHandler="org.apache.ibatis.type.ArrayTypeHandler"/>
+        <result column="recalled_document_ids" property="recalledDocumentIds" typeHandler="org.apache.ibatis.type.ArrayTypeHandler"/>
+        <result column="cited_document_ids" property="citedDocumentIds" typeHandler="org.apache.ibatis.type.ArrayTypeHandler"/>
+        <result column="cited_documents" property="citedDocuments" typeHandler="org.apache.ibatis.type.ArrayTypeHandler"/>
+    </resultMap>
+
+    <!-- 开始运行时每道题一行，题目和期望存快照，结果列为空。 -->
+    <insert id="insertAll">
+        INSERT INTO eval_result (run_id, question_id, position, question, knowledge_base_id, expectation, match_mode,
+                                 expected_document_ids, expected_documents)
+        VALUES
+        <foreach collection="rows" item="row" separator=",">
+            (#{row.runId}, #{row.questionId}, #{row.position}, #{row.question}, #{row.knowledgeBaseId},
+             #{row.expectation}, #{row.matchMode},
+             #{row.expectedDocumentIds, typeHandler=org.apache.ibatis.type.ArrayTypeHandler}::bigint[],
+             #{row.expectedDocuments, typeHandler=org.apache.ibatis.type.ArrayTypeHandler}::text[])
+        </foreach>
+    </insert>
+
+    <update id="saveOutcome">
+        UPDATE eval_result
+        SET passed = #{row.passed},
+            refused = #{row.refused},
+            recalled_document_ids = #{row.recalledDocumentIds, typeHandler=org.apache.ibatis.type.ArrayTypeHandler}::bigint[],
+            cited_document_ids = #{row.citedDocumentIds, typeHandler=org.apache.ibatis.type.ArrayTypeHandler}::bigint[],
+            cited_documents = #{row.citedDocuments, typeHandler=org.apache.ibatis.type.ArrayTypeHandler}::text[],
+            answer_text = #{row.answerText}
+        WHERE run_id = #{row.runId} AND question_id = #{row.questionId}
+    </update>
+
+    <select id="findByRun" resultMap="result">
+        SELECT run_id, question_id, position, question, knowledge_base_id, expectation, match_mode,
+               expected_document_ids, expected_documents, passed, refused, recalled_document_ids,
+               cited_document_ids, cited_documents, answer_text
+        FROM eval_result
+        WHERE run_id = #{runId}
+        ORDER BY position
+    </select>
+</mapper>

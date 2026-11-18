@@ -66,6 +66,9 @@ export function canAccess(knowledgeBaseId: number) {
 export const knowledgeBaseName = (id: number) =>
   knowledgeBases.find((knowledgeBase) => knowledgeBase.id === id)?.name ?? `知识库 ${id}`;
 
+/** 库里现有的文档（含新版本）；评测的假接口用来判断期望文档是否已删除。 */
+export const documentsIn = (knowledgeBaseId: number) => documents[knowledgeBaseId] ?? [];
+
 export const accessibleKnowledgeBaseIds = () =>
   knowledgeBases.filter((knowledgeBase) => canAccess(knowledgeBase.id)).map((knowledgeBase) => knowledgeBase.id);
 

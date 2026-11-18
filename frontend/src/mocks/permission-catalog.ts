@@ -66,6 +66,14 @@ export const permissionCatalog: PermissionGroup[] = [
     ],
   },
   {
+    menu: "知识质量",
+    view: { code: "eval:view", label: "进入页面" },
+    buttons: [
+      { code: "eval:manage", label: "管理题集和标准题" },
+      { code: "eval:run", label: "试问和运行" },
+    ],
+  },
+  {
     menu: "运营概览",
     view: { code: "stats:view", label: "进入页面" },
     buttons: [{ code: "stats:export", label: "导出" }],

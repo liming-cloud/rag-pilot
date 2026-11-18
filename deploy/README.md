@@ -100,6 +100,8 @@ docker compose --env-file .env --env-file release.env logs --tail 200 app   # �
 | `event=access_denied` | 越权被拒：缺的权限点（`permission`）、角色（`role`）或不能管理的知识库（`knowledgeBase`） |
 | `event=cache_failure` | Redis 出错或超时：`cache` 是哪种缓存、`op` 是什么操作。之后 30 秒内跳过 Redis（进程内的一级缓存照常用，没有时读数据库），问答照常；恢复后先清空 Redis 里的缓存再用。登录会话也在 Redis 里，Redis 不可用时**不能登录、已登录的请求会被拒绝** |
 | `event=cache_recovered`、`event=cache_value_unreadable` | Redis 恢复，已清空缓存后重新使用；缓存里的值读不回来（`cache`，多半是升级后结构变了），当作没缓存重新加载 |
+| `event=evaluation_run_finished`、`event=evaluation_run_failed`、`event=evaluation_run_abandoned` | 知识质量的题集运行（#224）：跑完（`run` 运行编号，`questions` 题数，`passed` 通过数）；中途失败停下，已跑完的题保留（`error` 是异常类型，多半同时有 `model_call_failed`）；启动时把上次没跑完的运行标为失败（`runs` 条数，停机或重启打断了运行，需要的话重新点“运行”） |
+| `event=golden_question_followed_new_version` | 标准题的期望文档上传了新版本，自动接到新版本（`document` 新版本编号，`questions` 改动的题数） |
 | `event=retention_purged` | 定时清理超过保留期的数据：`target` 是哪种（`conversation` 会话、`audit` 审计记录、`model_usage` 模型用量），`rows` 是条数 |
 
 ```bash

@@ -172,6 +172,42 @@ class ModelUsageTests {
                 .contains("priced-model", "free-model");
     }
 
+    @Test
+    @DisplayName("知识质量的试问：期间的回答、重排、问题向量化都记为“评测”用途，不混进员工问答的用量（#224）")
+    @SuppressWarnings("unchecked")
+    void evaluationUsageIsRecordedSeparately() {
+        var created = http.postForEntity("/api/knowledge-bases", Map.of("name", "评测用量库"), Map.class);
+        long kb = ((Number) created.getBody().get("id")).longValue();
+        assertThat(TestDocuments.awaitProcessed(http, kb, upload(kb), null)).containsEntry("status", "READY");
+        var before = callsByPurpose();
+
+        // 换一个问法：问题向量按原文缓存，原文相同时不会再调嵌入模型。前面的用例可能已把回答切到别的模型，按前缀找。
+        var trial = http.postForEntity("/api/evaluation/trial",
+                Map.of("knowledgeBaseId", kb, "question", "收银员交班的时候备用金要怎么处理"), Map.class);
+
+        assertThat(trial.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(trial.getBody()).containsEntry("refused", false);
+        var after = callsByPurpose();
+        assertThat(after).as("回答").hasEntrySatisfying("EVALUATION · usage-rerank", calls -> assertThat(calls).isPositive())
+                .hasEntrySatisfying("EVALUATION · usage-embed", calls -> assertThat(calls).isPositive());
+        assertThat(after.keySet()).as("回答记为评测：%s", after).anyMatch(key -> key.startsWith("EVALUATION · usage-answer"));
+        after.forEach((key, calls) -> {
+            if (!key.startsWith("EVALUATION")) {
+                assertThat(calls).as(key + " 不变").isEqualTo(before.get(key));
+            }
+        });
+    }
+
+    /** 库里按“用途 · 模型”汇总的调用数。 */
+    private Map<String, Long> callsByPurpose() {
+        var result = new HashMap<String, Long>();
+        jdbc.query("SELECT purpose, model, sum(calls) AS calls FROM model_usage_daily GROUP BY purpose, model",
+                row -> {
+                    result.put(row.getString("purpose") + " · " + row.getString("model"), row.getLong("calls"));
+                });
+        return result;
+    }
+
     /**
      * 后台线程（缺口问题补存向量等）的调用可能在断言时还没记完：等管理端汇总的这个模型追平假服务商返回过的数（最多 10 秒）。
      */

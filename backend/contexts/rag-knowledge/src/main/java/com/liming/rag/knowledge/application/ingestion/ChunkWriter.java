@@ -42,7 +42,7 @@ final class ChunkWriter {
             target.markReady(domainChunks.size());
             documents.saveOutcome(target);
             if (target.replacesDocumentId() != null) {
-                remover.remove(target.tenantId(), target.replacesDocumentId());
+                remover.replace(target.tenantId(), target.replacesDocumentId(), target.id());
             }
         });
     }

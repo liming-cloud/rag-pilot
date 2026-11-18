@@ -16,6 +16,12 @@ const MOCK_PATHS: Record<string, string> = {
   "GET /api/data-grants": "/api/data-grants?granteeType=USER&granteeId=2",
   "GET /api/answers": "/api/answers?filter=all&status=all",
   "GET /api/answers/gaps": "/api/answers/gaps?days=30&status=all",
+  "GET /api/evaluation/sets/:id": "/api/evaluation/sets/1",
+  "GET /api/evaluation/sets/:id/questions": "/api/evaluation/sets/1/questions",
+  "GET /api/evaluation/sets/:id/runs": "/api/evaluation/sets/1/runs",
+  "GET /api/evaluation/sets/:id/estimate": "/api/evaluation/sets/1/estimate",
+  "GET /api/evaluation/runs/:id": "/api/evaluation/runs/1001",
+  "GET /api/evaluation/knowledge-bases/:id/documents": "/api/evaluation/knowledge-bases/1/documents",
 };
 
 // 后端样例按管理员调用；示例会话属于店员小王，会话接口用他的身份取。
@@ -34,6 +40,14 @@ const json = (path: string, body: unknown) =>
   fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
 
 const importRows = [{ line: 2, username: "contract02", displayName: "契约导入", roleNames: ["员工"] }];
+const goldenQuestion = {
+  question: "临期商品打几折？",
+  knowledgeBaseId: 1,
+  expectation: "DOCUMENTS",
+  match: "ALL",
+  expectedDocumentIds: [11],
+};
+const goldenRows = [{ line: 2, question: "能代收快递吗？", knowledgeBase: "门店运营知识库", documents: [], match: "ALL" }];
 const provider = { name: "契约服务商", baseUrl: "http://127.0.0.1:9/v1", apiKey: "sk-contract-0000" };
 
 const WRITE_CALLS: Record<string, WriteCall> = {
@@ -90,6 +104,18 @@ const WRITE_CALLS: Record<string, WriteCall> = {
     path: "/api/models/prices",
     body: { model: "deepseek-chat", inputPerMillion: 2, outputPerMillion: 8 },
   },
+  "POST /api/evaluation/sets": { path: "/api/evaluation/sets", body: { name: "契约题集", description: "" } },
+  "PUT /api/evaluation/sets/:id": { path: "/api/evaluation/sets/1", body: { name: "门店运营回归", description: "" } },
+  "DELETE /api/evaluation/sets/:id": { path: "/api/evaluation/sets/2" },
+  "POST /api/evaluation/sets/:id/questions": { path: "/api/evaluation/sets/1/questions", body: goldenQuestion },
+  "PUT /api/evaluation/sets/:id/questions/:questionId": { path: "/api/evaluation/sets/1/questions/1", body: goldenQuestion },
+  "DELETE /api/evaluation/sets/:id/questions/:questionId": { path: "/api/evaluation/sets/1/questions/2" },
+  "POST /api/evaluation/sets/:id/questions/import": {
+    path: "/api/evaluation/sets/1/questions/import",
+    body: { rows: goldenRows },
+  },
+  "POST /api/evaluation/trial": { path: "/api/evaluation/trial", body: { knowledgeBaseId: 1, question: "临期商品打几折？" } },
+  "POST /api/evaluation/sets/:id/runs": { path: "/api/evaluation/sets/1/runs" },
   "PUT /api/data-grants": {
     path: "/api/data-grants?granteeType=USER&granteeId=2",
     body: { tools: [], units: [], regions: [] },

@@ -1,6 +1,6 @@
 {
   "说明" : "由后端 ApiContractTests 生成，不要手改；接口变了用 -Dcontract.update=true 重新生成",
-  "permissions" : [ "answer:export", "answer:recheck", "answer:review", "answer:view", "audit:view", "chat:use", "data:grant", "data:view", "doc:delete", "doc:replace", "doc:update", "doc:upload", "kb:create", "kb:delete", "kb:grant", "kb:update", "kb:view", "model:test", "model:update", "model:view", "role:create", "role:delete", "role:update", "role:view", "setting:update", "setting:view", "stats:export", "stats:view", "user:assign-role", "user:create", "user:disable", "user:import", "user:reset-password", "user:update", "user:view" ],
+  "permissions" : [ "answer:export", "answer:recheck", "answer:review", "answer:view", "audit:view", "chat:use", "data:grant", "data:view", "doc:delete", "doc:replace", "doc:update", "doc:upload", "eval:manage", "eval:run", "eval:view", "kb:create", "kb:delete", "kb:grant", "kb:update", "kb:view", "model:test", "model:update", "model:view", "role:create", "role:delete", "role:update", "role:view", "setting:update", "setting:view", "stats:export", "stats:view", "user:assign-role", "user:create", "user:disable", "user:import", "user:reset-password", "user:update", "user:view" ],
   "endpoints" : {
     "GET /api/answers" : {
       "items" : [ {
@@ -177,6 +177,123 @@
       "tools" : [ ],
       "units" : [ ]
     },
+    "GET /api/evaluation/knowledge-bases" : [ {
+      "id" : "number",
+      "name" : "string"
+    } ],
+    "GET /api/evaluation/knowledge-bases/:id/documents" : [ {
+      "filename" : "string",
+      "id" : "number"
+    } ],
+    "GET /api/evaluation/runs/:id" : {
+      "done" : "number",
+      "failed" : "number",
+      "finishedAt" : "string",
+      "id" : "number",
+      "newlyFailed" : "number",
+      "newlyPassed" : "number",
+      "passed" : "number",
+      "results" : [ {
+        "answerText" : "string",
+        "change" : "string",
+        "citedCount" : "number",
+        "citedDocuments" : [ "string" ],
+        "expectation" : "string",
+        "expectedCount" : "number",
+        "knowledgeBaseName" : "string",
+        "match" : "string",
+        "missingDocuments" : [ ],
+        "passed" : "boolean",
+        "question" : "string",
+        "questionId" : "number",
+        "recalledCount" : "number",
+        "refused" : "boolean"
+      } ],
+      "runnerName" : "string",
+      "setId" : "number",
+      "setName" : "string",
+      "startedAt" : "string",
+      "status" : "string",
+      "total" : "number"
+    },
+    "GET /api/evaluation/sets" : [ {
+      "description" : "string",
+      "id" : "number",
+      "knowledgeBaseNames" : [ "string" ],
+      "lastRun" : {
+        "done" : "number",
+        "failed" : "number",
+        "finishedAt" : "string",
+        "id" : "number",
+        "newlyFailed" : "number",
+        "newlyPassed" : "number",
+        "passed" : "number",
+        "runnerName" : "string",
+        "startedAt" : "string",
+        "status" : "string",
+        "total" : "number"
+      },
+      "name" : "string",
+      "questionCount" : "number",
+      "staleCount" : "number",
+      "updatedAt" : "string"
+    } ],
+    "GET /api/evaluation/sets/:id" : {
+      "description" : "string",
+      "id" : "number",
+      "knowledgeBaseNames" : [ "string" ],
+      "lastRun" : {
+        "done" : "number",
+        "failed" : "number",
+        "finishedAt" : "string",
+        "id" : "number",
+        "newlyFailed" : "number",
+        "newlyPassed" : "number",
+        "passed" : "number",
+        "runnerName" : "string",
+        "startedAt" : "string",
+        "status" : "string",
+        "total" : "number"
+      },
+      "name" : "string",
+      "questionCount" : "number",
+      "staleCount" : "number",
+      "updatedAt" : "string"
+    },
+    "GET /api/evaluation/sets/:id/estimate" : {
+      "cost" : "null",
+      "currency" : "string",
+      "questions" : "number",
+      "skippedStale" : "number"
+    },
+    "GET /api/evaluation/sets/:id/questions" : [ {
+      "createdAt" : "string",
+      "expectation" : "string",
+      "expectedDocuments" : [ {
+        "deleted" : "boolean",
+        "documentId" : "number",
+        "filename" : "string"
+      } ],
+      "id" : "number",
+      "knowledgeBaseId" : "number",
+      "knowledgeBaseName" : "string",
+      "match" : "string",
+      "question" : "string",
+      "stale" : "boolean"
+    } ],
+    "GET /api/evaluation/sets/:id/runs" : [ {
+      "done" : "number",
+      "failed" : "number",
+      "finishedAt" : "string",
+      "id" : "number",
+      "newlyFailed" : "number",
+      "newlyPassed" : "number",
+      "passed" : "number",
+      "runnerName" : "string",
+      "startedAt" : "string",
+      "status" : "string",
+      "total" : "number"
+    } ],
     "GET /api/knowledge-bases" : [ {
       "id" : "number",
       "name" : "string"
@@ -350,6 +467,12 @@
     "DELETE /api/conversations/:id" : {
       "status" : 204
     },
+    "DELETE /api/evaluation/sets/:id" : {
+      "status" : 204
+    },
+    "DELETE /api/evaluation/sets/:id/questions/:questionId" : {
+      "status" : 204
+    },
     "DELETE /api/knowledge-bases/:id/documents/:documentId" : {
       "status" : 204
     },
@@ -469,6 +592,83 @@
         "title" : "string"
       },
       "status" : 201
+    },
+    "POST /api/evaluation/sets" : {
+      "body" : {
+        "description" : "string",
+        "id" : "number",
+        "knowledgeBaseNames" : [ ],
+        "lastRun" : "null",
+        "name" : "string",
+        "questionCount" : "number",
+        "staleCount" : "number",
+        "updatedAt" : "string"
+      },
+      "status" : 201
+    },
+    "POST /api/evaluation/sets/:id/questions" : {
+      "body" : {
+        "createdAt" : "string",
+        "expectation" : "string",
+        "expectedDocuments" : [ {
+          "deleted" : "boolean",
+          "documentId" : "number",
+          "filename" : "string"
+        } ],
+        "id" : "number",
+        "knowledgeBaseId" : "number",
+        "knowledgeBaseName" : "string",
+        "match" : "string",
+        "question" : "string",
+        "stale" : "boolean"
+      },
+      "status" : 201
+    },
+    "POST /api/evaluation/sets/:id/questions/import" : {
+      "body" : {
+        "imported" : "number",
+        "skipped" : [ {
+          "line" : "number",
+          "reason" : "string"
+        } ]
+      },
+      "status" : 200
+    },
+    "POST /api/evaluation/sets/:id/runs" : {
+      "body" : {
+        "done" : "number",
+        "failed" : "number",
+        "finishedAt" : "null",
+        "id" : "number",
+        "newlyFailed" : "number",
+        "newlyPassed" : "number",
+        "passed" : "number",
+        "runnerName" : "string",
+        "startedAt" : "string",
+        "status" : "string",
+        "total" : "number"
+      },
+      "status" : 201
+    },
+    "POST /api/evaluation/trial" : {
+      "body" : {
+        "citedDocuments" : [ {
+          "documentId" : "number",
+          "documentName" : "string"
+        } ],
+        "passages" : [ {
+          "cited" : "boolean",
+          "documentId" : "number",
+          "documentName" : "string",
+          "excerpt" : "string",
+          "headingPath" : "string",
+          "relevance" : "number"
+        } ],
+        "refusalReason" : "null",
+        "refused" : "boolean",
+        "text" : "string"
+      },
+      "status" : 200
     },
     "POST /api/knowledge-bases" : {
       "body" : {
@@ -602,6 +802,37 @@
         "regions" : [ ],
         "tools" : [ ],
         "units" : [ ]
+      },
+      "status" : 200
+    },
+    "PUT /api/evaluation/sets/:id" : {
+      "body" : {
+        "description" : "string",
+        "id" : "number",
+        "knowledgeBaseNames" : [ ],
+        "lastRun" : "null",
+        "name" : "string",
+        "questionCount" : "number",
+        "staleCount" : "number",
+        "updatedAt" : "string"
+      },
+      "status" : 200
+    },
+    "PUT /api/evaluation/sets/:id/questions/:questionId" : {
+      "body" : {
+        "createdAt" : "string",
+        "expectation" : "string",
+        "expectedDocuments" : [ {
+          "deleted" : "boolean",
+          "documentId" : "number",
+          "filename" : "string"
+        } ],
+        "id" : "number",
+        "knowledgeBaseId" : "number",
+        "knowledgeBaseName" : "string",
+        "match" : "string",
+        "question" : "string",
+        "stale" : "boolean"
       },
       "status" : 200
     },
