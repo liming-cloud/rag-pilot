@@ -192,3 +192,7 @@ rag:
       root: ${RAG_STORAGE_ROOT:./data/files}
     # 资料失效日期在多少天内算“即将到期”，管理端据此提醒（D-046）；1 到 365。
     expiry-warning-days: ${RAG_EXPIRY_WARNING_DAYS:30}
+    # 分块参数（#225、D-073）：单块 token 上限和相邻分块的重叠；改了只影响之后入库的资料，评测时用它比较不同参数。
+    chunking:
+      max-tokens: ${RAG_CHUNK_MAX_TOKENS:500}
+      overlap-tokens: ${RAG_CHUNK_OVERLAP_TOKENS:80}

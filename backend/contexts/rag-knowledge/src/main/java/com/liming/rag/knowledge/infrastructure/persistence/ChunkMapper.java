@@ -11,4 +11,7 @@ public interface ChunkMapper extends BaseMapper<ChunkDO> {
 
     /** 一条 INSERT 写入多块，不回填 id。 */
     void insertAll(@Param("rows") List<ChunkDO> rows);
+
+    /** 把一份文档现在的分块正文留档（#225），重新分块前调用；已留档的不重复写。 */
+    void archive(@Param("documentId") long documentId);
 }

@@ -9,10 +9,11 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  * @param ingestion 后台入库
  * @param storage   原始文件存储
  * @param expiryWarningDays 失效日期在今天起多少天内算“即将到期”，管理端据此提醒（#124）
+ * @param chunking  分块参数
  */
 @ConfigurationProperties("rag.knowledge")
 public record KnowledgeProperties(@DefaultValue Ingestion ingestion, @DefaultValue Storage storage,
-        @DefaultValue("30") int expiryWarningDays) {
+        @DefaultValue("30") int expiryWarningDays, @DefaultValue Chunking chunking) {
 
     public KnowledgeProperties {
         if (expiryWarningDays < 1 || expiryWarningDays > 365) {
@@ -36,6 +37,20 @@ public record KnowledgeProperties(@DefaultValue Ingestion ingestion, @DefaultVal
         public Storage {
             if (root == null || root.isBlank()) {
                 throw new IllegalArgumentException("rag.knowledge.storage.root 不能为空");
+            }
+        }
+    }
+
+    /**
+     * 分块参数（#225）：单块的 token 上限和相邻分块的重叠，默认值由评测对比选定（D-073）。
+     * 改了只影响之后入库的资料；评测时用它比较不同参数。
+     */
+    public record Chunking(@DefaultValue("500") int maxTokens, @DefaultValue("80") int overlapTokens) {
+
+        public Chunking {
+            if (maxTokens < 50 || maxTokens > 4000 || overlapTokens < 0 || overlapTokens >= maxTokens) {
+                throw new IllegalArgumentException(
+                        "rag.knowledge.chunking.max-tokens 必须在 50 到 4000 之间，overlap-tokens 不小于 0 且小于 max-tokens");
             }
         }
     }

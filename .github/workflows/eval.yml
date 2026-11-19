@@ -32,6 +32,9 @@ on:
       hedge_model:
         description: 备用请求用的模型，填 same 与回答模型相同，不填用 application.yml 的默认值
         default: ""
+      chunk_max_tokens:
+        description: 分块 token 上限（重叠按 16% 换算，#225），不填用 application.yml 的默认值
+        default: ""
   pull_request:
     paths:
       - backend/platform/rag-ai/**
@@ -87,6 +90,7 @@ jobs:
           EVIDENCE_LIMIT: ${{ inputs.evidence_limit }}
           HEDGE_AFTER: ${{ inputs.hedge_after }}
           HEDGE_MODEL: ${{ inputs.hedge_model }}
+          CHUNK_MAX_TOKENS: ${{ inputs.chunk_max_tokens }}
         # 空环境变量会覆盖 application.yml 的默认值，所以只在填了输入时才设置。
         run: |
           if [ -n "$RERANK" ]; then export RERANK_MODEL="$RERANK"; fi
@@ -95,6 +99,7 @@ jobs:
           if [ -n "$EVIDENCE_LIMIT" ]; then export RAG_ANSWERING_EVIDENCE_LIMIT="$EVIDENCE_LIMIT"; fi
           if [ "$HEDGE_AFTER" = off ]; then export CHAT_HEDGE_AFTER=; elif [ -n "$HEDGE_AFTER" ]; then export CHAT_HEDGE_AFTER="$HEDGE_AFTER"; fi
           if [ "$HEDGE_MODEL" = same ]; then export CHAT_HEDGE_MODEL=; elif [ -n "$HEDGE_MODEL" ]; then export CHAT_HEDGE_MODEL="$HEDGE_MODEL"; fi
+          if [ -n "$CHUNK_MAX_TOKENS" ]; then export RAG_CHUNK_MAX_TOKENS="$CHUNK_MAX_TOKENS" RAG_CHUNK_OVERLAP_TOKENS=$((CHUNK_MAX_TOKENS * 16 / 100)); fi
           ./mvnw -B -ntp verify -pl backend/boot/rag-app -am \
             -Dtest.groups=eval -Dtest.excludedGroups=none \
             -Dtest=EvaluationRun,ToolEvaluationRun -Dsurefire.failIfNoSpecifiedTests=false

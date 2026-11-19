@@ -203,17 +203,22 @@ class DocumentHealthTests {
         }
     }
 
-    /** 足够长的 Word：styled 时章节标题用“标题 1”样式，否则只是普通段落。 */
+    /**
+     * 足够长的 Word：styled 时章节标题用“标题 1”样式，否则只是普通段落。两种的正文不同，免得同一个库里的两份被当成疑似重复
+     * （#225 起长段落按行切，同样的正文切出的分块几乎一样）。
+     */
     private static byte[] word(boolean styled) throws IOException {
+        var topic = styled ? "陈列" : "收银";
+        var body = styled ? "货架按品类分区，临期商品前置，价签与商品一一对应。" : "交班前清点备用金，差异超过十元时上报店长并登记。";
         try (var document = new XWPFDocument(); var out = new ByteArrayOutputStream()) {
             for (int chapter = 0; chapter < 6; chapter++) {
                 var title = document.createParagraph();
                 if (styled) {
                     title.setStyle("Heading1");
                 }
-                title.createRun().setText("陈列第" + (chapter + 1) + "章");
+                title.createRun().setText(topic + "第" + (chapter + 1) + "章");
                 document.createParagraph().createRun()
-                        .setText(("陈列第" + chapter + "章：货架按品类分区，临期商品前置，价签与商品一一对应。").repeat(30));
+                        .setText((topic + "第" + chapter + "章：" + body).repeat(30));
             }
             document.write(out);
             return out.toByteArray();

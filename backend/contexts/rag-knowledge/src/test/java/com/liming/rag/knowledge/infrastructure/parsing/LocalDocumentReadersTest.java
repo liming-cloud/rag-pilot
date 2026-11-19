@@ -32,12 +32,12 @@ class LocalDocumentReadersTest {
     private final DocumentReaders readers = new LocalDocumentReaders();
 
     @Test
-    @DisplayName("Word：标题样式转成章节，表格按行转成“表头：值”")
+    @DisplayName("Word：标题样式转成章节，表格先写一行表头，再按行转成“表头：值”（#225）")
     void parsesWord() throws IOException {
         var text = text("收银规范.docx", word());
 
         assertThat(text).contains("# 门店收银\n").contains("## 交班\n").contains("交班时清点备用金。")
-                .contains("商品：青柚气泡水；货架：A-03");
+                .contains("\n\n【表头】商品 | 货架\n商品：青柚气泡水；货架：A-03");
         assertThat(text.indexOf("# 门店收银")).isLessThan(text.indexOf("交班时清点备用金"));
     }
 
@@ -77,7 +77,7 @@ class LocalDocumentReadersTest {
     void readsExcel() throws IOException {
         var text = text("价目表.xlsx", excel(new XSSFWorkbook()));
 
-        assertThat(text).contains("## 价目表\n")
+        assertThat(text).contains("## 价目表\n\n【表头】商品 | 价格 | 上架日期 | 两份价格\n")
                 .contains("商品：青柚气泡水；价格：5.50；上架日期：2026/10/27；两份价格：11.00")
                 .contains("商品：海盐苏打；价格：4.00")
                 .doesNotContain("草稿").doesNotContain("；；");
@@ -93,7 +93,7 @@ class LocalDocumentReadersTest {
 
         assertThat(text).contains("## 新员工培训\n门店运营部\n")
                 .contains("## 收银交班\n交班时清点备用金。\n两人核对后签字。\n备注：讲到这里演示一次点钞。\n")
-                .contains("## 冷柜陈列\n商品：青柚气泡水；货架：A-03\n")
+                .contains("## 冷柜陈列\n\n【表头】商品 | 货架\n商品：青柚气泡水；货架：A-03\n")
                 .contains("## 第 5 页\n没有标题的页按页码命名。\n")
                 .doesNotContain("第 4 页");
         assertThat(text.indexOf("## 收银交班")).isLessThan(text.indexOf("## 冷柜陈列"));
@@ -161,7 +161,7 @@ class LocalDocumentReadersTest {
             var text = text("边界.docx", out.toByteArray());
 
             assertThat(text).contains("正文段落\n").contains("\n样式表里没有定义的 3 号样式\n").doesNotContain("#")
-                    .contains("商品：青柚气泡水；冷柜第二层\n").doesNotContain("只有表头").doesNotContain("；；");
+                    .contains("【表头】商品\n商品：青柚气泡水；冷柜第二层\n").doesNotContain("只有表头").doesNotContain("；；");
         }
     }
 

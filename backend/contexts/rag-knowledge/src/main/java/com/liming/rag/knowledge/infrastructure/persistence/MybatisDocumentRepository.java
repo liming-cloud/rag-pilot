@@ -6,6 +6,7 @@ import com.liming.rag.knowledge.domain.Chunk;
 import com.liming.rag.knowledge.domain.Document;
 import com.liming.rag.knowledge.domain.DocumentRepository;
 import com.liming.rag.knowledge.domain.DocumentStatus;
+import com.liming.rag.knowledge.domain.TextChunker;
 import com.liming.rag.knowledge.domain.Validity;
 import com.liming.rag.shared.TenantId;
 import java.time.OffsetDateTime;
@@ -87,6 +88,30 @@ class MybatisDocumentRepository implements DocumentRepository {
 
     @Override
     public void saveChunks(Document document, List<Chunk> values, List<float[]> embeddings) {
+        insertChunks(document, values, embeddings);
+        documents.update(new LambdaUpdateWrapper<DocumentDO>()
+                .set(DocumentDO::getChunkingVersion, TextChunker.VERSION)
+                .eq(DocumentDO::getTenantId, document.tenantId().value())
+                .eq(DocumentDO::getId, document.id()));
+    }
+
+    @Override
+    public void replaceChunks(Document document, List<Chunk> values, List<float[]> embeddings) {
+        // 乐观锁：读取之后被删除、修改（有效期、新版本替换）过的不动，下一轮再看。
+        update(document, new LambdaUpdateWrapper<DocumentDO>()
+                .set(DocumentDO::getChunkCount, document.chunkCount())
+                .set(DocumentDO::getChunkingVersion, TextChunker.VERSION)
+                .setIncrBy(DocumentDO::getVersion, 1)
+                .eq(DocumentDO::getTenantId, document.tenantId().value())
+                .eq(DocumentDO::getId, document.id())
+                .eq(DocumentDO::getStatus, DocumentStatus.READY.name())
+                .eq(DocumentDO::getVersion, document.version()));
+        chunks.archive(document.id());
+        chunks.delete(new LambdaQueryWrapper<ChunkDO>().eq(ChunkDO::getDocumentId, document.id()));
+        insertChunks(document, values, embeddings);
+    }
+
+    private void insertChunks(Document document, List<Chunk> values, List<float[]> embeddings) {
         if (values.size() != embeddings.size()) {
             throw new IllegalArgumentException("分块数和向量数不一致");
         }
@@ -170,6 +195,15 @@ class MybatisDocumentRepository implements DocumentRepository {
         return documents.selectList(new LambdaQueryWrapper<DocumentDO>()
                         .eq(DocumentDO::getStatus, DocumentStatus.FAILED.name())
                         .le(DocumentDO::getRetryAt, now)
+                        .orderByAsc(DocumentDO::getId))
+                .stream().map(MybatisDocumentRepository::toDomain).toList();
+    }
+
+    @Override
+    public List<Document> listStaleChunking() {
+        return documents.selectList(new LambdaQueryWrapper<DocumentDO>()
+                        .eq(DocumentDO::getStatus, DocumentStatus.READY.name())
+                        .lt(DocumentDO::getChunkingVersion, TextChunker.VERSION)
                         .orderByAsc(DocumentDO::getId))
                 .stream().map(MybatisDocumentRepository::toDomain).toList();
     }

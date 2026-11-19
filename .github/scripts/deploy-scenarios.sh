@@ -2,7 +2,8 @@
 # 部署验证的 CI 场景（D-048、#138），由 .github/workflows/deploy.yml 调用。全部用发布包和部署脚本完成，与客户现场的步骤一致：
 # 镜像由 build.sh 在本机构建；模型用本地确定性实现。
 #   ./deploy-scenarios.sh <新版本号> [上一版本的 Release 附件目录]
-# 场景：(a) 全新安装（没有上一版本时）或从上一版本升级，之后重启 app，登录会话仍有效（会话在 Redis，D-053）；
+# 场景：(a) 全新安装（没有上一版本时）或从上一版本升级（升级前入库的资料在升级后自动重新分块，#225），之后重启 app，
+#       登录会话仍有效（会话在 Redis，D-053）；
 #       (b) 停服务备份 → 删卷 → 恢复；
 #       (c) 升级到一个迁移会失败的版本：升级脚本停下并提示回退，用升级前的备份回退后系统正常。
 set -euo pipefail
@@ -39,6 +40,30 @@ unpack() {
 }
 
 title() { echo; echo "######## $* ########"; }
+app_url="http://127.0.0.1:8080"
+login() {
+  curl -fsS --max-time 10 -H 'Content-Type: application/json' \
+    -d '{"username":"admin","password":"ci-admin-password"}' "$app_url/api/auth/login" | grep -o '"token":"[^"]*"' | cut -d'"' -f4
+}
+# 在某个版本的目录里查数据库，输出不带表头。
+sql() { (cd "$1" && docker compose -f compose.yml --env-file .env --env-file release.env exec -T db psql -U rag -d rag -tAX -c "$2"); }
+
+# 在上一版本里建库、上传一份资料并等它可用，输出文档 id；升级后检查它被自动重新分块（#225）。
+seed_document() {
+  local dir="$1" token kb doc
+  token="$(login)"
+  kb="$(curl -fsS --max-time 10 -H "Authorization: Bearer $token" -H 'Content-Type: application/json' \
+    -d '{"name":"升级重新分块"}' "$app_url/api/knowledge-bases" | grep -o '"id":[0-9]*' | head -n 1 | cut -d: -f2)"
+  printf '## 门店状态\n\n门店：S1；状态：营业\n门店：S2；状态：停业\n' > "$work/seed.md"
+  doc="$(curl -fsS --max-time 30 -H "Authorization: Bearer $token" -F "file=@$work/seed.md" \
+    "$app_url/api/knowledge-bases/$kb/documents" | grep -o '"id":[0-9]*' | head -n 1 | cut -d: -f2)"
+  for _ in $(seq 60); do
+    [ "$(sql "$dir" "SELECT status FROM document WHERE id = $doc")" = "READY" ] && break
+    sleep 2
+  done
+  [ "$(sql "$dir" "SELECT status FROM document WHERE id = $doc")" = "READY" ] || { echo "上一版本的资料没有入库成功" >&2; exit 1; }
+  echo "$doc"
+}
 
 current="$(unpack "$PWD/packages" "$version")"
 
@@ -47,17 +72,26 @@ if [ -n "$previous" ]; then
   old="$(unpack "$previous" "$previous_version")"
   title "(a) 安装上一版本 $previous_version"
   "$old/install.sh"
+  seeded="$(seed_document "$old")"
   title "(a) 升级 $previous_version → $version"
   "$current/upgrade.sh" --yes
+  title "(a) 升级后后台自动重新分块上一版本入库的资料，旧分块正文留档（#225）"
+  for _ in $(seq 60); do
+    [ "$(sql "$current" "SELECT chunking_version FROM document WHERE id = $seeded")" = "2" ] && break
+    sleep 5
+  done
+  [ "$(sql "$current" "SELECT chunking_version FROM document WHERE id = $seeded")" = "2" ] \
+    || { echo "升级 5 分钟后资料还没有重新分块" >&2; exit 1; }
+  [ "$(sql "$current" "SELECT count(*) FROM chunk_archive WHERE document_id = $seeded")" -gt 0 ] \
+    || { echo "重新分块后旧分块没有留档" >&2; exit 1; }
+  echo "资料 $seeded 已重新分块，旧分块已留档"
 else
   title "(a) 全新安装 $version（没有上一版本，跳过升级）"
   "$current/install.sh"
 fi
 
 title "(a) 重启 app 后登录会话仍有效"
-app_url="http://127.0.0.1:8080"
-token="$(curl -fsS --max-time 10 -H 'Content-Type: application/json' \
-  -d '{"username":"admin","password":"ci-admin-password"}' "$app_url/api/auth/login" | grep -o '"token":"[^"]*"' | cut -d'"' -f4)"
+token="$(login)"
 [ -n "$token" ] || { echo "登录失败" >&2; exit 1; }
 (cd "$current" && docker compose -f compose.yml --env-file .env --env-file release.env restart app)
 for _ in $(seq 60); do

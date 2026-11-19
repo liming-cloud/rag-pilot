@@ -20,7 +20,7 @@ class DocumentCalendarTest {
     private static DocumentCalendar calendar(String instant, String zone) {
         StatsZone settings = () -> ZoneId.of(zone);
         var properties = new KnowledgeProperties(new KnowledgeProperties.Ingestion(2),
-                new KnowledgeProperties.Storage("./data"), 30);
+                new KnowledgeProperties.Storage("./data"), 30, new KnowledgeProperties.Chunking(500, 80));
         return new DocumentCalendar(settings, properties, Clock.fixed(Instant.parse(instant), ZoneOffset.UTC));
     }
 
