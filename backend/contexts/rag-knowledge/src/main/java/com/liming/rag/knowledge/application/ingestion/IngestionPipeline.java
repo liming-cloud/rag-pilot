@@ -28,15 +28,16 @@ class IngestionPipeline {
     private final TransactionOperations transactions;
     private final DocumentRemover remover;
     private final Clock clock;
-    private final HeadingChunker chunker = new HeadingChunker();
+    private final HeadingChunker chunker;
 
     IngestionPipeline(DocumentReaders readers, DocumentRepository documents, TextEmbedding embeddings,
-            TransactionOperations transactions, DocumentRemover remover, Clock clock) {
+            TransactionOperations transactions, DocumentRemover remover, HeadingChunker chunker, Clock clock) {
         this.readers = readers;
         this.documents = documents;
         this.embeddings = embeddings;
         this.transactions = transactions;
         this.remover = remover;
+        this.chunker = chunker;
         this.clock = clock;
     }
 

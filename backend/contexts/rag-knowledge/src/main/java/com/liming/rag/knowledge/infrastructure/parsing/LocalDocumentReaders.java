@@ -1,6 +1,7 @@
 package com.liming.rag.knowledge.infrastructure.parsing;
 
 import com.liming.rag.knowledge.application.ingestion.DocumentParseException;
+import com.liming.rag.knowledge.domain.TextChunker;
 import com.liming.rag.knowledge.application.DocumentReaders;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -307,25 +308,30 @@ final class LocalDocumentReaders implements DocumentReaders {
                 .toList(), out);
     }
 
-    /** 第一行当表头，其余每行转成“表头：值；表头：值”，空单元格跳过；记下最大一张表的数据行数。 */
+    /**
+     * 第一行当表头，其余每行转成“表头：值；表头：值”，空单元格跳过；记下最大一张表的数据行数。
+     * 表格单独成段，先写一行 {@link TextChunker#TABLE_HEADER} 开头的列名，分块时按行组切、每块带上它（#225）。
+     */
     private static void rows(List<List<String>> rows, Sink out) {
         if (rows.isEmpty()) {
             return;
         }
         out.largestTableRows = Math.max(out.largestTableRows, rows.size() - 1);
-        var text = out.text;
         var header = rows.getFirst();
-        for (var cells : rows.subList(1, rows.size())) {
-            var line = IntStream.range(0, cells.size())
-                    .filter(i -> !cells.get(i).isEmpty())
-                    .mapToObj(i -> (i < header.size() && !header.get(i).isEmpty() ? header.get(i) + "：" : "")
-                            + cells.get(i))
-                    .collect(Collectors.joining("；"));
-            if (!line.isEmpty()) {
-                text.append(line).append('\n');
-            }
+        var lines = rows.subList(1, rows.size()).stream()
+                .map(cells -> IntStream.range(0, cells.size())
+                        .filter(i -> !cells.get(i).isEmpty())
+                        .mapToObj(i -> (i < header.size() && !header.get(i).isEmpty() ? header.get(i) + "：" : "")
+                                + cells.get(i))
+                        .collect(Collectors.joining("；")))
+                .filter(line -> !line.isEmpty())
+                .toList();
+        var columns = header.stream().filter(cell -> !cell.isEmpty()).collect(Collectors.joining(" | "));
+        if (!lines.isEmpty() && !columns.isEmpty()) {
+            out.text.append('\n').append(TextChunker.TABLE_HEADER).append(columns).append('\n');
         }
-        text.append('\n');
+        lines.forEach(line -> out.text.append(line).append('\n'));
+        out.text.append('\n');
     }
 
     private static String cell(XWPFTableCell cell) {

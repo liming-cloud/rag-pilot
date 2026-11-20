@@ -59,6 +59,50 @@ class TextChunkerTest {
     }
 
     @Test
+    @DisplayName("大表格按整行切成行组：每块以表头行开头、位置是所在章节，行不被切开，行组之间不重叠（#225）")
+    void largeTablesAreSplitIntoRowGroupsWithHeader() {
+        var header = TextChunker.TABLE_HEADER + "门店 | 状态 | 备注";
+        var rows = IntStream.range(0, 60)
+                .mapToObj(i -> "门店：A" + i + "；状态：营业；备注：早班八点开门，晚班十点闭店")
+                .toList();
+        var text = "## 门店状态\n\n下表是各门店的营业状态。\n\n" + header + "\n" + String.join("\n", rows) + "\n";
+        var chunks = new TextChunker(120, 20).chunk("运营周报", text);
+
+        var tableChunks = chunks.stream().filter(chunk -> chunk.content().startsWith(header)).toList();
+        assertThat(tableChunks.size()).isGreaterThan(5);
+        assertThat(tableChunks).allSatisfy(chunk -> {
+            assertThat(chunk.headingPath()).isEqualTo("运营周报 > 门店状态");
+            assertThat(chunk.tokenCount()).isLessThanOrEqualTo(120);
+        });
+        var tableRows = tableChunks.stream().flatMap(chunk -> chunk.content().lines().skip(1)).toList();
+        assertThat(tableRows).containsExactlyElementsOf(rows);
+        assertThat(chunks.getFirst().content()).isEqualTo("下表是各门店的营业状态。");
+    }
+
+    @Test
+    @DisplayName("放得下的小表格不拆，和前后正文一起装箱（#225）")
+    void smallTablesStayWhole() {
+        var text = "交班规范。\n\n" + TextChunker.TABLE_HEADER + "班次 | 时间\n班次：早班；时间：8:00\n班次：晚班；时间：22:00\n";
+        var chunks = new TextChunker(120, 20).chunk("交班", text);
+
+        assertThat(chunks).singleElement().extracting(Chunk::content).isEqualTo(
+                "交班规范。\n" + TextChunker.TABLE_HEADER + "班次 | 时间\n班次：早班；时间：8:00\n班次：晚班；时间：22:00");
+    }
+
+    @Test
+    @DisplayName("长章节先按行切；重叠从一行的开头开始，不从半句开始（#225）")
+    void overlapStartsAtALine() {
+        var lines = IntStream.range(0, 40).mapToObj(i -> "第" + i + "条：交班前清点备用金。").toList();
+        var chunks = new TextChunker(60, 20).chunk("收银规范", String.join("\n", lines));
+
+        assertThat(chunks.size()).isGreaterThan(5);
+        assertThat(chunks).allSatisfy(chunk -> assertThat(chunk.content().lines())
+                .allSatisfy(line -> assertThat(lines).contains(line)));
+        assertThat(chunks.get(1).content().lines().findFirst().orElseThrow())
+                .isIn(chunks.get(0).content().lines().toList());
+    }
+
+    @Test
     @DisplayName("没有可见文字时不产生分块")
     void blankTextHasNoChunks() {
         assertThat(new TextChunker().chunk("空文档", "\uFEFF\n\n   \n")).isEmpty();

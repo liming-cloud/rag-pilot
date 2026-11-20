@@ -32,10 +32,7 @@ final class ChunkWriter {
 
     /** images、largestTableRows 是读取时得到的资料体检信号（#218），随分块一起写入。 */
     void write(List<Chunk> domainChunks, int images, int largestTableRows) {
-        // 向量化时带上章节位置，短分块也能借标题获得上下文。
-        var vectors = embeddings.embed(domainChunks.stream()
-                .map(chunk -> chunk.headingPath() + "\n" + chunk.content())
-                .toList());
+        var vectors = vectors(embeddings, domainChunks);
         transactions.executeWithoutResult(status -> {
             documents.saveChunks(target, domainChunks, vectors);
             documents.saveHealthSignals(target, images, largestTableRows);
@@ -45,5 +42,10 @@ final class ChunkWriter {
                 remover.replace(target.tenantId(), target.replacesDocumentId(), target.id());
             }
         });
+    }
+
+    /** 向量化时带上章节位置，短分块也能借标题获得上下文。重新分块（{@link Rechunker}）用同样的写法。 */
+    static List<float[]> vectors(TextEmbedding embeddings, List<Chunk> chunks) {
+        return embeddings.embed(chunks.stream().map(chunk -> chunk.headingPath() + "\n" + chunk.content()).toList());
     }
 }

@@ -81,5 +81,11 @@
         WHERE tenant_id = #{tenantId}
           AND knowledge_base_id IN (<include refid="accessibleKnowledgeBases"/>)
           AND id IN <foreach collection="chunkIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+        UNION ALL
+        <!-- 重新分块替换下来的旧分块（#225）：历史回答引用的原文仍按原来的 id 查到，授权过滤相同。 -->
+        SELECT id AS chunk_id, content FROM chunk_archive
+        WHERE tenant_id = #{tenantId}
+          AND knowledge_base_id IN (<include refid="accessibleKnowledgeBases"/>)
+          AND id IN <foreach collection="chunkIds" item="id" open="(" separator="," close=")">#{id}</foreach>
     </select>
 </mapper>

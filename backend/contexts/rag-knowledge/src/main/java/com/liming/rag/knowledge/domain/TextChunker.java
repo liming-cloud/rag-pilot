@@ -9,16 +9,22 @@ import java.util.regex.Pattern;
  * 按标题感知的文本分块：先按 Markdown 标题切成章节，再在章节内按段落装箱。
  *
  * <p>规则：分块不跨章节；单块目标不超过 {@link #MAX_TOKENS}；同一章节的相邻分块
- * 重叠约 {@link #OVERLAP_TOKENS} 个 token，避免答案正好落在切口上；超长段落先按句子切，
- * 再按字符切。算法是确定性的，同样的输入总是得到同样的分块。
+ * 重叠约 {@link #OVERLAP_TOKENS} 个 token，避免答案正好落在切口上，重叠从一行或一句的开头开始；超长段落先按行切，
+ * 再按句子、按字符切。以 {@link #TABLE_HEADER} 开头的段落是表格，放不下时按整行切成行组，每块带上表头（#225）。
+ * 算法是确定性的，同样的输入总是得到同样的分块。
  */
 public final class TextChunker {
 
+    /** 分块规则的版本：规则改了就加一，升级后按旧版本切的文档由后台自动重新分块（#225）。 */
+    public static final int VERSION = 2;
     public static final int MAX_TOKENS = 500;
     public static final int OVERLAP_TOKENS = 80;
+    /** 表格的第一行以它开头，后面是列名；读取器写出，分块时据此认出表格。 */
+    public static final String TABLE_HEADER = "【表头】";
 
     private static final Pattern HEADING = Pattern.compile("^(#{1,6})\\s+(.+?)\\s*#*\\s*$");
     private static final Pattern SENTENCE_END = Pattern.compile("(?<=[。！？；!?;])|(?<=\\.\\s)");
+    private static final Pattern SENTENCE_BOUNDARY = Pattern.compile("[。！？；!?;]");
 
     private final int maxTokens;
     private final int overlapTokens;
@@ -27,7 +33,7 @@ public final class TextChunker {
         this(MAX_TOKENS, OVERLAP_TOKENS);
     }
 
-    TextChunker(int maxTokens, int overlapTokens) {
+    public TextChunker(int maxTokens, int overlapTokens) {
         if (maxTokens <= 0 || overlapTokens < 0 || overlapTokens >= maxTokens) {
             throw new IllegalStateException("分块参数不合法");
         }
@@ -122,54 +128,107 @@ public final class TextChunker {
     }
 
     private void pack(Section section, List<Chunk> chunks) {
-        var buffer = new StringBuilder();
-        boolean hasNewContent = false;
-        for (var piece : pieces(section.paragraphs())) {
+        var box = new Box(section, chunks);
+        for (var paragraph : section.paragraphs()) {
+            if (paragraph.startsWith(TABLE_HEADER) && TokenEstimator.estimate(paragraph) > maxTokens) {
+                box.flush();
+                rowGroups(paragraph).forEach(group -> emit(section, group, chunks));
+            } else {
+                pieces(paragraph).forEach(box::add);
+            }
+        }
+        box.flush();
+    }
+
+    /** 一个章节正在装的分块：装不下时写出已装的，下一块从它末尾的重叠开始。 */
+    private final class Box {
+
+        private final Section section;
+        private final List<Chunk> chunks;
+        private final StringBuilder buffer = new StringBuilder();
+        private boolean hasNewContent;
+
+        Box(Section section, List<Chunk> chunks) {
+            this.section = section;
+            this.chunks = chunks;
+        }
+
+        void add(String piece) {
             var candidate = buffer.isEmpty() ? piece : buffer + "\n" + piece;
             if (hasNewContent && TokenEstimator.estimate(candidate) > maxTokens) {
-                emit(section, buffer.toString(), chunks);
                 var overlap = tail(buffer.toString());
-                buffer.setLength(0);
-                buffer.append(overlap);
-                candidate = buffer.isEmpty() ? piece : buffer + "\n" + piece;
+                emit(section, buffer.toString(), chunks);
+                candidate = overlap.isEmpty() ? piece : overlap + "\n" + piece;
             }
             buffer.setLength(0);
             buffer.append(candidate);
             hasNewContent = true;
         }
-        if (hasNewContent) {
-            emit(section, buffer.toString(), chunks);
+
+        /** 写出已装的内容，下一块从空开始：大表格的行组前后不带重叠。 */
+        void flush() {
+            if (hasNewContent) {
+                emit(section, buffer.toString(), chunks);
+            }
+            buffer.setLength(0);
+            hasNewContent = false;
         }
     }
 
-    /** 把章节内的段落拆成不超过上限的片段：先按句子，再按字符。 */
-    private List<String> pieces(List<String> paragraphs) {
+    /** 把一段拆成不超过上限的片段：先按行，再按句子，最后按字符。 */
+    private List<String> pieces(String paragraph) {
+        if (TokenEstimator.estimate(paragraph) <= maxTokens) {
+            return List.of(paragraph);
+        }
         var result = new ArrayList<String>();
-        for (var paragraph : paragraphs) {
-            if (TokenEstimator.estimate(paragraph) <= maxTokens) {
-                result.add(paragraph);
+        for (var line : paragraph.split("\n")) {
+            if (TokenEstimator.estimate(line) <= maxTokens) {
+                result.add(line);
                 continue;
             }
-            for (var sentence : SENTENCE_END.split(paragraph)) {
+            for (var sentence : SENTENCE_END.split(line)) {
                 if (sentence.isBlank()) {
                     continue;
                 }
-                if (TokenEstimator.estimate(sentence) <= maxTokens) {
-                    result.add(sentence.strip());
-                } else {
-                    result.addAll(hardSplit(sentence.strip()));
-                }
+                result.addAll(TokenEstimator.estimate(sentence) <= maxTokens ? List.of(sentence.strip())
+                        : hardSplit(sentence.strip(), maxTokens));
             }
         }
         return result;
     }
 
-    private List<String> hardSplit(String text) {
+    /**
+     * 大表格按整行装成行组，每组以表头行开头，组与组之间不重叠（每行本身带着列名）。
+     * 单独一行就超过上限的按字符切开，每段也带上表头。
+     */
+    private List<String> rowGroups(String table) {
+        var lines = table.split("\n");
+        var header = lines[0];
+        int budget = Math.max(maxTokens / 2, maxTokens - TokenEstimator.estimate(header));
+        var groups = new ArrayList<String>();
+        var group = new StringBuilder();
+        for (int i = 1; i < lines.length; i++) {
+            var row = lines[i];
+            for (var piece : TokenEstimator.estimate(row) <= budget ? List.of(row) : hardSplit(row, budget)) {
+                if (!group.isEmpty() && TokenEstimator.estimate(group + "\n" + piece) > budget) {
+                    groups.add(header + "\n" + group);
+                    group.setLength(0);
+                }
+                group.append(group.isEmpty() ? "" : "\n").append(piece);
+            }
+        }
+        if (!group.isEmpty()) {
+            groups.add(header + "\n" + group);
+        }
+        return groups;
+    }
+
+    private static List<String> hardSplit(String text, int limit) {
         var result = new ArrayList<String>();
         var current = new StringBuilder();
         text.codePoints().forEach(codePoint -> {
             current.appendCodePoint(codePoint);
-            if (TokenEstimator.estimate(current) >= maxTokens) {
+            if (TokenEstimator.estimate(current) >= limit) {
                 result.add(current.toString());
                 current.setLength(0);
             }
@@ -180,7 +239,10 @@ public final class TextChunker {
         return result;
     }
 
-    /** 取上一块末尾约 overlapTokens 个 token 的文字，作为下一块的开头。 */
+    /**
+     * 取上一块末尾约 overlapTokens 个 token 的文字，作为下一块的开头；
+     * 其中有换行或句末标点时从下一行、下一句开始，不从半句开始。
+     */
     private String tail(String text) {
         if (overlapTokens == 0) {
             return "";
@@ -193,7 +255,17 @@ public final class TextChunker {
             }
             start = previous;
         }
-        return text.substring(start).strip();
+        var overlap = text.substring(start);
+        if (start == 0 || text.charAt(start - 1) == '\n') {
+            return overlap.strip();
+        }
+        int line = overlap.indexOf('\n');
+        if (line >= 0) {
+            return overlap.substring(line + 1).strip();
+        }
+        var sentence = SENTENCE_BOUNDARY.matcher(overlap);
+        return (sentence.find() && sentence.end() < overlap.length() ? overlap.substring(sentence.end()) : overlap)
+                .strip();
     }
 
     private static void emit(Section section, String content, List<Chunk> chunks) {

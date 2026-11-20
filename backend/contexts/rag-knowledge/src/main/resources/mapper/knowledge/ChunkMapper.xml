@@ -13,4 +13,10 @@
         </foreach>
     </insert>
 
+    <insert id="archive">
+        INSERT INTO chunk_archive (id, tenant_id, knowledge_base_id, document_id, content)
+        SELECT id, tenant_id, knowledge_base_id, document_id, content FROM chunk WHERE document_id = #{documentId}
+        ON CONFLICT (id) DO NOTHING
+    </insert>
+
 </mapper>
