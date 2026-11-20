@@ -10,10 +10,11 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  * @param storage   原始文件存储
  * @param expiryWarningDays 失效日期在今天起多少天内算“即将到期”，管理端据此提醒（#124）
  * @param chunking  分块参数
+ * @param ocr       图片文字识别
  */
 @ConfigurationProperties("rag.knowledge")
 public record KnowledgeProperties(@DefaultValue Ingestion ingestion, @DefaultValue Storage storage,
-        @DefaultValue("30") int expiryWarningDays, @DefaultValue Chunking chunking) {
+        @DefaultValue("30") int expiryWarningDays, @DefaultValue Chunking chunking, @DefaultValue Ocr ocr) {
 
     public KnowledgeProperties {
         if (expiryWarningDays < 1 || expiryWarningDays > 365) {
@@ -53,5 +54,9 @@ public record KnowledgeProperties(@DefaultValue Ingestion ingestion, @DefaultVal
                         "rag.knowledge.chunking.max-tokens 必须在 50 到 4000 之间，overlap-tokens 不小于 0 且小于 max-tokens");
             }
         }
+    }
+
+    /** @param url RapidOCR 服务地址（#223）；为空时不识别图片里的文字 */
+    public record Ocr(@DefaultValue("") String url) {
     }
 }

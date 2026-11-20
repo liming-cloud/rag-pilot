@@ -12,7 +12,8 @@ class HeadingChunkerTest {
     @DisplayName("按标题切块，章节路径以文件名（去掉扩展名）开头，带上序号和 token 数")
     void chunksWithHeadingPath() {
         var properties = new KnowledgeProperties(new KnowledgeProperties.Ingestion(2),
-                new KnowledgeProperties.Storage("./data"), 30, new KnowledgeProperties.Chunking(500, 80));
+                new KnowledgeProperties.Storage("./data"), 30, new KnowledgeProperties.Chunking(500, 80),
+                new KnowledgeProperties.Ocr(""));
         var chunks = new HeadingChunker(properties).chunk("收银规范.md",
                 "# 收银\n\n## 交班\n\n交班时清点备用金。\n\n## 开店\n\n开店前检查收银机。");
 

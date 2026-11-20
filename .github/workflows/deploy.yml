@@ -68,7 +68,7 @@ jobs:
           ls packages
           [ "$(ls packages | wc -l)" -eq 2 ] || { echo "发布包目录里应只有 tar.gz 和 SHA256SUMS"; exit 1; }
           tar -tzf "packages/rag-pilot-$version.tar.gz" > contents.txt
-          for file in app/rag-app.jar web/dist/index.html app.Dockerfile web.Dockerfile build.sh install.sh upgrade.sh README.md; do
+          for file in app/rag-app.jar web/dist/index.html app.Dockerfile web.Dockerfile ocr.Dockerfile build.sh install.sh upgrade.sh README.md; do
             grep -qx "rag-pilot-$version/$file" contents.txt || { echo "发布包里缺少 $file"; exit 1; }
           done
           if grep -q 'image.tar.gz' contents.txt; then echo "发布包里不应再有镜像文件"; exit 1; fi

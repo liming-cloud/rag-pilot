@@ -10,7 +10,8 @@ public interface DocumentMapper extends BaseMapper<DocumentDO> {
 
     /** 写入读取时得到的信号，并从文档的分块算出其余信号。 */
     void refreshSignals(@Param("tenantId") long tenantId, @Param("documentId") long documentId,
-            @Param("images") int images, @Param("largestTableRows") int largestTableRows);
+            @Param("images") int images, @Param("largestTableRows") int largestTableRows,
+            @Param("imageTextPending") boolean imageTextPending);
 
     /** 删掉这份文档作为任一方的疑似重复记录。 */
     void deleteOverlaps(@Param("tenantId") long tenantId, @Param("documentId") long documentId);

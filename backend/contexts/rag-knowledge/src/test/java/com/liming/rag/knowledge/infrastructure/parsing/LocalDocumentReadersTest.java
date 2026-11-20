@@ -29,7 +29,7 @@ import org.junit.jupiter.api.Test;
 
 class LocalDocumentReadersTest {
 
-    private final DocumentReaders readers = new LocalDocumentReaders();
+    private final DocumentReaders readers = new LocalDocumentReaders(new ImageText(""));
 
     @Test
     @DisplayName("Word：标题样式转成章节，表格先写一行表头，再按行转成“表头：值”（#225）")

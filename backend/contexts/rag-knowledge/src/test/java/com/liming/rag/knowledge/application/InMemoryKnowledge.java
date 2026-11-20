@@ -64,7 +64,8 @@ public final class InMemoryKnowledge {
     private static DocumentCalendar calendar() {
         StatsZone settings = () -> ZoneId.of("Asia/Shanghai");
         var properties = new KnowledgeProperties(new KnowledgeProperties.Ingestion(2),
-                new KnowledgeProperties.Storage("./data"), 30, new KnowledgeProperties.Chunking(500, 80));
+                new KnowledgeProperties.Storage("./data"), 30, new KnowledgeProperties.Chunking(500, 80),
+                new KnowledgeProperties.Ocr(""));
         return new DocumentCalendar(settings, properties,
                 Clock.fixed(Instant.parse("2026-11-04T02:00:00Z"), ZoneOffset.UTC));
     }
@@ -174,12 +175,12 @@ public final class InMemoryKnowledge {
 
         /** 分块规则版本只在数据库里记，内存版的文档都按当前版本。 */
         @Override
-        public List<Document> listStaleChunking() {
+        public List<Document> listStaleChunking(boolean withPendingImageText) {
             return List.of();
         }
 
         @Override
-        public void saveHealthSignals(Document document, int images, int largestTableRows) {
+        public void saveHealthSignals(Document document, int images, int largestTableRows, boolean imageTextPending) {
             // 体检信号只在数据库里算，内存版不记。
         }
 

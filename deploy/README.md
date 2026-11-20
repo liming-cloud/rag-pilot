@@ -4,10 +4,11 @@
 
 ## 一、准备
 
-- 一台 Linux 服务器（x86_64 或 arm64），4 核 8 GB 内存以上，磁盘 100 GB 以上（数据库、上传文件和备份）。
+- 一台 Linux 服务器（x86_64 或 arm64），4 核 8 GB 内存以上，磁盘 100 GB 以上（数据库、上传文件和备份）。图片文字识别（ocr 容器）另占约 1 GB 内存，识别截图时占满一个 CPU 核。
 - Docker 24 以上，带 Compose 插件（`docker compose version` 能输出版本）；`curl`。
 - 能访问模型服务（默认硅基流动 `https://api.siliconflow.cn`）。
 - 安装和升级时能访问镜像仓库：系统的镜像在服务器上构建，要拉数据库镜像和 JRE、Nginx 基础镜像（第一次约 600 MB，之后只在它们变化时才下载）。默认从 Docker Hub 拉；用镜像源或内网仓库时见“三、安装”里的 `RAG_DB_IMAGE` 等三项。
+- 第一次安装时还要能访问 PyPI 和 ModelScope：图片文字识别的 ocr 镜像在服务器上构建，要下载 Python 基础镜像、RapidOCR 和识别模型（约 700 MB，之后只在 RapidOCR 版本变化时才重新构建）。PyPI 访问不了时见“三、安装”里的 `RAG_PIP_INDEX_URL`。
 - 一个运维账号，能执行 `docker` 命令。下面的命令都用这个账号执行。
 
 ## 二、发布包
@@ -16,10 +17,10 @@
 
 | 文件 | 内容 |
 | --- | --- |
-| `rag-pilot-<版本>.tar.gz` | 部署目录：本手册、`compose.yml`、脚本、`.env.example`、`release.env`（版本号），编译好的后端 `app/rag-app.jar` 和前端 `web/dist/`，以及在服务器上构建镜像用的 `app.Dockerfile`、`web.Dockerfile` |
+| `rag-pilot-<版本>.tar.gz` | 部署目录：本手册、`compose.yml`、脚本、`.env.example`、`release.env`（版本号），编译好的后端 `app/rag-app.jar` 和前端 `web/dist/`，以及在服务器上构建镜像用的 `app.Dockerfile`、`web.Dockerfile`、`ocr.Dockerfile` |
 | `rag-pilot-<版本>.SHA256SUMS` | 校验和 |
 
-镜像不随发布包提供：`install.sh`、`upgrade.sh` 会调用 `build.sh`，在服务器上用包里的 jar 和 dist 构建 `rag-pilot-app:<版本>`、`rag-pilot-web:<版本>`。数据库镜像和两个基础镜像按摘要锁定，保证每台服务器拿到的是同一个镜像。
+镜像不随发布包提供：`install.sh`、`upgrade.sh` 会调用 `build.sh`，在服务器上用包里的 jar 和 dist 构建 `rag-pilot-app:<版本>`、`rag-pilot-web:<版本>`，并构建图片文字识别的 `rag-pilot-ocr:rapidocr-<RapidOCR 版本>`（本机已有时跳过）。数据库镜像和两个基础镜像按摘要锁定，保证每台服务器拿到的是同一个镜像。
 
 版本号是 4 位：主.次.修订.构建号（如 `1.0.0.1`）。主版本变了说明有不兼容的数据库变更，升级前要看 Release 说明。
 
@@ -44,7 +45,7 @@ vi .env                                           # 至少填 DB_PASSWORD、REDI
 ./install.sh
 ```
 
-`install.sh` 依次：构建镜像（`build.sh`：拉数据库、Redis 镜像和基础镜像，用包里的 jar 和 dist 构建 app、web 镜像）→ 启动 → 等健康检查通过 → 运行 `verify.sh`。看到“部署验证通过”就装好了，浏览器打开 `http://<服务器地址>`（端口是 `.env` 里的 `WEB_PORT`），用 `RAG_ADMIN_USERNAME` / `RAG_ADMIN_PASSWORD` 登录。
+`install.sh` 依次：构建镜像（`build.sh`：拉数据库、Redis 镜像和基础镜像，用包里的 jar 和 dist 构建 app、web 镜像，构建 ocr 镜像）→ 启动 → 等健康检查通过 → 运行 `verify.sh`。看到“部署验证通过”就装好了，浏览器打开 `http://<服务器地址>`（端口是 `.env` 里的 `WEB_PORT`），用 `RAG_ADMIN_USERNAME` / `RAG_ADMIN_PASSWORD` 登录。
 
 `.env` 里每一项的含义见 `.env.example` 的注释。几项要特别注意：
 
@@ -53,6 +54,7 @@ vi .env                                           # 至少填 DB_PASSWORD、REDI
 - `.env` 里有密码和密钥，不要发给别人，不要放进备份。构建镜像时只用到 jar、dist 和 `nginx.conf`，`.env` 不会进镜像（见包里的 `.dockerignore`）。
 - `REDIS_PASSWORD`：Redis 的密码，用 `openssl rand -hex 24` 生成。Redis 存二级缓存和登录会话，只在 Compose 内部网络里，不对外开放端口。`compose.yml` 已给 app 设好 `RAG_CACHE_REDIS_ENABLED=true`；不经 Compose 直接运行 jar 时默认不连 Redis，缓存只在进程内、重启后要重新登录（D-054）。
 - `RAG_DB_IMAGE`、`RAG_REDIS_IMAGE`、`RAG_JRE_IMAGE`、`RAG_NGINX_IMAGE`：服务器不能直接访问 Docker Hub 时，改成镜像源或内网仓库里的地址，`@sha256:` 后面的摘要保持与 `compose.yml` 里的一致。不填时从 Docker Hub 拉。
+- `RAG_PYTHON_IMAGE`、`RAG_PIP_INDEX_URL`：构建 ocr 镜像用的 Python 基础镜像和 pip 包源。访问不了 Docker Hub、PyPI 时改成镜像源（如 `https://mirrors.aliyun.com/pypi/simple`），基础镜像的摘要保持与 `compose.yml` 里的一致。
 - `EMBEDDING_MODEL`、`RERANK_MODEL`、`CHAT_MODEL`、`CHAT_HEDGE_MODEL`、`CHAT_LIGHT_MODEL`：不用硅基流动时（自建 vLLM、专有云）改成那边的模型名，不填用默认值。嵌入模型只能在这里设，装好后不要再改（换了要全部重新入库）；对话、重排模型装好后也可以在管理端“模型管理”里改。`RAG_INGESTION_CONCURRENCY` 是后台同时向量化的文档数（默认 2），嵌入服务限流时调小。
 
 `verify.sh` 会建一个叫“部署验证”的知识库和一个测试账号 `deploy-verify`，用来检查检索、问答和权限；以后每次运行都复用它们。不想留可以在管理端删掉，下次运行会重新建。
@@ -89,7 +91,8 @@ docker compose --env-file .env --env-file release.env logs --tail 200 app   # �
 | `event=document_retried` | 模型暂时不可用而失败的文档自动重新处理：`attempts` 是第几次处理 |
 | `event=document_deferred`、`event=document_discarded` | 正在停机，文档留在“解析中”，下次启动时重新处理；处理期间文档被删除，结果不写回 |
 | `event=rechunk_started`、`event=document_rechunked`、`event=rechunk_finished` | 升级后自动重新分块（#225）：开始时 `documents` 是要重做的文档数、`version` 是新的分块规则版本；每做完一份记一条（`chunks` 新分块数），和新上传的资料轮流处理；这一轮结束。做完一份替换一份，期间检索照常 |
-| `event=rechunk_paused`、`event=rechunk_skipped`、`event=rechunk_failed` | 重新分块停下或跳过：模型暂时不可用（`document` 是正在做的那份），10 分钟后接着做；文档在处理期间被删除、修改或替换，下一轮再看；读不出原文件（`kind=content`）或意外错误（`kind=error`，带堆栈），这份保留旧分块，重启后再试 |
+| `event=rechunk_paused`、`event=rechunk_skipped`、`event=rechunk_failed` | 重新分块停下或跳过：模型暂时不可用（`document` 是正在做的那份）或图片文字识别服务不可用（`reason=ocr`），10 分钟后接着做；文档在处理期间被删除、修改或替换，下一轮再看；读不出原文件（`kind=content`）或意外错误（`kind=error`，带堆栈），这份保留旧分块，重启后再试 |
+| `event=ocr_unavailable`、`event=ocr_image_rejected` | 图片文字识别（#223）：识别服务连不上、超时或出错（`error` 是异常类型），这份文档照常入库，图片里的文字标为待识别，服务恢复后由重新分块自动补上（`docker compose logs ocr` 看原因）；识别服务拒收了某一张图（`status`），只跳过这张 |
 | `event=document_file_orphaned` | 文档已删除，但原始文件（`sha256`）没删掉，留在存储目录里，不影响使用，可以手工清理 |
 | `event=login_failed`、`event=account_locked` | 登录失败（`reason`：`unknown_user`、`locked`、`disabled`、`bad_password`，密码错误时 `attempts` 是连续输错次数）、连续输错被锁 |
 | `event=admin_created`、`event=admin_password_reset` | 启动时按 `RAG_ADMIN_USERNAME` 创建了超级管理员；按 `RAG_ADMIN_RESET_PASSWORD` 重置了超级管理员的密码并解锁（重置后请删掉这个环境变量再重启） |
@@ -176,6 +179,8 @@ docker compose --env-file .env --env-file release.env exec -T db psql -U rag -d 
 - **向量化费用** ≈ `tokens` × 1.1（重新分块后块数、章节位置略有变化）÷ 100 万 × 嵌入模型每百万 token 的单价。
 - **耗时** ≈ `chunks` ÷ 16（每批向量化的条数）× 单批耗时（通常 1～3 秒）；一次只做一份文档，被限流时自动退避（`event=embedding_rate_limited`），会更慢。
 
+从没有图片文字识别的版本（1.0.x）升级时，`build.sh` 会先构建 ocr 镜像（见“一、准备”）；升级完成后，后台只把**含图片**的文档逐份重新读取、识别图片里的文字、重新向量化，纯文字的文档不动，做法和上面的重新分块一样。进度看 `event=document_rechunked`，或数还没做完的文档（`SELECT count(*) FROM document WHERE status = 'READY' AND image_text_pending`）；费用按上面的公式只算含图片的文档（`SELECT count(*), sum(c.token_count) FROM chunk c JOIN document d ON d.id = c.document_id WHERE d.image_count > 0`）。
+
 从没有 Redis 的版本升级时，先在复制过来的 `.env` 里加上 `REDIS_PASSWORD`（见“三、安装”），否则 `upgrade.sh` 会提示后退出。升级、重启 app 后员工不用重新登录（会话在 Redis 里）。
 
 从 0.9.0.1（旧格式离线包，镜像随包提供）升级也是同样的步骤：新版本的镜像在服务器上构建，数据库镜像从镜像仓库重新拉一次（与旧版本是同一个镜像）。
@@ -236,6 +241,7 @@ java -Dloader.main=com.liming.rag.ai.tool.ToolSigningKeys -cp app/rag-app.jar \
 | 所有人都登录不了，或刚登录就被退出；`logs app` 里有 `RedisConnectionException` 或 `event=cache_failure` | Redis 没在运行或密码不对：`docker compose ... ps redis` 看状态，`logs redis` 看原因；检查 `.env` 的 `REDIS_PASSWORD`，改了以后 `up -d redis app`。Redis 恢复后不用做别的，缓存会自动清空重建 |
 | 在数据库里手工改了账号、角色、系统设置或模型配置，界面上没变 | 这些数据有缓存，只有经界面改才会立即清除：`up -d --force-recreate app` 重启后端（启动后先清空缓存），或等 1 小时缓存过期 |
 | `app` 启动失败，日志里有“rag.xxx 必须…” | `.env` 里的配置值不合法，按提示改正后 `up -d app` |
+| `build.sh` 构建 ocr 镜像失败（`pip install` 超时、下载模型失败） | 服务器访问不了 PyPI 或 ModelScope：在 `.env` 里把 `RAG_PIP_INDEX_URL` 改成能访问的包源，确认能访问 `modelscope.cn`，再运行一次 `./build.sh` |
 | `build.sh` 拉镜像失败（`pull access denied`、超时） | 服务器访问不了镜像仓库：配置 Docker 的镜像源，或在 `.env` 里把 `RAG_DB_IMAGE`、`RAG_REDIS_IMAGE`、`RAG_JRE_IMAGE`、`RAG_NGINX_IMAGE` 改成能访问的仓库地址（摘要不变），再运行一次 |
 | 磁盘满 | `df -h` 看哪个分区；清理旧备份（`backups/`）和不用的镜像（`docker image prune`，不要删正在用的版本；旧版本的镜像删了，回退时 `restore.sh` 会重新构建） |
 | `restore.sh` 提示“这份备份是版本 X 的” | 到版本 X 的部署目录里恢复，见“五、恢复” |

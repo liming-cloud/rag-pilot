@@ -65,6 +65,9 @@ echo "部署验证：$WEB_URL"
 wait_healthy 120 && ok "健康检查" || fail "健康检查没有通过（$APP_URL/actuator/health）"
 version="$(running_version)"
 [ -n "$version" ] && ok "运行版本 $version" || fail "读不到版本号（$APP_URL/actuator/info）"
+# 图片文字识别（#223）：启动时加载识别模型，健康了就能识别；没就绪时入库照常，只是图片里的文字要等它恢复后补上。
+compose up -d --wait --wait-timeout 180 ocr >/dev/null 2>&1 && ok "图片文字识别服务" \
+  || fail "图片文字识别服务没有就绪（docker compose logs ocr）"
 
 # 2. 经 web 打开页面和接口。
 curl -fsS --max-time 10 "$WEB_URL/" | grep -q '<div id="root">' && ok "页面可以打开" || fail "页面打不开"

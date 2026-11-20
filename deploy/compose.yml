@@ -1,4 +1,4 @@
-# 部署：db + redis + app + web（Nginx 提供前端并转发 /api，见 D-029）。员工访问 web 的端口。
+# 部署：db + redis + ocr + app + web（Nginx 提供前端并转发 /api，见 D-029；ocr 识别图片里的文字，见 D-074）。员工访问 web 的端口。
 # 在发布包解压后的目录里使用（#138）：包里有编译好的 app/rag-app.jar 和 web/dist，app、web 镜像由 build.sh 在宿主机上构建，
 # 安装、升级、备份恢复见 README.md：
 #   docker compose -f compose.yml --env-file .env --env-file release.env up -d
@@ -93,6 +93,8 @@ services:
       CHAT_LIGHT_MODEL: ${CHAT_LIGHT_MODEL:-Qwen/Qwen2.5-7B-Instruct}
       # 后台同时向量化的文档数；嵌入服务限流时调小。
       RAG_INGESTION_CONCURRENCY: ${RAG_INGESTION_CONCURRENCY:-2}
+      # 图片文字识别服务（#223）；它没启动或出错时照常入库，图片里的文字等它恢复后自动补上。
+      RAG_OCR_URL: http://ocr:9003
       RAG_ADMIN_USERNAME: ${RAG_ADMIN_USERNAME:-admin}
       RAG_ADMIN_PASSWORD: ${RAG_ADMIN_PASSWORD:-}
       RAG_ADMIN_RESET_PASSWORD: ${RAG_ADMIN_RESET_PASSWORD:-}
@@ -121,6 +123,25 @@ services:
     # 停服务时先等进行中的请求（最多 30 秒），再等后台正在生成的回答（最多 30 秒，见 application.yml 的
     # spring.task.execution.shutdown）和正在入库的文档（最多 10 秒，#197），之后才强制结束；Docker 默认只等 10 秒（#135）。
     stop_grace_period: 75s
+    logging: *logging
+
+  ocr:
+    # 图片文字识别（#223、D-074）：RapidOCR 的 HTTP 服务，只在 Compose 的内部网络里，不映射端口。
+    # 在宿主机上构建（build.sh），镜像不进发布包；标签跟 RapidOCR 版本走，本机已有就不再构建。
+    # Python 基础镜像按摘要锁定；用镜像源时在 .env 里设 RAG_PYTHON_IMAGE（摘要不变）和 RAG_PIP_INDEX_URL。
+    image: rag-pilot-ocr:rapidocr-3.10.0
+    build:
+      context: .
+      dockerfile: ocr.Dockerfile
+      args:
+        PYTHON_IMAGE: ${RAG_PYTHON_IMAGE:-python:3.12-slim@sha256:5e2bdb1b0d542d5039cffb8181c65930093949194a65c365dfb1b0fe13a4fa5b}
+        PIP_INDEX_URL: ${RAG_PIP_INDEX_URL:-https://pypi.org/simple}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:9003/', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
     logging: *logging
 
   web:

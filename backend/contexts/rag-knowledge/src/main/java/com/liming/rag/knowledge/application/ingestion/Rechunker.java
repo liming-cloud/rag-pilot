@@ -116,13 +116,12 @@ public class Rechunker {
     }
 
     private List<Document> stale() {
-        return documents.listStaleChunking().stream().filter(document -> !unreadable.contains(document.id())).toList();
+        return documents.listStaleChunking(readers.recognizesImages()).stream().filter(document -> !unreadable.contains(document.id())).toList();
     }
 
     private Outcome rechunkOne(Document document) {
         try {
-            rechunk(document);
-            return Outcome.DONE;
+            return rechunk(document);
         } catch (EmbeddingUnavailableException e) {
             log.warn("event=rechunk_paused document={}", document.id());
             return Outcome.PAUSED;
@@ -139,8 +138,13 @@ public class Rechunker {
         return Outcome.SKIPPED;
     }
 
-    private void rechunk(Document document) {
+    private Outcome rechunk(Document document) {
         var text = readers.read(document.filename(), storage.read(document.tenantId(), document.sha256()));
+        if (text.imageTextPending() && readers.recognizesImages()) {
+            // 图片文字识别服务暂时不可用：先不重做，免得白白再向量化一次，下一轮再看（#223）。
+            log.warn("event=rechunk_paused document={} reason=ocr", document.id());
+            return Outcome.PAUSED;
+        }
         var chunks = chunker.chunk(document.filename(), text.content());
         if (chunks.isEmpty()) {
             throw new DocumentParseException("文件里没有可检索的文字", null);
@@ -149,8 +153,9 @@ public class Rechunker {
         document.rechunked(chunks.size());
         transactions.executeWithoutResult(status -> {
             documents.replaceChunks(document, chunks, vectors);
-            documents.saveHealthSignals(document, text.images(), text.largestTableRows());
+            documents.saveHealthSignals(document, text.images(), text.largestTableRows(), text.imageTextPending());
         });
         log.info("event=document_rechunked document={} chunks={}", document.id(), chunks.size());
+        return Outcome.DONE;
     }
 }

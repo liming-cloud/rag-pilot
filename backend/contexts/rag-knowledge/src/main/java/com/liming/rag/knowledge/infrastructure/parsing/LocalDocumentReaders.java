@@ -3,24 +3,33 @@ package com.liming.rag.knowledge.infrastructure.parsing;
 import com.liming.rag.knowledge.application.ingestion.DocumentParseException;
 import com.liming.rag.knowledge.domain.TextChunker;
 import com.liming.rag.knowledge.application.DocumentReaders;
+import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.charset.CharacterCodingException;
 import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.EnumSet;
+import java.util.HashSet;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+import javax.imageio.ImageIO;
 import org.apache.pdfbox.Loader;
+import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDResources;
 import org.apache.pdfbox.pdmodel.encryption.InvalidPasswordException;
+import org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject;
 import org.apache.pdfbox.text.PDFTextStripper;
 import org.apache.poi.EncryptedDocumentException;
 import org.apache.poi.sl.usermodel.Placeholder;
@@ -41,30 +50,51 @@ import org.apache.poi.xwpf.usermodel.XWPFDocument;
 import org.apache.poi.xwpf.usermodel.XWPFParagraph;
 import org.apache.poi.xwpf.usermodel.XWPFTable;
 import org.apache.poi.xwpf.usermodel.XWPFTableCell;
+import org.jspecify.annotations.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 /**
- * 本地读取 TXT / Markdown（UTF-8）、PDF（PDFBox）、Word .docx、Excel .xlsx / .xls 和 PowerPoint .pptx（POI），不调用外部服务。
+ * 本地读取 TXT / Markdown（UTF-8）、PDF（PDFBox）、Word .docx、Excel .xlsx / .xls 和 PowerPoint .pptx（POI）。
  *
  * <p>Word 的标题样式转成 Markdown 标题；表格第一行当表头，其余每行转成“表头：值；表头：值”，
  * 一行一条，检索时每条都带着列名。Excel 每个可见工作表一节，规则同 Word 表格，单元格按 Excel 里显示的样子输出。
- * PowerPoint 每页一节，页标题当章节标题（没有标题用页码），正文、表格和备注跟在后面；只有图片的页不输出。
- * PDF 没有可靠的标题信息，只按阅读顺序提取文字。
+ * PowerPoint 每页一节，页标题当章节标题（没有标题用页码），正文、表格和备注跟在后面；没有文字的页不输出。
+ * PDF 没有可靠的标题信息，只按阅读顺序逐页提取文字。
+ *
+ * <p>Word、PDF、PowerPoint 里的图片交给 {@link ImageText} 识别（#223、D-074），文字以“图片文字：”开头，跟在图片所在的
+ * 段落或页后面。同一张图（如每页的标志）只识别一次，太小的图标不识别；识别服务不可用时照常读出其余文字，记为图片文字待识别。
  *
  * <p>同时记下资料体检用的信号（#218）：图片数和最大一张表格的行数。
  */
 @Component
 final class LocalDocumentReaders implements DocumentReaders {
 
+    private static final Logger log = LoggerFactory.getLogger(LocalDocumentReaders.class);
     /** 中文 Word 的内置标题样式名是“heading 1”，样式 ID 可能是“Heading1”或“1”；自定义样式常叫“标题 1”。 */
     private static final Pattern HEADING_STYLE = Pattern.compile("(?i)^(?:heading|标题)\\s*([1-6])$");
     /** 少于这么多可见字符，基本可以判断是扫描件或图片。 */
     private static final int MIN_PDF_CHARS = 20;
+    /** 宽或高小于这么多像素的图多是图标、项目符号，不识别。 */
+    private static final int MIN_IMAGE_SIDE = 16;
+    private static final String IMAGE_TEXT = "图片文字：";
 
     private static final Set<String> EXTENSIONS = Set.of("txt", "md", "markdown", "pdf", "docx", "xlsx", "xls", "pptx");
     /** 幻灯片上不当正文的占位符：标题单独作章节标题，页码、日期、页脚每页重复。 */
     private static final Set<Placeholder> NOT_BODY = EnumSet.of(Placeholder.TITLE, Placeholder.CENTERED_TITLE,
             Placeholder.SLIDE_NUMBER, Placeholder.DATETIME, Placeholder.FOOTER);
+
+    private final ImageText imageText;
+
+    LocalDocumentReaders(ImageText imageText) {
+        this.imageText = imageText;
+    }
+
+    @Override
+    public boolean recognizesImages() {
+        return imageText.enabled();
+    }
 
     @Override
     public boolean supports(String extension) {
@@ -78,7 +108,7 @@ final class LocalDocumentReaders implements DocumentReaders {
         if (!supports(extension)) {
             throw new IllegalArgumentException("不支持的文件类型：" + filename);
         }
-        var out = new Sink();
+        var out = new Sink(new Recognition());
         switch (extension) {
             case "pdf" -> pdf(content, out);
             case "docx" -> word(content, out);
@@ -89,14 +119,83 @@ final class LocalDocumentReaders implements DocumentReaders {
         if (out.text.toString().isBlank()) {
             throw new DocumentParseException("文件里没有可检索的文字", null);
         }
-        return new Text(out.text.toString(), out.images, out.largestTableRows);
+        return new Text(out.text.toString(), out.images, out.largestTableRows, out.recognition.pending);
     }
 
     /** 一次读取的输出：正文，以及边读边记的图片数和最大表格行数。 */
     private static final class Sink {
         private final StringBuilder text = new StringBuilder();
+        private final Recognition recognition;
         private int images;
         private int largestTableRows;
+
+        Sink(Recognition recognition) {
+            this.recognition = recognition;
+        }
+
+        /** 把一张图的文字接在正文后面。 */
+        void picture(@Nullable BufferedImage image) {
+            var recognized = recognition.text(image);
+            if (!recognized.isEmpty()) {
+                text.append(IMAGE_TEXT).append(recognized).append('\n');
+            }
+        }
+
+        void picture(byte[] data) {
+            BufferedImage image;
+            try {
+                image = ImageIO.read(new ByteArrayInputStream(data));
+            } catch (IOException e) {
+                image = null;
+            }
+            // 读不了的格式（如 EMF）识别服务也读不了，按没有文字处理。
+            picture(image);
+        }
+    }
+
+    /** 一份文档里的图片识别：同一张图只识别一次；服务不可用后，本文档剩下的图不再请求。 */
+    private final class Recognition {
+        private final Set<String> seen = new HashSet<>();
+        private boolean pending;
+
+        String text(@Nullable BufferedImage image) {
+            if (!imageText.enabled() || pending) {
+                pending = true;
+                return "";
+            }
+            if (image == null || Math.min(image.getWidth(), image.getHeight()) < MIN_IMAGE_SIDE) {
+                return "";
+            }
+            var png = png(image);
+            if (!seen.add(HexFormat.of().formatHex(sha256(png)))) {
+                return "";
+            }
+            try {
+                return imageText.recognize(png);
+            } catch (ImageText.UnavailableException e) {
+                pending = true;
+                log.warn("event=ocr_unavailable error={}", e.getCause().getClass().getSimpleName());
+                return "";
+            }
+        }
+    }
+
+    private static byte[] png(BufferedImage image) {
+        try {
+            var out = new ByteArrayOutputStream();
+            ImageIO.write(image, "png", out);
+            return out.toByteArray();
+        } catch (IOException e) {
+            throw new IllegalStateException("写内存里的 PNG 不会出错", e);
+        }
+    }
+
+    private static byte[] sha256(byte[] content) {
+        try {
+            return MessageDigest.getInstance("SHA-256").digest(content);
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("JDK 必带 SHA-256", e);
+        }
     }
 
     private static String utf8(byte[] content) {
@@ -115,13 +214,12 @@ final class LocalDocumentReaders implements DocumentReaders {
         try (var document = Loader.loadPDF(content)) {
             var stripper = new PDFTextStripper();
             stripper.setSortByPosition(true);
-            var text = stripper.getText(document);
-            if (text.replaceAll("\\s", "").length() < MIN_PDF_CHARS) {
-                throw new DocumentParseException("PDF 里提取不到文字，可能是扫描件或图片；目前还不支持扫描件，请上传可以复制文字的 PDF", null);
+            for (int i = 1; i <= document.getNumberOfPages(); i++) {
+                pdfPage(document, stripper, i, out);
             }
-            out.text.append(text);
-            for (var page : document.getPages()) {
-                out.images += pdfImages(page.getResources());
+            if (out.text.toString().replaceAll("\\s", "").length() < MIN_PDF_CHARS) {
+                throw new DocumentParseException(
+                        "PDF 里提取不到文字，可能是扫描件或图片，图片里也没有识别出文字；请上传可以复制文字的 PDF", null);
             }
         } catch (InvalidPasswordException e) {
             throw new DocumentParseException("PDF 有密码保护，请去掉密码后重新上传", e);
@@ -130,25 +228,32 @@ final class LocalDocumentReaders implements DocumentReaders {
         }
     }
 
+    /** 一页的文字，后面跟这一页图片里的文字。 */
+    private static void pdfPage(PDDocument document, PDFTextStripper stripper, int page, Sink out) throws IOException {
+        stripper.setStartPage(page);
+        stripper.setEndPage(page);
+        out.text.append(stripper.getText(document));
+        pdfImages(document.getPage(page - 1).getResources(), out);
+    }
+
     /** 一页上的图片：页面资源里的图片对象（同一张图在页上画几次只算一张）。 */
-    private static int pdfImages(PDResources resources) throws IOException {
+    private static void pdfImages(@Nullable PDResources resources, Sink out) throws IOException {
         if (resources == null) {
-            return 0;
+            return;
         }
-        int images = 0;
         for (var name : resources.getXObjectNames()) {
             if (resources.isImageXObject(name)) {
-                images++;
+                out.images++;
+                out.picture(((PDImageXObject) resources.getXObject(name)).getImage());
             }
         }
-        return images;
     }
 
     private static void word(byte[] content, Sink out) {
         try (var document = new XWPFDocument(new ByteArrayInputStream(content))) {
             for (var element : document.getBodyElements()) {
                 if (element instanceof XWPFParagraph paragraph) {
-                    paragraph(document, paragraph, out.text);
+                    paragraph(document, paragraph, out);
                 } else if (element instanceof XWPFTable table) {
                     table(table, out);
                 }
@@ -195,7 +300,7 @@ final class LocalDocumentReaders implements DocumentReaders {
 
     /** 一页一节：标题当章节标题，没有标题用页码；没有文字的页（只有图片）不输出，免得产生空分块。 */
     private static void slide(XSLFSlide slide, int number, Sink out) {
-        var body = new Sink();
+        var body = new Sink(out.recognition);
         shapes(slide.getShapes(), body);
         notes(slide.getNotes(), body.text);
         out.images += body.images;
@@ -227,8 +332,9 @@ final class LocalDocumentReaders implements DocumentReaders {
                         .toList(), out);
             } else if (shape instanceof XSLFGroupShape group) {
                 shapes(group.getShapes(), out);
-            } else if (shape instanceof XSLFPictureShape) {
+            } else if (shape instanceof XSLFPictureShape picture) {
                 out.images++;
+                out.picture(picture.getPictureData().getData());
             } else if (shape instanceof XSLFTextShape textShape && !NOT_BODY.contains(textShape.getTextType())) {
                 lines(textShape.getText(), out.text);
             }
@@ -274,16 +380,19 @@ final class LocalDocumentReaders implements DocumentReaders {
         return cell == null ? "" : formatter.formatCellValue(cell, evaluator).replaceAll("\\s+", " ").strip();
     }
 
-    private static void paragraph(XWPFDocument document, XWPFParagraph paragraph, StringBuilder text) {
+    /** 段落文字，后面跟段落里图片的文字。 */
+    private static void paragraph(XWPFDocument document, XWPFParagraph paragraph, Sink out) {
         var line = paragraph.getText().strip();
-        if (line.isEmpty()) {
-            return;
-        }
-        int level = headingLevel(document, paragraph);
+        int level = line.isEmpty() ? 0 : headingLevel(document, paragraph);
         if (level > 0) {
-            text.append('\n').append("#".repeat(level)).append(' ').append(line).append('\n');
-        } else {
-            text.append(line).append('\n');
+            out.text.append('\n').append("#".repeat(level)).append(' ').append(line).append('\n');
+        } else if (!line.isEmpty()) {
+            out.text.append(line).append('\n');
+        }
+        for (var run : paragraph.getRuns()) {
+            for (var picture : run.getEmbeddedPictures()) {
+                out.picture(picture.getPictureData().getData());
+            }
         }
     }
 
