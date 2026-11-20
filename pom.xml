@@ -34,7 +34,7 @@
         <maven-compiler-plugin.version>3.16.0</maven-compiler-plugin.version>
         <maven-surefire-plugin.version>3.6.1</maven-surefire-plugin.version>
         <!-- 上下文层禁止依赖 Spring AI（#145，见 backend/contexts/pom.xml）。 -->
-        <maven-enforcer-plugin.version>3.6.3</maven-enforcer-plugin.version>
+        <maven-enforcer-plugin.version>3.7.0</maven-enforcer-plugin.version>
         <!-- 复杂度门禁（#199，D-067）：只开两条规则，版本与 domain-forge 一致。 -->
         <maven-checkstyle-plugin.version>3.6.0</maven-checkstyle-plugin.version>
         <checkstyle.version>14.3.0</checkstyle.version>
