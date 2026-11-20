@@ -2,6 +2,7 @@
 # 在宿主机上准备本版本的镜像（#138）：数据库、Redis 镜像按摘要从镜像仓库拉（本机已有时不再下载）；app、web 镜像用发布包里
 # 编译好的 app/rag-app.jar 和 web/dist 构建，JRE、Nginx 基础镜像同样按摘要锁定。install.sh、upgrade.sh、restore.sh 会调用它，
 # 也可以单独运行。镜像仓库地址可在 .env 里用 RAG_DB_IMAGE、RAG_REDIS_IMAGE、RAG_JRE_IMAGE、RAG_NGINX_IMAGE 改成镜像源或内网仓库。
+# 图片文字识别的 ocr 镜像（#223）用 ocr.Dockerfile 构建，标签跟 RapidOCR 版本走，本机已有时不再构建。
 # 用法：./build.sh
 source "$(dirname "$0")/lib.sh"
 
@@ -18,6 +19,14 @@ for service in db redis; do
     compose pull "$service"
   fi
 done
+
+image="$(compose config --images ocr)"
+if docker image inspect "$image" >/dev/null 2>&1; then
+  info "ocr 镜像已在本机：$image"
+else
+  info "构建 ocr 镜像 ${image}（第一次要下载 Python 基础镜像、RapidOCR 和识别模型，约 700 MB）"
+  compose build ocr
+fi
 
 info "构建版本 $version 的 app、web 镜像（第一次会拉 JRE、Nginx 基础镜像）"
 compose build app web

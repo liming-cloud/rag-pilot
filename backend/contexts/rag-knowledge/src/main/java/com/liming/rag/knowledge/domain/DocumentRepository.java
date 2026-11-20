@@ -33,14 +33,16 @@ public interface DocumentRepository {
      */
     void replaceChunks(Document document, List<Chunk> chunks, List<float[]> embeddings);
 
-    /** 所有租户里分块规则版本比当前旧的可用文档，按标识顺序（#225）。 */
-    List<Document> listStaleChunking();
+    /**
+     * 所有租户里要重新分块的可用文档，按标识顺序：分块规则版本比当前旧的（#225），以及要求时图片文字待识别的（#223）。
+     */
+    List<Document> listStaleChunking(boolean withPendingImageText);
 
     /**
-     * 资料体检的信号（#218）：记下读取时得到的图片数和最大表格行数，从已写入的分块算出字数、空白、乱码和标题层级，
-     * 并重新比较这份文档和租户里其他文档的分块正文（疑似重复）。在写分块的同一个事务里调用。
+     * 资料体检的信号（#218）：记下读取时得到的图片数、最大表格行数和图片文字是否待识别（#223），从已写入的分块算出字数、
+     * 空白、乱码和标题层级，并重新比较这份文档和租户里其他文档的分块正文（疑似重复）。在写分块的同一个事务里调用。
      */
-    void saveHealthSignals(Document document, int images, int largestTableRows);
+    void saveHealthSignals(Document document, int images, int largestTableRows, boolean imageTextPending);
 
     /** 同一个库里同一份文件的文档（库内按内容唯一）。 */
     Optional<Document> findInKnowledgeBase(long knowledgeBaseId, String sha256);

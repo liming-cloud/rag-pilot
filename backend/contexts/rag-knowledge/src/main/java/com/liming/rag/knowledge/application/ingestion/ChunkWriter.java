@@ -1,6 +1,7 @@
 package com.liming.rag.knowledge.application.ingestion;
 
 import com.liming.rag.knowledge.domain.Chunk;
+import com.liming.rag.knowledge.application.DocumentReaders;
 import com.liming.rag.knowledge.application.TextEmbedding;
 import com.liming.rag.knowledge.domain.Document;
 import com.liming.rag.knowledge.domain.DocumentRepository;
@@ -30,12 +31,12 @@ final class ChunkWriter {
         this.target = target;
     }
 
-    /** images、largestTableRows 是读取时得到的资料体检信号（#218），随分块一起写入。 */
-    void write(List<Chunk> domainChunks, int images, int largestTableRows) {
+    /** text 里的图片数、最大表格行、图片文字是否待识别是读取时得到的资料体检信号（#218、#223），随分块一起写入。 */
+    void write(List<Chunk> domainChunks, DocumentReaders.Text text) {
         var vectors = vectors(embeddings, domainChunks);
         transactions.executeWithoutResult(status -> {
             documents.saveChunks(target, domainChunks, vectors);
-            documents.saveHealthSignals(target, images, largestTableRows);
+            documents.saveHealthSignals(target, text.images(), text.largestTableRows(), text.imageTextPending());
             target.markReady(domainChunks.size());
             documents.saveOutcome(target);
             if (target.replacesDocumentId() != null) {

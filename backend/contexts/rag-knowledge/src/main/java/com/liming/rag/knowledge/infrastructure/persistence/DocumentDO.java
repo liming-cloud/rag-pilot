@@ -36,6 +36,7 @@ public class DocumentDO {
     private Integer attempts;
     /** 分块规则的版本（#225）；插入时不写，取库里的默认值，写分块时更新。 */
     private Integer chunkingVersion;
+    private Boolean imageTextPending;
     /** 由数据库默认值生成。 */
     @TableField(insertStrategy = FieldStrategy.NEVER, updateStrategy = FieldStrategy.NEVER)
     private OffsetDateTime createdAt;
@@ -190,5 +191,13 @@ public class DocumentDO {
 
     public void setChunkingVersion(Integer chunkingVersion) {
         this.chunkingVersion = chunkingVersion;
+    }
+
+    public Boolean getImageTextPending() {
+        return imageTextPending;
+    }
+
+    public void setImageTextPending(Boolean imageTextPending) {
+        this.imageTextPending = imageTextPending;
     }
 }

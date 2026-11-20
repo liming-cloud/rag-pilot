@@ -196,3 +196,6 @@ rag:
     chunking:
       max-tokens: ${RAG_CHUNK_MAX_TOKENS:500}
       overlap-tokens: ${RAG_CHUNK_OVERLAP_TOKENS:80}
+    # 图片文字识别（#223、D-074）：RapidOCR 服务地址，Compose 里是 ocr 容器；为空时不识别图片里的文字。
+    ocr:
+      url: ${RAG_OCR_URL:}

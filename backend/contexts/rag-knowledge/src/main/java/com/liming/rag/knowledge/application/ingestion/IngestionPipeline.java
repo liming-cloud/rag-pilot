@@ -49,8 +49,7 @@ class IngestionPipeline {
             if (chunks.isEmpty()) {
                 failed(document, "文件里没有可检索的文字");
             } else {
-                new ChunkWriter(documents, embeddings, transactions, remover, document).write(chunks, text.images(),
-                        text.largestTableRows());
+                new ChunkWriter(documents, embeddings, transactions, remover, document).write(chunks, text);
             }
         } catch (DocumentParseException e) {
             failed(document, e.getMessage());

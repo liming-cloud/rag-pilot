@@ -3,13 +3,14 @@
 <mapper namespace="com.liming.rag.knowledge.infrastructure.persistence.DocumentMapper">
 
     <!--
-      资料体检的信号（#218）：图片数、最大表格行由读取时得到；字数、空白、乱码、标题层级从刚写入的分块算出，
+      资料体检的信号（#218）：图片数、最大表格行、图片文字是否待识别（#223）由读取时得到；字数、空白、乱码、标题层级从刚写入的分块算出，
       口径与迁移 V202611130101 的回填一致（乱码是 U+FFFD、私有区和控制字符；标题层级取 heading_path 最深的一级）。
     -->
     <update id="refreshSignals">
         UPDATE document d
         SET image_count        = #{images},
             largest_table_rows = #{largestTableRows},
+            image_text_pending = #{imageTextPending},
             total_chars        = s.total_chars,
             blank_chars        = s.blank_chars,
             garbled_chars      = s.garbled_chars,

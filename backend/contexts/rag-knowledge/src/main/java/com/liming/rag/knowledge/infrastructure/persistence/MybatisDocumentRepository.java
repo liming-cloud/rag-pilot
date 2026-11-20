@@ -136,9 +136,9 @@ class MybatisDocumentRepository implements DocumentRepository {
     }
 
     @Override
-    public void saveHealthSignals(Document document, int images, int largestTableRows) {
+    public void saveHealthSignals(Document document, int images, int largestTableRows, boolean imageTextPending) {
         long tenantId = document.tenantId().value();
-        documents.refreshSignals(tenantId, document.id(), images, largestTableRows);
+        documents.refreshSignals(tenantId, document.id(), images, largestTableRows, imageTextPending);
         documents.deleteOverlaps(tenantId, document.id());
         documents.insertOverlaps(tenantId, document.id());
     }
@@ -200,10 +200,11 @@ class MybatisDocumentRepository implements DocumentRepository {
     }
 
     @Override
-    public List<Document> listStaleChunking() {
+    public List<Document> listStaleChunking(boolean withPendingImageText) {
         return documents.selectList(new LambdaQueryWrapper<DocumentDO>()
                         .eq(DocumentDO::getStatus, DocumentStatus.READY.name())
-                        .lt(DocumentDO::getChunkingVersion, TextChunker.VERSION)
+                        .and(stale -> stale.lt(DocumentDO::getChunkingVersion, TextChunker.VERSION)
+                                .or(withPendingImageText).eq(withPendingImageText, DocumentDO::getImageTextPending, true))
                         .orderByAsc(DocumentDO::getId))
                 .stream().map(MybatisDocumentRepository::toDomain).toList();
     }
