@@ -28,8 +28,8 @@
 
 ```
 /opt/rag-pilot/
-├── rag-pilot-1.0.0.1/     当前版本的部署目录
-├── rag-pilot-0.9.0.1/     上一个版本，回退时用，确认新版本没问题后可以删
+├── rag-pilot-1.1.0.1/     当前版本的部署目录
+├── rag-pilot-1.0.0.1/     上一个版本，回退时用，确认新版本没问题后可以删
 └── backups/               备份（也可以在 .env 里用 RAG_BACKUP_DIR 指到单独的磁盘）
 ```
 
@@ -37,9 +37,9 @@
 
 ```bash
 cd /opt/rag-pilot
-sha256sum -c rag-pilot-1.0.0.1.SHA256SUMS        # 校验下载的文件
-tar -xzf rag-pilot-1.0.0.1.tar.gz
-cd rag-pilot-1.0.0.1
+sha256sum -c rag-pilot-1.1.0.1.SHA256SUMS        # 校验下载的文件
+tar -xzf rag-pilot-1.1.0.1.tar.gz
+cd rag-pilot-1.1.0.1
 cp .env.example .env && chmod 600 .env
 vi .env                                           # 至少填 DB_PASSWORD、REDIS_PASSWORD、MODEL_API_KEY、RAG_ADMIN_PASSWORD、RAG_MASTER_KEY
 ./install.sh
@@ -62,8 +62,8 @@ vi .env                                           # 至少填 DB_PASSWORD、REDI
 ## 四、日常检查
 
 ```bash
-cd /opt/rag-pilot/rag-pilot-1.0.0.1
-docker compose --env-file .env --env-file release.env ps       # 三个服务都是 running（healthy）
+cd /opt/rag-pilot/rag-pilot-1.1.0.1
+docker compose --env-file .env --env-file release.env ps       # db、redis、ocr、app、web 五个服务都是 running（healthy）
 curl http://127.0.0.1:8080/actuator/health                    # {"status":"UP"}
 curl http://127.0.0.1:8080/actuator/info                      # 当前版本
 ./verify.sh                                                   # 完整检查一遍（约 1 分钟）
@@ -139,7 +139,7 @@ curl -s 'http://127.0.0.1:8080/actuator/metrics/rag.cache.gets?tag=result:local_
 定时备份由运维配置，例如每天凌晨 2 点备份、只保留最近 7 份（`crontab -e`）：
 
 ```
-0 2 * * * cd /opt/rag-pilot/rag-pilot-1.0.0.1 && ./backup.sh >> /opt/rag-pilot/backups/backup.log 2>&1 && ls -1dt /opt/rag-pilot/backups/2*/ | tail -n +8 | xargs -r rm -rf
+0 2 * * * cd /opt/rag-pilot/rag-pilot-1.1.0.1 && ./backup.sh >> /opt/rag-pilot/backups/backup.log 2>&1 && ls -1dt /opt/rag-pilot/backups/2*/ | tail -n +8 | xargs -r rm -rf
 ```
 
 升级到新版本后，记得把 cron 里的目录改成新版本的。
@@ -178,6 +178,8 @@ docker compose --env-file .env --env-file release.env exec -T db psql -U rag -d 
 
 - **向量化费用** ≈ `tokens` × 1.1（重新分块后块数、章节位置略有变化）÷ 100 万 × 嵌入模型每百万 token 的单价。
 - **耗时** ≈ `chunks` ÷ 16（每批向量化的条数）× 单批耗时（通常 1～3 秒）；一次只做一份文档，被限流时自动退避（`event=embedding_rate_limited`），会更慢。
+
+从 1.0.x 升级到 1.1 时，上面两种重做会一起发生：分块规则从第 1 版变成第 2 版，**全部**文档都要重新分块；重读时含图片的文档顺带识别图片文字，不会再额外重做一次。费用和耗时按上面对全部分块的估算。
 
 从没有图片文字识别的版本（1.0.x）升级时，`build.sh` 会先构建 ocr 镜像（见“一、准备”）；升级完成后，后台只把**含图片**的文档逐份重新读取、识别图片里的文字、重新向量化，纯文字的文档不动，做法和上面的重新分块一样。进度看 `event=document_rechunked`，或数还没做完的文档（`SELECT count(*) FROM document WHERE status = 'READY' AND image_text_pending`）；费用按上面的公式只算含图片的文档（`SELECT count(*), sum(c.token_count) FROM chunk c JOIN document d ON d.id = c.document_id WHERE d.image_count > 0`）。
 
