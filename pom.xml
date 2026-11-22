@@ -37,7 +37,7 @@
         <maven-enforcer-plugin.version>3.6.3</maven-enforcer-plugin.version>
         <!-- 复杂度门禁（#199，D-067）：只开两条规则，版本与 domain-forge 一致。 -->
         <maven-checkstyle-plugin.version>3.6.0</maven-checkstyle-plugin.version>
-        <checkstyle.version>14.3.0</checkstyle.version>
+        <checkstyle.version>14.4.0</checkstyle.version>
         <!-- 调用真实模型的评测、耗时测量默认不跑；评测任务用 -Dtest.groups=eval -Dtest.excludedGroups=none 运行。 -->
         <test.groups></test.groups>
         <test.excludedGroups>eval,benchmark</test.excludedGroups>
